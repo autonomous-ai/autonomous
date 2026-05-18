@@ -242,6 +242,26 @@ type Health struct {
 	TTS     bool `json:"tts"`
 }
 
+// GetVersion returns LeLamp's runtime version string (from FastAPI app.version
+// at /version). Empty + error if LeLamp is unreachable.
+func GetVersion() (string, error) {
+	resp, err := httpClient.Get(BaseURL + "/version")
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("GET /version returned %d", resp.StatusCode)
+	}
+	var r struct {
+		Version string `json:"version"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&r); err != nil {
+		return "", fmt.Errorf("decode /version: %w", err)
+	}
+	return r.Version, nil
+}
+
 // GetHealth returns the current health snapshot from LeLamp.
 func GetHealth() (*Health, error) {
 	resp, err := httpClient.Get(BaseURL + "/health")

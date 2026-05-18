@@ -17,6 +17,7 @@ import (
 	"go-lamp.autonomous.ai/domain"
 	"go-lamp.autonomous.ai/internal/device"
 	"go-lamp.autonomous.ai/internal/network"
+	"go-lamp.autonomous.ai/lib/lelamp"
 	"go-lamp.autonomous.ai/server/config"
 	"go-lamp.autonomous.ai/server/serializers"
 )
@@ -59,6 +60,7 @@ func (h *HealthHandler) SystemInfo(c *gin.Context) {
 		"uptime":         readUptime(),
 		"serviceUptime":  int64(time.Since(serverStartTime).Seconds()),
 		"lelampUptime":   readLeLampUptime(),
+		"lelampVersion":  readLeLampVersion(),
 		"goRoutines": runtime.NumGoroutine(),
 		"version":    config.LumiVersion,
 		"deviceId":   h.config.DeviceID,
@@ -311,6 +313,34 @@ func readCPUTemp() float64 {
 	}
 	milliC, _ := strconv.Atoi(strings.TrimSpace(string(data)))
 	return float64(milliC) / 1000.0
+}
+
+// lelampVersionCache holds the most recent /version reading. LeLamp version
+// only changes on OTA (rare), so a 60s TTL is plenty fresh while sparing the
+// loopback HTTP call from a 5s monitor poll. On error we keep serving the
+// previously cached value so a transient LeLamp restart doesn't blank out
+// the version row in the UI.
+var lelampVersionCache = struct {
+	mu        sync.Mutex
+	value     string
+	fetchedAt time.Time
+}{}
+
+// readLeLampVersion returns LeLamp's runtime version via GET :5001/version,
+// memoized for 60s. Empty string when LeLamp has never responded successfully.
+func readLeLampVersion() string {
+	lelampVersionCache.mu.Lock()
+	defer lelampVersionCache.mu.Unlock()
+	if time.Since(lelampVersionCache.fetchedAt) < 60*time.Second && lelampVersionCache.value != "" {
+		return lelampVersionCache.value
+	}
+	v, err := lelamp.GetVersion()
+	if err != nil {
+		return lelampVersionCache.value
+	}
+	lelampVersionCache.value = v
+	lelampVersionCache.fetchedAt = time.Now()
+	return v
 }
 
 // readLeLampUptime returns uptime in seconds of the lumi-lelamp systemd service.

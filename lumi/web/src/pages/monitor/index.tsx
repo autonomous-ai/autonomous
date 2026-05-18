@@ -204,7 +204,6 @@ export default function Monitor() {
   const [speakerMuted, setSpeakerMuted] = useState(false);
   const [ledColor, setLedColor] = useState<LEDColor | null>(null);
   const [sceneInfo, setSceneInfo] = useState<SceneInfo | null>(null);
-  const [lelampVersion, setLelampVersion] = useState<string | null>(null);
   const [events, setEvents] = useState<DisplayEvent[]>([]);
   const [displayTs, setDisplayTs] = useState(0);
 
@@ -218,12 +217,9 @@ export default function Monitor() {
     setEvents([]);
   }, []);
 
-  // Fetch LeLamp version once
-  useEffect(() => {
-    fetch(`${HW}/version`).then((r) => r.json()).then((r) => {
-      if (r.version) setLelampVersion(r.version);
-    }).catch(() => {});
-  }, []);
+  // LeLamp version comes from /api/system/info (sys.lelampVersion), populated
+  // by lumi via a cached loopback call to :5001/version. Avoids a direct
+  // browser fetch to /hw/version which nginx gates to loopback only.
 
   // One-shot fetch for system info on mount — populates sidebar version /
   // uptime labels without needing a recurring poll on every section.
@@ -430,7 +426,7 @@ export default function Monitor() {
               ledColor={ledColor}
               sceneInfo={sceneInfo}
               webVersion={__WEB_VERSION__}
-              lelampVersion={lelampVersion}
+              lelampVersion={sys?.lelampVersion ?? null}
               onSceneActivate={(scene) => {
                 const url = scene === "off" ? `${HW}/scene/off` : `${HW}/scene`;
                 const opts: RequestInit = { method: "POST", headers: { "Content-Type": "application/json" } };
