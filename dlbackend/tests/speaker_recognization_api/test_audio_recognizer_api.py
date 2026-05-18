@@ -28,7 +28,7 @@ _ = load_dotenv()
 DL_BACKEND_URL = os.getenv("DL_BACKEND_URL", "").rstrip("/")
 DL_API_KEY = os.getenv("DL_API_KEY", "")
 
-DATA_DIR = Path(__file__).parent / "mock_data" / "audio" / "speakers"
+DATA_DIR = Path(__file__).parent.parent / "mock_data" / "audio" / "speakers"
 BAO_1 = DATA_DIR / "Bao" / "Bao_1.wav"
 BAO_2 = DATA_DIR / "Bao" / "Bao_2.wav"
 KHANH_1 = DATA_DIR / "Khanh" / "Khanh_1.wav"
