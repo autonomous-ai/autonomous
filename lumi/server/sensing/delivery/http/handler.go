@@ -781,7 +781,7 @@ func shouldQueueEvent(eventType, message string, inVoiceWindow bool) bool {
 	switch eventType {
 	case "presence.enter", "presence.leave", "voice",
 		"motion.activity", "emotion.detected", "speech_emotion.detected",
-		"pose.ergo_risk", "web_chat":
+		"web_chat":
 		return true
 	case "sound":
 		return strings.Contains(message, "persistent")

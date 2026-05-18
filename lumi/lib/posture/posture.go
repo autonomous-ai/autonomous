@@ -1,8 +1,10 @@
 // Package posture provides a per-user ergonomic-risk history logger.
 //
-// Stores rows produced by the posture coach: `posture_alert` from lelamp's
-// pose.ergo_risk events, plus agent-written `nudge_posture` / `praise_posture`
-// rows.
+// Stores agent-written `nudge_posture` / `praise_posture` rows fired by the
+// wellbeing skill when motion.activity carries a `[posture_summary]` block.
+// `posture_alert` is a legacy action kept for back-compat with old timeline
+// data; the new pipeline does not write alerts (lelamp samples are kept in
+// a separate debug JSONL on the lamp).
 //
 // Mirrors lib/mood structure (newer pattern than lib/wellbeing). Daily
 // JSONL files with 60-day retention.

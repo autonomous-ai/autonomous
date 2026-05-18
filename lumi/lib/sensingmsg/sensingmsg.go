@@ -9,7 +9,6 @@ import (
 
 	"go-lamp.autonomous.ai/domain"
 	"go-lamp.autonomous.ai/lib/i18n"
-	"go-lamp.autonomous.ai/lib/posture"
 	"go-lamp.autonomous.ai/lib/skillcontext"
 )
 
@@ -25,9 +24,9 @@ import (
 //     wrapper when guard mode is active. Pass "" otherwise (and always "" on
 //     the drain path — guard state isn't preserved across the queue).
 //
-// Side effect: pose.ergo_risk events with a parsable Score also persist an
-// alert row via posture.LogAlert. The context block is built BEFORE the alert
-// is logged so trend / repeated-episode computation can't see its own row.
+// pose.ergo_risk used to be its own event type; it is now folded into
+// motion.activity via [posture_summary] / [computer_streak_min] blocks added
+// by LeLamp's MotionPerception. The wellbeing skill reads those blocks.
 func Build(eventType, message, currentUser, guardTag string) string {
 	switch eventType {
 	case "voice_command":
@@ -61,8 +60,6 @@ func Build(eventType, message, currentUser, guardTag string) string {
 		msg = "[emotion] " + message
 	case "speech_emotion.detected":
 		msg = "[speech_emotion] " + message
-	case "pose.ergo_risk":
-		msg = "[posture] " + message
 	default:
 		msg = "[sensing:" + eventType + "] " + message
 	}
@@ -96,22 +93,6 @@ func Build(eventType, message, currentUser, guardTag string) string {
 		// emotion2vec (speech_emotion.detected); the prefix tells the skill
 		// which source to log on the mood signal row.
 		msg += skillcontext.BuildEmotionContext(skillcontext.ExtractDetectedEmotion(message), currentUser)
-	case "pose.ergo_risk":
-		msg += "\n[context: current_user=" + currentUser + "]"
-		msg += skillcontext.BuildUserContext(currentUser)
-		ev := skillcontext.ParsePostureMessage(message)
-		// Build context BEFORE logging the alert — otherwise computeTrend /
-		// isRepeatedEpisode would scan the just-written row and compare it
-		// against itself.
-		msg += "\n[posture_context: " + skillcontext.BuildPostureContext(currentUser, ev) + "]"
-		if ev.Score > 0 {
-			posture.LogAlert(currentUser, posture.AlertExtras{
-				Score:      ev.Score,
-				Risk:       ev.Risk,
-				LeftScore:  ev.LeftScore,
-				RightScore: ev.RightScore,
-			})
-		}
 	}
 
 	// Inject device locale once per passive-sensing turn — sensor events
