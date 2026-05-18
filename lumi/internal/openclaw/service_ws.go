@@ -33,7 +33,11 @@ func (s *Service) StartWS(ctx context.Context, handler domain.AgentEventHandler)
 		if ctx.Err() != nil {
 			return
 		}
-		if s.statusLED != nil {
+		// Skip the cyan status overlay during AP/provisioning mode: the WS
+		// is doomed to fail until the user finishes setup (no openclaw
+		// credentials yet), and StateAgentDown would clobber the
+		// setup-needed solid white painted by server.waitAndPaintSetupReady.
+		if s.statusLED != nil && s.config.SetUpCompleted {
 			s.statusLED.Set(statusled.StateAgentDown)
 		}
 		if err != nil {
@@ -249,7 +253,7 @@ func (s *Service) runWSConn(ctx context.Context, handler domain.AgentEventHandle
 	s.wsMu.Unlock()
 	s.wsConnected.Store(true)
 	s.wsConnectedAt.Store(time.Now().Unix())
-	if s.statusLED != nil {
+	if s.statusLED != nil && s.config.SetUpCompleted {
 		s.statusLED.Clear(statusled.StateAgentDown)
 	}
 	flow.End("ws_connect", connStart, map[string]any{"session_key": s.GetSessionKey() != ""})
