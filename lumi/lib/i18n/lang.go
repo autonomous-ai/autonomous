@@ -55,10 +55,10 @@ func Lang() string {
 // LangContextTag returns "\n[context: current_language=X]" when the STT
 // language is configured, "" otherwise. Mirrors the [context: current_user=X]
 // injection used by sensing handlers so SKILL.md replies to sensor-triggered
-// (text-less) events — presence.enter/leave, motion.activity, emotion,
-// pose.ergo_risk — stay in the right locale instead of defaulting to English.
-// Voice and web_chat paths skip this because the user's own text already
-// carries the language signal.
+// (text-less) events — presence.enter/leave, motion.activity, emotion — stay
+// in the right locale instead of defaulting to English. Voice and web_chat
+// paths skip this because the user's own text already carries the language
+// signal.
 func LangContextTag() string {
 	if l := Lang(); l != "" {
 		return "\n[context: current_language=" + l + "]"

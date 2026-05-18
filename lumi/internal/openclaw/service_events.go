@@ -118,7 +118,6 @@ func (s *Service) drainPendingEvents() {
 		"motion.activity":         true,
 		"emotion.detected":        true,
 		"speech_emotion.detected": true,
-		"pose.ergo_risk":          true,
 		"presence.enter":          true,
 		"presence.leave":          true,
 		"presence.away":           true,
@@ -145,7 +144,6 @@ func (s *Service) drainPendingEvents() {
 		"motion.activity":         true,
 		"emotion.detected":        true,
 		"speech_emotion.detected": true,
-		"pose.ergo_risk":          true,
 	}
 	lastIdx := make(map[string]int, len(events))
 	for i, ev := range events {
