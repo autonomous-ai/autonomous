@@ -167,6 +167,45 @@ Manual override does NOT get auto-overridden by scene/emotion/presence triggers.
 - Only user-initiated voice commands or system triggers (scene, emotion, presence) should toggle
 - Agent must never decide on its own to turn camera off/on without user asking
 
+## Digital Zoom
+
+Software zoom for focusing on small subjects (e.g. a laptop screen during a video call so Lumi can read it).
+
+### API
+
+- `POST /camera/zoom` body `{"zoom": <float>}` — sets zoom factor, range `1.0` (no zoom) to `5.0`. Returns updated `CameraInfoResponse`.
+- `GET /camera` includes `zoom` field with current factor.
+
+### How it works
+
+Zoom is applied **inside the capture loop** (`devices/video_capture_device.py::_video_capture_loop`) right after rotate, before `last_response` is set. The loop center-crops the frame by `1/zoom` and resizes back to the original dimensions, so every downstream consumer reads the same zoomed buffer:
+
+| Consumer | Source | Sees zoom? |
+|---|---|---|
+| `/camera/snapshot` (vision tool) | `camera_capture.last_frame` | ✅ |
+| `/camera/stream` (web UI) | `camera_capture.last_frame` | ✅ |
+| Sensing orchestrator (face recog, motion, pose, emotion) | `camera_capture.capture()` → `last_response` | ✅ |
+| Tracker service | `camera_capture.last_frame` | ✅ |
+
+### Trade-off
+
+Zoom > 1 narrows the effective field of view for **every** consumer:
+
+- ✅ Faces on a small surface (laptop screen) become large enough for InsightFace to detect → presence.enter can trigger from a video-call participant.
+- ✅ Vision tool snapshot reads on-screen content clearly.
+- ❌ People/objects outside the center crop are invisible to face recog / motion / pose / tracker.
+- ❌ Active tracking can lose target if it moves outside the cropped region.
+
+Treat zoom > 1 as a **temporary mode** for a specific subject. Reset to `1.0` (web UI Reset button or `POST /camera/zoom {"zoom": 1.0}`) when finished to restore wide sensing.
+
+### Storage
+
+Zoom state lives on the device instance (`LocalVideoCaptureDevice.zoom`). Not persisted — resets to `1.0` on server restart. No auto-reset on camera disable/enable.
+
+### Web UI
+
+Monitor → Camera tab → Live Stream card has a Zoom slider (1.0×–5.0×, step 0.1, debounced 200 ms POST) with a Reset button. Slider value shows amber when zoomed to warn about narrowed FOV.
+
 ## Edge Cases
 
 - **Guard mode + camera off**: ✅ Done — guard SKILL.md step 1: `[HW:/camera/enable:{}]` before enabling guard. Overrides manual disable.
