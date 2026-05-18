@@ -634,5 +634,5 @@ Configuration constants are in `lelamp/config.py`:
 - **Passive sensing events** (`[sensing:*]`) are dropped if the agent is already busy with another turn (except presence and voice events which are queued).
 - **Voice events** always pass through — the user is explicitly speaking. Voice messages include a mood scan nudge (`[MANDATORY: Follow Mood skill — log mood now.]`) so the agent remembers to detect mood from the conversation flow.
 - The `[sensing:type]` prefix in the message is how the agent knows it's an ambient event, not a user message.
-- Sensing events are exempt from the "call `/emotion thinking` first" rule — each type has its own defined first emotion.
+- **Pre-turn `thinking` emotion**: The `emotion-acknowledge` hook fires `POST /emotion {thinking, 0.7}` server-side at `message:preprocessed` for every non-sensing message — the agent does not need to call it. Sensing events are skipped by the hook because each type has its own defined first emotion.
 - **Image pruning echo**: OpenClaw strips old image payloads from conversation history to save tokens. Smaller models (Haiku) may echo the pruning markers as `[image description removed]` in their response text. `SOUL.md` instructs the agent to never echo these markers.
