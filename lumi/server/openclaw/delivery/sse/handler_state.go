@@ -1,6 +1,7 @@
 package sse
 
 import (
+	"log/slog"
 	"strings"
 )
 
@@ -17,6 +18,22 @@ func (h *OpenClawHandler) accumulateAssistantDelta(runID, delta string) {
 		h.assistantBuf[runID] = buf
 	}
 	buf.WriteString(delta)
+	slog.Info("assistant delta buffered (TTS waits for lifecycle:end)",
+		"component", "agent",
+		"run_id", runID,
+		"delta", delta,
+		"cumulative_len", buf.Len(),
+		"cumulative_tail", tailPreview(buf.String(), 120),
+	)
+}
+
+// tailPreview returns the last n chars of s for log readability without spamming
+// the entire growing buffer on every delta.
+func tailPreview(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return "…" + s[len(s)-n:]
 }
 
 // flushAssistantText returns the accumulated text for runId and clears the buffer.
