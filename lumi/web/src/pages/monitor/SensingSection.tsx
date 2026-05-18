@@ -11,6 +11,26 @@ function fmtAgo(seconds: number | null | undefined): string {
   return `${Math.floor(seconds / 3600)}h ago`;
 }
 
+interface PoseSample {
+  ts: number;
+  score: number;
+  risk_level: number;
+  region_max: Record<string, number>;
+  noisy: boolean;
+}
+
+interface PoseSummary {
+  bad_ratio: number;
+  valid_samples: number;
+  bad_samples: number;
+  window_min: number;
+  region_frequency: Record<string, number>;
+  dominant_region: string;
+  dominant_count: number;
+  latest_score: number;
+  latest_risk_level: number;
+}
+
 interface Perception {
   type: string;
   connected?: boolean;
@@ -36,6 +56,17 @@ interface Perception {
   seconds_since_check?: number | null;
   occurrence_count?: number;
   echo_suppression?: boolean;
+  // Pose perception (added with the silent-sampler refactor).
+  ergo_score?: number | null;
+  ergo_risk_level?: number | null;
+  seconds_since_sample?: number | null;
+  samples_in_buffer?: number;
+  samples_until_gate?: number;
+  window_samples?: number;
+  sample_interval_s?: number;
+  bad_ratio_threshold?: number;
+  summary?: PoseSummary | null;
+  samples?: PoseSample[];
 }
 
 interface SensingData {
@@ -96,6 +127,45 @@ function lightTier(level: number): { label: string; color: string } {
   return                  { label: "Sunlit", color: "var(--lm-green)" };
 }
 
+// Risk tier for pose samples. Mirrors the lelamp risk_level enum:
+// 0 (no data) / 1 (negligible) / 2 (low) / 3 (medium) / 4 (high).
+function poseDotColor(sample: PoseSample): string {
+  if (sample.noisy) return "var(--lm-text-muted)";
+  switch (sample.risk_level) {
+    case 4: return "var(--lm-red)";
+    case 3: return "var(--lm-amber)";
+    case 2: return "var(--lm-teal)";
+    case 1: return "var(--lm-green)";
+    default: return "var(--lm-text-muted)";
+  }
+}
+
+function riskName(level: number | null | undefined): string {
+  switch (level) {
+    case 4: return "high";
+    case 3: return "medium";
+    case 2: return "low";
+    case 1: return "negligible";
+    default: return "—";
+  }
+}
+
+function posePillStatus(pose: Perception): { text: string; color: string } {
+  const inBuf = pose.samples_in_buffer ?? 0;
+  const win = pose.window_samples ?? 30;
+  const summary = pose.summary;
+  if (summary && summary.bad_ratio >= (pose.bad_ratio_threshold ?? 0.6)) {
+    return { text: `Bad ${Math.round(summary.bad_ratio * 100)}%`, color: "var(--lm-red)" };
+  }
+  if (summary) {
+    return { text: `OK (${Math.round((1 - summary.bad_ratio) * 100)}% clean)`, color: "var(--lm-green)" };
+  }
+  if (inBuf > 0) {
+    return { text: `Filling ${inBuf}/${win}`, color: "var(--lm-amber)" };
+  }
+  return { text: "Idle", color: "var(--lm-text-muted)" };
+}
+
 export function SensingSection() {
   const [data, setData] = useState<SensingData | null>(null);
 
@@ -111,6 +181,7 @@ export function SensingSection() {
   const face = data.perceptions.find((p) => p.type === "face");
   const light = data.perceptions.find((p) => p.type === "light_level");
   const sound = data.perceptions.find((p) => p.type === "sound");
+  const pose = data.perceptions.find((p) => p.type === "pose");
   const ev = data.last_event_seconds_ago;
 
   const motionFresh = (motion?.seconds_since_motion ?? Infinity) < 30;
@@ -264,6 +335,94 @@ export function SensingSection() {
           </div>
         </div>
       </div>
+
+      {/* Pose / Posture — rolling 30-min sample buffer + aggregated summary.
+          See lelamp pose.py + motion.py: posture summary rides on the next
+          motion.activity event only when the bad_ratio threshold is crossed. */}
+      {pose ? (() => {
+        const status = posePillStatus(pose);
+        const samples = pose.samples ?? [];
+        const win = pose.window_samples ?? 30;
+        const summary = pose.summary;
+        const placeholders = Math.max(0, win - samples.length);
+        return (
+          <div style={S.card}>
+            <CardHeader
+              label="Pose / Posture"
+              pill={<Pill text={status.text} color={status.color} />}
+            />
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 1fr) 2fr", gap: 14 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <StatPill label="Connected"      value={pose.connected ? "Yes" : "No"} color={pose.connected ? "var(--lm-green)" : "var(--lm-red)"} />
+                <StatPill label="Buffer"         value={`${pose.samples_in_buffer ?? 0} / ${win}`} />
+                <StatPill label="Until gate"     value={pose.samples_until_gate ?? win} color={(pose.samples_until_gate ?? 1) === 0 ? "var(--lm-green)" : undefined} />
+                <StatPill label="Sample every"   value={`${Math.round(pose.sample_interval_s ?? 60)}s`} />
+                <StatPill label="Last sample"    value={fmtAgo(pose.seconds_since_sample)} />
+                <StatPill label="Last score"     value={`${pose.ergo_score ?? "—"} (${riskName(pose.ergo_risk_level)})`} />
+                {summary ? (
+                  <>
+                    <StatPill label="Bad ratio"      value={`${Math.round(summary.bad_ratio * 100)}% (${summary.bad_samples}/${summary.valid_samples})`} color={summary.bad_ratio >= (pose.bad_ratio_threshold ?? 0.6) ? "var(--lm-red)" : "var(--lm-green)"} />
+                    <StatPill label="Dominant"       value={summary.dominant_region ? `${summary.dominant_region} (${summary.dominant_count})` : "—"} />
+                    <StatPill label="Window"         value={`${summary.window_min} min`} />
+                  </>
+                ) : (
+                  <StatPill label="Summary" value="Not ready yet" />
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "var(--lm-text-muted)", marginBottom: 6, letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                  Samples (oldest → newest)
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${win}, 1fr)`, gap: 3 }}>
+                  {samples.map((s, idx) => (
+                    <div
+                      key={`${s.ts}-${idx}`}
+                      title={`score=${s.score} risk=${riskName(s.risk_level)}${s.noisy ? " [noisy]" : ""}`}
+                      style={{
+                        height: 18,
+                        borderRadius: 3,
+                        background: poseDotColor(s),
+                        opacity: s.noisy ? 0.4 : 1,
+                        border: s.noisy ? "1px dashed var(--lm-text-muted)" : "none",
+                      }}
+                    />
+                  ))}
+                  {Array.from({ length: placeholders }).map((_, idx) => (
+                    <div
+                      key={`pad-${idx}`}
+                      style={{
+                        height: 18,
+                        borderRadius: 3,
+                        background: "transparent",
+                        border: "1px dashed var(--lm-text-muted)",
+                        opacity: 0.4,
+                      }}
+                    />
+                  ))}
+                </div>
+                {summary && summary.region_frequency ? (
+                  <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {Object.entries(summary.region_frequency)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([region, count]) => (
+                        <span key={region} style={{
+                          fontSize: 10,
+                          padding: "2px 7px",
+                          borderRadius: 4,
+                          background: count > 0 ? "var(--lm-red)26" : "var(--lm-text-muted)15",
+                          color: count > 0 ? "var(--lm-red)" : "var(--lm-text-muted)",
+                          border: `1px solid ${count > 0 ? "var(--lm-red)55" : "var(--lm-text-muted)33"}`,
+                        }}>
+                          {region}: {count}
+                        </span>
+                      ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }
