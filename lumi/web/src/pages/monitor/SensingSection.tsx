@@ -11,17 +11,31 @@ function fmtAgo(seconds: number | null | undefined): string {
   return `${Math.floor(seconds / 3600)}h ago`;
 }
 
+// Raw per-side ergo data from dlbackend (passed through by lelamp).
+interface PoseSide {
+  score?: number;
+  risk_level?: number;
+  body_scores?: {
+    upper_arm?: number; upper_arm_angle?: number;
+    lower_arm?: number; lower_arm_angle?: number;
+    wrist?: number;
+    neck?: number;     neck_angle?: number;
+    trunk?: number;    trunk_angle?: number;
+  };
+  skipped_joints?: string[];
+}
+
 interface PoseSample {
   ts: number;
   score: number;
   risk_level: number;
-  region_max: Record<string, number>;
-  noisy: boolean;
+  left?: PoseSide;
+  right?: PoseSide;
 }
 
 interface PoseSummary {
   bad_ratio: number;
-  valid_samples: number;
+  samples: number;
   bad_samples: number;
   window_min: number;
   region_frequency: Record<string, number>;
@@ -130,7 +144,6 @@ function lightTier(level: number): { label: string; color: string } {
 // Risk tier for pose samples. Mirrors the lelamp risk_level enum:
 // 0 (no data) / 1 (negligible) / 2 (low) / 3 (medium) / 4 (high).
 function poseDotColor(sample: PoseSample): string {
-  if (sample.noisy) return "var(--lm-text-muted)";
   switch (sample.risk_level) {
     case 4: return "var(--lm-red)";
     case 3: return "var(--lm-amber)";
@@ -351,46 +364,79 @@ export function SensingSection() {
               label="Pose / Posture"
               pill={<Pill text={status.text} color={status.color} />}
             />
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-              <StatPill label="Buffer"      value={`${pose.samples_in_buffer ?? 0} / ${win}`} />
-              <StatPill label="Until gate"  value={pose.samples_until_gate ?? win} color={(pose.samples_until_gate ?? 1) === 0 ? "var(--lm-green)" : undefined} />
-              <StatPill label="Last"        value={fmtAgo(pose.seconds_since_sample)} />
-              <StatPill label="Last score"  value={`${pose.ergo_score ?? "—"} (${riskName(pose.ergo_risk_level)})`} />
-              {summary ? (
-                <>
-                  <StatPill label="Bad" value={`${Math.round(summary.bad_ratio * 100)}% (${summary.bad_samples}/${summary.valid_samples})`} color={summary.bad_ratio >= (pose.bad_ratio_threshold ?? 0.6) ? "var(--lm-red)" : "var(--lm-green)"} />
-                  <StatPill label="Dominant" value={summary.dominant_region || "—"} />
-                </>
-              ) : null}
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(240px, 320px) 1fr", gap: 14, marginBottom: 10, alignItems: "start" }}>
+              <div>
+                {/* Latest annotated pose snapshot (lelamp /sensing/pose-snapshot).
+                    Cache-buster via the last-sample timestamp so the browser
+                    fetches a fresh frame each time pose appends a sample. */}
+                <img
+                  src={`${HW}/sensing/pose-snapshot?t=${pose.samples?.[pose.samples.length - 1]?.ts ?? 0}`}
+                  alt="latest pose"
+                  style={{ width: "100%", borderRadius: 4, background: "var(--lm-text-muted)15", border: "1px solid var(--lm-text-muted)33" }}
+                  onError={(e) => { (e.currentTarget.style.display = "none"); }}
+                />
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignContent: "flex-start" }}>
+                <StatPill label="Buffer"      value={`${pose.samples_in_buffer ?? 0} / ${win}`} />
+                <StatPill label="Until gate"  value={pose.samples_until_gate ?? win} color={(pose.samples_until_gate ?? 1) === 0 ? "var(--lm-green)" : undefined} />
+                <StatPill label="Last"        value={fmtAgo(pose.seconds_since_sample)} />
+                <StatPill label="Last score"  value={`${pose.ergo_score ?? "—"} (${riskName(pose.ergo_risk_level)})`} />
+                {summary ? (
+                  <>
+                    <StatPill label="Bad" value={`${Math.round(summary.bad_ratio * 100)}% (${summary.bad_samples}/${summary.samples})`} color={summary.bad_ratio >= (pose.bad_ratio_threshold ?? 0.6) ? "var(--lm-red)" : "var(--lm-green)"} />
+                    <StatPill label="Dominant" value={summary.dominant_region || "—"} />
+                  </>
+                ) : null}
+              </div>
             </div>
             <div style={{ fontSize: 10, color: "var(--lm-text-muted)", marginBottom: 4, letterSpacing: "0.05em", textTransform: "uppercase" }}>
-              Samples (newest first)
+              Samples (newest first) — sub-score@angle° raw from dlbackend; L = left, R = right
             </div>
             {samples.length === 0 ? (
               <span style={{ color: "var(--lm-text-muted)", fontSize: 11 }}>No samples yet</span>
-            ) : (
-              <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11, lineHeight: 1.6 }}>
-                <div style={{ display: "grid", gridTemplateColumns: "100px 50px 60px 1fr 60px", gap: 8, color: "var(--lm-text-muted)", paddingBottom: 4, borderBottom: "1px solid var(--lm-text-muted)33" }}>
-                  <div>time</div><div>score</div><div>risk</div><div>regions (neck/trunk/u-arm/l-arm/wrist)</div><div>noisy</div>
+            ) : (() => {
+              // 10 columns: time, score, risk, neck, trunk, L u-arm, R u-arm, L l-arm, R l-arm, wrists
+              const cols = "92px 42px 56px 90px 90px 90px 90px 90px 90px 64px";
+              const fmtCell = (sub: number | undefined, angle: number | undefined): string => {
+                if (sub == null) return "-";
+                if (angle == null) return `${sub}`;
+                return `${sub}@${Math.round(angle)}°`;
+              };
+              return (
+                <div style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 11, lineHeight: 1.6, overflowX: "auto" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: cols, gap: 6, color: "var(--lm-text-muted)", paddingBottom: 4, borderBottom: "1px solid var(--lm-text-muted)33", whiteSpace: "nowrap" }}>
+                    <div>time</div><div>score</div><div>risk</div>
+                    <div>neck</div><div>trunk</div>
+                    <div>L u-arm</div><div>R u-arm</div>
+                    <div>L l-arm</div><div>R l-arm</div>
+                    <div>wrist L/R</div>
+                  </div>
+                  {samples.map((s, idx) => {
+                    const d = new Date(s.ts * 1000);
+                    const hh = String(d.getHours()).padStart(2, "0");
+                    const mm = String(d.getMinutes()).padStart(2, "0");
+                    const ss = String(d.getSeconds()).padStart(2, "0");
+                    const L = s.left?.body_scores ?? {};
+                    const R = s.right?.body_scores ?? {};
+                    // neck and trunk are bilateral; show left's view (right would be identical).
+                    return (
+                      <div key={`${s.ts}-${idx}`} style={{ display: "grid", gridTemplateColumns: cols, gap: 6, whiteSpace: "nowrap" }}>
+                        <div>{`${hh}:${mm}:${ss}`}</div>
+                        <div>{s.score}</div>
+                        <div style={{ color: poseDotColor(s) }}>{riskName(s.risk_level)}</div>
+                        <div>{fmtCell(L.neck, L.neck_angle)}</div>
+                        <div>{fmtCell(L.trunk, L.trunk_angle)}</div>
+                        <div>{fmtCell(L.upper_arm, L.upper_arm_angle)}</div>
+                        <div>{fmtCell(R.upper_arm, R.upper_arm_angle)}</div>
+                        <div>{fmtCell(L.lower_arm, L.lower_arm_angle)}</div>
+                        <div>{fmtCell(R.lower_arm, R.lower_arm_angle)}</div>
+                        <div>{`${L.wrist ?? "-"}/${R.wrist ?? "-"}`}</div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {samples.map((s, idx) => {
-                  const d = new Date(s.ts * 1000);
-                  const hh = String(d.getHours()).padStart(2, "0");
-                  const mm = String(d.getMinutes()).padStart(2, "0");
-                  const ss = String(d.getSeconds()).padStart(2, "0");
-                  const r = s.region_max ?? {};
-                  return (
-                    <div key={`${s.ts}-${idx}`} style={{ display: "grid", gridTemplateColumns: "100px 50px 60px 1fr 60px", gap: 8, opacity: s.noisy ? 0.5 : 1 }}>
-                      <div>{`${hh}:${mm}:${ss}`}</div>
-                      <div>{s.score}</div>
-                      <div style={{ color: poseDotColor(s) }}>{riskName(s.risk_level)}</div>
-                      <div>{`${r.neck ?? "-"}/${r.trunk ?? "-"}/${r.upper_arm ?? "-"}/${r.lower_arm ?? "-"}/${r.wrist ?? "-"}`}</div>
-                      <div style={{ color: s.noisy ? "var(--lm-amber)" : "var(--lm-text-muted)" }}>{s.noisy ? "yes" : ""}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+              );
+            })()}
           </div>
         );
       })() : null}
