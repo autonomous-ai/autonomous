@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"go-lamp.autonomous.ai/lib/posture"
 	"go-lamp.autonomous.ai/lib/usercanon"
 	"go-lamp.autonomous.ai/lib/wellbeing"
 )
@@ -100,6 +101,7 @@ type wellbeingContext struct {
 	DrinksSinceToiletNudge      int                      `json:"drinks_since_toilet_nudge"`      // count of `drink` rows logged after the most recent `nudge_toilet` today (or all today's drinks if none); resets via nudge_toilet POST
 	Patterns                    map[string]patternDigest `json:"patterns,omitempty"`  // wellbeing_patterns from patterns.json, keyed by action ("drink"/"break")
 	BootstrapNeeded             bool                     `json:"bootstrap_needed"`    // patterns missing/stale AND days >= 3 → invoke habit Flow A only when nudging
+	LastPostureNudgeAgeMin      int                      `json:"last_posture_nudge_age_min"` // minutes since last nudge_posture today; -1 if none. Lets the skill defend against double-nudging if lelamp lost its cooldown state (restart), and supports the praise route (recent nudge + improving summary -> praise instead of re-nudge).
 }
 
 type patternDigest struct {
@@ -140,6 +142,9 @@ func BuildWellbeingContext(user string) string {
 	days := countWellbeingDays(user)
 	bootstrapNeeded := !patternsFresh && days >= bootstrapMinDays
 
+	postureEvents := posture.Query(user, today, 0)
+	lastPostureNudgeAge := lastPostureNudgeAgeMin(postureEvents, now)
+
 	ctx := wellbeingContext{
 		HydrationDeltaMin:          hydrationDelta,
 		BreakDeltaMin:              breakDelta,
@@ -155,6 +160,7 @@ func BuildWellbeingContext(user string) string {
 		DrinksSinceToiletNudge:     drinksSinceToiletNudge,
 		Patterns:                   patterns,
 		BootstrapNeeded:            bootstrapNeeded,
+		LastPostureNudgeAgeMin:     lastPostureNudgeAge,
 	}
 
 	body, err := json.Marshal(ctx)
@@ -163,6 +169,27 @@ func BuildWellbeingContext(user string) string {
 		return ""
 	}
 	return fmt.Sprintf("\n[wellbeing_context: %s]", string(body))
+}
+
+// lastPostureNudgeAgeMin returns minutes since the most recent
+// `nudge_posture` row today, or -1 if none. Lets the wellbeing skill
+// defend against double-nudging when lelamp lost its cooldown state
+// (process restart) and enables the praise route (recent nudge + the
+// summary trending better -> praise instead of re-nudge).
+func lastPostureNudgeAgeMin(events []posture.Event, now time.Time) int {
+	var latestTS float64
+	for _, e := range events {
+		if e.Action != posture.ActionNudge {
+			continue
+		}
+		if e.TS > latestTS {
+			latestTS = e.TS
+		}
+	}
+	if latestTS == 0 {
+		return -1
+	}
+	return int(now.Sub(time.Unix(int64(latestTS), 0)).Minutes())
 }
 
 // computeDeltaMin returns minutes since the most recent event with an action
