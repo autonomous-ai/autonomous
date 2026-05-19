@@ -75,8 +75,10 @@ interface Perception {
   ergo_risk_level?: number | null;
   seconds_since_sample?: number | null;
   samples_in_buffer?: number;
-  samples_until_gate?: number;
-  window_samples?: number;
+  window_age_s?: number;
+  window_duration_s?: number;
+  window_min_samples?: number;
+  window_complete?: boolean;
   sample_interval_s?: number;
   bad_ratio_threshold?: number;
   summary?: PoseSummary | null;
@@ -164,8 +166,8 @@ function riskName(level: number | null | undefined): string {
 }
 
 function posePillStatus(pose: Perception): { text: string; color: string } {
-  const inBuf = pose.samples_in_buffer ?? 0;
-  const win = pose.window_samples ?? 30;
+  const ageS = pose.window_age_s ?? 0;
+  const durS = pose.window_duration_s ?? 600;
   const summary = pose.summary;
   if (summary && summary.bad_ratio >= (pose.bad_ratio_threshold ?? 0.6)) {
     return { text: `Bad ${Math.round(summary.bad_ratio * 100)}%`, color: "var(--lm-red)" };
@@ -173,8 +175,9 @@ function posePillStatus(pose: Perception): { text: string; color: string } {
   if (summary) {
     return { text: `OK (${Math.round((1 - summary.bad_ratio) * 100)}% clean)`, color: "var(--lm-green)" };
   }
-  if (inBuf > 0) {
-    return { text: `Filling ${inBuf}/${win}`, color: "var(--lm-amber)" };
+  if (ageS > 0) {
+    const remainMin = Math.max(0, Math.ceil((durS - ageS) / 60));
+    return { text: `Filling ${remainMin}m left`, color: "var(--lm-amber)" };
   }
   return { text: "Idle", color: "var(--lm-text-muted)" };
 }
@@ -350,15 +353,17 @@ export function SensingSection() {
         </div>
       </div>
 
-      {/* Pose / Posture — rolling sample buffer rendered as a raw table.
-          Each row is one minute's reading (newest first). See lelamp
-          pose.py + motion.py: posture summary rides on the next
-          motion.activity event only when the bad_ratio threshold is crossed. */}
+      {/* Pose / Posture — tumbling time window rendered as a raw sample
+          table (newest first). See lelamp pose.py + motion.py: samples
+          accumulate until POSE_WINDOW_DURATION_S elapses, then motion.py
+          evaluates the aggregate, optionally folds a posture nudge into
+          motion.activity, and always resets the window. */}
       {pose ? (() => {
         const status = posePillStatus(pose);
-        const win = pose.window_samples ?? 30;
         const samples = [...(pose.samples ?? [])].reverse(); // newest first
         const summary = pose.summary;
+        const winDurMin = Math.round((pose.window_duration_s ?? 600) / 60);
+        const winAgeMin = Math.round((pose.window_age_s ?? 0) / 60);
         return (
           <div style={S.card}>
             <CardHeader
@@ -366,8 +371,8 @@ export function SensingSection() {
               pill={<Pill text={status.text} color={status.color} />}
             />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-              <StatPill label="Buffer"      value={`${pose.samples_in_buffer ?? 0} / ${win}`} />
-              <StatPill label="Until gate"  value={pose.samples_until_gate ?? win} color={(pose.samples_until_gate ?? 1) === 0 ? "var(--lm-green)" : undefined} />
+              <StatPill label="Samples"     value={`${pose.samples_in_buffer ?? 0} (min ${pose.window_min_samples ?? 3})`} />
+              <StatPill label="Window"      value={`${winAgeMin}m / ${winDurMin}m`} color={pose.window_complete ? "var(--lm-green)" : undefined} />
               <StatPill label="Last"        value={fmtAgo(pose.seconds_since_sample)} />
               <StatPill label="Last score"  value={`${pose.ergo_score ?? "—"} (${riskName(pose.ergo_risk_level)})`} />
               {summary ? (

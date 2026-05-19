@@ -9,16 +9,22 @@ so a second summary won't arrive for ~30 min anyway.
 
 LeLamp folds two extra blocks into `motion.activity` ONLY when ALL hold:
 
-- Sedentary streak ≥ `POSE_STREAK_MIN_GATE_S` (test 10 min / prod 30 min).
-- Sample buffer is full (`POSE_WINDOW_SAMPLES` — test 10 / prod 30
-  valid samples across that many minutes).
-- `bad_ratio ≥ POSE_BAD_RATIO` (test 0.3 / prod 0.5).
-- No previous summary was injected within `POSE_NUDGE_COOLDOWN_S`
-  (test 10 min / prod 30 min).
+- The tumbling pose window has completed (open for ≥ `POSE_WINDOW_DURATION_S`
+  — debug 300 s / prod target 3600 s — since the user first turned
+  sedentary in this cycle).
+- The user is still sedentary on this flush (no nag mid-stretch).
+- At least `POSE_WINDOW_MIN_SAMPLES` valid pose samples landed in that
+  span (default 3, noise-floor for windows where dlbackend missed
+  most frames).
+- `bad_ratio ≥ POSE_BAD_RATIO` (default 0.6).
 
-If the block is absent: posture is fine, the streak is still short,
-the buffer isn't full yet, or we're in cooldown — **do not nudge
-posture this turn**, regardless of how the user feels in the moment.
+There is no separate streak-minimum or cooldown — the window is the
+rhythm. After every completed cycle (fire or no-fire) the window
+resets, so the next nudge is naturally one window away.
+
+If the block is absent: posture is fine, the window isn't complete yet,
+or the user is currently on a stretch break — **do not nudge posture
+this turn**, regardless of how the user feels in the moment.
 The wellbeing
 context's `last_posture_nudge_age_min` field gives the corroborating
 agent-side view (-1 if no nudge today).

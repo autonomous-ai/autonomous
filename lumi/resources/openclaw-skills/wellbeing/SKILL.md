@@ -131,7 +131,7 @@ Read the `[activity] Activity detected: <labels>.` message + the `[wellbeing_con
 - **One route per turn.** Pick the first matching row, then stop.
 - **Reference files own the phrasing** for routes #2–#5 (morning-greeting / sleep-winddown / meal-reminder / posture-nudge). The corresponding HW marker logs `action=<route name>` so the next event in the same window/day sees `*_done_today` / `*_done_this_window` true and skips re-firing.
 - The `nudge_*` row you POST in routes #6 (hydration) / #7 (break) acts as the next reset point for `hydration_delta_min` / `break_delta_min`, so once you nudge the delta drops to 0 and the next reminder of that kind only fires after another full threshold window. Route #8 (toilet) similarly resets `drinks_since_toilet_nudge` to 0 on POST.
-- Route #5 (posture) does NOT follow that pattern — re-firing is gated by lelamp's `POSE_NUDGE_COOLDOWN_S` (~30 min, enforced upstream by suppressing the `[posture_summary]` block). Your POST does not by itself reset a timer; if the block is absent, you cannot nudge.
+- Route #5 (posture) does NOT follow that pattern — re-firing is gated by lelamp's tumbling pose window: a `[posture_summary]` block only appears at the end of each completed window where bad_ratio crossed the threshold AND the user is still sedentary. Your POST does not by itself reset a timer; if the block is absent, you cannot nudge.
 - Never narrate the routing decision in the spoken reply.
 
 ## Reaction (when the user just did the thing)

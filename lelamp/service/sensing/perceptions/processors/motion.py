@@ -297,12 +297,13 @@ class MotionPerception(Perception[cv2.typing.MatLike]):
 
         # Sedentary streak — tracks how long the user has been in a
         # continuous "sedentary" activity (using computer / writing / …).
-        # Posture summary only rides along when this exceeds the gate.
+        # Wired in by the orchestrator. Used to fold posture_summary into
+        # motion.activity whenever pose's tumbling window completes.
         self._pose_perception: PosePerception | None = None
+        # Tracks when the current continuous-sedentary stretch began. Used
+        # only to compute the [computer_streak_min: N] context hint that
+        # rides alongside the posture summary — not a gate.
         self._sedentary_streak_start_ts: float = 0.0
-        # Cooldown so the same "still bad" window doesn't keep injecting on
-        # every dedup-expired motion.activity flush.
-        self._last_posture_inject_ts: float = 0.0
 
     def set_pose_perception(self, pose: PosePerception | None) -> None:
         """Wire in the pose sampler so motion can fold posture summaries
@@ -476,6 +477,13 @@ class MotionPerception(Perception[cv2.typing.MatLike]):
         if has_sedentary:
             if self._sedentary_streak_start_ts <= 0:
                 self._sedentary_streak_start_ts = cur_ts
+            # Sedentary is the SOLE trigger to open the pose tumbling
+            # window. Idempotent — subsequent sedentary flushes inside an
+            # already-open window are no-ops. Once the window is open it
+            # runs purely on POSE_WINDOW_DURATION_S; later stretch breaks
+            # don't stop the clock, they just leave the bad_ratio honest.
+            if self._pose_perception is not None:
+                self._pose_perception.start_window()
         else:
             if self._sedentary_streak_start_ts > 0:
                 logger.debug(
@@ -487,29 +495,22 @@ class MotionPerception(Perception[cv2.typing.MatLike]):
 
         message = f"Activity detected: {', '.join(sorted(labels))}."
 
-        # Fold posture summary in when the sedentary streak exceeds the
-        # gate AND the pose buffer says the window is genuinely bad. Single
-        # transient frames (cup-reach, wrap-edge noise) are already filtered
-        # by pose's aggregation logic. After an injection, suppress further
-        # ones for POSE_NUDGE_COOLDOWN_S so the user isn't nagged on every
-        # dedup-expired flush while the window stays bad.
-        #
-        # `pending_posture_commit_ts` defers the cooldown commit: we only
-        # mark _last_posture_inject_ts after the dedup check has let the
-        # event through. Otherwise a fold that got eaten by dedup would
-        # still burn the 10-min cooldown, and the agent would never see
-        # the posture nudge until the cooldown expired.
-        pending_posture_commit_ts: float = 0.0
+        # Posture tumbling-window evaluation. Pose.py opens a window on the
+        # first sedentary flush. Once it's been open for POSE_WINDOW_DURATION_S,
+        # we evaluate the aggregate and ALWAYS reset — fire or no-fire.
+        # The window itself is the rhythm: no separate streak gate (window
+        # start = "user is sedentary now") and no separate cooldown (next
+        # fire is naturally one window away). Only two gates remain at fold
+        # time: bad_ratio over the configured threshold, and the user must
+        # still be sedentary on this flush (don't nag mid-stretch).
+        posture_injected: bool = False
         if (
-            has_sedentary
-            and self._sedentary_streak_start_ts > 0
-            and self._pose_perception is not None
-            and (cur_ts - self._last_posture_inject_ts)
-            >= config.POSE_NUDGE_COOLDOWN_S
+            self._pose_perception is not None
+            and self._pose_perception.is_window_complete()
         ):
-            streak_s: float = cur_ts - self._sedentary_streak_start_ts
-            streak_min: int = int(streak_s / 60)
-            if streak_s >= config.POSE_STREAK_MIN_GATE_S:
+            if has_sedentary and self._sedentary_streak_start_ts > 0:
+                streak_s: float = cur_ts - self._sedentary_streak_start_ts
+                streak_min: int = int(streak_s / 60)
                 summary: dict[str, Any] | None = (
                     self._pose_perception.get_posture_summary()
                 )
@@ -522,14 +523,20 @@ class MotionPerception(Perception[cv2.typing.MatLike]):
                         f"[posture_summary: "
                         f"{json.dumps(summary_with_streak, separators=(',', ':'))}]"
                     )
-                    pending_posture_commit_ts = cur_ts
+                    posture_injected = True
                     logger.info(
                         "[motion] folding posture summary "
-                        "(streak=%dm bad_ratio=%.2f dominant=%s)",
+                        "(streak=%dm bad_ratio=%.2f dominant=%s samples=%d)",
                         streak_min,
                         summary["bad_ratio"],
                         summary["dominant_region"],
+                        summary["samples"],
                     )
+            # Unconditional reset — a completed window with no fire (stretch
+            # break in progress, bad_ratio under threshold, or too few samples
+            # for the noise floor) still must clear, otherwise the next
+            # sit-down would evaluate stale data from the previous cycle.
+            self._pose_perception.reset_window()
 
         # Dedup: drop if the outbound state (user + outbound labels) hasn't
         # changed since the last send AND we're still within the dedup window.
@@ -542,6 +549,7 @@ class MotionPerception(Perception[cv2.typing.MatLike]):
         if (
             self._last_sent_key == key
             and (cur_ts - self._last_sent_ts) < self._dedup_window_s
+            and not posture_injected
         ):
             logger.info(
                 "[motion] dedup drop: %s (same as last send %.1fs ago)",
@@ -549,16 +557,13 @@ class MotionPerception(Perception[cv2.typing.MatLike]):
                 cur_ts - self._last_sent_ts,
             )
             return
+        if posture_injected and self._last_sent_key == key and (cur_ts - self._last_sent_ts) < self._dedup_window_s:
+            logger.info(
+                "[motion] dedup BYPASS (posture nudge): would-have-dropped (last send %.1fs ago)",
+                cur_ts - self._last_sent_ts,
+            )
         self._last_sent_key = key
         self._last_sent_ts = cur_ts
-        # Commit posture cooldown only now that the event has cleared dedup
-        # and will reach the agent. If we set _last_posture_inject_ts inside
-        # the fold block, a dropped event would still burn the 10-min
-        # cooldown — the agent would miss the nudge entirely until cooldown
-        # expired, and meanwhile every subsequent fold attempt would skip
-        # because cur_ts - _last_posture_inject_ts < POSE_NUDGE_COOLDOWN_S.
-        if pending_posture_commit_ts > 0:
-            self._last_posture_inject_ts = pending_posture_commit_ts
 
         # Log each outbound label to Lumi wellbeing BEFORE firing the event.
         # Log-first means when the agent reads history on motion.activity,
