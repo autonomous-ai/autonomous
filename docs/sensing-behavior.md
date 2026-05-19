@@ -119,6 +119,40 @@ Only large motion is forwarded — small motion is filtered out by LeLamp and ne
 
 ---
 
+## Posture (RULA — silently sampled, folded into `motion.activity`)
+
+LeLamp streams every camera frame to dlbackend `/api/dl/pose-estimation/ws` and receives a per-frame RULA breakdown (whole-body score + `risk_level` + per-side `body_scores` and `*_angle` for `neck / trunk / upper_arm / lower_arm / wrist`). `PosePerception` throttles to **one sample per `POSE_SAMPLE_INTERVAL_S` (default 60s)** into a rolling deque + daily JSONL under `/tmp/lumi-sensing-snapshots/sensing_pose/samples_YYYY-MM-DD.jsonl`. **No event is emitted directly** — `MotionPerception` calls `get_posture_summary()` and rides the aggregate along on the next `motion.activity` when the gate trips.
+
+### Gate (when does the summary inject)
+
+A sample counts as **bad** when **either**:
+
+- whole-body `risk_level >= 3` (medium/high), **or**
+- any single region (left **or** right side) at sub-score `>= POSE_REGION_HIGH_SUBSCORE` (default `4`)
+
+The second arm catches forward-head-thrust ("tech neck") cases where the RULA total stays "low" because trunk + arms are fine but neck alone is clearly off.
+
+Fire when `bad_ratio >= POSE_BAD_RATIO` (default **0.6**) over a buffer of `POSE_WINDOW_SAMPLES` (default 10 = 10 min; production target 30 = 30 min). Two additional gates apply at the motion side: sedentary streak ≥ `POSE_STREAK_MIN_GATE_S`, and cooldown ≥ `POSE_NUDGE_COOLDOWN_S` since the previous inject.
+
+### Per-event annotated snapshots
+
+Every sample writes its own annotated JPEG (skeleton overlay + RULA label) to `/tmp/lumi-sensing-snapshots/sensing_pose/snapshots/<int(ts)>.jpg`. Rotation runs after each write — files older than `POSE_SNAPSHOT_RETENTION_S` (default 24h) are pruned, and if the directory total still exceeds `POSE_SNAPSHOT_MAX_BYTES` (default 50 MB) the oldest are deleted until it fits.
+
+Two endpoints:
+
+| Endpoint | Returns |
+|---|---|
+| `GET /sensing/pose-snapshot` | The newest `.jpg` in the snapshots dir (back-compat for the live preview tile in the monitor) |
+| `GET /sensing/pose-snapshot/{ts}` | The annotated JPEG for that specific sample (`ts` = `int(sample.ts)` from the JSONL). 404 once rotation prunes the file |
+
+The monitor's Pose / Posture card uses the second endpoint for both the big preview (pinned to the newest sample's ts) and the clickable timestamp on each table row — clicking opens the exact frame in a new tab.
+
+### Angle sign workaround (temporary)
+
+dlbackend's `signed_flexion_angle` currently returns the opposite sign of its docstring ("Positive = forward flexion") — a user clearly hunched forward registers a **negative** neck angle, not positive. LeLamp negates `upper_arm_angle`, `neck_angle`, `trunk_angle` on receive (`POSE_FLIP_DLBACKEND_ANGLE_SIGN=True`, default on) so the monitor table and JSONL match reality. `lower_arm_angle` is unsigned and skipped. RULA scores already use `abs(angle)` so risk/score are unaffected by either sign convention. **Revert** by setting the flag to `False` (or removing `_flip_signed_angles`) once dlbackend ships the upstream fix.
+
+---
+
 ## Light Level (`light.level`)
 
 Ambient light changes are forwarded when they cross `LIGHT_CHANGE_THRESHOLD`. No speech required — agent adjusts LED or expresses emotion based on context (e.g. `/emotion sleepy` when lights go dim).

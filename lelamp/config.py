@@ -165,7 +165,14 @@ POSE_ERGO_HIGH_RISK_THRESHOLD = int(os.environ.get("LELAMP_POSE_ERGO_HIGH_RISK_T
 POSE_SAMPLE_INTERVAL_S = float(os.environ.get("LELAMP_POSE_SAMPLE_INTERVAL_S", "60.0"))
 # TEST VALUES — swap WINDOW=30, STREAK=1800, COOLDOWN=1800 (all 30 min) for production.
 POSE_WINDOW_SAMPLES = int(os.environ.get("LELAMP_POSE_WINDOW_SAMPLES", "10"))
-POSE_BAD_RATIO = float(os.environ.get("LELAMP_POSE_BAD_RATIO", "0.3"))
+# Bad-sample definition: any single region (L or R) at sub-score >= this.
+# Catches "head thrust forward, rest of body OK" cases that dlbackend's
+# whole-body risk_level alone misses (RULA total stays at "low" because
+# trunk+arms are fine, but neck sub-score = 4 by itself is worth nagging).
+POSE_REGION_HIGH_SUBSCORE = int(os.environ.get("LELAMP_POSE_REGION_HIGH_SUBSCORE", "4"))
+# Fraction of the window that must be "bad" before posture_summary rides
+# along on the next motion.activity event. Window-size agnostic.
+POSE_BAD_RATIO = float(os.environ.get("LELAMP_POSE_BAD_RATIO", "0.6"))
 # Min "using computer" streak before posture summary is allowed to ride along.
 POSE_STREAK_MIN_GATE_S = float(os.environ.get("LELAMP_POSE_STREAK_MIN_GATE_S", "600.0"))
 # After a posture summary has been folded into a motion.activity event, suppress
@@ -173,6 +180,27 @@ POSE_STREAK_MIN_GATE_S = float(os.environ.get("LELAMP_POSE_STREAK_MIN_GATE_S", "
 # (every 5+ min while the window stays "bad") would re-inject the summary and
 # nag the user repeatedly.
 POSE_NUDGE_COOLDOWN_S = float(os.environ.get("LELAMP_POSE_NUDGE_COOLDOWN_S", "600.0"))
+# Per-sample annotated JPEG retention. Files are written as
+# snapshots/<int(ts)>.jpg next to the daily JSONL; oldest are pruned when
+# any cap is hit. Lets the monitor UI click a sample row to see the actual
+# frame instead of only the most recent.
+POSE_SNAPSHOT_RETENTION_S = float(
+    os.environ.get("LELAMP_POSE_SNAPSHOT_RETENTION_S", str(24 * 3600))
+)
+POSE_SNAPSHOT_MAX_BYTES = int(
+    os.environ.get("LELAMP_POSE_SNAPSHOT_MAX_BYTES", str(50 * 1024 * 1024))
+)
+# TEMPORARY WORKAROUND — dlbackend's signed_flexion_angle returns the
+# opposite sign of its docstring ("Positive = forward flexion"): user
+# clearly hunched forward produces angle = -72°, not +72°. Flip on
+# receive so the monitor table and JSONL match reality. Revert (set to
+# False) the moment dlbackend's utils.signed_flexion_angle is fixed
+# upstream. Only the three signed angles need flipping; lower_arm_angle
+# is unsigned (angle_between_3d) and the RULA scores already use
+# abs(angle) so risk_level / score are unaffected.
+POSE_FLIP_DLBACKEND_ANGLE_SIGN = (
+    os.environ.get("LELAMP_POSE_FLIP_DLBACKEND_ANGLE_SIGN", "true").lower() == "true"
+)
 
 # --- Sensing: Snapshot storage ---
 SNAPSHOT_TMP_DIR = os.environ.get(
