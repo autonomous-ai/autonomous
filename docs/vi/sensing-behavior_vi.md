@@ -147,6 +147,10 @@ Hai endpoint:
 
 Pose / Posture card trên monitor dùng endpoint thứ hai cho cả preview lớn (pin theo ts mới nhất) và timestamp clickable trên từng row trong bảng — click sẽ mở frame chính xác đó trong tab mới.
 
+### Workaround sign góc (tạm thời)
+
+`signed_flexion_angle` ở dlbackend hiện trả về dấu ngược với docstring ("Positive = forward flexion") — user chúi cổ rõ ràng lại ra **góc âm**, không phải dương. LeLamp negate `upper_arm_angle`, `neck_angle`, `trunk_angle` khi nhận từ dlbackend (`POSE_FLIP_DLBACKEND_ANGLE_SIGN=True`, mặc định bật) để bảng monitor + JSONL khớp thực tế. `lower_arm_angle` unsigned nên bỏ qua. RULA score đã dùng `abs(angle)` nên risk/score không đổi dù theo convention nào. **Revert** bằng cách set flag `False` (hoặc xóa `_flip_signed_angles`) ngay khi dlbackend ship fix upstream.
+
 ---
 
 ## Ánh sáng (`light.level`)

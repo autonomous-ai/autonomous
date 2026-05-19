@@ -255,6 +255,30 @@ class RemotePoseEstimator:
 
 _REGIONS: tuple[str, ...] = ("neck", "trunk", "upper_arm", "lower_arm", "wrist")
 
+# dlbackend signed_flexion_angle currently returns the opposite sign of
+# its docstring; we flip on receive while waiting for the upstream fix.
+# lower_arm_angle is unsigned so it stays as-is.
+_SIGNED_ANGLE_KEYS: tuple[str, ...] = ("neck_angle", "trunk_angle", "upper_arm_angle")
+
+
+def _flip_signed_angles(side: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of `side` (a per-side ergo dict from dlbackend) with
+    the three signed angle keys negated inside `body_scores`. Safe no-op
+    when keys are missing or non-numeric."""
+    if not side:
+        return side
+    bs: dict[str, Any] | None = side.get("body_scores")
+    if not isinstance(bs, dict):
+        return side
+    new_bs: dict[str, Any] = dict(bs)
+    for key in _SIGNED_ANGLE_KEYS:
+        val = new_bs.get(key)
+        if isinstance(val, (int, float)):
+            new_bs[key] = -val
+    out: dict[str, Any] = dict(side)
+    out["body_scores"] = new_bs
+    return out
+
 
 class PosePerception(Perception[cv2.typing.MatLike]):
     """Pose estimation + silent ergonomic sampling.
@@ -432,6 +456,9 @@ class PosePerception(Perception[cv2.typing.MatLike]):
 
         left: dict[str, Any] = ergo.get("left", {}) or {}
         right: dict[str, Any] = ergo.get("right", {}) or {}
+        if config.POSE_FLIP_DLBACKEND_ANGLE_SIGN:
+            left = _flip_signed_angles(left)
+            right = _flip_signed_angles(right)
 
         sample = _PoseSample(
             ts=now,

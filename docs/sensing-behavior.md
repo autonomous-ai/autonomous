@@ -147,6 +147,10 @@ Two endpoints:
 
 The monitor's Pose / Posture card uses the second endpoint for both the big preview (pinned to the newest sample's ts) and the clickable timestamp on each table row — clicking opens the exact frame in a new tab.
 
+### Angle sign workaround (temporary)
+
+dlbackend's `signed_flexion_angle` currently returns the opposite sign of its docstring ("Positive = forward flexion") — a user clearly hunched forward registers a **negative** neck angle, not positive. LeLamp negates `upper_arm_angle`, `neck_angle`, `trunk_angle` on receive (`POSE_FLIP_DLBACKEND_ANGLE_SIGN=True`, default on) so the monitor table and JSONL match reality. `lower_arm_angle` is unsigned and skipped. RULA scores already use `abs(angle)` so risk/score are unaffected by either sign convention. **Revert** by setting the flag to `False` (or removing `_flip_signed_angles`) once dlbackend ships the upstream fix.
+
 ---
 
 ## Light Level (`light.level`)

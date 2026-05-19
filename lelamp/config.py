@@ -190,6 +190,17 @@ POSE_SNAPSHOT_RETENTION_S = float(
 POSE_SNAPSHOT_MAX_BYTES = int(
     os.environ.get("LELAMP_POSE_SNAPSHOT_MAX_BYTES", str(50 * 1024 * 1024))
 )
+# TEMPORARY WORKAROUND — dlbackend's signed_flexion_angle returns the
+# opposite sign of its docstring ("Positive = forward flexion"): user
+# clearly hunched forward produces angle = -72°, not +72°. Flip on
+# receive so the monitor table and JSONL match reality. Revert (set to
+# False) the moment dlbackend's utils.signed_flexion_angle is fixed
+# upstream. Only the three signed angles need flipping; lower_arm_angle
+# is unsigned (angle_between_3d) and the RULA scores already use
+# abs(angle) so risk_level / score are unaffected.
+POSE_FLIP_DLBACKEND_ANGLE_SIGN = (
+    os.environ.get("LELAMP_POSE_FLIP_DLBACKEND_ANGLE_SIGN", "true").lower() == "true"
+)
 
 # --- Sensing: Snapshot storage ---
 SNAPSHOT_TMP_DIR = os.environ.get(
