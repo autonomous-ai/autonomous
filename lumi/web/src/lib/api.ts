@@ -45,6 +45,42 @@ export function withApiToken(url: string): string {
   return `${url}${sep}token=${encodeURIComponent(apiToken)}`;
 }
 
+/** Build a /api/hardware/<path> URL with the bearer token baked in as
+ *  ?token=, for places where headers can't be set: <img src>, <a href>,
+ *  window.open, MJPEG stream. Pair with hardwareProxy + adminAuthMiddleware
+ *  on the Go side (?token= fallback). */
+export function hwUrl(path: string): string {
+  const url = `/api/hardware${path}`;
+  return apiToken ? withApiToken(url) : url;
+}
+
+// Global fetch interceptor: attaches Authorization: Bearer to any request
+// that targets /api/hardware/* (the Go hardware proxy). Avoids refactoring
+// ~65 raw fetch sites in the monitor — they keep their existing
+// fetch(`${HW}/...`) shape, and HW now points at the proxy.
+if (typeof window !== "undefined" && !(window as unknown as { __lumiFetchPatched?: boolean }).__lumiFetchPatched) {
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function patchedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    let url = "";
+    if (typeof input === "string") url = input;
+    else if (input instanceof URL) url = input.toString();
+    else url = (input as Request).url;
+
+    // Only intercept the hardware proxy path. Anything else is left alone
+    // (apiRequest already handles its own header set; third-party code
+    // shouldn't be affected).
+    if (url.includes("/api/hardware/") && apiToken) {
+      const headers = new Headers(init?.headers);
+      if (!headers.has("Authorization")) {
+        headers.set("Authorization", `Bearer ${apiToken}`);
+      }
+      return origFetch(input, { ...init, headers });
+    }
+    return origFetch(input, init);
+  };
+  (window as unknown as { __lumiFetchPatched?: boolean }).__lumiFetchPatched = true;
+}
+
 async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   const headers = new Headers(options?.headers);
   if (apiToken && !headers.has("Authorization")) {
