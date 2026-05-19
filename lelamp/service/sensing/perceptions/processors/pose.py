@@ -528,14 +528,14 @@ class PosePerception(Perception[cv2.typing.MatLike]):
         self._samples.clear()
         self._window_start_ts = 0.0
 
-    def get_posture_summary(self) -> dict[str, Any] | None:
-        """Aggregate the current window's samples into a summary dict.
+    def _aggregate(self) -> dict[str, Any] | None:
+        """Pure aggregation over whatever samples are currently in the
+        deque. Returns None only when there are no samples to aggregate.
 
-        All per-frame values are from dlbackend (Khanh's RULA scorer);
-        this method only counts. Returns None when the window hasn't
-        elapsed OR has fewer than POSE_WINDOW_MIN_SAMPLES (statistical
-        noise floor — detection misses can leave a window too sparse to
-        trust).
+        Called by both `get_posture_summary()` (with window-complete +
+        min-samples gates layered on top, for the motion fire decision)
+        and the monitor's running view in `to_dict()` (no gates, so the
+        FE can show a live bad_ratio mid-window for debugging).
 
         "Bad" sample = any single region (L or R) at sub-score
         >= POSE_REGION_HIGH_SUBSCORE, OR whole-body risk_level >= 3.
@@ -543,9 +543,7 @@ class PosePerception(Perception[cv2.typing.MatLike]):
         RULA total stays "low" because trunk+arms are fine but neck
         alone is clearly off.
         """
-        if not self.is_window_complete():
-            return None
-        if len(self._samples) < config.POSE_WINDOW_MIN_SAMPLES:
+        if not self._samples:
             return None
 
         sub_thr: int = config.POSE_REGION_HIGH_SUBSCORE
@@ -610,6 +608,17 @@ class PosePerception(Perception[cv2.typing.MatLike]):
             "latest_right": latest.raw_right,
         }
 
+    def get_posture_summary(self) -> dict[str, Any] | None:
+        """Gated aggregation: returns the summary only when the window has
+        elapsed AND has at least POSE_WINDOW_MIN_SAMPLES samples (statistical
+        noise floor — detection misses can leave a window too sparse to
+        trust). Used by MotionPerception for the fire/no-fire decision."""
+        if not self.is_window_complete():
+            return None
+        if len(self._samples) < config.POSE_WINDOW_MIN_SAMPLES:
+            return None
+        return self._aggregate()
+
     def is_window_bad(self) -> bool:
         """True when the gate criteria are met (window complete AND bad ratio over threshold)."""
         summary: dict[str, Any] | None = self.get_posture_summary()
@@ -669,6 +678,11 @@ class PosePerception(Perception[cv2.typing.MatLike]):
             "sample_interval_s": config.POSE_SAMPLE_INTERVAL_S,
             "bad_ratio_threshold": config.POSE_BAD_RATIO,
             "summary": self.get_posture_summary(),
+            # Live aggregate over whatever samples are in the deque right
+            # now, regardless of window-complete / min-samples gates. Lets
+            # the monitor show "would-fire?" indicators mid-window without
+            # waiting for the cycle boundary.
+            "running": self._aggregate(),
             "samples": [
                 {
                     "ts": round(s.ts, 2),
