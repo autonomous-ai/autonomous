@@ -134,6 +134,8 @@ The second arm catches forward-head-thrust ("tech neck") cases where the RULA to
 
 Fire when `bad_ratio >= POSE_BAD_RATIO` (default **0.6**) over a buffer of `POSE_WINDOW_SAMPLES` (default 10 = 10 min; production target 30 = 30 min). Two additional gates apply at the motion side: sedentary streak ≥ `POSE_STREAK_MIN_GATE_S`, and cooldown ≥ `POSE_NUDGE_COOLDOWN_S` since the previous inject.
 
+The cooldown timestamp (`_last_posture_inject_ts`) is committed **only after the motion.activity event has cleared the 5-min activity-dedup window**. If a fold runs but the surrounding event is dropped by dedup (same user + same labels within the window), the cooldown stays untouched so the next tick can re-attempt the fold. Otherwise the agent would silently miss the nudge for the full `POSE_NUDGE_COOLDOWN_S` while the cooldown burned on an event that never reached it.
+
 ### Per-event annotated snapshots
 
 Every sample writes its own annotated JPEG (skeleton overlay + RULA label) to `/tmp/lumi-sensing-snapshots/sensing_pose/snapshots/<int(ts)>.jpg`. Rotation runs after each write — files older than `POSE_SNAPSHOT_RETENTION_S` (default 24h) are pruned, and if the directory total still exceeds `POSE_SNAPSHOT_MAX_BYTES` (default 50 MB) the oldest are deleted until it fits.

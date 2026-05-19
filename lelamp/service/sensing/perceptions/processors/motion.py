@@ -493,6 +493,13 @@ class MotionPerception(Perception[cv2.typing.MatLike]):
         # by pose's aggregation logic. After an injection, suppress further
         # ones for POSE_NUDGE_COOLDOWN_S so the user isn't nagged on every
         # dedup-expired flush while the window stays bad.
+        #
+        # `pending_posture_commit_ts` defers the cooldown commit: we only
+        # mark _last_posture_inject_ts after the dedup check has let the
+        # event through. Otherwise a fold that got eaten by dedup would
+        # still burn the 10-min cooldown, and the agent would never see
+        # the posture nudge until the cooldown expired.
+        pending_posture_commit_ts: float = 0.0
         if (
             has_sedentary
             and self._sedentary_streak_start_ts > 0
@@ -515,7 +522,7 @@ class MotionPerception(Perception[cv2.typing.MatLike]):
                         f"[posture_summary: "
                         f"{json.dumps(summary_with_streak, separators=(',', ':'))}]"
                     )
-                    self._last_posture_inject_ts = cur_ts
+                    pending_posture_commit_ts = cur_ts
                     logger.info(
                         "[motion] folding posture summary "
                         "(streak=%dm bad_ratio=%.2f dominant=%s)",
@@ -544,6 +551,14 @@ class MotionPerception(Perception[cv2.typing.MatLike]):
             return
         self._last_sent_key = key
         self._last_sent_ts = cur_ts
+        # Commit posture cooldown only now that the event has cleared dedup
+        # and will reach the agent. If we set _last_posture_inject_ts inside
+        # the fold block, a dropped event would still burn the 10-min
+        # cooldown — the agent would miss the nudge entirely until cooldown
+        # expired, and meanwhile every subsequent fold attempt would skip
+        # because cur_ts - _last_posture_inject_ts < POSE_NUDGE_COOLDOWN_S.
+        if pending_posture_commit_ts > 0:
+            self._last_posture_inject_ts = pending_posture_commit_ts
 
         # Log each outbound label to Lumi wellbeing BEFORE firing the event.
         # Log-first means when the agent reads history on motion.activity,

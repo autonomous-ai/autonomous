@@ -134,6 +134,8 @@ Vế thứ hai bắt được case "tech neck" (rướn cổ về màn hình) kh
 
 Fire khi `bad_ratio >= POSE_BAD_RATIO` (default **0.6**) trên buffer `POSE_WINDOW_SAMPLES` (default 10 = 10 phút; production target 30 = 30 phút). Thêm 2 gate phía motion: sedentary streak ≥ `POSE_STREAK_MIN_GATE_S` và cooldown ≥ `POSE_NUDGE_COOLDOWN_S` kể từ lần inject trước.
 
+Timestamp cooldown (`_last_posture_inject_ts`) chỉ commit **sau khi motion.activity event đã pass qua dedup window 5 phút**. Nếu fold chạy nhưng event bị dedup drop (cùng user + cùng labels trong window), cooldown KHÔNG bị tiêu — tick tiếp theo có thể re-attempt fold. Nếu không có defer này, agent sẽ silently mất nudge suốt `POSE_NUDGE_COOLDOWN_S` (10 phút) trong khi cooldown bị tiêu cho event không bao giờ tới được agent.
+
 ### Snapshot annotated cho từng event
 
 Mỗi sample ghi 1 JPEG có overlay skeleton + nhãn RULA vào `/tmp/lumi-sensing-snapshots/sensing_pose/snapshots/<int(ts)>.jpg`. Rotation chạy sau mỗi lần ghi — file cũ hơn `POSE_SNAPSHOT_RETENTION_S` (default 24h) bị xóa, nếu tổng dir vẫn vượt `POSE_SNAPSHOT_MAX_BYTES` (default 50 MB) thì xóa từ cũ → mới đến khi dưới ngưỡng.
