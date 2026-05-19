@@ -38,6 +38,11 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineEleme
 // Sections rendered as full-bleed iframes — they need their own padding/overflow override.
 const EMBED_SECTIONS = new Set<Section>(["api-docs", "agent-config"]);
 
+// Sections shown to non-debug users. Append `?debug=true` to the URL to reveal
+// the full menu (Flow, Camera, Sensing, Analytics, Servo, Logs, CLI, API Docs,
+// Agent gateway).
+const PUBLIC_SECTIONS = new Set<Section>(["chat", "overview", "system", "face-owners", "bluetooth"]);
+
 const iframeStyle: React.CSSProperties = {
   width: "100%",
   height: "100%",
@@ -177,9 +182,13 @@ function AgentGWMenu({ section, setSection, closeSidebar }: {
 
 export default function Monitor() {
   const [theme, toggleTheme, themeClass] = useTheme();
+  const isDebug = new URLSearchParams(window.location.search).get("debug") === "true";
   const [section, setSectionRaw] = useState<Section>(() => {
     const h = window.location.hash.replace("#", "") as Section;
-    return allNavLeaves().some((n) => n.id === h) ? h : "overview";
+    const known = allNavLeaves().some((n) => n.id === h);
+    if (!known) return "overview";
+    if (!isDebug && !PUBLIC_SECTIONS.has(h)) return "overview";
+    return h;
   });
   const setSection = (s: Section) => {
     window.location.hash = s;
@@ -347,22 +356,33 @@ export default function Monitor() {
             <span style={{ fontSize: 14, lineHeight: 1 }}>⚙</span>
             Settings
           </a>
-          <AgentGWMenu section={section} setSection={setSection} closeSidebar={closeSidebar} />
-          {NAV.filter((e) => isNavGroup(e) || (!isNavGroup(e) && e.id !== "chat")).map((entry) =>
-            isNavGroup(entry) ? (
-              <NavGroupItem key={entry.group} entry={entry} section={section} setSection={setSection} closeSidebar={closeSidebar} />
-            ) : (
-              <a
-                key={entry.id}
-                href={`#${entry.id}`}
-                style={S.navItem(section === entry.id)}
-                onClick={(e) => { e.preventDefault(); setSection(entry.id); closeSidebar(); }}
-              >
-                <span style={{ fontSize: 14, lineHeight: 1 }}>{entry.icon}</span>
-                {entry.label}
-              </a>
-            )
-          )}
+          {isDebug && <AgentGWMenu section={section} setSection={setSection} closeSidebar={closeSidebar} />}
+          {NAV
+            .filter((e) => isNavGroup(e) || (!isNavGroup(e) && e.id !== "chat"))
+            .map((entry) => {
+              if (isNavGroup(entry)) {
+                const filtered = isDebug
+                  ? entry
+                  : {
+                      ...entry,
+                      children: entry.children.filter((c) => isNavLink(c) ? false : PUBLIC_SECTIONS.has(c.id)),
+                    };
+                if (filtered.children.length === 0) return null;
+                return <NavGroupItem key={entry.group} entry={filtered} section={section} setSection={setSection} closeSidebar={closeSidebar} />;
+              }
+              if (!isDebug && !PUBLIC_SECTIONS.has(entry.id)) return null;
+              return (
+                <a
+                  key={entry.id}
+                  href={`#${entry.id}`}
+                  style={S.navItem(section === entry.id)}
+                  onClick={(e) => { e.preventDefault(); setSection(entry.id); closeSidebar(); }}
+                >
+                  <span style={{ fontSize: 14, lineHeight: 1 }}>{entry.icon}</span>
+                  {entry.label}
+                </a>
+              );
+            })}
         </nav>
         <div style={{
           padding: "12px 16px",

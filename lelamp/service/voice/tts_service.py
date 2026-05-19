@@ -49,6 +49,25 @@ DEFAULT_MODEL = "tts-1"
 TTS_CHANNELS = 1
 
 
+class _PendingSpeech:
+    """One queued speak_queue() request waiting to play after the current TTS
+    ends. Pre-synthesized in a background thread via a producer queue so the
+    drain can play each frame the moment it arrives (no buffer-everything-
+    first delay) and pre-synth time is hidden behind the previous speech's
+    playback. Mirrors the tail_producer/tail_q pattern in _speak_sync."""
+
+    __slots__ = ("text", "interruptible", "frame_queue", "failed")
+
+    def __init__(self, text: str, interruptible: bool):
+        self.text = text
+        self.interruptible = interruptible
+        # Producer (pre-synth thread) appends numpy frames as they arrive
+        # from the backend; consumer (_drain_pending_queue) writes them to
+        # the ALSA stream. None sentinel = producer is done.
+        self.frame_queue: "queue.Queue" = queue.Queue(maxsize=128)
+        self.failed = False
+
+
 class TTSService:
     """Text-to-speech with pluggable backend + sounddevice streaming playback."""
 
@@ -81,6 +100,14 @@ class TTSService:
         self._interruptible = False
         self._max_retries = max_retries
         self._stop_event = threading.Event()
+
+        # speak_queue() drops items here when the lock is held by another
+        # speech. Background threads pre-synthesize each item's PCM frames
+        # while the current speech plays; _drain_pending_queue() writes those
+        # frames to the same open ALSA stream so playback continues with no
+        # synth-TTFB gap between sentences. stop() clears the queue.
+        self._pending_queue_lock = threading.Lock()
+        self._pending_queue: list = []  # list[_PendingSpeech]
 
         # Optional callbacks for LED speaking effect.
         # on_speak_start(): called when TTS playback begins (before audio streams).
@@ -262,10 +289,20 @@ class TTSService:
         return self._last_spoken_time
 
     def stop(self):
-        """Interrupt active TTS playback. No-op if not speaking."""
+        """Interrupt active TTS playback. No-op if not speaking.
+
+        Also clears the speak_queue() pending list — pre-synth'd PCM is
+        discarded so a stop during sentence-streaming actually silences
+        everything the agent had queued ahead, not just the current sentence.
+        """
         if self._speaking:
             logger.info("TTS stop requested — setting stop event")
             self._stop_event.set()
+        with self._pending_queue_lock:
+            cleared = len(self._pending_queue)
+            self._pending_queue.clear()
+        if cleared:
+            logger.info("TTS stop cleared %d pending queued speech item(s)", cleared)
 
     @property
     def interruptible(self) -> bool:
@@ -309,6 +346,139 @@ class TTSService:
         )
         thread.start()
         return True
+
+    def speak_queue(self, text: str, interruptible: bool = False) -> bool:
+        """Speak `text`. If TTS is idle, plays immediately (same as speak()).
+        If TTS is currently speaking, the text is appended to a pending queue
+        and pre-synthesized in the background; once the current playback
+        finishes, the pre-synth'd PCM frames stream to the same open ALSA
+        stream with no synth-TTFB gap.
+
+        Used by the SSE handler to dispatch sentence-streamed agent replies:
+        the first sentence lands while idle (immediate play); subsequent
+        sentences arrive while the first is still playing and are queued so
+        the user hears one continuous reply with no per-sentence pause.
+
+        Returns True if the request was accepted (playing or queued); False
+        if TTS is unavailable.
+        """
+        if not self.available:
+            logger.warning("TTS not available")
+            return False
+
+        if self._lock.acquire(blocking=False):
+            # Idle — start a normal speech (same as speak()).
+            self._stop_event.clear()
+            self._speaking = True
+            self._interruptible = interruptible
+            self._last_spoken_text = text
+            thread = threading.Thread(
+                target=self._speak_sync,
+                args=(text,),
+                daemon=True,
+                name="tts-speak-queue",
+            )
+            thread.start()
+            return True
+
+        # Busy — queue + kick off pre-synth so frames are ready when the
+        # current speech ends. We don't try to interrupt even if the current
+        # speech is interruptible; the whole point of speak_queue() is to
+        # chain on top of the current speech, not replace it.
+        item = _PendingSpeech(text=text, interruptible=interruptible)
+        with self._pending_queue_lock:
+            self._pending_queue.append(item)
+        threading.Thread(
+            target=self._pre_synth_pending,
+            args=(item,),
+            daemon=True,
+            name="tts-pre-synth",
+        ).start()
+        logger.info(
+            "TTS queued for pre-synth (busy, queue depth=%d): %s",
+            len(self._pending_queue),
+            text[:60],
+        )
+        return True
+
+    def _pre_synth_pending(self, item: "_PendingSpeech") -> None:
+        """Synthesize PCM for a queued item in a background thread. Streams
+        frames into item.frame_queue as they arrive from the backend so the
+        drain consumer can start playing on the first frame (~1.5s TTFB)
+        without waiting for the entire batch to synthesize. A long batch
+        (3-4 chunks, 300+ chars) takes 10-15s end-to-end; buffer-then-play
+        would underrun the drain's timeout.
+
+        Honors _stop_event so stop() during pre-synth aborts cleanly. Always
+        writes the None sentinel at the end so the drain stops looking.
+        """
+        try:
+            dst_rate = self._device_rate or TTS_SAMPLE_RATE
+            chunks = self._split_text_into_growing_sentence_chunks(item.text)
+            for chunk_text in chunks:
+                if self._stop_event.is_set():
+                    return
+                for frame in self._iter_tts_samples(chunk_text, dst_rate, ttfb_tag="pre-synth"):
+                    if self._stop_event.is_set():
+                        return
+                    item.frame_queue.put(frame)
+        except Exception:
+            logger.exception("Pre-synth failed for queued item")
+            item.failed = True
+        finally:
+            # Sentinel — drain stops reading. Never block here even if the
+            # consumer hasn't drained: queue is bounded but the producer is
+            # done, so the put is allowed.
+            try:
+                item.frame_queue.put(None, timeout=1.0)
+            except queue.Full:
+                pass
+
+    def _drain_pending_queue(self, stream) -> int:
+        """Stream pre-synth'd frames from each pending queue item to the open
+        ALSA stream as they arrive. Called from _speak_sync after the main
+        playback's tail chunks drain but before the stream lock is released
+        — so the queued frames continue on the same audio output and the
+        user hears no inter-speech gap.
+
+        First-frame wait is bounded (handles the case where pre-synth is
+        slow or hung); intra-stream wait is longer to ride out backend
+        slowdowns mid-batch without abandoning the speech.
+
+        Returns total samples written.
+        """
+        total = 0
+        while not self._stop_event.is_set():
+            with self._pending_queue_lock:
+                if not self._pending_queue:
+                    break
+                item = self._pending_queue.pop(0)
+            try:
+                first = item.frame_queue.get(timeout=15.0)
+            except queue.Empty:
+                logger.warning("Pre-synth no first frame within 15s, abandoning: %s", item.text[:60])
+                continue
+            if first is None:
+                if item.failed:
+                    logger.warning("Pre-synth failed for queued speech: %s", item.text[:60])
+                else:
+                    logger.warning("Pre-synth produced no frames, skipping: %s", item.text[:60])
+                continue
+            self._last_spoken_text = item.text
+            logger.info("Playing pre-synth'd queued speech (streaming): %s", item.text[:80])
+            stream.write(first)
+            total += len(first)
+            while not self._stop_event.is_set():
+                try:
+                    frame = item.frame_queue.get(timeout=30.0)
+                except queue.Empty:
+                    logger.warning("Pre-synth stalled (no frame within 30s), ending speech early: %s", item.text[:60])
+                    break
+                if frame is None:
+                    break
+                stream.write(frame)
+                total += len(frame)
+        return total
 
     def _resample(self, audio, src_rate: int, dst_rate: int):
         """Linear interpolation resample (no scipy needed)."""
@@ -649,6 +819,11 @@ class TTSService:
                                 break
                             stream.write(item)
                             total_samples += len(item)
+                    # speak_queue() may have parked pre-synth'd PCM behind us
+                    # while this speech played. Drain that queue on the same
+                    # open ALSA stream so the queued speech continues with no
+                    # synth-TTFB gap (the agent's sentence-streamed batch).
+                    total_samples += self._drain_pending_queue(stream)
                 break  # playback succeeded, exit retry loop
             except Exception:
                 logger.exception("TTS playback setup failed")

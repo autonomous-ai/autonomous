@@ -163,10 +163,21 @@ class AudioDevicesResponse(BaseModel):
 
 class CameraInfoResponse(BaseModel):
     available: bool
+    # Actual capture mode the device negotiated (None until the capture loop
+    # has opened the device once). Falls back to configured CAMERA_WIDTH/
+    # CAMERA_HEIGHT when device has not reported yet.
     width: Optional[int]
     height: Optional[int]
+    fps: Optional[float] = None
     disabled: bool = False
     manual_override: bool = False
+    zoom: float = 1.0
+
+
+class CameraZoomRequest(BaseModel):
+    zoom: float = Field(..., ge=1.0, le=5.0, description="Digital zoom factor, 1.0 = no zoom")
+
+    model_config = {"json_schema_extra": {"examples": [{"zoom": 2.0}]}}
 
 
 class EmotionRequest(BaseModel):

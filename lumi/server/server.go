@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -194,11 +195,73 @@ func (s *Server) stopMQTT() {
 	}
 }
 
+// sameOriginOrLAN blocks the route for callers that are neither on the local
+// network nor sending a same-origin browser header (Origin/Referer). This lets
+// the web UI and Swagger call the endpoint from any IP, while raw curl/Postman
+// requests without an Origin header are rejected when coming from outside LAN.
+func sameOriginOrLAN() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if strings.ToLower(strings.TrimSpace(os.Getenv("LELAMP_MODE"))) == "developer" {
+			c.Next()
+			return
+		}
+		// nginx proxies to Go on localhost, so RemoteAddr is always 127.0.0.1.
+		// Use X-Real-IP (set by nginx) to get the real client IP.
+		clientIP := strings.TrimSpace(c.GetHeader("X-Real-IP"))
+		if clientIP == "" {
+			// Fallback: first entry of X-Forwarded-For
+			clientIP = strings.TrimSpace(strings.SplitN(c.GetHeader("X-Forwarded-For"), ",", 2)[0])
+		}
+		if clientIP == "" {
+			remoteHost, _, _ := net.SplitHostPort(c.Request.RemoteAddr)
+			clientIP = remoteHost
+		}
+		if ip := net.ParseIP(clientIP); ip != nil && (ip.IsLoopback() || ip.IsPrivate()) {
+			c.Next()
+			return
+		}
+		deviceHost := c.Request.Host
+		origin := strings.SplitN(c.GetHeader("Origin"), ",", 2)[0]
+		referer := strings.SplitN(c.GetHeader("Referer"), ",", 2)[0]
+		if isAllowedOrigin(origin, deviceHost) || isAllowedOrigin(referer, deviceHost) {
+			c.Next()
+			return
+		}
+		c.JSON(http.StatusForbidden, gin.H{"status": 0, "message": "same-origin or LAN only"})
+		c.Abort()
+	}
+}
+
+func goSameOrigin(header, host string) bool {
+	if header == "" || host == "" {
+		return false
+	}
+	h := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(header), "https://"), "http://")
+	h = strings.SplitN(h, "/", 2)[0]
+	return h == host
+}
+
+// isAllowedOrigin returns true for same-host origins and approved external
+// domains (autonomous.ai subdomains for parent-app iframe embedding).
+func isAllowedOrigin(origin, requestHost string) bool {
+	if origin == "" {
+		return false
+	}
+	h := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(origin), "https://"), "http://")
+	h = strings.SplitN(h, "/", 2)[0]
+	// Same host (any IP or .local name the device is reached on).
+	return h == requestHost
+}
+
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+		origin := c.GetHeader("Origin")
+		if isAllowedOrigin(origin, c.Request.Host) {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Vary", "Origin")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+		}
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
@@ -282,7 +345,7 @@ func (s *Server) Serve(closeFn func()) error {
 	network.GET("check-internet", s.networkHandler.CheckInternet)
 
 	sensing := api.Group("sensing")
-	sensing.POST("event", s.sensingHandler.PostEvent)
+	sensing.POST("event", sameOriginOrLAN(), s.sensingHandler.PostEvent)
 	sensing.GET("snapshot/:category/:name", s.sensingHandler.GetSnapshot)
 
 	// Voice file delete (filesystem orchestration on Pi). Voice enroll
@@ -328,7 +391,7 @@ func (s *Server) Serve(closeFn func()) error {
 	oc.GET("flow-logs", s.openclawHandler.FlowLogs)
 	oc.DELETE("flow-logs", s.openclawHandler.ClearFlowLogs)
 	oc.GET("analytics", s.openclawHandler.Analytics)
-	oc.GET("config-json", s.openclawHandler.ConfigJSON)
+	oc.GET("config-json", sameOriginOrLAN(), s.openclawHandler.ConfigJSON)
 	oc.GET("compaction-latest", s.openclawHandler.CompactionLatest)
 
 	logs := api.Group("logs")
@@ -556,14 +619,14 @@ func (s *Server) handleSetUpCompleteChange(setupCompleted bool) {
 			}
 
 			// Init speaker volume — set to max so hardware/alsactl level is the effective control.
-				if err := s.agentGateway.SetVolume(100); err != nil {
-					slog.Warn("init volume failed", "component", "server", "error", err)
-				}
+			if err := s.agentGateway.SetVolume(100); err != nil {
+				slog.Warn("init volume failed", "component", "server", "error", err)
+			}
 
-				// Greet user now that agent + voice pipeline are ready.
-				// Prompt is localized by STTLanguage so the very first turn
-				// lands in the owner's language without relying on the agent
-				// to translate the priming message.
+			// Greet user now that agent + voice pipeline are ready.
+			// Prompt is localized by STTLanguage so the very first turn
+			// lands in the owner's language without relying on the agent
+			// to translate the priming message.
 			if _, err := s.agentGateway.SendSystemChatMessage(wakeGreetingPrompt()); err != nil {
 				slog.Warn("startup greeting failed", "component", "server", "error", err)
 			}

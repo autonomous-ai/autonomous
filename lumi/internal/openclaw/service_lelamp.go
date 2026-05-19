@@ -115,3 +115,27 @@ func (s *Service) SendToLeLampTTS(text string) error {
 
 	return nil
 }
+
+// SendToLeLampTTSQueue posts response text to LeLamp's /voice/speak-queue
+// endpoint. If the speaker is idle the audio plays immediately (same as
+// SendToLeLampTTS); if a previous speak is still in flight Python queues +
+// pre-synthesizes this text and chains it onto the same open ALSA stream so
+// the user hears the agent's sentence-streamed reply as one continuous
+// utterance.
+func (s *Service) SendToLeLampTTSQueue(text string) error {
+	text = stripForTTS(text)
+	if text == "" {
+		return nil
+	}
+	if err := lelamp.SpeakQueue(text); err != nil {
+		return fmt.Errorf("speak-queue: %w", err)
+	}
+	slog.Info("TTS queued", "component", "openclaw", "text", truncRunes(text, 80))
+
+	s.monitorBus.Push(domain.MonitorEvent{
+		Type:    "tts",
+		Summary: text,
+	})
+
+	return nil
+}

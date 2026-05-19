@@ -24,8 +24,17 @@ type OpenClawHandler struct {
 
 	// assistantBuf accumulates assistant deltas per runId so we can send the
 	// full text to TTS when the agent turn ends (lifecycle "end").
-	assistantMu  sync.Mutex
-	assistantBuf map[string]*strings.Builder
+	//
+	// streamedCleanLen tracks bytes of the HW-stripped reply already
+	// dispatched to TTS by trySentenceFlush. Only the FIRST sentence is
+	// streamed mid-turn — chaining each sentence as its own /voice/speak
+	// POST produced a ~400ms TTFB gap between sentences (choppy). The
+	// remainder goes through /voice/speak-queue at lifecycle:end, which
+	// Python pre-synthesises while sentence 1 is still playing so the rest
+	// of the reply chains on with no audible gap. Shares assistantMu.
+	assistantMu      sync.Mutex
+	assistantBuf     map[string]*strings.Builder
+	streamedCleanLen map[string]int
 
 	// ttsSuppressReasons tracks runIDs that should skip TTS on lifecycle end.
 	// Value is the reason: "music_playing" (speaker shared with audio) or
@@ -163,6 +172,7 @@ func ProvideOpenClawHandler(gw domain.AgentGateway, bus *monitor.Bus, sled *stat
 		monitorBus:           bus,
 		statusLED:            sled,
 		assistantBuf:         make(map[string]*strings.Builder),
+		streamedCleanLen:     make(map[string]int),
 		streamStats:          make(map[string]*runStreamStats),
 		ttsSuppressReasons:   make(map[string]string),
 		runIDMap:             make(map[string]string),

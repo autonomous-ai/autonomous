@@ -3,11 +3,11 @@
 import os
 import time
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 import lelamp.app_state as state
-from lelamp.models import CameraInfoResponse, StatusResponse
+from lelamp.models import CameraInfoResponse, CameraZoomRequest, StatusResponse
 from lelamp.config import CAMERA_WIDTH, CAMERA_HEIGHT
 
 router = APIRouter(tags=["Camera"])
@@ -20,17 +20,45 @@ except ImportError:
     pass
 
 
-@router.get("/camera", response_model=CameraInfoResponse)
-def get_camera_info():
-    """Get camera availability and resolution."""
+def _camera_info_payload() -> dict:
+    """Build the CameraInfoResponse dict from current device + state."""
     available = state.camera_capture is not None and cv2 is not None
+    cap = state.camera_capture
+    actual_w = getattr(cap, "actual_width", None) if available else None
+    actual_h = getattr(cap, "actual_height", None) if available else None
+    actual_fps = getattr(cap, "actual_fps", None) if available else None
     return {
         "available": available,
-        "width": CAMERA_WIDTH if available else None,
-        "height": CAMERA_HEIGHT if available else None,
+        # Prefer the device-negotiated mode; fall back to configured values
+        # until the capture loop has reported (e.g. camera disabled at boot).
+        "width": actual_w if actual_w else (CAMERA_WIDTH if available else None),
+        "height": actual_h if actual_h else (CAMERA_HEIGHT if available else None),
+        "fps": actual_fps,
         "disabled": state._camera_disabled,
         "manual_override": state._camera_manual_override,
+        "zoom": getattr(cap, "zoom", 1.0) if available else 1.0,
     }
+
+
+@router.get("/camera", response_model=CameraInfoResponse)
+def get_camera_info():
+    """Get camera availability, negotiated resolution, FPS, zoom."""
+    return _camera_info_payload()
+
+
+@router.post("/camera/zoom", response_model=CameraInfoResponse)
+def set_camera_zoom(req: CameraZoomRequest):
+    """Set digital zoom factor (1.0 = no zoom, applies to all frame consumers).
+
+    Side effect: zoom > 1 narrows the FOV seen by sensing (face recog, motion,
+    pose, emotion) and tracking. Use for focusing on a small subject (e.g.
+    laptop screen in a video call); set back to 1.0 to restore wide view.
+    """
+    if not state.camera_capture:
+        raise HTTPException(503, "Camera not available")
+    state.camera_capture.zoom = req.zoom
+    state.logger.info("Camera zoom set to %.2f", req.zoom)
+    return _camera_info_payload()
 
 
 @router.post("/camera/disable", response_model=StatusResponse)
@@ -62,8 +90,19 @@ def enable_camera():
 
 
 @router.get("/camera/snapshot")
-def camera_snapshot(save: bool = False):
-    """Capture a single JPEG frame from the camera (freezes servos for stability)."""
+def camera_snapshot(
+    save: bool = False,
+    width: int | None = Query(default=None, ge=1, le=4096, description="Resize output width (preserves aspect ratio). Capped at source width — never upscales."),
+    height: int | None = Query(default=None, ge=1, le=4096, description="Resize output height (preserves aspect ratio). Capped at source height — never upscales."),
+    quality: int = Query(default=85, ge=1, le=100, description="JPEG quality 1-100."),
+):
+    """Capture a single JPEG frame from the camera (freezes servos for stability).
+
+    Optional resize: pass width and/or height to downscale the output. Aspect
+    ratio is preserved; if both given, the frame is fit inside the requested
+    box. Upscaling above source is not allowed (just blurs without detail) —
+    requests above source are clamped.
+    """
     if not state.camera_capture or cv2 is None:
         raise HTTPException(503, "Camera not available")
 
@@ -95,7 +134,24 @@ def camera_snapshot(save: bool = False):
         state.camera_capture.release_consumer()
         if was_disabled:
             state.camera_capture.stop()
-    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+
+    if width is not None or height is not None:
+        src_h, src_w = frame.shape[:2]
+        # Compute target scale honoring aspect ratio, clamped so we never
+        # upscale (digital upscale adds no detail, only blur).
+        scale_w = (width / src_w) if width else 1.0
+        scale_h = (height / src_h) if height else 1.0
+        if width and height:
+            scale = min(scale_w, scale_h)
+        else:
+            scale = scale_w if width else scale_h
+        scale = min(scale, 1.0)
+        if scale < 1.0:
+            new_w = max(1, int(src_w * scale))
+            new_h = max(1, int(src_h * scale))
+            frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    _, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
 
     if not save:
         return Response(content=buf.tobytes(), media_type="image/jpeg")

@@ -187,6 +187,12 @@ type AgentGateway interface {
 	// SendToLeLampTTS posts response text to LeLamp for TTS playback.
 	SendToLeLampTTS(text string) error
 
+	// SendToLeLampTTSQueue posts text to /voice/speak-queue: plays
+	// immediately when idle, otherwise queues + pre-synthesizes so the audio
+	// chains seamlessly onto the current speech (used for sentence-streamed
+	// agent replies).
+	SendToLeLampTTSQueue(text string) error
+
 	// StopTTS interrupts active TTS playback and music on LeLamp.
 	StopTTS() error
 
