@@ -80,6 +80,17 @@ func Speak(text string) error {
 	return post("/voice/speak", body)
 }
 
+// SpeakQueue sends text to /voice/speak-queue — same playback semantics as
+// Speak when the speaker is idle, but queues+pre-synthesizes the audio if
+// the speaker is currently playing another speak(). The queued audio
+// continues on the same ALSA stream when the current speech ends, so the
+// agent's sentence-streamed reply plays as one continuous utterance instead
+// of N speak() calls separated by ~400ms TTFB each.
+func SpeakQueue(text string) error {
+	body, _ := json.Marshal(map[string]string{"text": text})
+	return post("/voice/speak-queue", body)
+}
+
 // SpeakInterruptible sends text to TTS; playback can be cut short by incoming voice.
 func SpeakInterruptible(text string) error {
 	body, _ := json.Marshal(map[string]any{"text": text, "interruptible": true})

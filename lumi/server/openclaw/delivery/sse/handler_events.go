@@ -636,6 +636,31 @@ func (h *OpenClawHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) e
 			// Accumulate deltas per runId and send to TTS when lifecycle "end" arrives.
 			h.accumulateAssistantDelta(payload.RunID, delta)
 
+			// Sentence-streaming: dispatch the FIRST complete sentence to
+			// /voice/speak as soon as the agent emits the boundary so the
+			// lamp starts speaking before generation finishes. Only the
+			// first sentence streams here — chaining every sentence as its
+			// own POST exposes a per-sentence TTFB gap. Lifecycle:end sends
+			// the remainder through /voice/speak-queue so Python pre-synths
+			// it while sentence 1 plays and chains the rest seamlessly.
+			if h.canStreamSentenceTTS(payload.RunID, flowRunID) {
+				if sentence := h.tryFirstSentenceFlush(payload.RunID); sentence != "" {
+					cleaned := sanitizeAgentText(sentence)
+					if cleaned != "" {
+						slog.Info("streaming first sentence to TTS",
+							"component", "agent",
+							"run_id", flowRunID,
+							"sentence", cleaned[:min(len(cleaned), 100)])
+						flow.Log("tts_stream_send", map[string]any{"run_id": flowRunID, "text": cleaned}, flowRunID)
+						go func(s string) {
+							if err := h.agentGateway.SendToLeLampTTSQueue(s); err != nil {
+								slog.Error("streaming TTS delivery failed", "component", "agent", "error", err)
+							}
+						}(cleaned)
+					}
+				}
+			}
+
 		}
 
 		// When agent lifecycle ends, flush accumulated assistant text to TTS.
@@ -657,7 +682,18 @@ func (h *OpenClawHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) e
 			if suppressReason == "" && h.agentGateway.ConsumeWebChatRun(flowRunID) {
 				suppressReason = "web_chat"
 			}
-			if text, hwCalls := h.flushAssistantText(payload.RunID); text != "" || len(hwCalls) > 0 {
+			text, hwCalls := h.flushAssistantText(payload.RunID)
+			// streamedCleanLen > 0 means the first sentence was dispatched
+			// mid-turn via tryFirstSentenceFlush; the remainder TTS POST
+			// below slices `text` at that offset to skip what already
+			// played. Broadcast/DM still use full `text` since it covers
+			// the entire reply the user heard.
+			streamedLen := h.consumeStreamedCleanLen(payload.RunID)
+			if streamedLen > len(text) {
+				streamedLen = len(text)
+			}
+			streamed := streamedLen > 0
+			if text != "" || len(hwCalls) > 0 || streamed {
 				// Fire HW calls with full tracking (flow.Log + lastEmotion + monitorBus).
 				h.fireHWCalls(hwCalls, flowRunID)
 
@@ -733,9 +769,25 @@ func (h *OpenClawHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) e
 				// Non-tagged replies pass through unchanged.
 				text = extractSayTag(text)
 				text = sanitizeAgentText(text)
+				// Slice off the prefix already streamed mid-turn so the
+				// remainder POST doesn't replay sentence 1. Clamp because
+				// extractSayTag / sanitizeAgentText may shorten text below
+				// the previously-tracked offset.
+				if streamedLen > len(text) {
+					streamedLen = len(text)
+				}
+				remainderText := strings.TrimSpace(text[streamedLen:])
 				if isAgentNoReply(text) {
-					// NO_REPLY: agent explicitly decided to do nothing
-					slog.Info("agent replied NO_REPLY, skipping TTS", "component", "agent", "run_id", flowRunID)
+					// NO_REPLY in remainder. If streamed > 0 the agent
+					// already spoke sentence 1; can't unspeak it. Log a
+					// warning so we notice any skill that mixes NO_REPLY
+					// with real speech.
+					if streamed {
+						slog.Warn("NO_REPLY in remainder after first sentence streamed",
+							"component", "agent", "run_id", flowRunID, "streamed_len", streamedLen)
+					} else {
+						slog.Info("agent replied NO_REPLY, skipping TTS", "component", "agent", "run_id", flowRunID)
+					}
 					flow.Log("no_reply", map[string]any{"run_id": flowRunID}, flowRunID)
 					h.monitorBus.Push(domain.MonitorEvent{
 						Type:    "chat_response",
@@ -744,9 +796,19 @@ func (h *OpenClawHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) e
 						State:   "final",
 						Detail:  map[string]string{"role": "assistant", "message": "[no reply]"},
 					})
-				} else if text == "" {
-					// HW-only reply (only markers, no spoken text)
-					flow.Log("hw_only_reply", map[string]any{"run_id": flowRunID}, flowRunID)
+				} else if remainderText == "" {
+					if streamed {
+						// Reply was a single sentence already streamed
+						// mid-turn — nothing left to TTS at end. Log so
+						// the flow monitor shows turn complete instead
+						// of a misleading hw_only_reply.
+						slog.Info("assistant turn complete via first-sentence streaming",
+							"component", "agent", "run_id", flowRunID, "streamed_len", streamedLen)
+						flow.Log("tts_stream_complete", map[string]any{"run_id": flowRunID, "text": text}, flowRunID)
+					} else {
+						// HW-only reply (only markers, no spoken text)
+						flow.Log("hw_only_reply", map[string]any{"run_id": flowRunID}, flowRunID)
+					}
 				} else if suppressReason != "" {
 					slog.Info("assistant turn done, TTS suppressed", "component", "agent", "reason", suppressReason, "text", text[:min(len(text), 100)])
 					flow.Log("tts_suppressed", map[string]any{"run_id": flowRunID, "reason": suppressReason, "text": text}, flowRunID)
@@ -800,13 +862,26 @@ func (h *OpenClawHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) e
 						slog.Info("assistant turn done, TTS suppressed (channel run)", "component", "agent", "text", text[:min(len(text), 100)], "broadcast", isBroadcastRun, "force_tts", forceTTS, "cron_fire", isCronFire, "heartbeat", isHeartbeatRun)
 						flow.Log("tts_suppressed", map[string]any{"run_id": flowRunID, "reason": "channel_run", "text": text}, flowRunID)
 					} else {
-						slog.Info("assistant turn done, sending to TTS", "component", "agent", "text", text[:min(len(text), 100)], "broadcast", isBroadcastRun, "force_tts", forceTTS, "cron_fire", isCronFire, "heartbeat", isHeartbeatRun)
-						flow.Log("tts_send", map[string]any{"run_id": flowRunID, "text": text}, flowRunID)
+						// remainderText excludes the first sentence already
+						// streamed (when streamed=true). Use /voice/speak-queue
+						// so Python pre-synthesises while sentence 1 is still
+						// playing and chains the remainder seamlessly onto
+						// the open ALSA stream (no inter-sentence gap). Non-
+						// streamed turns also go through the queue endpoint
+						// — when idle it behaves exactly like /voice/speak,
+						// so this is a safe drop-in.
+						slog.Info("assistant turn done, sending to TTS",
+							"component", "agent",
+							"text", remainderText[:min(len(remainderText), 100)],
+							"streamed_len", streamedLen,
+							"broadcast", isBroadcastRun, "force_tts", forceTTS,
+							"cron_fire", isCronFire, "heartbeat", isHeartbeatRun)
+						flow.Log("tts_send", map[string]any{"run_id": flowRunID, "text": remainderText, "streamed_len": streamedLen}, flowRunID)
 						go func(t string) {
-							if err := h.agentGateway.SendToLeLampTTS(t); err != nil {
+							if err := h.agentGateway.SendToLeLampTTSQueue(t); err != nil {
 								slog.Error("TTS delivery failed", "component", "agent", "error", err)
 							}
-						}(text)
+						}(remainderText)
 					}
 					// Guard broadcast is handled above (before the if/else) to ensure
 					// it fires even on NO_REPLY / empty / suppressed paths.

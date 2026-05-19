@@ -272,6 +272,46 @@ def speak_text(req: SpeakRequest):
     return {"status": "ok"}
 
 
+@router.post("/voice/speak-queue", response_model=StatusResponse)
+def speak_queue_text(req: SpeakRequest):
+    """Speak text, queueing if TTS is currently busy.
+
+    Differs from /voice/speak: when the speaker is already in use, /voice/speak
+    returns 409 and the caller drops the text; /voice/speak-queue accepts the
+    request, pre-synthesizes the audio in the background, and plays it
+    seamlessly when the current speech finishes (same open ALSA stream → no
+    TTFB gap between sentences). Used by the SSE handler so a multi-sentence
+    agent reply that streams sentence-by-sentence is heard as one continuous
+    utterance instead of N choppy speak() calls separated by ~400ms each.
+
+    409 is still returned when music is playing (speaker fully committed) and
+    503 when TTS isn't initialized; both match /voice/speak's contract so
+    upstream error handling stays uniform.
+    """
+    if not state.tts_service:
+        state.logger.error("POST /voice/speak-queue: tts_service is None (not initialized)")
+        raise HTTPException(503, "TTS not initialized")
+    if state._speaker_muted:
+        state.logger.info("POST /voice/speak-queue: suppressed -- speaker muted")
+        return {"status": "suppressed"}
+    if state.music_service and state.music_service.playing:
+        state.logger.info("POST /voice/speak-queue: rejected -- music is playing")
+        raise HTTPException(409, "Speaker busy -- music is playing")
+    if not state.tts_service.available:
+        raise HTTPException(503, "TTS not available")
+    if req.voice:
+        state.tts_service._voice = req.voice
+    state.logger.info(
+        "POST /voice/speak-queue: len=%d interruptible=%s",
+        len(req.text or ""),
+        req.interruptible,
+    )
+    ok = state.tts_service.speak_queue(req.text, interruptible=req.interruptible)
+    if not ok:
+        raise HTTPException(503, "TTS not available")
+    return {"status": "ok"}
+
+
 @router.post("/tts/stop", response_model=StatusResponse)
 def stop_tts():
     """Interrupt active TTS playback immediately."""
