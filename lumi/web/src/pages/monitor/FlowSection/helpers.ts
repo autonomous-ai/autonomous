@@ -46,7 +46,11 @@ export function containsSensingPrefix(msg: string): boolean {
 // becomes its own row so rare events stand out.
 export interface PipelineRow {
   /** Underlying OpenClaw stream type — drives row color/label. */
-  kind: "thinking" | "assistant" | "tool" | "tool_result" | "lifecycle_start" | "lifecycle_end" | "compaction" | "error" | "other";
+  kind: "thinking" | "assistant" | "tool" | "tool_result"
+    | "lifecycle_start" | "lifecycle_end"
+    | "agent_first_token" | "agent_last_token"
+    | "thinking_first_token" | "thinking_last_token"
+    | "compaction" | "error" | "other";
   label: string;        // e.g. "thinking", "tool · bash", "lifecycle:start"
   detail?: string;      // optional secondary text (tool args summary, error msg)
   startMs: number;      // first event timestamp
@@ -184,42 +188,34 @@ export function aggregateEvents(events: DisplayEvent[]): PipelineRow[] {
       continue;
     }
 
-    // Persisted stream summaries (JSONL projection of monitorBus deltas).
-    // Raw thinking/assistant_delta events only live in monitorBus (RAM), so
-    // for past turns reloaded from JSONL the pipeline rect would otherwise
-    // show no streaming rows. first_token opens a row; last_token closes it
-    // with chunks/chars from the backend accumulator. If live deltas later
-    // arrive (frontend subscribes to monitorBus), the trailing row will
-    // already exist and last_token just updates its stats.
-    if (fnode === "agent_first_token" || fnode === "thinking_first_token") {
+    // Persisted stream summary markers (JSONL projection of monitorBus
+    // deltas). Raw thinking/assistant_delta events only live in monitorBus
+    // (RAM), so for past turns reloaded from JSONL the pipeline rect would
+    // otherwise show no streaming evidence. Rendered as TWO discrete
+    // one-shot marker rows per stream — matching the lifecycle:start /
+    // lifecycle:end convention so every pipeline row stays a single event,
+    // not an aggregated span. last_token carries chunks/chars summary.
+    if (fnode === "agent_first_token" || fnode === "thinking_first_token"
+        || fnode === "agent_last_token" || fnode === "thinking_last_token") {
       const t = ts(ev);
-      const k: PipelineRow["kind"] = fnode === "thinking_first_token" ? "thinking" : "assistant";
-      const last = rows[rows.length - 1];
-      if (!last || last.kind !== k || last.durationMs > 0) {
-        rows.push({
-          kind: k, label: k,
-          startMs: t, endMs: t, durationMs: 0, chunks: 0, chars: 0,
-        });
-      }
-      continue;
-    }
-    if (fnode === "agent_last_token" || fnode === "thinking_last_token") {
-      const t = ts(ev);
-      const k: PipelineRow["kind"] = fnode === "thinking_last_token" ? "thinking" : "assistant";
       const d = ev.detail as Record<string, any> | undefined;
       const data = (d?.data ?? d) as Record<string, any> | undefined;
-      const chunks = Number(data?.chunks ?? 0);
-      const chars = Number(data?.chars ?? 0);
-      for (let i = rows.length - 1; i >= 0; i--) {
-        const r = rows[i];
-        if (r.kind === k) {
-          r.endMs = t;
-          r.durationMs = r.endMs - r.startMs;
-          if (chunks > r.chunks) r.chunks = chunks;
-          if (chars > r.chars) r.chars = chars;
-          break;
-        }
+      const isLast = fnode.endsWith("_last_token");
+      let detail: string | undefined;
+      if (isLast) {
+        const chunks = Number(data?.chunks ?? 0);
+        const chars = Number(data?.chars ?? 0);
+        if (chunks > 0) detail = `${chunks} chunks · ${chars}c`;
       }
+      const label = fnode.startsWith("thinking_")
+        ? "thinking:" + fnode.slice("thinking_".length)
+        : "agent:" + fnode.slice("agent_".length);
+      rows.push({
+        kind: fnode as PipelineRow["kind"],
+        label,
+        detail,
+        startMs: t, endMs: t, durationMs: 0, chunks: 1, chars: 0,
+      });
       continue;
     }
 

@@ -457,8 +457,8 @@ export function FlowDiagram({
             ? sumParts.join("  ·  ")
             : (totalMs > 0 ? `total ${fmtDur(totalMs)}` : "");
           const rowColor = (kind: string) => {
-            if (kind === "thinking") return "var(--lm-purple)";
-            if (kind === "assistant") return "var(--lm-blue)";
+            if (kind === "thinking" || kind === "thinking_first_token" || kind === "thinking_last_token") return "var(--lm-purple)";
+            if (kind === "assistant" || kind === "agent_first_token" || kind === "agent_last_token") return "var(--lm-blue)";
             if (kind === "tool" || kind === "tool_result") return "#f59e0b";
             if (kind === "lifecycle_start" || kind === "lifecycle_end") return "var(--lm-green)";
             if (kind === "error") return "#ef4444";
@@ -620,7 +620,10 @@ export function FlowDiagram({
                   ) : pipelineRows.map((r, i) => {
                     const c = rowColor(r.kind);
                     const isStream = r.kind === "thinking" || r.kind === "assistant";
-                    const isOneShot = r.kind === "lifecycle_start" || r.kind === "lifecycle_end" || r.kind === "compaction" || r.kind === "error";
+                    const isOneShot = r.kind === "lifecycle_start" || r.kind === "lifecycle_end"
+                      || r.kind === "agent_first_token" || r.kind === "agent_last_token"
+                      || r.kind === "thinking_first_token" || r.kind === "thinking_last_token"
+                      || r.kind === "compaction" || r.kind === "error";
                     // Gap to NEXT row — rendered below this row when > 200ms
                     // so the user sees idle time (e.g., "+ 6.3s" between
                     // lifecycle_start and the first tool call = LLM thinking
