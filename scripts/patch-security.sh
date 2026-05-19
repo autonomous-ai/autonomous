@@ -70,6 +70,44 @@ else:
     print("[patch] nginx /api/system/exec: already patched, skipping")
 PYEOF
 
+# 3a. nginx /api/system/shell: add WebSocket upgrade block if missing.
+# Devices provisioned from setup.sh before the dedicated shell block was added
+# fall through to the generic /api/ proxy (no Upgrade headers) — WS handshake
+# fails with "upgrade token not found in Connection header".
+python3 - "$NGINX_CONF" <<'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path) as f:
+    content = f.read()
+
+if "location = /api/system/shell" in content:
+    print("[patch] nginx /api/system/shell: already present, skipping")
+    sys.exit(0)
+
+old = "  location /api/ {"
+new = """  # Interactive shell WebSocket (xterm.js PTY) — must come before generic /api/.
+  location = /api/system/shell {
+    proxy_pass http://backend;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_read_timeout 86400s;
+    proxy_send_timeout 86400s;
+  }
+
+  location /api/ {"""
+
+if old not in content:
+    print("[patch] nginx /api/system/shell: /api/ block not found, may need manual check")
+    sys.exit(0)
+
+content = content.replace(old, new, 1)
+with open(path, "w") as f:
+    f.write(content)
+print("[patch] nginx /api/system/shell: WebSocket upgrade block added")
+PYEOF
+
 # 3b. nginx /gw and /gw/: add allow/deny if missing (OpenClaw gateway local-only)
 python3 - "$NGINX_CONF" <<'PYEOF'
 import sys
