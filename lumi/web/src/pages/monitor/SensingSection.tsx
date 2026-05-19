@@ -82,6 +82,7 @@ interface Perception {
   sample_interval_s?: number;
   bad_ratio_threshold?: number;
   summary?: PoseSummary | null;
+  running?: PoseSummary | null;
   samples?: PoseSample[];
 }
 
@@ -168,16 +169,25 @@ function riskName(level: number | null | undefined): string {
 function posePillStatus(pose: Perception): { text: string; color: string } {
   const ageS = pose.window_age_s ?? 0;
   const durS = pose.window_duration_s ?? 600;
-  const summary = pose.summary;
-  if (summary && summary.bad_ratio >= (pose.bad_ratio_threshold ?? 0.6)) {
-    return { text: `Bad ${Math.round(summary.bad_ratio * 100)}%`, color: "var(--lm-red)" };
-  }
-  if (summary) {
-    return { text: `OK (${Math.round((1 - summary.bad_ratio) * 100)}% clean)`, color: "var(--lm-green)" };
+  const threshold = pose.bad_ratio_threshold ?? 0.6;
+  const minSamples = pose.window_min_samples ?? 3;
+  // Prefer the running aggregate so the pill shows live "would fire?"
+  // status mid-window — `summary` is only populated at the precise tick
+  // the window completes (between motion's eval and its reset_window).
+  const live = pose.running ?? pose.summary;
+  const samples = pose.samples_in_buffer ?? 0;
+  if (live && samples >= minSamples) {
+    const pct = Math.round(live.bad_ratio * 100);
+    if (live.bad_ratio >= threshold) {
+      return { text: `Bad ${pct}% (${live.bad_samples}/${samples})`, color: "var(--lm-red)" };
+    }
+    return { text: `OK ${pct}% (${live.bad_samples}/${samples})`, color: "var(--lm-green)" };
   }
   if (ageS > 0) {
     const remainMin = Math.max(0, Math.ceil((durS - ageS) / 60));
-    return { text: `Filling ${remainMin}m left`, color: "var(--lm-amber)" };
+    const samplesShort = Math.max(0, minSamples - samples);
+    const reason = samplesShort > 0 ? `${samplesShort} sample${samplesShort === 1 ? "" : "s"} short` : `${remainMin}m left`;
+    return { text: `Filling ${reason}`, color: "var(--lm-amber)" };
   }
   return { text: "Idle", color: "var(--lm-text-muted)" };
 }
@@ -361,9 +371,18 @@ export function SensingSection() {
       {pose ? (() => {
         const status = posePillStatus(pose);
         const samples = [...(pose.samples ?? [])].reverse(); // newest first
-        const summary = pose.summary;
+        // Prefer running over summary for mid-window visibility — summary
+        // is only populated for one tick at the cycle boundary, but the
+        // user wants to see "is this window going to fire?" the whole time.
+        const live = pose.running ?? pose.summary;
+        const threshold = pose.bad_ratio_threshold ?? 0.6;
+        const minSamples = pose.window_min_samples ?? 3;
+        const samplesNow = pose.samples_in_buffer ?? 0;
         const winDurMin = Math.round((pose.window_duration_s ?? 600) / 60);
         const winAgeMin = Math.round((pose.window_age_s ?? 0) / 60);
+        // "Would fire?" — gates the motion-side fold uses, ignoring the
+        // is_window_complete check so we can predict before the cycle ends.
+        const wouldFire = !!(live && samplesNow >= minSamples && live.bad_ratio >= threshold);
         return (
           <div style={S.card}>
             <CardHeader
@@ -371,14 +390,15 @@ export function SensingSection() {
               pill={<Pill text={status.text} color={status.color} />}
             />
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-              <StatPill label="Samples"     value={`${pose.samples_in_buffer ?? 0} (min ${pose.window_min_samples ?? 3})`} />
+              <StatPill label="Samples"     value={`${samplesNow} (min ${minSamples})`} color={samplesNow >= minSamples ? "var(--lm-green)" : undefined} />
               <StatPill label="Window"      value={`${winAgeMin}m / ${winDurMin}m`} color={pose.window_complete ? "var(--lm-green)" : undefined} />
               <StatPill label="Last"        value={fmtAgo(pose.seconds_since_sample)} />
               <StatPill label="Last score"  value={`${pose.ergo_score ?? "—"} (${riskName(pose.ergo_risk_level)})`} />
-              {summary ? (
+              {live ? (
                 <>
-                  <StatPill label="Bad" value={`${Math.round(summary.bad_ratio * 100)}% (${summary.bad_samples}/${summary.samples})`} color={summary.bad_ratio >= (pose.bad_ratio_threshold ?? 0.6) ? "var(--lm-red)" : "var(--lm-green)"} />
-                  <StatPill label="Dominant" value={summary.dominant_region || "—"} />
+                  <StatPill label="Bad" value={`${Math.round(live.bad_ratio * 100)}% (${live.bad_samples}/${live.samples})`} color={live.bad_ratio >= threshold ? "var(--lm-red)" : "var(--lm-green)"} />
+                  <StatPill label="Dominant" value={live.dominant_region || "—"} />
+                  <StatPill label="Will fire" value={wouldFire ? "YES — waiting window" : "no"} color={wouldFire ? "var(--lm-red)" : "var(--lm-text-muted)"} />
                 </>
               ) : null}
             </div>
