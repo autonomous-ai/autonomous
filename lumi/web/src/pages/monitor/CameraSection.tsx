@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePolling } from "../../hooks/usePolling";
 import { S } from "./styles";
+import { hwUrl } from "@/lib/api";
 import { HW } from "./types";
 
 interface TrackStatus {
@@ -219,7 +220,7 @@ export function CameraSection({
               highlight={track.tracking}
             >
               <img
-                src={`${HW}/camera/stream`}
+                src={hwUrl(`/camera/stream`)}
                 alt="camera"
                 style={mediaImgStyle(track.tracking)}
                 onError={() => setStreamError(true)}
