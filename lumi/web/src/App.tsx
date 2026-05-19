@@ -5,7 +5,7 @@ import Setup from "@/pages/Setup";
 import Monitor from "@/pages/monitor";
 import EditConfig from "@/pages/EditConfig";
 import GwConfig from "@/pages/GwConfig";
-import { checkInternet, getSetupStatus } from "@/lib/api";
+import { checkInternet, getApiToken, getDeviceConfig, getSetupStatus } from "@/lib/api";
 
 // Detect Tailscale access by either:
 //  - CGNAT IPv4 in 100.64.0.0/10 (100.64.0.0 – 100.127.255.255), or
@@ -62,7 +62,20 @@ function SetupGate() {
   return <Setup mode={provisioned ? "continue" : "initial"} />;
 }
 
+// Bootstrap the admin bearer token for /api/* admin routes (PUT
+// device/config, software-update, logs, etc.). Skips when sessionStorage
+// already has one. Pre-login transition: token == llm_api_key fetched from
+// the still-open GET /api/device/config. Silent on error — Setup mode and
+// unprovisioned devices may not have a token yet, that's expected.
+function useApiTokenBootstrap() {
+  useEffect(() => {
+    if (getApiToken()) return;
+    getDeviceConfig().catch(() => {});
+  }, []);
+}
+
 function App() {
+  useApiTokenBootstrap();
   return (
     <BrowserRouter>
       <Routes>

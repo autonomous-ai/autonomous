@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"io"
@@ -296,6 +297,33 @@ func localOnlyMiddleware() gin.HandlerFunc {
 	}
 }
 
+// adminAuthMiddleware requires Authorization: Bearer <llm_api_key> on requests
+// to admin endpoints (config write, channel change, logs, OTA). Reads the
+// expected token from cfg.LLMAPIKey at request time so config-change rotation
+// applies without a restart. Constant-time compare guards against timing
+// side-channels. Empty configured key fails closed (503 admin auth not configured).
+//
+// Web monitor admin pages must include this header until a proper login UI
+// lands; pre-login web bootstrap can still read GET /api/device/config (kept
+// open via sameOriginOrLAN) to fetch the token.
+func adminAuthMiddleware(cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		expected := cfg.LLMAPIKey
+		if expected == "" {
+			c.JSON(http.StatusServiceUnavailable, serializers.ResponseError("admin auth not configured"))
+			c.Abort()
+			return
+		}
+		got := strings.TrimSpace(strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer "))
+		if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(expected)) != 1 {
+			c.JSON(http.StatusUnauthorized, serializers.ResponseError("unauthorized"))
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
 func corsMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.GetHeader("Origin")
@@ -375,16 +403,20 @@ func (s *Server) Serve(closeFn func()) error {
 	system.GET("info", s.healthHandler.SystemInfo)
 	system.GET("network", s.healthHandler.NetworkInfo)
 	system.GET("dashboard", s.healthHandler.Dashboard)
-	system.POST("software-update/:target", s.softwareUpdate)
+	system.POST("software-update/:target", adminAuthMiddleware(s.config), s.softwareUpdate)
 	system.POST("exec", localOnlyMiddleware(), s.execCommand)
 	system.GET("shell", systemshell.ShellHandler)
 
 	device := api.Group("device")
 	device.POST("setup", s.deviceHandler.Setup)
 	device.GET("setup/status", s.deviceHandler.SetupStatus)
-	device.POST("channel", s.deviceHandler.ChangeChannel)
+	device.POST("channel", adminAuthMiddleware(s.config), s.deviceHandler.ChangeChannel)
+	// GET kept open (sameOriginOrLAN at nginx + Origin check) so web can
+	// bootstrap the bearer token before a login UI exists. Audit web F1
+	// (raw secrets in response) is tracked separately and addressed when
+	// login lands — until then this stays the bootstrap path.
 	device.GET("config", s.deviceHandler.GetConfig)
-	device.PUT("config", s.deviceHandler.UpdateConfig)
+	device.PUT("config", adminAuthMiddleware(s.config), s.deviceHandler.UpdateConfig)
 	device.GET("voices", s.deviceHandler.GetVoices)
 	device.GET("tts-providers", s.deviceHandler.GetTTSProviders)
 
@@ -444,8 +476,8 @@ func (s *Server) Serve(closeFn func()) error {
 	oc.GET("compaction-latest", s.openclawHandler.CompactionLatest)
 
 	logs := api.Group("logs")
-	logs.GET("tail", s.logTail)
-	logs.GET("stream", s.logStream)
+	logs.GET("tail", adminAuthMiddleware(s.config), s.logTail)
+	logs.GET("stream", adminAuthMiddleware(s.config), s.logStream)
 
 	slog.Info("server started", "component", "server")
 

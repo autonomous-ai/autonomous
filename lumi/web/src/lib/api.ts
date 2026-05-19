@@ -16,8 +16,41 @@ export interface JSONResponse<T = unknown> {
   data: T;
 }
 
+// Bearer token attached to every /api/* request hitting an admin-gated route
+// in the Go server (`adminAuthMiddleware`). The value mirrors
+// `config.json::llm_api_key` and is bootstrapped from GET /api/device/config
+// on first page load until a proper login UI exists.
+//
+// sessionStorage so a hard reload keeps the token without a refetch.
+const TOKEN_STORAGE_KEY = "lumi_api_token";
+let apiToken: string =
+  typeof window !== "undefined" ? sessionStorage.getItem(TOKEN_STORAGE_KEY) ?? "" : "";
+
+export function setApiToken(token: string): void {
+  apiToken = token ?? "";
+  if (typeof window === "undefined") return;
+  if (apiToken) sessionStorage.setItem(TOKEN_STORAGE_KEY, apiToken);
+  else sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+
+export function getApiToken(): string {
+  return apiToken;
+}
+
+/** Append ?token=<key> to a URL — used for SSE/EventSource where native
+ *  EventSource cannot set custom headers. */
+export function withApiToken(url: string): string {
+  if (!apiToken) return url;
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}token=${encodeURIComponent(apiToken)}`;
+}
+
 async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(url, options);
+  const headers = new Headers(options?.headers);
+  if (apiToken && !headers.has("Authorization")) {
+    headers.set("Authorization", `Bearer ${apiToken}`);
+  }
+  const res = await fetch(url, { ...options, headers });
   const json = (await res.json()) as JSONResponse<T>;
   if (json.status !== 1) {
     const msg =
@@ -167,7 +200,14 @@ export async function testTTSVoice(voice: string, opts: TestTTSOptions = {}): Pr
 }
 
 export async function getDeviceConfig(): Promise<DeviceConfig> {
-  return apiRequest<DeviceConfig>(`${API_BASE}/api/device/config`);
+  const cfg = await apiRequest<DeviceConfig>(`${API_BASE}/api/device/config`);
+  // Bootstrap the admin bearer token so subsequent admin /api/* calls succeed.
+  // GET /api/device/config is intentionally kept open in Go server until web
+  // has a login UI — this is the transition path.
+  if (cfg?.llm_api_key) {
+    setApiToken(cfg.llm_api_key);
+  }
+  return cfg;
 }
 
 export async function updateDeviceConfig(body: Partial<DeviceConfig> & { password?: string; ssid?: string }): Promise<boolean> {

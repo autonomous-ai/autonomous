@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getApiToken } from "@/lib/api";
 import { API } from "./types";
 
 export function StatusDot({ ok }: { ok: boolean }) {
@@ -24,7 +25,9 @@ export function SoftwareUpdateButton({ target, label }: { target: "lumi" | "web"
     setBusy(true);
     setMsg(null);
     try {
-      const r = await fetch(`${API}/system/software-update/${target}`, { method: "POST" });
+      const token = getApiToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const r = await fetch(`${API}/system/software-update/${target}`, { method: "POST", headers });
       if (r.ok) setMsg("OK");
       else setMsg("Failed");
     } catch {
