@@ -91,22 +91,28 @@ Watch the `level` value during normal ambient conditions vs. when you clap/speak
 
 ## Voice Wake Word (VAD)
 
-**File:** `lelamp/service/voice/voice_service.py`
+**File:** `lelamp/service/voice/voice_service.py` (all env-tunable)
 
 ```python
-RMS_THRESHOLD = 500        # mic energy to start streaming to Deepgram (free local check)
-SILENCE_TIMEOUT_S = 2.5   # stop STT session after this much silence
-SPEECH_HOLDOFF_S = 0.2    # min speech duration before opening STT (ignore short clicks)
-ECHO_SIMILARITY_THRESHOLD = 0.55  # transcript similarity to Lumi's own TTS output = drop as echo
+LELAMP_VAD_THRESHOLD = 3500        # RMS to trigger speech detection (default 3500)
+LELAMP_SILENCE_TIMEOUT = 2.5       # stop STT session after this much silence (s)
+LELAMP_SPEECH_HOLDOFF = 0.2        # min speech duration before opening STT — rejects short clicks (s)
+LELAMP_PRE_ROLL_FRAMES = 8         # rolling lookback frames kept BEFORE VAD trigger (8 × 64ms = 512ms)
+LELAMP_WEBRTCVAD_ENABLED = false   # secondary gate, recommended true for low-threshold setups
+LELAMP_SILERO_ENABLED = false      # tertiary gate (ONNX); webrtcvad usually enough
 ```
+
+**How pre-roll works:** Every mic frame goes into a rolling `deque(maxlen=PRE_ROLL_FRAMES)` regardless of VAD state. When VAD finally triggers, the pre-trigger history (frames that fell under `RMS_THRESHOLD` — e.g. quiet stop consonants like "b", "k", "t", "p") gets prepended to the audio stream sent to STT. This eliminates the need for the user to say "Uhm..." as a warmup before their actual phrase.
 
 **Tuning:**
 
 | Symptom | Fix |
 |---------|-----|
-| Wake word not picked up reliably | Decrease `RMS_THRESHOLD` (500 → 300) |
-| Lumi starts listening from ambient noise | Increase `RMS_THRESHOLD` (500 → 800) |
-| Lumi cuts off before you finish speaking | Increase `SILENCE_TIMEOUT_S` |
+| First syllable clipped (STT hears "ật đèn" instead of "bật đèn") | Increase `LELAMP_PRE_ROLL_FRAMES` (8 → 12) or decrease `LELAMP_VAD_THRESHOLD` (3500 → 1500) |
+| Wake word not picked up reliably | Decrease `LELAMP_VAD_THRESHOLD` (3500 → 1500) + enable `LELAMP_WEBRTCVAD_ENABLED=true` as safety net |
+| Lumi starts listening from ambient noise | Increase `LELAMP_VAD_THRESHOLD` and/or enable `LELAMP_WEBRTCVAD_ENABLED=true` |
+| Lumi cuts off before you finish speaking | Increase `LELAMP_SILENCE_TIMEOUT` |
+| Stale audio from previous turn bleeds into next session | Already mitigated: `lookback.clear()` fires after each session closes |
 | Lumi repeats its own TTS back to OpenClaw (echo loop) | Decrease `ECHO_SIMILARITY_THRESHOLD` (0.55 → 0.45) |
 
 ---

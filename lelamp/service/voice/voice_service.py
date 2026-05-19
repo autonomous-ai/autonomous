@@ -17,6 +17,7 @@ import re
 import subprocess
 import threading
 import time
+from collections import deque
 from pathlib import Path
 from typing import Optional
 
@@ -37,6 +38,11 @@ FRAME_DURATION_MS = 64  # Frame duration in ms (device-rate-independent)
 RMS_THRESHOLD = int(os.environ.get("LELAMP_VAD_THRESHOLD", "3500"))      # RMS above this = speech
 SILENCE_TIMEOUT_S = float(os.environ.get("LELAMP_SILENCE_TIMEOUT", "2.5"))  # Silence before STT disconnect
 SPEECH_HOLDOFF_S = float(os.environ.get("LELAMP_SPEECH_HOLDOFF", "0.2"))  # Minimum speech duration before connecting STT
+# Pre-roll lookback — frames retained BEFORE VAD trigger so quiet first
+# syllables ("b", "k", "t", "p" stop consonants, or any utterance starting
+# under RMS_THRESHOLD) reach STT instead of getting clipped. 8 × 64ms = 512ms
+# of audio history. Equivalent to user manually saying "Uhm..." before speech.
+PRE_ROLL_FRAMES = int(os.environ.get("LELAMP_PRE_ROLL_FRAMES", "8"))
 
 SESSION_COOLDOWN_S = float(os.environ.get("LELAMP_SESSION_COOLDOWN_S", "0.3"))
 
@@ -769,6 +775,11 @@ class VoiceService:
         Breaks out when TTS starts speaking so _loop can close mic and reopen after."""
         speech_start = None
         speech_pre_buffer = []  # frames buffered during holdoff period
+        # Rolling pre-trigger history. Every read appends here regardless of
+        # VAD state — when speech is finally detected, the last N frames of
+        # pre-trigger audio (the syllable that fell under RMS_THRESHOLD)
+        # get prepended to speech_pre_buffer so STT sees the full utterance.
+        lookback = deque(maxlen=PRE_ROLL_FRAMES)
 
         # Keepalive: pre-connect STT WS so it's ready before speech is detected.
         keepalive_session = None
@@ -795,6 +806,11 @@ class VoiceService:
             if self._tts_is_speaking() or self._music_is_playing():
                 return
 
+            # Always append to rolling lookback — regardless of VAD state.
+            # This is what makes pre-roll work: the moment VAD triggers we
+            # already have N frames of pre-trigger audio in hand.
+            lookback.append(data)
+
             rms = self._rms(data)
 
             if rms >= RMS_THRESHOLD and self._webrtcvad_is_speech(data, device_rate):
@@ -812,15 +828,26 @@ class VoiceService:
                             speech_start = None
                             speech_pre_buffer = []
                             continue
-                    # Convert pre-buffer to STT format
-                    speech_pre_buffer = [self._resample_to_stt(f, device_rate) for f in speech_pre_buffer]
-                    logger.info("Speech detected (RMS=%.0f), connecting STT...", rms)
+                    # Prepend pre-trigger history from lookback. The last
+                    # len(speech_pre_buffer) frames of lookback already == the
+                    # holdoff buffer, so slice them off to avoid duplicates.
+                    buffered = len(speech_pre_buffer)
+                    history = list(lookback)[:-buffered] if buffered > 0 else list(lookback)
+                    all_frames = history + speech_pre_buffer
+                    logger.info(
+                        "Speech detected (RMS=%.0f) — pre-roll=%d frames (~%dms) + holdoff=%d frames",
+                        rms, len(history), len(history) * FRAME_DURATION_MS, buffered,
+                    )
+                    speech_pre_buffer = [self._resample_to_stt(f, device_rate) for f in all_frames]
                     self._stream_session(mic, frame_size, device_rate,
                                         preconnected_session=keepalive_session,
                                         speech_pre_buffer=speech_pre_buffer)
                     keepalive_session = None
                     speech_start = None
                     speech_pre_buffer = []
+                    # Clear lookback so the next session doesn't replay tail
+                    # audio from this turn (silence + post-speech artifacts).
+                    lookback.clear()
                     self._silero_reset_state()
                     logger.info("VAD resumed — mic active, waiting for next speech")
                     # Cooldown after session to let resources clean up

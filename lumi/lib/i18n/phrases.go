@@ -19,6 +19,17 @@ const (
 	PhraseBrainRestart  Phrase = "sensing.brain_restart"
 	PhraseCompactNotice Phrase = "openclaw.compact_notice"
 	PhraseTrackFailFmt  Phrase = "tracking.track_fail_fmt"
+
+	// Chitchat replies — consumed via PickIn(phrase, inputLang) from the
+	// local intent matcher. The reply lang follows the matched input phrase
+	// (so "hi" → English reply) rather than the configured Lang().
+	PhraseChitchatGreeting      Phrase = "chitchat.greeting"
+	PhraseChitchatFarewell      Phrase = "chitchat.farewell"
+	PhraseChitchatThanks        Phrase = "chitchat.thanks"
+	PhraseChitchatApology       Phrase = "chitchat.apology"
+	PhraseChitchatCompliment    Phrase = "chitchat.compliment"
+	PhraseChitchatNevermind     Phrase = "chitchat.nevermind"
+	PhraseChitchatPresenceCheck Phrase = "chitchat.presence_check"
 )
 
 // fallbackLang is used when the active STT language has no entry for
@@ -170,6 +181,75 @@ var phrases = map[Phrase]map[string][]string{
 		LangZhCN: {"[sigh] 我看不太清%s — 让我朝那边看看，或者换个名字？"},
 		LangZhTW: {"[sigh] 我看不太清%s — 讓我朝那邊看看，或者換個名字？"},
 	},
+	PhraseChitchatGreeting: {
+		LangEN:   {"[chuckle] Hi there!", "[laughs softly] Hey hey!", "[whisper] I'm here."},
+		LangVI:   {"[chuckle] Chào bạn!", "[laughs softly] Mình đây!", "[whisper] Lumi đây nè."},
+		LangZhCN: {"[chuckle] 你好呀!", "[laughs softly] 嗨, 我在这里."},
+		LangZhTW: {"[chuckle] 你好啊!", "[laughs softly] 嗨, 我在這裡."},
+	},
+	PhraseChitchatFarewell: {
+		LangEN:   {"[whisper] Bye!", "[sigh] See you later."},
+		LangVI:   {"[whisper] Bye nha!", "[sigh] Hẹn gặp lại."},
+		LangZhCN: {"[whisper] 再见!", "[sigh] 下次见."},
+		LangZhTW: {"[whisper] 再見!", "[sigh] 下次見."},
+	},
+	PhraseChitchatThanks: {
+		LangEN:   {"[chuckle] No worries!", "[whisper] You're welcome.", "[laughs softly] Sure thing."},
+		LangVI:   {"[chuckle] Khỏi cần!", "[whisper] Không có gì.", "[laughs softly] Có gì đâu."},
+		LangZhCN: {"[chuckle] 不用谢!", "[whisper] 没事."},
+		LangZhTW: {"[chuckle] 不用謝!", "[whisper] 沒事."},
+	},
+	PhraseChitchatApology: {
+		LangEN:   {"[chuckle] No worries!", "[whisper] It's all good.", "[laughs softly] Don't sweat it."},
+		LangVI:   {"[chuckle] Không sao mà!", "[whisper] Yên tâm đi.", "[laughs softly] Có gì đâu."},
+		LangZhCN: {"[chuckle] 没关系!", "[whisper] 别担心."},
+		LangZhTW: {"[chuckle] 沒關係!", "[whisper] 別擔心."},
+	},
+	PhraseChitchatCompliment: {
+		LangEN:   {"[chuckle] Aw, thanks!", "[laughs softly] You're sweet.", "[whisper] Hehe, thanks."},
+		LangVI:   {"[chuckle] Cảm ơn nha!", "[laughs softly] Bạn dễ thương quá.", "[whisper] Hihi, cảm ơn."},
+		LangZhCN: {"[chuckle] 谢谢夸奖!", "[laughs softly] 你真好."},
+		LangZhTW: {"[chuckle] 謝謝誇獎!", "[laughs softly] 你真好."},
+	},
+	PhraseChitchatNevermind: {
+		LangEN:   {"[whisper] Got it.", "Ok.", "[chuckle] No problem."},
+		LangVI:   {"[whisper] Ừ ok.", "Dạ.", "[chuckle] Không sao."},
+		LangZhCN: {"[whisper] 好的.", "嗯, 知道了."},
+		LangZhTW: {"[whisper] 好的.", "嗯, 知道了."},
+	},
+	PhraseChitchatPresenceCheck: {
+		LangEN:   {"[chuckle] Still here!", "[whisper] Right here.", "I'm here."},
+		LangVI:   {"[chuckle] Vẫn đây nè!", "[whisper] Mình đây.", "Có Lumi đây."},
+		LangZhCN: {"[chuckle] 我还在!", "[whisper] 在呢."},
+		LangZhTW: {"[chuckle] 我還在!", "[whisper] 在呢."},
+	},
+}
+
+// PickIn is like Pick but uses the explicit `lang` argument rather than the
+// configured Lang(). Used by the local intent matcher where the reply lang
+// must follow the matched input phrase's lang (e.g. "hi" → English reply,
+// "chào" → Vietnamese reply) independent of global config.
+func PickIn(p Phrase, lang string) string {
+	pool := poolFor(p, lang)
+	if len(pool) == 0 {
+		return ""
+	}
+	return pool[rand.Intn(len(pool))]
+}
+
+// AllVariantsAcrossLangs returns every reply variant for phrase p across all
+// languages — used by the WAV pre-render boot path so the cache covers every
+// possible chitchat reply ahead of time.
+func AllVariantsAcrossLangs(p Phrase) []string {
+	byLang, ok := phrases[p]
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, pool := range byLang {
+		out = append(out, pool...)
+	}
+	return out
 }
 
 // Pick returns one entry at random from the active language's pool for

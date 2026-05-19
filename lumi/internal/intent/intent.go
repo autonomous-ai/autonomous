@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"go-lamp.autonomous.ai/lib/i18n"
 	"go-lamp.autonomous.ai/lib/lelamp"
 )
 
@@ -30,9 +31,18 @@ type Result struct {
 
 // Match tries to match a voice command to a local intent.
 // Returns nil if no match — caller should fall through to OpenClaw.
+// Chitchat (exact-match greetings/farewells/thanks across vi/en/zh) is
+// checked first so a bare "chào" / "hi" / "你好" hits the WAV cache in
+// ~50ms instead of going through the 8s LLM TTFT.
 func Match(text string) *Result {
-	t := normalize(text)
+	// Chitchat needs a stricter normalization than command rules — speaker
+	// prefixes, voice tags, and the (audio saved at ...) suffix from the
+	// sensing message must be stripped for an exact phrase match to work.
+	if r := matchChitchat(stripChitchatPrefixes(text)); r != nil {
+		return r
+	}
 
+	t := normalize(text)
 	for _, r := range rules {
 		if r.match(t) {
 			res := r.exec(t)
@@ -48,16 +58,230 @@ func Match(text string) *Result {
 // derived from the rules table) because rule.exec is dynamic — some
 // replies depend on runtime input (color name, current time) and aren't
 // suitable for caching.
-var CacheableReplies = []string{
-	"Light on!",
-	"Light off!",
-	"Back to normal!",
-	"Goodnight!",
-	"Volume up!",
-	"Volume down!",
-	"Music stopped.",
-	"Dimmed.",
-	"Max brightness!",
+var CacheableReplies = func() []string {
+	out := []string{
+		"Light on!", "Light off!", "Back to normal!", "Goodnight!",
+		"Volume up!", "Volume down!", "Music stopped.", "Dimmed.", "Max brightness!",
+	}
+	// Pull every chitchat reply variant from i18n so the WAV cache covers
+	// them after reboot — first call is then ~50ms playback instead of 1.5s
+	// ElevenLabs render.
+	for _, r := range chitchatRules {
+		out = append(out, i18n.AllVariantsAcrossLangs(r.reply)...)
+	}
+	return out
+}()
+
+// --- chitchat (greetings / farewells / thanks) ---
+
+// chitchatRule is the local metadata for one chitchat intent. Input
+// phrases (per lang) and reply variants (per lang) both live in i18n —
+// look up via i18n.InputPhrases(reply) and i18n.PickIn(reply, lang).
+type chitchatRule struct {
+	reply   i18n.Phrase // i18n key — input matchers + reply variants both keyed by this
+	intent  string      // "greeting" / "farewell" / "thanks" — for log/Rule field
+	emotion string      // emotion fired alongside reply
+}
+
+// Order matters — Contains is greedy so specific phrases (presence_check,
+// apology, compliment) must run before broad ones (greeting/farewell).
+// Nevermind goes last because its trigger words (e.g. "thôi") are short and
+// would shadow other intents that include the same token in their pool.
+var chitchatRules = []chitchatRule{
+	{reply: i18n.PhraseChitchatPresenceCheck, intent: "presence_check", emotion: "happy"},
+	{reply: i18n.PhraseChitchatApology, intent: "apology", emotion: "happy"},
+	{reply: i18n.PhraseChitchatCompliment, intent: "compliment", emotion: "happy"},
+	{reply: i18n.PhraseChitchatGreeting, intent: "greeting", emotion: "happy"},
+	{reply: i18n.PhraseChitchatFarewell, intent: "farewell", emotion: "happy"},
+	{reply: i18n.PhraseChitchatThanks, intent: "thanks", emotion: "happy"},
+	{reply: i18n.PhraseChitchatNevermind, intent: "nevermind", emotion: "idle"},
+}
+
+// matchChitchat returns a Result when text starts with a chitchat phrase in
+// any supported language AND looks short/social (≤5 words, no command verbs).
+// Reply is picked in the matched-input language so "hi" → English reply,
+// "chào" → Vietnamese reply — keeps the lamp on the user's current language
+// regardless of configured i18n.Lang().
+func matchChitchat(text string) *Result {
+	if text == "" {
+		return nil
+	}
+	t := strings.ToLower(strings.TrimSpace(text))
+	t = strings.TrimRight(t, ".!?,。！？，")
+
+	// Strip leading wake word so "Lumi xin chào" → "xin chào", "Lami cảm
+	// ơn" → "cảm ơn". Bare wake-word / "lumi ơi" → "" → user is just
+	// calling Lumi by name; short-circuit with a greeting reply.
+	t = stripWakeWord(t)
+	if t == "" {
+		return bareAttentionResult()
+	}
+
+	// Length gate: greeting/farewell/thanks are short. "Chào Lumi hôm nay
+	// bạn thế nào" → 6 words → fall through to LLM so context isn't lost.
+	// Word counting on bytes works for VN/EN; for ZH treat each rune as a
+	// word since CJK has no spaces.
+	if wordCountLoose(t) > 5 {
+		return nil
+	}
+
+	// Reject if any command word is present — the user is asking for an
+	// action and OpenClaw / the command rules must see it.
+	for _, w := range i18n.ChitchatCommandWords() {
+		if strings.Contains(t, w) {
+			return nil
+		}
+	}
+
+	for _, r := range chitchatRules {
+		for lang, phrases := range i18n.InputPhrases(r.reply) {
+			for _, p := range phrases {
+				// Substring match — exact / prefix / suffix all hit. The
+				// length gate above (≤5 words) and command-verb reject
+				// already bound false positives, so Contains is safe and
+				// catches real speech variation: "chào nha", "lumi chào
+				// em", "cảm ơn rất nhiều", "thanks man", etc.
+				if !strings.Contains(t, p) {
+					continue
+				}
+				reply := i18n.PickIn(r.reply, lang)
+				if reply == "" {
+					continue
+				}
+				post("/emotion", fmt.Sprintf(`{"emotion":"%s","intensity":0.7}`, r.emotion))
+				return &Result{
+					TTSText: reply,
+					Emotion: r.emotion,
+					Rule:    "chitchat_" + r.intent,
+					Actions: []string{"POST /emotion " + r.emotion},
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// wordCountLoose counts space-separated tokens for VN/EN. For CJK text
+// (Chinese), space-split returns 1 since there are no spaces — fall back
+// to rune count (each char ≈ a "word" for the purpose of "is this short").
+func wordCountLoose(s string) int {
+	fields := strings.Fields(s)
+	if len(fields) > 1 {
+		return len(fields)
+	}
+	// Single field — could be EN/VN one word or CJK run with no spaces.
+	// Count runes if any non-ASCII rune is present (CJK heuristic).
+	for _, r := range s {
+		if r > 127 {
+			n := 0
+			for range s {
+				n++
+			}
+			// Round down by dividing by 2 — typical Chinese phrase has
+			// 2 runes per "word" (e.g. 你好 = 1 social word).
+			if n/2 < 1 {
+				return 1
+			}
+			return n / 2
+		}
+	}
+	return len(fields)
+}
+
+// stripChitchatPrefixes removes the sensing-message envelope around the
+// user's actual words so an exact-match chitchat rule can fire. The sensing
+// path wraps voice text like:
+//
+//	[user] [ambient] Unknown Speaker: [voice:voice_46] chào (audio saved at /tmp/...)
+//
+// Stripping leading [tag]…[tag] groups, the speaker label up to the first
+// colon, the [voice:…] tag after it, and the trailing (audio saved …) note
+// leaves just "chào" which can match the chitchat table.
+func stripChitchatPrefixes(s string) string {
+	s = strings.TrimSpace(s)
+	// Strip leading [tag] groups.
+	for strings.HasPrefix(s, "[") {
+		end := strings.Index(s, "]")
+		if end < 0 {
+			break
+		}
+		s = strings.TrimSpace(s[end+1:])
+	}
+	// Strip "Speaker - Name:" / "Unknown Speaker:" prefix when colon is
+	// near the start (avoid eating user text that happens to contain ":").
+	if idx := strings.Index(s, ":"); idx >= 0 && idx < 40 {
+		before := strings.ToLower(s[:idx])
+		if strings.Contains(before, "speaker") {
+			s = strings.TrimSpace(s[idx+1:])
+		}
+	}
+	// Strip another round of leading [voice:…] tags after the speaker label.
+	for strings.HasPrefix(s, "[") {
+		end := strings.Index(s, "]")
+		if end < 0 {
+			break
+		}
+		s = strings.TrimSpace(s[end+1:])
+	}
+	// Strip trailing "(audio saved at …)" / "(audio is too short …)" — our
+	// own annotation, never user content. Anything else in parens stays.
+	if idx := strings.LastIndex(s, "("); idx > 0 {
+		rest := s[idx:]
+		if strings.Contains(rest, "audio saved") || strings.Contains(rest, "audio is too short") {
+			s = strings.TrimSpace(s[:idx])
+		}
+	}
+	return s
+}
+
+// stripWakeWord removes a leading wake-word token ("lumi", "làmi", "lumi
+// ơi", …) from already-lowercased chitchat input. Boundary check ensures
+// "luminous" / "lumière" aren't accidentally stripped — must be followed by
+// whitespace, comma, punctuation, or end-of-string. The wake-word list is
+// kept longest-first by i18n.ChitchatWakeWords so "lumi ơi xin chào" strips
+// the compound form rather than just "lumi", which would leave a dangling
+// "ơi" that matches no rule.
+func stripWakeWord(s string) string {
+	for _, w := range i18n.ChitchatWakeWords() {
+		if !strings.HasPrefix(s, w) {
+			continue
+		}
+		rest := s[len(w):]
+		if rest == "" {
+			return ""
+		}
+		c := rest[0]
+		if c == ' ' || c == ',' || c == '.' || c == '!' || c == '?' {
+			return strings.TrimSpace(strings.TrimLeft(rest, " ,.!?"))
+		}
+	}
+	return s
+}
+
+// bareAttentionResult fires when the user said only the wake word ("Lumi",
+// "Lumi ơi", "Lami"). Replies with a greeting in the configured language —
+// skipping LLM RT keeps the lamp responsive when the user is just calling.
+func bareAttentionResult() *Result {
+	reply := i18n.Pick(i18n.PhraseChitchatGreeting)
+	if reply == "" {
+		return nil
+	}
+	post("/emotion", `{"emotion":"happy","intensity":0.7}`)
+	return &Result{
+		TTSText: reply,
+		Emotion: "happy",
+		Rule:    "chitchat_attention",
+		Actions: []string{"POST /emotion happy"},
+	}
+}
+
+// pickRandom returns a pseudo-random pick using the current time. Avoids
+// pulling in math/rand state for low-stakes variance.
+func pickRandom(opts []string) string {
+	if len(opts) == 0 {
+		return ""
+	}
+	return opts[int(time.Now().UnixNano())%len(opts)]
 }
 
 // --- rules table ---
