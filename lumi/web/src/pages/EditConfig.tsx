@@ -23,19 +23,23 @@ import { Wifi, UserCircle, Lamp, Brain, Volume2, MicVocal, MessageSquare, Globe,
 // rendered under id="stt"), not `language` / `deepgram` like Setup.
 type SectionId = Extract<SharedSectionId, "device" | "wifi" | "llm" | "voice" | "face" | "tts" | "stt" | "channel" | "mqtt">;
 const ICON_SIZE = 15;
-const SECTIONS: { id: SectionId; label: string; icon: React.ReactNode }[] = [
+const ALL_SECTIONS: { id: SectionId; label: string; icon: React.ReactNode; debugOnly?: boolean }[] = [
   { id: "device",   label: "Device",   icon: <Lamp size={ICON_SIZE} /> },
   { id: "wifi",     label: "Wi-Fi",    icon: <Wifi size={ICON_SIZE} /> },
   { id: "llm",      label: "AI Brain", icon: <Brain size={ICON_SIZE} /> },
   // Language above Lumi's Voice — picking the language determines which
   // voices sound natural, so the operator should set it first.
-  { id: "stt",      label: "Language", icon: <Globe size={ICON_SIZE} /> },
-  { id: "tts",      label: "Lumi's Voice", icon: <Volume2 size={ICON_SIZE} /> },
+  // Language + Lumi's Voice are gated behind ?debug=true: typical operators
+  // shouldn't see STT/TTS provider knobs.
+  { id: "stt",      label: "Language", icon: <Globe size={ICON_SIZE} />, debugOnly: true },
+  { id: "tts",      label: "Lumi's Voice", icon: <Volume2 size={ICON_SIZE} />, debugOnly: true },
   { id: "voice",    label: "My Voice", icon: <MicVocal size={ICON_SIZE} /> },
   { id: "face",     label: "Face",     icon: <UserCircle size={ICON_SIZE} /> },
   { id: "channel",  label: "Channels", icon: <MessageSquare size={ICON_SIZE} /> },
   { id: "mqtt",     label: "MQTT",     icon: <Link size={ICON_SIZE} /> },
 ];
+
+const isDebugMode = () => new URLSearchParams(window.location.search).get("debug") === "true";
 
 // Field / LockedField / LockedPasswordField / SectionCard moved to
 // @/components/setup/shared. SkeletonBlock stays inline because EditConfig's
@@ -64,6 +68,8 @@ export default function EditConfig() {
   const [loadingCfg, setLoadingCfg] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const debug = isDebugMode();
+  const SECTIONS = debug ? ALL_SECTIONS : ALL_SECTIONS.filter((s) => !s.debugOnly);
   const [activeSection, setActiveSection] = useState<SectionId>(() => {
     const hash = window.location.hash.replace("#", "") as SectionId;
     return SECTIONS.some((s) => s.id === hash) ? hash : "device";
