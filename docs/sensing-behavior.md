@@ -121,9 +121,13 @@ Only large motion is forwarded — small motion is filtered out by LeLamp and ne
 
 ## Posture (RULA — silently sampled, folded into `motion.activity`)
 
-LeLamp streams every camera frame to dlbackend `/api/dl/pose-estimation/ws` and receives a per-frame RULA breakdown (whole-body score + `risk_level` + per-side `body_scores` and `*_angle` for `neck / trunk / upper_arm / lower_arm / wrist`). `PosePerception` throttles to **one sample per `POSE_SAMPLE_INTERVAL_S` (default 60s)** into a rolling deque + daily JSONL under `/tmp/lumi-sensing-snapshots/sensing_pose/samples_YYYY-MM-DD.jsonl`. **No event is emitted directly** — `MotionPerception` calls `get_posture_summary()` and rides the aggregate along on the next `motion.activity` when the gate trips.
+LeLamp streams every camera frame to dlbackend `/api/dl/pose-estimation/ws` and receives a per-frame RULA breakdown (whole-body score + `risk_level` + per-side `body_scores` and `*_angle` for `neck / trunk / upper_arm / lower_arm / wrist`). `PosePerception` throttles to **one sample per `POSE_SAMPLE_INTERVAL_S` (default 60s)** into a tumbling window + daily JSONL under `/tmp/lumi-sensing-snapshots/sensing_pose/samples_YYYY-MM-DD.jsonl`. **No event is emitted directly** — `MotionPerception` checks `is_window_complete()` once per tick and folds the aggregate into the next `motion.activity` when the gate trips.
 
-### Gate (when does the summary inject)
+### Tumbling window (when does the summary inject)
+
+A window opens on the **first sedentary motion-activity flush** — `MotionPerception` calls `pose.start_window()` the moment any of the sedentary labels (`using computer`, `writing`, `reading book`, …) show up. Pose samples that arrived before that point (e.g. user was standing or stretching but still present) are cleared so the window's bad_ratio reflects only the sitting period. Once open, the window runs purely on time: it stays open for the full `POSE_WINDOW_DURATION_S` regardless of whether the user later breaks sedentary state — later stretch breaks just leave the bad_ratio honest. Default **600 s = 10 min** for testing; flip to 3600 for production — one variable, no test/prod code paths.
+
+When the window completes, `MotionPerception` performs exactly one decision and **always calls `reset_window()`** — no carry-over of stale samples into the next cycle. If the user is still sedentary on the next flush, `start_window()` opens a fresh cycle immediately; if not, the window stays unanchored until the next sedentary flush. Detection misses (dlbackend returns no `ergo`, occlusion, low confidence) don't extend the window; they simply lower the in-window sample count.
 
 A sample counts as **bad** when **either**:
 
@@ -132,9 +136,21 @@ A sample counts as **bad** when **either**:
 
 The second arm catches forward-head-thrust ("tech neck") cases where the RULA total stays "low" because trunk + arms are fine but neck alone is clearly off.
 
-Fire when `bad_ratio >= POSE_BAD_RATIO` (default **0.6**) over a buffer of `POSE_WINDOW_SAMPLES` (default 10 = 10 min; production target 30 = 30 min). Two additional gates apply at the motion side: sedentary streak ≥ `POSE_STREAK_MIN_GATE_S`, and cooldown ≥ `POSE_NUDGE_COOLDOWN_S` since the previous inject.
+Injection fires when **all** of the following hold:
 
-The cooldown timestamp (`_last_posture_inject_ts`) is committed **only after the motion.activity event has cleared the 5-min activity-dedup window**. If a fold runs but the surrounding event is dropped by dedup (same user + same labels within the window), the cooldown stays untouched so the next tick can re-attempt the fold. Otherwise the agent would silently miss the nudge for the full `POSE_NUDGE_COOLDOWN_S` while the cooldown burned on an event that never reached it.
+- window complete (`time.time() - _window_start_ts >= POSE_WINDOW_DURATION_S`)
+- user is still sedentary on this flush (`has_sedentary` is True — don't nag mid-stretch)
+- in-window samples `>= POSE_WINDOW_MIN_SAMPLES` (default `3`) — noise floor that suppresses windows where dlbackend dropped most frames
+- `bad_ratio >= POSE_BAD_RATIO` (default **0.6**)
+
+There is no separate "minimum sedentary streak" gate and no separate "nudge cooldown" — the window itself is the rhythm. Window start requires sedentary, so when it completes the user has been at the computer for at least `POSE_WINDOW_DURATION_S`; the unconditional reset after each cycle means the next fire is naturally one window away.
+
+When the inject fires, the dedup check is **bypassed** for that single event: a posture nudge is a meaningfully different signal from "user is still using computer", and losing it to dedup would mean waiting another full window before the next attempt.
+
+Window lifecycle:
+1. **Open** — `pose.start_window()` called by motion-side when a sedentary label first appears. Clears any pre-window samples and anchors `_window_start_ts = now`. Idempotent — calls while a window is already open are no-ops.
+2. **Reset** — `pose.reset_window()` called by motion-side after every completed window (fire or no-fire). Clears samples and unanchors. A new window only opens when sedentary is next observed.
+3. **Presence-loss reset** — `pose.py:_check_impl` also resets the window when presence drops, so a user who walks away mid-cycle doesn't leak stale samples into the next session.
 
 ### Per-event annotated snapshots
 

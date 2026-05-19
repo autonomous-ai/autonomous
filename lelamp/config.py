@@ -162,9 +162,22 @@ DL_POSE_BACKEND_URL = DL_BACKEND_URL.rstrip("/") + "/" + DL_POSE_ENDPOINT.strip(
 POSE_ERGO_HIGH_RISK_THRESHOLD = int(os.environ.get("LELAMP_POSE_ERGO_HIGH_RISK_THRESHOLD", "5"))
 # Posture is now sampled silently into a rolling buffer; MotionPerception
 # decides when to fold the summary into a motion.activity event.
-POSE_SAMPLE_INTERVAL_S = float(os.environ.get("LELAMP_POSE_SAMPLE_INTERVAL_S", "60.0"))
-# TEST VALUES — swap WINDOW=30, STREAK=1800, COOLDOWN=1800 (all 30 min) for production.
-POSE_WINDOW_SAMPLES = int(os.environ.get("LELAMP_POSE_WINDOW_SAMPLES", "10"))
+#
+# DEBUG VALUES (set 2026-05-19) — sampling 1 / 30s and window 5 min so a
+# full evaluation cycle takes only ~5 min during live testing, instead of
+# 10–60 min. Swap back to 60s / 3600s for production (one env var each,
+# no code change). Streak + cooldown are still 600s — see notes below.
+POSE_SAMPLE_INTERVAL_S = float(os.environ.get("LELAMP_POSE_SAMPLE_INTERVAL_S", "30.0"))
+# Tumbling time window. At the end of every WINDOW_DURATION_S, MotionPerception
+# evaluates whatever samples have accumulated, decides whether to inject a
+# posture nudge, and ALWAYS resets the buffer + window start (regardless of
+# fire / no-fire). DEBUG = 300 s (5 min); production target 3600 s (60 min) —
+# one variable, no test/prod branches in code.
+POSE_WINDOW_DURATION_S = float(os.environ.get("LELAMP_POSE_WINDOW_DURATION_S", "300.0"))
+# Noise floor — if the window completed but had fewer than this many real
+# samples (dlbackend missed most frames, presence flicker, etc.), skip the
+# inject. Statistical confidence is too low to nag the user.
+POSE_WINDOW_MIN_SAMPLES = int(os.environ.get("LELAMP_POSE_WINDOW_MIN_SAMPLES", "3"))
 # Bad-sample definition: any single region (L or R) at sub-score >= this.
 # Catches "head thrust forward, rest of body OK" cases that dlbackend's
 # whole-body risk_level alone misses (RULA total stays at "low" because
@@ -173,13 +186,12 @@ POSE_REGION_HIGH_SUBSCORE = int(os.environ.get("LELAMP_POSE_REGION_HIGH_SUBSCORE
 # Fraction of the window that must be "bad" before posture_summary rides
 # along on the next motion.activity event. Window-size agnostic.
 POSE_BAD_RATIO = float(os.environ.get("LELAMP_POSE_BAD_RATIO", "0.6"))
-# Min "using computer" streak before posture summary is allowed to ride along.
-POSE_STREAK_MIN_GATE_S = float(os.environ.get("LELAMP_POSE_STREAK_MIN_GATE_S", "600.0"))
-# After a posture summary has been folded into a motion.activity event, suppress
-# subsequent injections for this long. Otherwise every motion.activity flush
-# (every 5+ min while the window stays "bad") would re-inject the summary and
-# nag the user repeatedly.
-POSE_NUDGE_COOLDOWN_S = float(os.environ.get("LELAMP_POSE_NUDGE_COOLDOWN_S", "600.0"))
+# Removed POSE_STREAK_MIN_GATE_S + POSE_NUDGE_COOLDOWN_S — the tumbling
+# window is the only timing gate. Window-start is anchored on the first
+# sedentary flush, so by the time it completes the user has been at the
+# computer for at least POSE_WINDOW_DURATION_S — no separate "streak
+# minimum" needed. Window-reset after each cycle means the next fire is
+# naturally one window away — no separate cooldown needed.
 # Per-sample annotated JPEG retention. Files are written as
 # snapshots/<int(ts)>.jpg next to the daily JSONL; oldest are pruned when
 # any cap is hit. Lets the monitor UI click a sample row to see the actual

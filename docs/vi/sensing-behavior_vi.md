@@ -121,9 +121,13 @@ Chỉ chuyển động lớn được forward — LeLamp lọc và không gửi 
 
 ## Tư thế (RULA — sampling thầm lặng, gắn vào `motion.activity`)
 
-LeLamp stream từng frame camera lên dlbackend `/api/dl/pose-estimation/ws` và nhận RULA breakdown từng frame (whole-body score + `risk_level` + `body_scores` + `*_angle` cho `neck / trunk / upper_arm / lower_arm / wrist`, mỗi bên trái/phải). `PosePerception` throttle thành **một sample mỗi `POSE_SAMPLE_INTERVAL_S` (default 60s)** vào deque cuộn + JSONL theo ngày tại `/tmp/lumi-sensing-snapshots/sensing_pose/samples_YYYY-MM-DD.jsonl`. **Không emit event trực tiếp** — `MotionPerception` gọi `get_posture_summary()` và gắn aggregate vào `motion.activity` kế tiếp khi gate đỏ.
+LeLamp stream từng frame camera lên dlbackend `/api/dl/pose-estimation/ws` và nhận RULA breakdown từng frame (whole-body score + `risk_level` + `body_scores` + `*_angle` cho `neck / trunk / upper_arm / lower_arm / wrist`, mỗi bên trái/phải). `PosePerception` throttle thành **một sample mỗi `POSE_SAMPLE_INTERVAL_S` (default 60s)** vào tumbling window + JSONL theo ngày tại `/tmp/lumi-sensing-snapshots/sensing_pose/samples_YYYY-MM-DD.jsonl`. **Không emit event trực tiếp** — `MotionPerception` check `is_window_complete()` mỗi tick và gắn aggregate vào `motion.activity` kế tiếp khi gate đỏ.
 
-### Gate (lúc nào summary được inject)
+### Tumbling window (lúc nào summary được inject)
+
+Window mở khi **motion flush đầu tiên có label sedentary** — `MotionPerception` gọi `pose.start_window()` ngay lúc thấy bất kỳ label sedentary nào (`using computer`, `writing`, `reading book`, …). Pose samples đã đến trước thời điểm đó (vd user đang đứng/stretching nhưng vẫn present) bị clear, để bad_ratio chỉ phản ánh giai đoạn ngồi. Sau khi mở, window chạy **chỉ theo thời gian**: stay open đủ `POSE_WINDOW_DURATION_S` bất kể user có break sedentary giữa chừng — stretch break không stop clock, chỉ làm bad_ratio honest hơn. Default **600 s = 10 phút** test; đổi 3600 cho production — 1 biến duy nhất, không có nhánh code test/prod.
+
+Khi window complete, `MotionPerception` ra đúng 1 quyết định và **luôn gọi `reset_window()`** — không carry-over samples cũ. Nếu user vẫn sedentary ở flush kế tiếp, `start_window()` mở cycle mới ngay; nếu không, window stay unanchored đến lần sedentary tiếp theo. Detection miss (dlbackend không trả `ergo`, bị che, low confidence) không kéo dài window; chỉ làm giảm số sample trong window.
 
 Sample được tính là **bad** khi **một trong hai**:
 
@@ -132,9 +136,21 @@ Sample được tính là **bad** khi **một trong hai**:
 
 Vế thứ hai bắt được case "tech neck" (rướn cổ về màn hình) khi RULA tổng vẫn "low" vì lưng+tay OK nhưng riêng cổ rõ ràng tệ.
 
-Fire khi `bad_ratio >= POSE_BAD_RATIO` (default **0.6**) trên buffer `POSE_WINDOW_SAMPLES` (default 10 = 10 phút; production target 30 = 30 phút). Thêm 2 gate phía motion: sedentary streak ≥ `POSE_STREAK_MIN_GATE_S` và cooldown ≥ `POSE_NUDGE_COOLDOWN_S` kể từ lần inject trước.
+Inject fire khi **tất cả** điều kiện sau đúng:
 
-Timestamp cooldown (`_last_posture_inject_ts`) chỉ commit **sau khi motion.activity event đã pass qua dedup window 5 phút**. Nếu fold chạy nhưng event bị dedup drop (cùng user + cùng labels trong window), cooldown KHÔNG bị tiêu — tick tiếp theo có thể re-attempt fold. Nếu không có defer này, agent sẽ silently mất nudge suốt `POSE_NUDGE_COOLDOWN_S` (10 phút) trong khi cooldown bị tiêu cho event không bao giờ tới được agent.
+- window complete (`time.time() - _window_start_ts >= POSE_WINDOW_DURATION_S`)
+- user vẫn sedentary ở flush này (`has_sedentary` True — không nag giữa stretch break)
+- samples trong window `>= POSE_WINDOW_MIN_SAMPLES` (default `3`) — noise floor, bỏ qua window mà dlbackend miss quá nhiều frame
+- `bad_ratio >= POSE_BAD_RATIO` (default **0.6**)
+
+Không có gate "minimum sedentary streak" riêng và không có "nudge cooldown" riêng — window chính là rhythm. Window-start yêu cầu sedentary nên khi complete, user đã ở máy tính ít nhất `POSE_WINDOW_DURATION_S`; unconditional reset sau mỗi cycle khiến lần fire kế tiếp tự nhiên cách 1 window.
+
+Khi inject fire, dedup check được **bypass** cho event đó: posture nudge là tín hiệu khác hẳn "user vẫn đang dùng máy tính", và mất nó vì dedup sẽ phải chờ thêm cả một window đầy đủ trước khi có cơ hội tiếp.
+
+Lifecycle window:
+1. **Open** — `pose.start_window()` gọi từ motion-side khi label sedentary đầu tiên xuất hiện. Clear samples pre-window và anchor `_window_start_ts = now`. Idempotent — call thêm khi window đã mở là no-op.
+2. **Reset** — `pose.reset_window()` gọi từ motion-side sau mỗi window complete (fire hay no-fire). Clear samples và unanchor. Window mới chỉ mở khi sedentary lại được observe.
+3. **Presence-loss reset** — `pose.py:_check_impl` cũng reset window khi presence drop, để user đi mất giữa cycle không leak samples cũ sang session sau.
 
 ### Snapshot annotated cho từng event
 

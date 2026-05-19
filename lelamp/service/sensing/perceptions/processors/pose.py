@@ -311,10 +311,19 @@ class PosePerception(Perception[cv2.typing.MatLike]):
         )
         self._last_result: PoseResult | None = None
         self._risk_threshold: int = config.POSE_ERGO_HIGH_RISK_THRESHOLD
-        self._samples: deque[_PoseSample] = deque(
-            maxlen=config.POSE_WINDOW_SAMPLES
+        # Tumbling window: samples accumulate until POSE_WINDOW_DURATION_S
+        # elapses since the first sample, then MotionPerception evaluates
+        # and calls reset_window() to start a fresh cycle. The deque
+        # maxlen is a safety cap (2× expected window samples, floor 50)
+        # in case motion.py's flush stops ticking (e.g. classifier loses
+        # the user despite presence still PRESENT) — without it, samples
+        # would grow unbounded until presence drop.
+        max_expected: int = int(
+            config.POSE_WINDOW_DURATION_S / max(config.POSE_SAMPLE_INTERVAL_S, 1.0)
         )
+        self._samples: deque[_PoseSample] = deque(maxlen=max(50, max_expected * 2))
         self._last_sample_ts: float = 0.0
+        self._window_start_ts: float = 0.0
         self._samples_dir: str = os.path.join(
             config.SNAPSHOT_TMP_DIR, "sensing_pose"
         )
@@ -434,18 +443,19 @@ class PosePerception(Perception[cv2.typing.MatLike]):
 
         now: float = time.time()
 
-        # Presence gate: if the user isn't here, clear the buffer (session
-        # ended) and skip sampling.
+        # Presence gate: if the user isn't here, reset the tumbling window
+        # (session ended) and skip sampling. Window start_ts is reset too
+        # so the next presence return starts a fresh cycle from sample 1.
         if (
             self._presence_service is not None
             and self._presence_service.state != PresenceState.PRESENT
         ):
-            if self._samples:
+            if self._samples or self._window_start_ts > 0:
                 logger.debug(
-                    "[pose.sample] presence lost — buffer reset (had %d)",
+                    "[pose.sample] presence lost — window reset (had %d samples)",
                     len(self._samples),
                 )
-                self._samples.clear()
+                self.reset_window()
                 self._last_sample_ts = 0.0
             return
 
@@ -469,22 +479,63 @@ class PosePerception(Perception[cv2.typing.MatLike]):
         )
         self._samples.append(sample)
         self._last_sample_ts = now
+        # Note: window anchoring is NOT done here. MotionPerception calls
+        # start_window() the moment it observes a sedentary label, so the
+        # window cycle aligns with "user is at the computer" rather than
+        # "first pose sample after presence". Samples that arrive before
+        # the window starts (e.g. user is present but standing/stretching)
+        # still get appended, and once start_window() fires they're already
+        # in the deque for the new cycle.
         self._append_sample_file(sample)
         self._save_event_snapshot(data, result, now)
+        window_age: float = (now - self._window_start_ts) if self._window_start_ts > 0 else 0.0
         logger.debug(
-            "[pose.sample] ts=%.0f score=%d risk=%d buffer=%d/%d",
+            "[pose.sample] ts=%.0f score=%d risk=%d samples=%d window_age=%.1fs",
             now,
             sample.score,
             sample.risk_level,
             len(self._samples),
-            config.POSE_WINDOW_SAMPLES,
+            window_age,
         )
 
+    def is_window_complete(self) -> bool:
+        """True when the tumbling window has been open for at least
+        POSE_WINDOW_DURATION_S. Caller is expected to follow up with
+        get_posture_summary() + reset_window() — the window doesn't
+        self-evaluate or self-reset."""
+        if self._window_start_ts <= 0.0:
+            return False
+        return time.time() - self._window_start_ts >= config.POSE_WINDOW_DURATION_S
+
+    def start_window(self) -> None:
+        """Open a new tumbling window. Idempotent — a second call while
+        the window is already open is a no-op. Called by MotionPerception
+        the moment it sees a sedentary label, so the window cycle aligns
+        with "user is at the computer" rather than "user just appeared".
+        Pre-window samples (collected between presence-return and sedentary
+        detection) are cleared on start so the bad_ratio reflects only the
+        sitting period."""
+        if self._window_start_ts > 0.0:
+            return
+        self._samples.clear()
+        self._window_start_ts = time.time()
+
+    def reset_window(self) -> None:
+        """Clear samples and unanchor the window. Called by MotionPerception
+        at the end of every completed cycle (fire or no-fire) — every cycle
+        starts fresh, no carry-over. After reset, start_window() must be
+        called again before a new cycle begins."""
+        self._samples.clear()
+        self._window_start_ts = 0.0
+
     def get_posture_summary(self) -> dict[str, Any] | None:
-        """Aggregate the rolling buffer into a summary dict.
+        """Aggregate the current window's samples into a summary dict.
 
         All per-frame values are from dlbackend (Khanh's RULA scorer);
-        this method only counts. Returns None until the buffer is full.
+        this method only counts. Returns None when the window hasn't
+        elapsed OR has fewer than POSE_WINDOW_MIN_SAMPLES (statistical
+        noise floor — detection misses can leave a window too sparse to
+        trust).
 
         "Bad" sample = any single region (L or R) at sub-score
         >= POSE_REGION_HIGH_SUBSCORE, OR whole-body risk_level >= 3.
@@ -492,8 +543,9 @@ class PosePerception(Perception[cv2.typing.MatLike]):
         RULA total stays "low" because trunk+arms are fine but neck
         alone is clearly off.
         """
-        window: int = config.POSE_WINDOW_SAMPLES
-        if len(self._samples) < window:
+        if not self.is_window_complete():
+            return None
+        if len(self._samples) < config.POSE_WINDOW_MIN_SAMPLES:
             return None
 
         sub_thr: int = config.POSE_REGION_HIGH_SUBSCORE
@@ -543,9 +595,7 @@ class PosePerception(Perception[cv2.typing.MatLike]):
             dominant_count = region_freq[dominant_region]
 
         latest: _PoseSample = self._samples[-1]
-        window_min: int = int(
-            window * config.POSE_SAMPLE_INTERVAL_S / 60
-        )
+        window_min: int = int(config.POSE_WINDOW_DURATION_S / 60)
         return {
             "bad_ratio": round(bad_ratio, 2),
             "samples": len(self._samples),
@@ -561,7 +611,7 @@ class PosePerception(Perception[cv2.typing.MatLike]):
         }
 
     def is_window_bad(self) -> bool:
-        """True when the gate criteria are met (window full AND bad ratio over threshold)."""
+        """True when the gate criteria are met (window complete AND bad ratio over threshold)."""
         summary: dict[str, Any] | None = self.get_posture_summary()
         if summary is None:
             return False
@@ -594,12 +644,12 @@ class PosePerception(Perception[cv2.typing.MatLike]):
                 ergo_score = self._last_result.ergo.get("score")
                 ergo_risk = self._last_result.ergo.get("risk_level")
 
-        samples_until_gate: int = max(
-            0, config.POSE_WINDOW_SAMPLES - len(self._samples)
-        )
         seconds_since_sample: float | None = None
         if self._last_sample_ts > 0:
             seconds_since_sample = time.time() - self._last_sample_ts
+        window_age_s: float = 0.0
+        if self._window_start_ts > 0:
+            window_age_s = time.time() - self._window_start_ts
 
         return {
             "type": "pose",
@@ -612,8 +662,10 @@ class PosePerception(Perception[cv2.typing.MatLike]):
             if seconds_since_sample is not None
             else None,
             "samples_in_buffer": len(self._samples),
-            "samples_until_gate": samples_until_gate,
-            "window_samples": config.POSE_WINDOW_SAMPLES,
+            "window_age_s": int(window_age_s),
+            "window_duration_s": int(config.POSE_WINDOW_DURATION_S),
+            "window_min_samples": config.POSE_WINDOW_MIN_SAMPLES,
+            "window_complete": self.is_window_complete(),
             "sample_interval_s": config.POSE_SAMPLE_INTERVAL_S,
             "bad_ratio_threshold": config.POSE_BAD_RATIO,
             "summary": self.get_posture_summary(),
