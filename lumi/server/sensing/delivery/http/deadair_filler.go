@@ -23,259 +23,18 @@ import (
 //
 // Pool empty = that position is silent. Both empty = feature disabled.
 
-// OpeningFillers play first in a turn. Tone: short acknowledgement.
-// English pool — also the fallback when STTLanguage is empty/unknown.
-var OpeningFillers = []string{
-	"Hmm, let me think",
-	"Ok, got it",
-	"Sure, one moment",
-	"Right",
-	"Got it",
-	"Alright",
-	"Ok",
-	"Sure",
-	"One sec",
-}
-
-// ContinuationFillers play on re-arm after a tool finishes. Tone: neutral
-// "still working" — never claim "almost done" because filler #2 of 6 in a
-// long multi-tool turn may still be far from finished, and a wrong promise
-// damages trust more than dead air.
-// Pool size kept ≥ 12 so MaxFillersPerTurn=6 turns don't repeat heavily
-// (pickFrom dedups only against the immediately previous line).
-// English pool — also the fallback when STTLanguage is empty/unknown.
-var ContinuationFillers = []string{
-	"Still on it",
-	"Still thinking",
-	"Let me check",
-	"Hmm, processing",
-	"Hang on",
-	"Bear with me",
-	"Still here",
-	"One moment",
-	"Working on it",
-	"Just a sec",
-	"Hmm, working",
-	"Still digging",
-}
-
-// Vietnamese pools (STTLanguage="vi"). Tone matches EN: short acknowledgements
-// for opening, progress beats for continuation.
-var OpeningFillersVI = []string{
-	"Hmm để xem",
-	"Ờ rồi",
-	"Vâng một chút",
-	"Vâng",
-	"Hiểu rồi",
-	"Dạ",
-	"Ờ",
-	"Để xem",
-	"Chờ chút",
-}
-
-var ContinuationFillersVI = []string{
-	"Vẫn đang nghĩ",
-	"Để mình xem",
-	"Đang xử lý nhé",
-	"Đợi chút nhé",
-	"Hmm, để xem",
-	"Vẫn đây mà",
-	"Mình đang làm tiếp",
-	"Còn đang nghĩ",
-	"Đang làm đây",
-	"Chờ chút nha",
-	"Để xem tí nữa",
-	"Còn xử lý nhé",
-}
-
-// Chinese Simplified pools (STTLanguage="zh-CN").
-var OpeningFillersZhCN = []string{
-	"嗯，让我想想",
-	"好的",
-	"稍等一下",
-	"好",
-	"明白了",
-	"嗯",
-	"等一下",
-	"稍等",
-	"好的好的",
-}
-
-var ContinuationFillersZhCN = []string{
-	"还在想",
-	"让我看看",
-	"我在处理",
-	"稍等一下",
-	"嗯，再想想",
-	"我还在",
-	"再等等",
-	"还在弄",
-	"我在搜",
-	"再稍候",
-	"继续找",
-	"搜索中",
-}
-
-// Chinese Traditional pools (STTLanguage="zh-TW").
-var OpeningFillersZhTW = []string{
-	"嗯，讓我想想",
-	"好的",
-	"稍等一下",
-	"好",
-	"明白了",
-	"嗯",
-	"等一下",
-	"稍等",
-	"好的好的",
-}
-
-var ContinuationFillersZhTW = []string{
-	"還在想",
-	"讓我看看",
-	"我在處理",
-	"稍等一下",
-	"嗯，再想想",
-	"我還在",
-	"再等等",
-	"還在弄",
-	"我在搜",
-	"再稍候",
-	"繼續找",
-	"搜尋中",
-}
-
-// Tool-specific filler pools. When run.lastToolName matches a key, fire()
-// prefers these phrases over the generic Continuation pool so the spoken
-// filler hints at what's happening — but phrased like a friend, not a
-// system log. Avoid leaking machinery vocabulary (file, command, exec,
-// patch, plan, tool, page); the user doesn't know or care which tool is
-// running. Unmapped tool names fall through to ContinuationFillers.
-//
-// Tool name list sourced from OpenClaw runtime (openclaw-tools, bash-tools,
-// pi-tools, memory-core, x-search). Only the high-frequency / user-visible
-// tools have entries — others (cron, gateway, sessions_send, …) fall back.
-var ToolFillersEN = map[string][]string{
-	"web_search":     {"Let me look that up", "Quick search", "Checking around", "Hunting that down"},
-	"x_search":       {"Peeking at X", "Quick look on X", "Checking X"},
-	"web_fetch":      {"Taking a peek", "Pulling that up", "Let me see", "Loading it up"},
-	"read":           {"Reading through", "Let me see", "Skimming it", "Having a look"},
-	"memory_search":  {"Digging through my notes", "Let me remember", "Checking what I know"},
-	"memory_get":     {"Pulling that up", "Let me recall"},
-	"exec":           {"On it", "Working on it", "Putting it together", "Crunching it"},
-	"process":        {"On it", "Working in the background"},
-	"image_generate": {"Painting it", "Making something", "Creating that", "Sketching it"},
-	"video_generate": {"Putting it together", "Rolling the camera"},
-	"music_generate": {"Composing", "Making the track"},
-	"update_plan":    {"Rethinking", "Reshuffling things", "Taking another look"},
-	"session_status": {"Taking stock", "Catching up"},
-	"apply_patch":    {"Tweaking it", "Making the change"},
-	"pdf":            {"Looking through it", "Skimming the doc"},
-	"canvas":         {"Sketching", "Doodling it"},
-	"nodes":          {"On it", "Reaching for that"},
-	"subagents":      {"Calling for help", "Getting backup"},
-	"image":          {"Taking a look", "Peeking at it"},
-}
-
-var ToolFillersVI = map[string][]string{
-	"web_search":     {"Để Lumi tìm chút", "Để xem có gì hay", "Lùng chút nha", "Tra cho bạn nha"},
-	"x_search":       {"Ngó X tí", "Xem trên X chút", "Lùng X coi"},
-	"web_fetch":      {"Để mình xem chút", "Mở ra xem nha", "Để Lumi ngó qua", "Coi thử nha"},
-	"read":           {"Để Lumi đọc qua", "Xem chút nha", "Lướt qua chút", "Để mình ngó"},
-	"memory_search":  {"Để Lumi nhớ lại", "Lục trí nhớ chút", "Đợi Lumi nhớ ra"},
-	"memory_get":     {"Để Lumi nhớ chút", "Đợi mình nhớ ra"},
-	"exec":           {"Lumi làm liền", "Đang làm cho bạn", "Đợi tí nha", "Mình lo nha"},
-	"process":        {"Mình lo phần đó", "Đang làm phía sau"},
-	"image_generate": {"Để Lumi vẽ chút", "Đang vẽ nha", "Sáng tác chút", "Đợi Lumi tạo nha"},
-	"video_generate": {"Đang dựng cho bạn", "Để Lumi làm chút"},
-	"music_generate": {"Đang sáng tác nha", "Để Lumi soạn nhạc"},
-	"update_plan":    {"Để Lumi sắp xếp lại", "Tính lại chút", "Nghĩ lại chút"},
-	"session_status": {"Để Lumi nhìn lại", "Coi tình hình chút"},
-	"apply_patch":    {"Đang chỉnh chút", "Sửa giúp bạn"},
-	"pdf":            {"Để Lumi đọc qua", "Lướt qua chút"},
-	"canvas":         {"Đang vẽ nha", "Phác chút coi"},
-	"nodes":          {"Lumi làm liền", "Để mình lo nha"},
-	"subagents":      {"Để Lumi nhờ phụ chút", "Gọi phụ tá nha"},
-	"image":          {"Để Lumi nhìn nha", "Ngắm tí coi"},
-}
-
-var ToolFillersZhCN = map[string][]string{
-	"web_search":     {"我帮你找找", "查一下哦", "我去搜搜", "找一下啊"},
-	"x_search":       {"去X看看", "瞅瞅X", "在X瞄一下"},
-	"web_fetch":      {"我去看看", "翻开看看", "瞅一眼", "打开瞧瞧"},
-	"read":           {"我看一下", "翻翻看", "瞄一眼", "我读读"},
-	"memory_search":  {"我想想", "回忆一下", "翻翻记忆"},
-	"memory_get":     {"我想想", "让我回忆下"},
-	"exec":           {"我来弄", "马上做", "在做了", "正在弄"},
-	"process":        {"我在弄", "后台跑着"},
-	"image_generate": {"我来画", "画一张哦", "做一张看看", "画着呢"},
-	"video_generate": {"我来弄", "在做呢"},
-	"music_generate": {"在写曲子", "我来作曲"},
-	"update_plan":    {"我重新理理", "再想想", "换个思路"},
-	"session_status": {"我看看情况", "瞄一眼"},
-	"apply_patch":    {"我来改", "调整一下"},
-	"pdf":            {"我读一下", "扫一遍"},
-	"canvas":         {"在画", "随手画一下"},
-	"nodes":          {"我来", "马上"},
-	"subagents":      {"找帮手", "叫人来帮"},
-	"image":          {"我看看", "瞄一眼"},
-}
-
-var ToolFillersZhTW = map[string][]string{
-	"web_search":     {"我幫你找找", "查一下喔", "我去搜搜", "找一下啊"},
-	"x_search":       {"去X看看", "瞄一下X", "在X瞧瞧"},
-	"web_fetch":      {"我去看看", "翻開看看", "瞄一眼", "打開瞧瞧"},
-	"read":           {"我看一下", "翻翻看", "瞄一眼", "我讀讀"},
-	"memory_search":  {"我想想", "回憶一下", "翻翻記憶"},
-	"memory_get":     {"我想想", "讓我回憶下"},
-	"exec":           {"我來弄", "馬上做", "在做了", "正在弄"},
-	"process":        {"我在弄", "背景跑著"},
-	"image_generate": {"我來畫", "畫一張喔", "做一張看看", "畫著呢"},
-	"video_generate": {"我來弄", "在做呢"},
-	"music_generate": {"在寫曲子", "我來作曲"},
-	"update_plan":    {"我重新理理", "再想想", "換個思路"},
-	"session_status": {"我看看情況", "瞄一眼"},
-	"apply_patch":    {"我來改", "調整一下"},
-	"pdf":            {"我讀一下", "掃一遍"},
-	"canvas":         {"在畫", "隨手畫一下"},
-	"nodes":          {"我來", "馬上"},
-	"subagents":      {"找幫手", "叫人來幫"},
-	"image":          {"我看看", "瞄一眼"},
-}
-
 // poolsForLang returns the (opening, continuation) pools for a BCP-47 STT
 // language code. Empty / unknown / "en*" → English. Falls through to English
 // when the requested pool is empty so a misconfigured pool stays graceful.
 func poolsForLang(lang string) (opening, continuation []string) {
-	switch lang {
-	case i18n.LangVI:
-		return OpeningFillersVI, ContinuationFillersVI
-	case i18n.LangZhCN:
-		return OpeningFillersZhCN, ContinuationFillersZhCN
-	case i18n.LangZhTW:
-		return OpeningFillersZhTW, ContinuationFillersZhTW
-	}
-	return OpeningFillers, ContinuationFillers
+	return i18n.FillerOpening(lang), i18n.FillerContinuation(lang)
 }
 
 // toolPoolForLang returns the tool-specific filler pool for (lang, toolName).
 // Returns nil when there's no pool for that combination — caller falls back
 // to the regular Continuation pool. Unknown lang → English pool.
 func toolPoolForLang(lang, toolName string) []string {
-	if toolName == "" {
-		return nil
-	}
-	var pools map[string][]string
-	switch lang {
-	case i18n.LangVI:
-		pools = ToolFillersVI
-	case i18n.LangZhCN:
-		pools = ToolFillersZhCN
-	case i18n.LangZhTW:
-		pools = ToolFillersZhTW
-	default:
-		pools = ToolFillersEN
-	}
-	return pools[toolName]
+	return i18n.FillerForTool(lang, toolName)
 }
 
 // Filler tuning. All durations are wall-clock.
@@ -340,7 +99,7 @@ type fillerRun struct {
 // switch. Per-language pools are not considered: emptying English alone
 // disables the feature for every language.
 func fillersDisabled() bool {
-	return len(OpeningFillers) == 0 && len(ContinuationFillers) == 0
+	return len(i18n.FillerOpening(i18n.LangEN)) == 0 && len(i18n.FillerContinuation(i18n.LangEN)) == 0
 }
 
 // pickFiller returns a phrase appropriate for the current turn position
@@ -477,19 +236,15 @@ func PrewarmFillers() {
 	// runs) hits ElevenLabs live (~1-2s render) and the resulting late
 	// audio races against the assistant TTS that follows — user perceives
 	// it as the filler getting cut off / TTS being suppressed.
-	var toolPools map[string][]string
-	switch lang {
-	case i18n.LangVI:
-		toolPools = ToolFillersVI
-	case i18n.LangZhCN:
-		toolPools = ToolFillersZhCN
-	case i18n.LangZhTW:
-		toolPools = ToolFillersZhTW
-	default:
-		toolPools = ToolFillersEN
-	}
-	for _, phrases := range toolPools {
-		all = append(all, phrases...)
+	// Flatten every tool override across all langs so prerender covers the
+	// pool for the currently-active lang (poolsForLang via i18n).
+	for _, tool := range []string{
+		"web_search", "x_search", "web_fetch", "read", "memory_search",
+		"memory_get", "exec", "process", "image_generate", "video_generate",
+		"music_generate", "update_plan", "session_status", "apply_patch",
+		"pdf", "canvas", "nodes", "subagents", "image",
+	} {
+		all = append(all, i18n.FillerForTool(lang, tool)...)
 	}
 	all = append(all, intent.CacheableReplies...)
 	// Dedup so overlapping phrases (e.g. between a tool pool and the
