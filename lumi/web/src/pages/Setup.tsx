@@ -64,6 +64,12 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // Gated to initial (AP) mode so editing on the LAN IP keeps the full menu.
   const lumiPushedConfig = mode === "initial" && !!urlParams.llmApiKey;
 
+  // Language + Lumi's Voice are gated behind ?debug=true: regular operators
+  // get the auto-detected language and the "alloy"/openai voice defaults,
+  // which still flow through submit because the sections stay in the DOM
+  // (display:none) — same pattern as STT/MQTT below.
+  const debug = searchParams.get("debug") === "true";
+
   // Fixed order. STT (Deepgram) / MQTT are intentionally hidden — their
   // state is still wired up and submitted with empty or URL-prefilled
   // defaults, so re-adding a SectionCard + a SECTIONS entry brings them
@@ -73,8 +79,10 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
     { id: "wifi",   label: "Wi-Fi",  icon: <Wifi size={15} /> },
     { id: "llm",    label: "AI Brain", icon: <Brain size={15} /> },
     { id: "channel", label: "Channels", icon: <MessageSquare size={15} /> },
-    { id: "language", label: "Language", icon: <Globe size={15} /> },
-    { id: "tts",    label: "Lumi's Voice", icon: <Volume2 size={15} /> },
+    ...(debug ? [
+      { id: "language" as SectionId, label: "Language", icon: <Globe size={15} /> },
+      { id: "tts" as SectionId,      label: "Lumi's Voice", icon: <Volume2 size={15} /> },
+    ] : []),
     // Voice / Face appear in continue mode only — they need the lamp's
     // hardware + backend, both unavailable while we're still on the AP.
     ...(isContinue ? [
