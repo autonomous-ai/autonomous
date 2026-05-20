@@ -138,6 +138,19 @@ type AgentGateway interface {
 	// ConsumeBroadcastRun checks if a runID is marked for broadcast. One-shot.
 	ConsumeBroadcastRun(runID string) bool
 
+	// MarkPoseBucketRun stashes the pose bucket + worst-snapshot filenames
+	// associated with a motion.activity turn that surfaced a posture nudge.
+	// The SSE handler consumes this on /dm so the worst frames can be
+	// attached to the Telegram message without the agent having to know
+	// any file paths. bucketID is lelamp's window_start integer; filenames
+	// are relative to <SNAPSHOT_TMP_DIR>/sensing_pose/buckets/<bucketID>/.
+	MarkPoseBucketRun(runID string, bucketID string, worstFilenames []string)
+
+	// ConsumePoseBucketRun returns + removes the pose bucket info for a
+	// runID. One-shot, mirrors ConsumeGuardRun. ok is false when the run
+	// has no associated bucket (most turns).
+	ConsumePoseBucketRun(runID string) (bucketID string, worstFilenames []string, ok bool)
+
 	// MarkWebChatRun marks a runID as originating from the web monitor chat.
 	// TTS is suppressed for these runs — response is displayed in the web UI only.
 	MarkWebChatRun(runID string)

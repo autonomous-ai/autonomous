@@ -40,6 +40,68 @@ func (s *Service) ConsumeGuardRun(runID string) (string, bool) {
 	return snap, ok
 }
 
+// poseBucketRunTTL bounds how long an unconsumed pose-bucket marker
+// stays around. The bucket itself survives much longer (POSE_BUCKET_KEEP_S
+// on lelamp, default 2 days), so this only protects against runIDs that
+// never reach the SSE /dm path (agent decides not to nudge → marker is
+// orphaned). Generous because a single agent turn can run ~minutes when
+// the LLM thinks; nothing else hinges on this map staying tight.
+const poseBucketRunTTL = 10 * time.Minute
+
+// MarkPoseBucketRun stores the bucket + worst-snapshot filenames for a
+// motion.activity turn. Mirrors MarkGuardRun's lifecycle but carries a
+// slice instead of a single path.
+func (s *Service) MarkPoseBucketRun(runID string, bucketID string, worstFilenames []string) {
+	if runID == "" || bucketID == "" {
+		return
+	}
+	clean := make([]string, 0, len(worstFilenames))
+	for _, f := range worstFilenames {
+		f = strings.TrimSpace(f)
+		if f != "" {
+			clean = append(clean, f)
+		}
+	}
+	s.poseBucketRunsMu.Lock()
+	s.prunePoseBucketRunsLocked()
+	s.poseBucketRuns[runID] = poseBucketInfo{
+		bucketID:  bucketID,
+		filenames: clean,
+		markedAt:  time.Now(),
+	}
+	s.poseBucketRunsMu.Unlock()
+	slog.Info("pose bucket run marked",
+		"component", "openclaw", "runID", runID, "bucket", bucketID, "worst_count", len(clean))
+}
+
+// ConsumePoseBucketRun returns the bucket info for a runID and deletes
+// the entry. One-shot.
+func (s *Service) ConsumePoseBucketRun(runID string) (string, []string, bool) {
+	s.poseBucketRunsMu.Lock()
+	defer s.poseBucketRunsMu.Unlock()
+	s.prunePoseBucketRunsLocked()
+	info, ok := s.poseBucketRuns[runID]
+	if !ok {
+		return "", nil, false
+	}
+	delete(s.poseBucketRuns, runID)
+	return info.bucketID, info.filenames, true
+}
+
+// prunePoseBucketRunsLocked drops marker entries older than poseBucketRunTTL.
+// Caller must hold poseBucketRunsMu.
+func (s *Service) prunePoseBucketRunsLocked() {
+	if len(s.poseBucketRuns) == 0 {
+		return
+	}
+	cutoff := time.Now().Add(-poseBucketRunTTL)
+	for k, v := range s.poseBucketRuns {
+		if v.markedAt.Before(cutoff) {
+			delete(s.poseBucketRuns, k)
+		}
+	}
+}
+
 // MarkBroadcastRun marks a runID so the agent's response is broadcast to all channels.
 func (s *Service) MarkBroadcastRun(runID string) {
 	s.broadcastRunsMu.Lock()
