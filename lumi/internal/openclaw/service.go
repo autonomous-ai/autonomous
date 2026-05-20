@@ -3,6 +3,7 @@ package openclaw
 import (
 	"encoding/json"
 	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -30,6 +31,38 @@ var _ domain.AgentGateway = (*Service)(nil)
 
 // reSnapshotPath matches [snapshot: /path/to/file.jpg] markers in sensing messages.
 var reSnapshotPath = regexp.MustCompile(`\[snapshot:\s*[^\]]+\]`)
+
+// Pose bucket markers — emitted by lelamp motion.py on motion.activity
+// when a posture nudge folds in. Drain path strips them before forwarding
+// to the LLM and extracts the (bucket_id, worst_filenames) pair so the SSE
+// /dm path can attach the worst frames to the Telegram DM. Mirrors the
+// regex pair in server/sensing/delivery/http/handler.go.
+var rePoseBucketMarker = regexp.MustCompile(`\[pose_bucket:\s*([^\]]+)\]\n?`)
+var rePoseWorstMarker = regexp.MustCompile(`\[pose_worst:\s*([^\]]+)\]\n?`)
+
+// extractPoseBucketMarkers pulls (bucket_id, filenames) from a sensing
+// message. Returns ("", nil) when there's no bucket marker.
+func extractPoseBucketMarkers(message string) (string, []string) {
+	bm := rePoseBucketMarker.FindStringSubmatch(message)
+	if bm == nil {
+		return "", nil
+	}
+	bucketID := strings.TrimSpace(bm[1])
+	if bucketID == "" {
+		return "", nil
+	}
+	wm := rePoseWorstMarker.FindStringSubmatch(message)
+	var worst []string
+	if wm != nil {
+		for _, part := range strings.Split(wm[1], ",") {
+			part = strings.TrimSpace(part)
+			if part != "" {
+				worst = append(worst, part)
+			}
+		}
+	}
+	return bucketID, worst
+}
 
 // Service provides setup, reset, restart of openclaw config/gateway and StartWS.
 type Service struct {

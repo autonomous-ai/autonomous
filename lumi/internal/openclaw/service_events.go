@@ -194,15 +194,26 @@ func (s *Service) drainPendingEvents() {
 		}
 		turnStart := flow.Start("sensing_input", startPayload, runID)
 
+		// Re-stash any pose bucket info riding on a motion.activity that was
+		// queued while the agent was busy. Without this, the SSE /dm path
+		// has no bucket to attach images from when the agent eventually
+		// nudges on the replayed run. Matches the live sensing handler.
+		if ev.eventType == "motion.activity" {
+			if bid, worst := extractPoseBucketMarkers(ev.msg); bid != "" {
+				s.MarkPoseBucketRun(runID, bid, worst)
+			}
+		}
 		// Build the outgoing message via the shared helper so the drain path
 		// stays identical to the live sensing handler. Guard tag is always ""
 		// here — guard state isn't preserved across the queue.
 		msg := sensingmsg.Build(ev.eventType, ev.msg, ev.currentUser, "")
-		// Strip [snapshot: ...] markers from the outgoing LLM message — matches the
-		// behaviour of the direct PostEvent path (sensing handler). The full text with
-		// snapshot paths still reaches the sensing_input JSONL via startPayload above,
-		// so Monitor UI thumbnails keep working.
+		// Strip [snapshot: ...] + pose bucket markers from the outgoing LLM
+		// message — matches the behaviour of the direct PostEvent path. The
+		// full text still reaches the sensing_input JSONL via startPayload
+		// above, so Monitor UI thumbnails + bucket popup keep working.
 		msg = reSnapshotPath.ReplaceAllString(msg, "")
+		msg = rePoseBucketMarker.ReplaceAllString(msg, "")
+		msg = rePoseWorstMarker.ReplaceAllString(msg, "")
 		msg = strings.ReplaceAll(msg, "\n\n\n", "\n\n")
 		msg = strings.TrimSpace(msg)
 
