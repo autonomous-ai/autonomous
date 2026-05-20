@@ -1,9 +1,11 @@
 import { C, LockedField, SectionCard } from "@/components/setup/shared";
+import { SecretUpdateField } from "@/components/SecretUpdateField";
 import type { ChannelType } from "@/types";
 import type { ChannelLoadedState } from "@/hooks/setup/types";
 
-// Edit-mode channel credentials use LockedField for tokens (not LockedPasswordField
-// like Setup) — operator wants to see and verify saved tokens at a glance.
+// Bot tokens now go through SecretUpdateField (write-only) — the server only
+// returns has_* booleans so the previous "show saved token" affordance is
+// gone. Channel IDs stay plain LockedField since they're not secrets.
 export function ChannelSection({
   active, channel, setChannel, channelLoaded,
   teleToken, setTeleToken, teleUserId, setTeleUserId,
@@ -44,20 +46,20 @@ export function ChannelSection({
       </div>
       {channel === "telegram" && (
         <>
-          <LockedField lockedInitially={channelLoaded.teleToken} label="Bot Token" id="tele_token" value={teleToken} onChange={setTeleToken} placeholder="123456:ABC-DEF..." />
+          <SecretUpdateField configured={channelLoaded.teleToken} label="Bot Token" id="tele_token" value={teleToken} onChange={setTeleToken} placeholder="123456:ABC-DEF..." />
           <LockedField lockedInitially={channelLoaded.teleUserId} label="User ID" id="tele_user_id" value={teleUserId} onChange={setTeleUserId} placeholder="123456789" />
         </>
       )}
       {channel === "slack" && (
         <>
-          <LockedField lockedInitially={channelLoaded.slackBotToken} label="Bot Token" id="slack_bot_token" value={slackBotToken} onChange={setSlackBotToken} placeholder="xoxb-..." />
-          <LockedField lockedInitially={channelLoaded.slackAppToken} label="App Token" id="slack_app_token" value={slackAppToken} onChange={setSlackAppToken} placeholder="xapp-..." />
+          <SecretUpdateField configured={channelLoaded.slackBotToken} label="Bot Token" id="slack_bot_token" value={slackBotToken} onChange={setSlackBotToken} placeholder="xoxb-..." />
+          <SecretUpdateField configured={channelLoaded.slackAppToken} label="App Token" id="slack_app_token" value={slackAppToken} onChange={setSlackAppToken} placeholder="xapp-..." />
           <LockedField lockedInitially={channelLoaded.slackUserId} label="User ID" id="slack_user_id" value={slackUserId} onChange={setSlackUserId} placeholder="U0123456789" />
         </>
       )}
       {channel === "discord" && (
         <>
-          <LockedField lockedInitially={channelLoaded.discordBotToken} label="Bot Token" id="discord_bot_token" value={discordBotToken} onChange={setDiscordBotToken} placeholder="Bot token" />
+          <SecretUpdateField configured={channelLoaded.discordBotToken} label="Bot Token" id="discord_bot_token" value={discordBotToken} onChange={setDiscordBotToken} placeholder="Bot token" />
           <LockedField lockedInitially={channelLoaded.discordGuildId} label="Guild ID" id="discord_guild_id" value={discordGuildId} onChange={setDiscordGuildId} placeholder="123456789" />
           <LockedField lockedInitially={channelLoaded.discordUserId} label="User ID" id="discord_user_id" value={discordUserId} onChange={setDiscordUserId} placeholder="123456789" />
         </>

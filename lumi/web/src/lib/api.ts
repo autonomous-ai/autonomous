@@ -16,12 +16,10 @@ export interface JSONResponse<T = unknown> {
   data: T;
 }
 
-// Bearer token attached to every /api/* request hitting an admin-gated route
-// in the Go server (`adminAuthMiddleware`). The value mirrors
-// `config.json::llm_api_key` and is bootstrapped from GET /api/device/config
-// on first page load until a proper login UI exists.
-//
-// sessionStorage so a hard reload keeps the token without a refetch.
+// Legacy Bearer fallback. Browsers normally authenticate via the
+// `lumi_session` cookie set by POST /api/login, but scripted callers and
+// shareable dev links may still pass an explicit token. Cleared on logout;
+// not persisted on first load (cookie auth makes sessionStorage unnecessary).
 const TOKEN_STORAGE_KEY = "lumi_api_token";
 let apiToken: string =
   typeof window !== "undefined" ? sessionStorage.getItem(TOKEN_STORAGE_KEY) ?? "" : "";
@@ -37,21 +35,21 @@ export function getApiToken(): string {
   return apiToken;
 }
 
-/** Append ?token=<key> to a URL — used for SSE/EventSource where native
- *  EventSource cannot set custom headers. */
+/** Append ?token=<key> to a URL only when a legacy Bearer token is in play.
+ *  After login, cookies attach automatically — callers can pass URLs through
+ *  this helper unchanged and the URL stays clean. */
 export function withApiToken(url: string): string {
   if (!apiToken) return url;
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}token=${encodeURIComponent(apiToken)}`;
 }
 
-/** Build a /api/hardware/<path> URL with the bearer token baked in as
- *  ?token=, for places where headers can't be set: <img src>, <a href>,
- *  window.open, MJPEG stream. Pair with hardwareProxy + adminAuthMiddleware
- *  on the Go side (?token= fallback). */
+/** Build a `/api/hardware/<path>` URL. Cookie auto-attaches for same-origin
+ *  requests, so this is now just a prefix builder — no token leaks into the
+ *  URL, DOM, or browser history. Legacy Bearer fallback still rides along
+ *  when a token is set (dev/scripted callers). */
 export function hwUrl(path: string): string {
-  const url = `/api/hardware${path}`;
-  return apiToken ? withApiToken(url) : url;
+  return withApiToken(`/api/hardware${path}`);
 }
 
 // Setup query params that may carry secrets. When a redirect or shareable
@@ -69,6 +67,7 @@ const SECRET_QUERY_KEYS = [
   "tts_api_key",
   "mqtt_password",
   "password",
+  "admin_password",
 ];
 
 /** Return window.location.search (or the given query string) with every
@@ -89,10 +88,22 @@ export function safeSearch(search?: string): string {
   return out ? `?${out}` : "";
 }
 
-// Global fetch interceptor: attaches Authorization: Bearer to any request
-// that targets /api/hardware/* (the Go hardware proxy). Avoids refactoring
-// ~65 raw fetch sites in the monitor — they keep their existing
-// fetch(`${HW}/...`) shape, and HW now points at the proxy.
+/** Scrub secret query params from window.location without a navigation.
+ *  Called once on every page mount so a `?llm_api_key=…` link doesn't survive
+ *  in browser history / address bar / clipboard after the page reads it. */
+export function scrubLocationSecrets(): void {
+  if (typeof window === "undefined") return;
+  const cleaned = safeSearch();
+  if (cleaned === window.location.search) return;
+  const next = `${window.location.pathname}${cleaned}${window.location.hash}`;
+  window.history.replaceState(null, "", next);
+}
+
+// Patched window.fetch: ensures every same-origin /api/* request rides the
+// session cookie (credentials: include) and attaches a legacy Bearer header
+// when one is in play. Browsers default fetch to credentials: 'same-origin'
+// for same-origin requests, but Vite's dev server can confuse the heuristic
+// and the explicit setting is cheap insurance.
 if (typeof window !== "undefined" && !(window as unknown as { __lumiFetchPatched?: boolean }).__lumiFetchPatched) {
   const origFetch = window.fetch.bind(window);
   window.fetch = function patchedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -101,17 +112,14 @@ if (typeof window !== "undefined" && !(window as unknown as { __lumiFetchPatched
     else if (input instanceof URL) url = input.toString();
     else url = (input as Request).url;
 
-    // Only intercept the hardware proxy path. Anything else is left alone
-    // (apiRequest already handles its own header set; third-party code
-    // shouldn't be affected).
-    if (url.includes("/api/hardware/") && apiToken) {
-      const headers = new Headers(init?.headers);
-      if (!headers.has("Authorization")) {
-        headers.set("Authorization", `Bearer ${apiToken}`);
-      }
-      return origFetch(input, { ...init, headers });
+    const isApiCall = url.startsWith("/api/") || url.includes("/api/");
+    if (!isApiCall) return origFetch(input, init);
+
+    const headers = new Headers(init?.headers);
+    if (apiToken && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${apiToken}`);
     }
-    return origFetch(input, init);
+    return origFetch(input, { ...init, headers, credentials: "include" });
   };
   (window as unknown as { __lumiFetchPatched?: boolean }).__lumiFetchPatched = true;
 }
@@ -121,12 +129,14 @@ async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   if (apiToken && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${apiToken}`);
   }
-  const res = await fetch(url, { ...options, headers });
+  const res = await fetch(url, { credentials: "include", ...options, headers });
   const json = (await res.json()) as JSONResponse<T>;
   if (json.status !== 1) {
     const msg =
       typeof json.message === "string" ? json.message : res.ok ? "Request failed" : res.statusText;
-    throw new Error(msg);
+    const err = new Error(msg) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return json.data;
 }
@@ -184,23 +194,18 @@ export async function getSetup(): Promise<boolean> {
   return apiRequest<boolean>(`${API_BASE}/api/setup`);
 }
 
+/** Sanitized device config — Has* booleans replace raw secrets so they
+ *  never reach the DOM / sessionStorage / HAR captures. PUT
+ *  /api/device/config still accepts plaintext writes through SecretUpdateField. */
 export interface DeviceConfig {
   channel: string;
-  telegram_bot_token: string;
   telegram_user_id: string;
-  slack_bot_token: string;
-  slack_app_token: string;
   slack_user_id: string;
-  discord_bot_token: string;
   discord_guild_id: string;
   discord_user_id: string;
-  llm_api_key: string;
   llm_model: string;
   llm_base_url: string;
   llm_disable_thinking: boolean;
-  deepgram_api_key: string;
-  stt_api_key: string;
-  tts_api_key: string;
   stt_base_url: string;
   tts_base_url: string;
   stt_language: string;
@@ -210,13 +215,23 @@ export interface DeviceConfig {
   device_id: string;
   mac: string;
   network_ssid: string;
-  network_password: string;
   mqtt_endpoint: string;
   mqtt_username: string;
-  mqtt_password: string;
   mqtt_port: number;
   fa_channel: string;
   fd_channel: string;
+
+  has_telegram_bot_token: boolean;
+  has_slack_bot_token: boolean;
+  has_slack_app_token: boolean;
+  has_discord_bot_token: boolean;
+  has_llm_api_key: boolean;
+  has_deepgram_api_key: boolean;
+  has_stt_api_key: boolean;
+  has_tts_api_key: boolean;
+  has_network_password: boolean;
+  has_mqtt_password: boolean;
+  has_admin_password: boolean;
 }
 
 export async function getTTSVoices(provider?: string, lang?: string): Promise<string[]> {
@@ -257,7 +272,9 @@ function demoPhraseFor(lang?: string): string {
 export async function testTTSVoice(voice: string, opts: TestTTSOptions = {}): Promise<void> {
   const apiKey = (opts.ttsApiKey && opts.ttsApiKey.trim()) || opts.llmApiKey || "";
   const baseUrl = (opts.ttsBaseUrl && opts.ttsBaseUrl.trim()) || opts.llmBaseUrl || "";
-  await fetch("/hw/voice/speak", {
+  // Routes through the Go hardware proxy so cookie/Bearer auth applies and
+  // the request never touches the direct /hw/voice endpoint.
+  await fetch(hwUrl("/voice/speak"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -271,20 +288,28 @@ export async function testTTSVoice(voice: string, opts: TestTTSOptions = {}): Pr
 }
 
 export async function getDeviceConfig(): Promise<DeviceConfig> {
-  const cfg = await apiRequest<DeviceConfig>(`${API_BASE}/api/device/config`);
-  // Bootstrap the admin bearer token so subsequent admin /api/* calls succeed.
-  // GET /api/device/config is intentionally kept open in Go server until web
-  // has a login UI — this is the transition path.
-  if (cfg?.llm_api_key) {
-    setApiToken(cfg.llm_api_key);
-  }
-  return cfg;
+  return apiRequest<DeviceConfig>(`${API_BASE}/api/device/config`);
 }
 
-export async function updateDeviceConfig(body: Partial<DeviceConfig> & { password?: string; ssid?: string }): Promise<boolean> {
+export async function updateDeviceConfig(body: Partial<Record<string, unknown>>): Promise<boolean> {
   return apiRequest<boolean>(`${API_BASE}/api/device/config`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+/** POST /api/login — server validates bcrypt(password) against
+ *  config.AdminPasswordHash and sets the lumi_session cookie on success. */
+export async function login(password: string): Promise<boolean> {
+  return apiRequest<boolean>(`${API_BASE}/api/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+}
+
+export async function logout(): Promise<boolean> {
+  setApiToken("");
+  return apiRequest<boolean>(`${API_BASE}/api/logout`, { method: "POST" });
 }

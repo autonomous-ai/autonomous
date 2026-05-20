@@ -107,6 +107,16 @@ type Config struct {
 	// Injected into sensing events so the agent follows it (e.g. "play scary sound when stranger detected").
 	GuardInstruction string `json:"guard_instruction,omitempty" yaml:"guardInstruction"`
 
+	// AdminPasswordHash is the bcrypt hash of the admin login password set during
+	// device setup. POST /api/login validates against this. Empty before setup
+	// completes; once set, /login becomes the canonical browser admin entry.
+	AdminPasswordHash string `json:"admin_password_hash,omitempty" yaml:"adminPasswordHash"`
+
+	// SessionSecret is a random 32-byte key (base64) used to sign HMAC session
+	// tokens. Generated on first save when empty so an upgrade picks one up
+	// automatically; rotating it invalidates all outstanding sessions.
+	SessionSecret string `json:"session_secret,omitempty" yaml:"sessionSecret"`
+
 	notify chan bool
 }
 

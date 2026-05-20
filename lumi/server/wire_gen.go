@@ -39,7 +39,7 @@ func InitializeServer() (*Server, error) {
 	client := beclient.ProvideClient(configConfig)
 	deviceService := device.ProvideService(configConfig, service, agentGateway, client)
 	networkHandler := http2.ProvideNetworkHandler(configConfig, service, deviceService)
-	deviceHandler := http3.ProvideDeviceHandler(deviceService, service)
+	deviceHandler := http3.ProvideDeviceHandler(deviceService, service, configConfig)
 	mqttConfig := config.ProvideMQTTConfig(configConfig)
 	factory, err := mqtt.ProvideFactory(mqttConfig)
 	if err != nil {

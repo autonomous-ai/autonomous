@@ -49,6 +49,7 @@ import (
 	_openclawSseDeliver "go-lamp.autonomous.ai/server/openclaw/delivery/sse"
 	_sensingHttpDeliver "go-lamp.autonomous.ai/server/sensing/delivery/http"
 	"go-lamp.autonomous.ai/server/serializers"
+	"go-lamp.autonomous.ai/server/session"
 	systemshell "go-lamp.autonomous.ai/server/system"
 )
 
@@ -329,15 +330,18 @@ var hardwareProxy = func() http.Handler {
 	return proxy
 }()
 
-// adminAuthMiddleware requires Authorization: Bearer <llm_api_key> on requests
-// to admin endpoints (config write, channel change, logs, OTA). Reads the
-// expected token from cfg.LLMAPIKey at request time so config-change rotation
-// applies without a restart. Constant-time compare guards against timing
-// side-channels. Empty configured key fails closed (503 admin auth not configured).
+// adminAuthMiddleware admits a request when any of these holds:
+//   - Authorization: Bearer <llm_api_key> matches cfg.LLMAPIKey (scripts, curl)
+//   - lumi_session cookie validates under cfg.SessionSecret (browser, post-login)
+//   - ?token=<llm_api_key> query param matches (legacy <img>/<a>/EventSource —
+//     still needed for cases where the browser can't set headers AND cookies
+//     can't ride along, e.g. cross-tab popups)
 //
-// Web monitor admin pages must include this header until a proper login UI
-// lands; pre-login web bootstrap can still read GET /api/device/config (kept
-// open via sameOriginOrLAN) to fetch the token.
+// Reading the expected token from cfg.LLMAPIKey at request time means a
+// PUT /api/device/config rotation takes effect without a restart. Constant-time
+// compare on the bearer path keeps timing channels closed. Empty configured key
+// AND empty session secret both fail closed (503 admin auth not configured).
+//
 // setupOnlyMiddleware blocks POST /api/device/setup once provisioning is
 // complete. After setup the device should be edited via PUT /api/device/config
 // (admin-auth gated), not re-provisioned — leaving setup open means a caller
@@ -357,15 +361,22 @@ func setupOnlyMiddleware(cfg *config.Config) gin.HandlerFunc {
 
 func adminAuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Session cookie path (browser, post-login). Cookies auto-attach so
+		// this covers <img>, <a>, EventSource and any same-site fetch.
+		if session.HasValid(c, cfg) {
+			c.Next()
+			return
+		}
 		expected := cfg.LLMAPIKey
 		if expected == "" {
+			// No bearer configured AND no valid session → can't admit anyone.
 			c.JSON(http.StatusServiceUnavailable, serializers.ResponseError("admin auth not configured"))
 			c.Abort()
 			return
 		}
-		// Prefer Authorization header; fall back to ?token= query param so
-		// callers that can't set headers (native EventSource, <img src>,
-		// <a href> download links) still authenticate.
+		// Bearer header (preferred) or ?token= query (legacy fallback for
+		// places where headers and cookies both can't ride: cross-tab popups,
+		// download links rendered into srcdoc iframes).
 		got := strings.TrimSpace(strings.TrimPrefix(c.GetHeader("Authorization"), "Bearer "))
 		if got == "" {
 			got = strings.TrimSpace(c.Query("token"))
@@ -460,17 +471,24 @@ func (s *Server) Serve(closeFn func()) error {
 	system.GET("dashboard", s.healthHandler.Dashboard)
 	system.POST("software-update/:target", adminAuthMiddleware(s.config), s.softwareUpdate)
 	system.POST("exec", localOnlyMiddleware(), s.execCommand)
-	system.GET("shell", systemshell.ShellHandler)
+	// xterm.js shell: admin-gated. WS upgrade doesn't carry the Bearer header
+	// in browsers, so the cookie path inside adminAuthMiddleware is the live
+	// auth on this route. Scripts may still ?token=<llm_api_key>=.
+	system.GET("shell", adminAuthMiddleware(s.config), systemshell.ShellHandler)
+
+	// Login: POST {password} → bcrypt-verifies admin_password_hash, mints
+	// signed session cookie. No auth required (this is how you get auth).
+	api.POST("login", s.loginHandler)
+	api.POST("logout", s.logoutHandler)
 
 	device := api.Group("device")
 	device.POST("setup", setupOnlyMiddleware(s.config), s.deviceHandler.Setup)
 	device.GET("setup/status", s.deviceHandler.SetupStatus)
 	device.POST("channel", adminAuthMiddleware(s.config), s.deviceHandler.ChangeChannel)
-	// GET kept open (sameOriginOrLAN at nginx + Origin check) so web can
-	// bootstrap the bearer token before a login UI exists. Audit web F1
-	// (raw secrets in response) is tracked separately and addressed when
-	// login lands — until then this stays the bootstrap path.
-	device.GET("config", s.deviceHandler.GetConfig)
+	// GET config is admin-gated now. Pre-login web can no longer bootstrap
+	// the bearer from here — browser must POST /api/login first (cookie),
+	// scripts/curl must send Authorization: Bearer <llm_api_key>.
+	device.GET("config", adminAuthMiddleware(s.config), s.deviceHandler.GetConfig)
 	device.PUT("config", adminAuthMiddleware(s.config), s.deviceHandler.UpdateConfig)
 	device.GET("voices", s.deviceHandler.GetVoices)
 	device.GET("tts-providers", s.deviceHandler.GetTTSProviders)
@@ -797,6 +815,40 @@ func (s *Server) handleSetUpCompleteChange(setupCompleted bool) {
 		s.networkService.SwitchToAPMode()
 	}
 	s.lastSetupCompleted = &setupCompleted
+}
+
+// loginHandler validates the admin password and issues a session cookie.
+// POST /api/login  body: {"password": "..."}.
+//
+// Returns 401 on any failure (no password set, wrong password, malformed
+// hash). Uniform error keeps the response from leaking which case fired.
+func (s *Server) loginHandler(c *gin.Context) {
+	var body struct {
+		Password string `json:"password"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.Password == "" {
+		c.JSON(http.StatusBadRequest, serializers.ResponseError("password required"))
+		return
+	}
+	if err := s.deviceService.VerifyAdminPassword(body.Password); err != nil {
+		slog.Info("login rejected", "component", "auth", "error", err)
+		c.JSON(http.StatusUnauthorized, serializers.ResponseError("invalid credentials"))
+		return
+	}
+	if err := session.Issue(c, s.config); err != nil {
+		slog.Error("issue session failed", "component", "auth", "error", err)
+		c.JSON(http.StatusInternalServerError, serializers.ResponseError("session issue failed"))
+		return
+	}
+	c.JSON(http.StatusOK, serializers.ResponseSuccess(true))
+}
+
+// logoutHandler clears the session cookie. Stateless tokens mean we can't
+// actively revoke server-side; the client losing the cookie is enough.
+// Anyone who already exfiltrated the token can still use it until expiry.
+func (s *Server) logoutHandler(c *gin.Context) {
+	session.Clear(c)
+	c.JSON(http.StatusOK, serializers.ResponseSuccess(true))
 }
 
 // allowedLogs maps source names to their log file paths (supports glob patterns).

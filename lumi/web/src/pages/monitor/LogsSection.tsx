@@ -100,8 +100,10 @@ function LogPanel({ source, label, color, initialFilter, initialLevel, onFilterC
     };
     const open = () => {
       if (es !== null) return;
-      // EventSource can't set custom headers — auth via ?token= query.
-      es = new EventSource(withApiToken(`${API}/logs/stream?source=${source}`));
+      // EventSource can't set custom headers; cookies attach automatically
+      // with `withCredentials: true` for same-origin connections. Legacy
+      // Bearer fallback (?token=) still rides along when a token is set.
+      es = new EventSource(withApiToken(`${API}/logs/stream?source=${source}`), { withCredentials: true });
       sseRef.current = es;
       es.addEventListener("log", onLog);
       es.addEventListener("error", () => { /* EventSource auto-reconnects */ });

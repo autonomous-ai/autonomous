@@ -116,6 +116,12 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
 
   const [deviceId, setDeviceId] = useState(urlParams.deviceId || "");
   const [mac, setMac] = useState("");
+  // Admin password the operator picks here. Server bcrypts it into
+  // config.admin_password_hash and uses it to gate browser admin access via
+  // /api/login. Confirm field is a UI-only second copy — only adminPassword
+  // ships to the server.
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminPasswordConfirm, setAdminPasswordConfirm] = useState("");
   // mDNS hostname for the lamp on home Wi-Fi: `lumi-<suffix>.local`. Matches
   // what stage_ap sets via `hostnamectl set-hostname lumi-${SUFFIX_LC}` — both
   // sides derive the suffix from the device's hardware ID (Pi device-tree
@@ -222,7 +228,10 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // the auto-scroll-to-next-pending behavior in continue mode. We treat a
   // section as done when its config has the value the user came here to set.
   const sectionDone: Record<SectionId, boolean> = {
-    device: !!deviceId,
+    // device-section requires admin password to be set AND confirmed before
+    // submit is enabled. Existing-device "continue" mode skips the password
+    // check since the device may already have one set from initial provision.
+    device: !!deviceId && (isContinue || (!!adminPassword && adminPassword === adminPasswordConfirm)),
     wifi: !!ssid,
     llm: !!llmApiKey,
     language: true, // Auto/empty is a valid choice — never block on this.
@@ -302,15 +311,15 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
 
   useConfigPrefill({
     urlParams, channelParam,
-    setTtsProvider, setTtsVoice, setSsid, setPassword, setDeviceId, setMac, setActiveSection,
-    setLlmApiKey, setLlmUrl, setLlmModel, setLlmLoaded, setLlmDisableThinking,
-    setTtsApiKey, setTtsBaseUrl,
+    setTtsProvider, setTtsVoice, setSsid, setDeviceId, setMac, setActiveSection,
+    setLlmUrl, setLlmModel, setLlmLoaded, setLlmDisableThinking,
+    setTtsBaseUrl,
     setChannelLoaded,
-    setTeleToken, setTeleUserId,
-    setSlackBotToken, setSlackAppToken, setSlackUserId,
-    setDiscordBotToken, setDiscordGuildId, setDiscordUserId,
+    setTeleUserId,
+    setSlackUserId,
+    setDiscordGuildId, setDiscordUserId,
     setChannel,
-    setMqttEndpoint, setMqttPort, setMqttUsername, setMqttPassword,
+    setMqttEndpoint, setMqttPort, setMqttUsername,
     setFaChannel, setFdChannel,
     setSttLanguage,
   });
@@ -349,6 +358,16 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    // Block submit when the admin password doesn't match. Initial-provision
+    // requires a password; continue-mode (already provisioned) lets it skip.
+    if (!isContinue && adminPassword !== adminPasswordConfirm) {
+      setError("Admin password and confirmation don't match.");
+      return;
+    }
+    if (!isContinue && !adminPassword) {
+      setError("Pick an admin password — you'll use it to sign in later.");
+      return;
+    }
     setLoading(true);
     try {
       let channelCredentials: Record<string, string>;
@@ -389,6 +408,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
         tts_provider: ttsProvider || undefined,
         tts_voice: ttsVoice || undefined,
         device_id: urlParams.deviceId || deviceId,
+        admin_password: adminPassword || undefined,
       };
       const endpoint = mqttEndpoint || urlParams.mqttEndpoint;
       if (endpoint) {
@@ -414,6 +434,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
     discordBotToken, discordGuildId, discordUserId, ssid, password, llmUrl, llmApiKey,
     llmModel, llmDisableThinking, sttApiKey, sttBaseUrl, ttsApiKey, ttsBaseUrl, ttsVoice, deviceId,
     mqttEndpoint, mqttPort, mqttUsername, mqttPassword, faChannel, fdChannel,
+    sttLanguage, ttsProvider, isContinue, adminPassword, adminPasswordConfirm,
   ]);
 
   return (
@@ -674,6 +695,12 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
                     active={activeSection === "device"}
                     deviceId={deviceId} setDeviceId={setDeviceId}
                     mac={mac}
+                    {...(isContinue ? {} : {
+                      adminPassword,
+                      setAdminPassword,
+                      adminPasswordConfirm,
+                      setAdminPasswordConfirm,
+                    })}
                   />
 
                   <WifiSection

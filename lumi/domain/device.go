@@ -51,6 +51,13 @@ type SetupRequest struct {
 	// optional
 	DeviceID string `json:"device_id" validate:"required"`
 
+	// AdminPassword is the plaintext password the operator picks at setup time.
+	// Server bcrypts it into config.AdminPasswordHash and never persists the
+	// plaintext. Used to gate browser admin access via POST /api/login + the
+	// lumi_session cookie. Empty allowed (validated at handler level so
+	// pre-login-UI clients keep working during the migration window).
+	AdminPassword string `json:"admin_password"`
+
 	// MQTT (optional): empty broker URL means MQTT disabled
 	MQTTEndpoint string `json:"mqtt_endpoint"`
 	MQTTUsername string `json:"mqtt_username"`
@@ -278,24 +285,20 @@ func NewMQTTInfoResponse(cfg *config.Config, msgType string, mac string) MQTTInf
 	}
 }
 
-// ConfigResponse is returned by GET /api/device/config with current device settings.
-type ConfigResponse struct {
+// ConfigPublicResponse is returned by GET /api/device/config. Raw secrets
+// (API keys, channel tokens, MQTT/WiFi passwords) are replaced by boolean
+// presence flags so the web UI can render "configured ✓" + a write-only
+// SecretUpdateField. Non-secret fields (URLs, IDs, model name, language)
+// are returned as-is because they're useful for the UI and not sensitive.
+type ConfigPublicResponse struct {
 	Channel            string `json:"channel"`
-	TelegramBotToken   string `json:"telegram_bot_token"`
 	TelegramUserID     string `json:"telegram_user_id"`
-	SlackBotToken      string `json:"slack_bot_token"`
-	SlackAppToken      string `json:"slack_app_token"`
 	SlackUserID        string `json:"slack_user_id"`
-	DiscordBotToken    string `json:"discord_bot_token"`
 	DiscordGuildID     string `json:"discord_guild_id"`
 	DiscordUserID      string `json:"discord_user_id"`
-	LLMAPIKey          string `json:"llm_api_key"`
 	LLMModel           string `json:"llm_model"`
 	LLMBaseURL         string `json:"llm_base_url"`
 	LLMDisableThinking bool   `json:"llm_disable_thinking"`
-	DeepgramAPIKey     string `json:"deepgram_api_key"`
-	STTAPIKey          string `json:"stt_api_key"`
-	TTSAPIKey          string `json:"tts_api_key"`
 	STTBaseURL         string `json:"stt_base_url"`
 	TTSBaseURL         string `json:"tts_base_url"`
 	STTLanguage        string `json:"stt_language"`
@@ -305,13 +308,25 @@ type ConfigResponse struct {
 	DeviceID           string `json:"device_id"`
 	Mac                string `json:"mac"`
 	NetworkSSID        string `json:"network_ssid"`
-	NetworkPassword    string `json:"network_password"`
 	MQTTEndpoint       string `json:"mqtt_endpoint"`
 	MQTTUsername       string `json:"mqtt_username"`
-	MQTTPassword       string `json:"mqtt_password"`
 	MQTTPort           int    `json:"mqtt_port"`
 	FAChannel          string `json:"fa_channel"`
 	FDChannel          string `json:"fd_channel"`
+
+	// Presence booleans replace raw secret values. Frontend renders
+	// "configured · update" affordance when true, empty input when false.
+	HasTelegramBotToken bool `json:"has_telegram_bot_token"`
+	HasSlackBotToken    bool `json:"has_slack_bot_token"`
+	HasSlackAppToken    bool `json:"has_slack_app_token"`
+	HasDiscordBotToken  bool `json:"has_discord_bot_token"`
+	HasLLMAPIKey        bool `json:"has_llm_api_key"`
+	HasDeepgramAPIKey   bool `json:"has_deepgram_api_key"`
+	HasSTTAPIKey        bool `json:"has_stt_api_key"`
+	HasTTSAPIKey        bool `json:"has_tts_api_key"`
+	HasNetworkPassword  bool `json:"has_network_password"`
+	HasMQTTPassword     bool `json:"has_mqtt_password"`
+	HasAdminPassword    bool `json:"has_admin_password"`
 }
 
 // UpdateConfigRequest is used by PUT /api/device/config to update device settings.

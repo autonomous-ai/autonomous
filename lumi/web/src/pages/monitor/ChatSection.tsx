@@ -4,7 +4,8 @@ import {
   Pin, ChevronRight, Sparkles, Plus, Trash2, History,
   Wrench, Lightbulb, Cog, Music, Palette, Search, Smile, ChevronDown,
 } from "lucide-react";
-import { API, AGENT_API } from "./types";
+import { API } from "./types";
+import { getDeviceConfig } from "@/lib/api";
 import type { DisplayEvent, MonitorEvent } from "./types";
 
 // ─── Markdown ───────────────────────────────────────────────────────────────
@@ -513,22 +514,22 @@ export function ChatSection({ events, isActive }: Props) {
   // active row — keeps the sidebar list visually quiet at rest.
   const [hoveredConvoId, setHoveredConvoId] = useState<string | null>(null);
 
-  // Resolve the active model name from openclaw.json so we can label each
-  // assistant message ("claude-haiku-4-5-20251001" → "haiku-4-5"). Fetched
-  // lazily once per mount — the model rarely changes between turns.
+  // Resolve the active model name so we can label each assistant message
+  // ("claude-haiku-4-5-20251001" → "haiku-4-5"). Pulled from the sanitized
+  // /api/device/config; the old `${AGENT_API}/config-json` path is now
+  // loopback-only (audit local F5c) and unreachable from a browser.
   const [modelLabel, setModelLabel] = useState<string>("");
   useEffect(() => {
-    fetch(`${AGENT_API}/config-json`)
-      .then((r) => r.json())
-      .then((res) => {
-        const primary = res?.data?.agents?.defaults?.model?.primary;
-        if (typeof primary !== "string") return;
-        // primary looks like "<provider>/<model-id>" — strip provider and
-        // collapse the verbose Anthropic version suffix so it fits the badge.
+    getDeviceConfig()
+      .then((cfg) => {
+        const primary = cfg.llm_model;
+        if (!primary) return;
+        // Strip provider prefix and collapse Anthropic's trailing version
+        // suffix so the badge stays compact.
         const raw = primary.includes("/") ? primary.split("/").pop() ?? primary : primary;
         const compact = raw
           .replace(/^claude-/i, "")
-          .replace(/-\d{8}$/, ""); // trailing date suffix like -20251001
+          .replace(/-\d{8}$/, "");
         setModelLabel(compact);
       })
       .catch(() => {});
@@ -879,7 +880,7 @@ export function ChatSection({ events, isActive }: Props) {
 
     const open = () => {
       if (es !== null) return;
-      es = new EventSource(`${API}/openclaw/events`);
+      es = new EventSource(`${API}/openclaw/events`, { withCredentials: true });
       es.onmessage = onMessage;
     };
     const close = () => {

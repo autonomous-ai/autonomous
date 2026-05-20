@@ -10,64 +10,64 @@ import type { SectionId, LlmLoadedState, ChannelLoadedState } from "./types";
 // user-typed value take precedence — we only fill empty state slots
 // (`prev || cfg.x || ""`). Gated against URL for tts/lang fields since
 // URL is the authoritative override channel.
+// ConfigPublicResponse no longer carries plaintext secrets, so the prefill
+// hook only takes setters for the non-secret fields it can still populate.
+// Secret setters (setLlmApiKey, setPassword, setMqttPassword, channel
+// tokens, etc.) used to mirror saved values into form state — they're now
+// dropped from the signature because the source data is gone. The Setup
+// page keeps owning that state for user input via SecretUpdateField /
+// LockedPasswordField.
 export function useConfigPrefill(args: {
   urlParams: SetupUrlParams;
   channelParam: string | null;
   setTtsProvider: Dispatch<SetStateAction<string>>;
   setTtsVoice: Dispatch<SetStateAction<string>>;
   setSsid: Dispatch<SetStateAction<string>>;
-  setPassword: Dispatch<SetStateAction<string>>;
   setDeviceId: Dispatch<SetStateAction<string>>;
   setMac: Dispatch<SetStateAction<string>>;
   setActiveSection: Dispatch<SetStateAction<SectionId>>;
-  setLlmApiKey: Dispatch<SetStateAction<string>>;
   setLlmUrl: Dispatch<SetStateAction<string>>;
   setLlmModel: Dispatch<SetStateAction<string>>;
   setLlmLoaded: Dispatch<SetStateAction<LlmLoadedState>>;
   setLlmDisableThinking: Dispatch<SetStateAction<boolean>>;
-  setTtsApiKey: Dispatch<SetStateAction<string>>;
   setTtsBaseUrl: Dispatch<SetStateAction<string>>;
   setChannelLoaded: Dispatch<SetStateAction<ChannelLoadedState>>;
-  setTeleToken: Dispatch<SetStateAction<string>>;
   setTeleUserId: Dispatch<SetStateAction<string>>;
-  setSlackBotToken: Dispatch<SetStateAction<string>>;
-  setSlackAppToken: Dispatch<SetStateAction<string>>;
   setSlackUserId: Dispatch<SetStateAction<string>>;
-  setDiscordBotToken: Dispatch<SetStateAction<string>>;
   setDiscordGuildId: Dispatch<SetStateAction<string>>;
   setDiscordUserId: Dispatch<SetStateAction<string>>;
   setChannel: Dispatch<SetStateAction<ChannelType>>;
   setMqttEndpoint: Dispatch<SetStateAction<string>>;
   setMqttPort: Dispatch<SetStateAction<string>>;
   setMqttUsername: Dispatch<SetStateAction<string>>;
-  setMqttPassword: Dispatch<SetStateAction<string>>;
   setFaChannel: Dispatch<SetStateAction<string>>;
   setFdChannel: Dispatch<SetStateAction<string>>;
   setSttLanguage: Dispatch<SetStateAction<string>>;
 }) {
   const {
     urlParams, channelParam,
-    setTtsProvider, setTtsVoice, setSsid, setPassword, setDeviceId, setMac, setActiveSection,
-    setLlmApiKey, setLlmUrl, setLlmModel, setLlmLoaded, setLlmDisableThinking,
-    setTtsApiKey, setTtsBaseUrl,
+    setTtsProvider, setTtsVoice, setSsid, setDeviceId, setMac, setActiveSection,
+    setLlmUrl, setLlmModel, setLlmLoaded, setLlmDisableThinking,
+    setTtsBaseUrl,
     setChannelLoaded,
-    setTeleToken, setTeleUserId,
-    setSlackBotToken, setSlackAppToken, setSlackUserId,
-    setDiscordBotToken, setDiscordGuildId, setDiscordUserId,
+    setTeleUserId,
+    setSlackUserId,
+    setDiscordGuildId, setDiscordUserId,
     setChannel,
-    setMqttEndpoint, setMqttPort, setMqttUsername, setMqttPassword,
+    setMqttEndpoint, setMqttPort, setMqttUsername,
     setFaChannel, setFdChannel,
     setSttLanguage,
   } = args;
 
   useEffect(() => {
     getDeviceConfig().then((cfg) => {
-      // URL params win over saved config (matches the prev-||-cfg pattern used
-      // elsewhere). Without this guard, cfg would clobber ?tts_provider=... etc.
+      // ConfigPublicResponse only surfaces presence booleans for secrets, so
+      // we can pre-fill non-secret fields (URLs, IDs, model name, language)
+      // and only mark "loaded" for the secret slots — the operator retypes
+      // any secret they want to change via the LockedField pencil.
       if (cfg.tts_provider && !urlParams.ttsProvider) setTtsProvider(cfg.tts_provider);
       if (cfg.tts_voice && !urlParams.ttsVoice) setTtsVoice(cfg.tts_voice);
       setSsid((prev) => prev || cfg.network_ssid || "");
-      setPassword((prev) => prev || cfg.network_password || "");
       setDeviceId((prev) => prev || cfg.device_id || "");
       // Mac is hardware-derived and read-only; just mirror it from the backend.
       setMac(cfg.mac || "");
@@ -77,33 +77,27 @@ export function useConfigPrefill(args: {
       if (cfg.device_id) {
         setActiveSection((prev) => (prev === "device" ? "wifi" : prev));
       }
-      setLlmApiKey((prev) => prev || cfg.llm_api_key || "");
       setLlmUrl((prev) => prev || cfg.llm_base_url || "");
       setLlmModel((prev) => prev || cfg.llm_model || "");
       setLlmLoaded((prev) => ({
-        apiKey: prev.apiKey || !!cfg.llm_api_key,
+        apiKey: prev.apiKey || cfg.has_llm_api_key,
         baseUrl: prev.baseUrl || !!cfg.llm_base_url,
         model: prev.model || !!cfg.llm_model,
       }));
       if (cfg.llm_disable_thinking != null) setLlmDisableThinking((prev) => prev || cfg.llm_disable_thinking);
-      setTtsApiKey((prev) => prev || cfg.tts_api_key || "");
       setTtsBaseUrl((prev) => prev || cfg.tts_base_url || "");
       setChannelLoaded((prev) => ({
-        teleToken: prev.teleToken || !!cfg.telegram_bot_token,
+        teleToken: prev.teleToken || cfg.has_telegram_bot_token,
         teleUserId: prev.teleUserId || !!cfg.telegram_user_id,
-        slackBotToken: prev.slackBotToken || !!cfg.slack_bot_token,
-        slackAppToken: prev.slackAppToken || !!cfg.slack_app_token,
+        slackBotToken: prev.slackBotToken || cfg.has_slack_bot_token,
+        slackAppToken: prev.slackAppToken || cfg.has_slack_app_token,
         slackUserId: prev.slackUserId || !!cfg.slack_user_id,
-        discordBotToken: prev.discordBotToken || !!cfg.discord_bot_token,
+        discordBotToken: prev.discordBotToken || cfg.has_discord_bot_token,
         discordGuildId: prev.discordGuildId || !!cfg.discord_guild_id,
         discordUserId: prev.discordUserId || !!cfg.discord_user_id,
       }));
-      setTeleToken((prev) => prev || cfg.telegram_bot_token || "");
       setTeleUserId((prev) => prev || cfg.telegram_user_id || "");
-      setSlackBotToken((prev) => prev || cfg.slack_bot_token || "");
-      setSlackAppToken((prev) => prev || cfg.slack_app_token || "");
       setSlackUserId((prev) => prev || cfg.slack_user_id || "");
-      setDiscordBotToken((prev) => prev || cfg.discord_bot_token || "");
       setDiscordGuildId((prev) => prev || cfg.discord_guild_id || "");
       setDiscordUserId((prev) => prev || cfg.discord_user_id || "");
       // Adopt saved channel only when the user hasn't already picked one via URL.
@@ -113,7 +107,6 @@ export function useConfigPrefill(args: {
       setMqttEndpoint((prev) => prev || cfg.mqtt_endpoint || "");
       setMqttPort((prev) => prev || (cfg.mqtt_port ? String(cfg.mqtt_port) : ""));
       setMqttUsername((prev) => prev || cfg.mqtt_username || "");
-      setMqttPassword((prev) => prev || cfg.mqtt_password || "");
       setFaChannel((prev) => prev || cfg.fa_channel || "");
       setFdChannel((prev) => prev || cfg.fd_channel || "");
       // Saved language wins over the browser-locale default — the browser

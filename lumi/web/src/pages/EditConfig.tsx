@@ -152,72 +152,65 @@ export default function EditConfig() {
   useEffect(() => {
     getDeviceConfig()
       .then((cfg: DeviceConfig) => {
+        // ConfigPublicResponse — secrets are returned as has_* booleans only.
+        // State for secret fields stays empty until the operator types a new
+        // value in SecretUpdateField; submit then ships only the touched ones.
         setSsid(cfg.network_ssid ?? "");
-        setPassword(cfg.network_password ?? "");
         setDeviceId(cfg.device_id ?? "");
         setMac(cfg.mac ?? "");
-        setLlmApiKey(cfg.llm_api_key ?? "");
         setLlmUrl(cfg.llm_base_url ?? "");
         setLlmModel(cfg.llm_model ?? "");
         setLlmDisableThinking(cfg.llm_disable_thinking ?? false);
-        setDeepgramApiKey(cfg.deepgram_api_key ?? "");
-        setSttApiKey(cfg.stt_api_key ?? "");
         setSttBaseUrl(cfg.stt_base_url ?? "");
-        setSttProvider(cfg.deepgram_api_key ? "deepgram" : "autonomous");
+        setSttProvider(cfg.has_deepgram_api_key ? "deepgram" : "autonomous");
         setSttLanguage(cfg.stt_language ?? "");
-        setTtsApiKey(cfg.tts_api_key ?? "");
         setTtsBaseUrl(cfg.tts_base_url ?? "");
         setTtsProvider(cfg.tts_provider || "openai");
         setTtsVoice(cfg.tts_voice || "alloy");
         setChannel((cfg.channel as ChannelType) || "telegram");
-        setTeleToken(cfg.telegram_bot_token ?? "");
         setTeleUserId(cfg.telegram_user_id ?? "");
-        setSlackBotToken(cfg.slack_bot_token ?? "");
-        setSlackAppToken(cfg.slack_app_token ?? "");
         setSlackUserId(cfg.slack_user_id ?? "");
-        setDiscordBotToken(cfg.discord_bot_token ?? "");
         setDiscordGuildId(cfg.discord_guild_id ?? "");
         setDiscordUserId(cfg.discord_user_id ?? "");
         setMqttEndpoint(cfg.mqtt_endpoint ?? "");
         setMqttPort(cfg.mqtt_port ? String(cfg.mqtt_port) : "");
         setMqttUsername(cfg.mqtt_username ?? "");
-        setMqttPassword(cfg.mqtt_password ?? "");
         setFaChannel(cfg.fa_channel ?? "");
         setFdChannel(cfg.fd_channel ?? "");
         setMqttLoaded({
           endpoint: !!cfg.mqtt_endpoint,
           port: !!cfg.mqtt_port,
           username: !!cfg.mqtt_username,
-          password: !!cfg.mqtt_password,
+          password: cfg.has_mqtt_password,
           faChannel: !!cfg.fa_channel,
           fdChannel: !!cfg.fd_channel,
         });
         setChannelLoaded({
-          teleToken: !!cfg.telegram_bot_token,
+          teleToken: cfg.has_telegram_bot_token,
           teleUserId: !!cfg.telegram_user_id,
-          slackBotToken: !!cfg.slack_bot_token,
-          slackAppToken: !!cfg.slack_app_token,
+          slackBotToken: cfg.has_slack_bot_token,
+          slackAppToken: cfg.has_slack_app_token,
           slackUserId: !!cfg.slack_user_id,
-          discordBotToken: !!cfg.discord_bot_token,
+          discordBotToken: cfg.has_discord_bot_token,
           discordGuildId: !!cfg.discord_guild_id,
           discordUserId: !!cfg.discord_user_id,
         });
         setWifiLoaded({
           ssid: !!cfg.network_ssid,
-          password: !!cfg.network_password,
+          password: cfg.has_network_password,
         });
         setLlmLoaded({
-          apiKey: !!cfg.llm_api_key,
+          apiKey: cfg.has_llm_api_key,
           baseUrl: !!cfg.llm_base_url,
           model: !!cfg.llm_model,
         });
         setTtsLoaded({
-          apiKey: !!cfg.tts_api_key,
+          apiKey: cfg.has_tts_api_key,
           baseUrl: !!cfg.tts_base_url,
         });
         setSttLoaded({
-          deepgram: !!cfg.deepgram_api_key,
-          apiKey: !!cfg.stt_api_key,
+          deepgram: cfg.has_deepgram_api_key,
+          apiKey: cfg.has_stt_api_key,
           baseUrl: !!cfg.stt_base_url,
         });
       })
@@ -268,34 +261,52 @@ export default function EditConfig() {
     setError(null);
     setSaving(true);
     try {
-      let channelCreds: Record<string, string> = {};
-      if (channel === "telegram") {
-        channelCreds = { telegram_bot_token: teleToken, telegram_user_id: teleUserId };
-      } else if (channel === "slack") {
-        channelCreds = { slack_bot_token: slackBotToken, slack_app_token: slackAppToken, slack_user_id: slackUserId };
-      } else {
-        channelCreds = { discord_bot_token: discordBotToken, discord_guild_id: discordGuildId, discord_user_id: discordUserId };
-      }
-      // STT provider is implicit on backend: deepgram if deepgram_api_key set,
-      // else autonomous via stt_api_key/stt_base_url. So when picking
-      // autonomous we send deepgram_api_key="" to clear it (backend now allows
-      // blank-clears for STT/Deepgram), and vice versa.
-      const sttFields = sttProvider === "deepgram"
-        ? { deepgram_api_key: deepgramApiKey, stt_api_key: "", stt_base_url: "" }
-        : { deepgram_api_key: "", stt_api_key: sttApiKey, stt_base_url: sttBaseUrl };
-      await updateDeviceConfig({
-        ssid: ssid.trim(), password,
-        channel, ...channelCreds,
-        llm_base_url: llmUrl, llm_api_key: llmApiKey, llm_model: llmModel,
+      // Build the payload from non-secret fields first, then layer on each
+      // secret only when the operator typed something into its
+      // SecretUpdateField. Empty secrets would otherwise clobber the saved
+      // value on disk (PUT treats blanks as intentional clears for STT /
+      // Deepgram). Channel id fields (telegram_user_id, slack_user_id,
+      // discord_guild_id, discord_user_id) are non-secret and ship every time.
+      const body: Record<string, unknown> = {
+        ssid: ssid.trim(),
+        channel,
+        llm_base_url: llmUrl, llm_model: llmModel,
         llm_disable_thinking: llmDisableThinking,
-        ...sttFields,
-        stt_language: sttLanguage,
-        tts_api_key: ttsApiKey, tts_base_url: ttsBaseUrl, tts_provider: ttsProvider, tts_voice: ttsVoice, device_id: deviceId,
+        stt_base_url: sttBaseUrl, stt_language: sttLanguage,
+        tts_base_url: ttsBaseUrl, tts_provider: ttsProvider, tts_voice: ttsVoice,
+        device_id: deviceId,
         mqtt_endpoint: mqttEndpoint, mqtt_username: mqttUsername,
-        mqtt_password: mqttPassword,
         mqtt_port: mqttPort ? parseInt(mqttPort, 10) : 0,
         fa_channel: faChannel, fd_channel: fdChannel,
-      } as Parameters<typeof updateDeviceConfig>[0]);
+      };
+      if (password) body.password = password;
+      if (llmApiKey) body.llm_api_key = llmApiKey;
+      if (ttsApiKey) body.tts_api_key = ttsApiKey;
+      if (mqttPassword) body.mqtt_password = mqttPassword;
+      // STT provider switch: clear the opposing key explicitly so the
+      // operator's mode toggle takes effect. When staying on the same provider
+      // and not typing a new key, leave both fields untouched.
+      if (sttProvider === "deepgram") {
+        if (deepgramApiKey) body.deepgram_api_key = deepgramApiKey;
+        if (sttLoaded.apiKey || sttApiKey) body.stt_api_key = "";
+      } else {
+        if (sttApiKey) body.stt_api_key = sttApiKey;
+        if (sttLoaded.deepgram || deepgramApiKey) body.deepgram_api_key = "";
+      }
+      // Channel credentials: send IDs always, tokens only when typed.
+      if (channel === "telegram") {
+        body.telegram_user_id = teleUserId;
+        if (teleToken) body.telegram_bot_token = teleToken;
+      } else if (channel === "slack") {
+        body.slack_user_id = slackUserId;
+        if (slackBotToken) body.slack_bot_token = slackBotToken;
+        if (slackAppToken) body.slack_app_token = slackAppToken;
+      } else {
+        body.discord_guild_id = discordGuildId;
+        body.discord_user_id = discordUserId;
+        if (discordBotToken) body.discord_bot_token = discordBotToken;
+      }
+      await updateDeviceConfig(body);
       toast.success("Config saved — restart Lumi for changes to take effect.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed.");
@@ -304,7 +315,8 @@ export default function EditConfig() {
   }, [
     channel, teleToken, teleUserId, slackBotToken, slackAppToken, slackUserId,
     discordBotToken, discordGuildId, discordUserId, ssid, password, llmUrl,
-    llmApiKey, llmModel, llmDisableThinking, deepgramApiKey, sttApiKey, sttBaseUrl, sttProvider, sttLanguage,
+    llmApiKey, llmModel, llmDisableThinking, deepgramApiKey, sttApiKey, sttBaseUrl,
+    sttProvider, sttLanguage, sttLoaded,
     ttsApiKey, ttsBaseUrl, ttsProvider, ttsVoice, deviceId,
     mqttEndpoint, mqttUsername, mqttPassword, mqttPort, faChannel, fdChannel,
   ]);

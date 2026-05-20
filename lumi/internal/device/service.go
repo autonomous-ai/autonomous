@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"go-lamp.autonomous.ai/domain"
 	"go-lamp.autonomous.ai/internal/beclient"
 	"go-lamp.autonomous.ai/internal/network"
@@ -152,6 +154,17 @@ func (s *Service) Setup(data domain.SetupRequest) error {
 	if data.LLMDisableThinking != nil {
 		s.config.LLMDisableThinking = data.LLMDisableThinking
 	}
+	// Admin password is hashed once and never persisted in plaintext. Empty
+	// is permitted so older clients that don't send it still complete setup;
+	// the operator can set one later via PUT /api/device/config (TODO) or
+	// re-run setup after factory reset.
+	if data.AdminPassword != "" {
+		hash, hashErr := bcrypt.GenerateFromPassword([]byte(data.AdminPassword), bcrypt.DefaultCost)
+		if hashErr != nil {
+			return fmt.Errorf("hash admin password: %w", hashErr)
+		}
+		s.config.AdminPasswordHash = string(hash)
+	}
 	if err := s.config.Save(); err != nil {
 		slog.Error("save config failed", "component", "device", "error", err)
 	}
@@ -255,35 +268,28 @@ func (s *Service) StartStatusReporter(ctx context.Context) {
 	}
 }
 
-// GetConfig returns the current device configuration.
-func (s *Service) GetConfig() domain.ConfigResponse {
+// GetPublicConfig returns the device configuration with secrets replaced by
+// presence booleans, suitable for browser bootstrap. The web UI renders
+// write-only fields against the `Has*` flags so plaintext tokens never reach
+// the DOM / sessionStorage / HAR captures.
+func (s *Service) GetPublicConfig() domain.ConfigPublicResponse {
 	disableThinking := false
 	if s.config.LLMDisableThinking != nil {
 		disableThinking = *s.config.LLMDisableThinking
 	}
-	// Device ID is hardware-derived (Lumi-XXXX from Pi serial). Fall back to it
-	// when config is empty so the web form always shows a stable, non-editable value.
 	deviceID := s.config.DeviceID
 	if deviceID == "" {
 		deviceID = GetDeviceMac()
 	}
-	return domain.ConfigResponse{
+	return domain.ConfigPublicResponse{
 		Channel:            s.config.Channel,
-		TelegramBotToken:   s.config.TelegramBotToken,
 		TelegramUserID:     s.config.TelegramUserID,
-		SlackBotToken:      s.config.SlackBotToken,
-		SlackAppToken:      s.config.SlackAppToken,
 		SlackUserID:        s.config.SlackUserID,
-		DiscordBotToken:    s.config.DiscordBotToken,
 		DiscordGuildID:     s.config.DiscordGuildID,
 		DiscordUserID:      s.config.DiscordUserID,
-		LLMAPIKey:          s.config.LLMAPIKey,
 		LLMModel:           s.config.LLMModel,
 		LLMBaseURL:         s.config.LLMBaseURL,
 		LLMDisableThinking: disableThinking,
-		DeepgramAPIKey:     s.config.DeepgramAPIKey,
-		STTAPIKey:          s.config.STTAPIKey,
-		TTSAPIKey:          s.config.TTSAPIKey,
 		STTBaseURL:         s.config.STTBaseURL,
 		TTSBaseURL:         s.config.TTSBaseURL,
 		STTLanguage:        s.config.STTLanguage,
@@ -293,14 +299,35 @@ func (s *Service) GetConfig() domain.ConfigResponse {
 		DeviceID:           deviceID,
 		Mac:                GetDeviceMac(),
 		NetworkSSID:        s.config.NetworkSSID,
-		NetworkPassword:    s.config.NetworkPassword,
 		MQTTEndpoint:       s.config.MQTTEndpoint,
 		MQTTUsername:       s.config.MQTTUsername,
-		MQTTPassword:       s.config.MQTTPassword,
 		MQTTPort:           s.config.MQTTPort,
 		FAChannel:          s.config.FAChannel,
 		FDChannel:          s.config.FDChannel,
+
+		HasTelegramBotToken: s.config.TelegramBotToken != "",
+		HasSlackBotToken:    s.config.SlackBotToken != "",
+		HasSlackAppToken:    s.config.SlackAppToken != "",
+		HasDiscordBotToken:  s.config.DiscordBotToken != "",
+		HasLLMAPIKey:        s.config.LLMAPIKey != "",
+		HasDeepgramAPIKey:   s.config.DeepgramAPIKey != "",
+		HasSTTAPIKey:        s.config.STTAPIKey != "",
+		HasTTSAPIKey:        s.config.TTSAPIKey != "",
+		HasNetworkPassword:  s.config.NetworkPassword != "",
+		HasMQTTPassword:     s.config.MQTTPassword != "",
+		HasAdminPassword:    s.config.AdminPasswordHash != "",
 	}
+}
+
+// VerifyAdminPassword returns nil when password matches the stored bcrypt hash.
+// Returns an error when no password is set, when the hash is malformed, or when
+// the password is wrong. Callers must not surface the specific error to clients
+// (uniform "invalid credentials" message) to avoid leaking which case fired.
+func (s *Service) VerifyAdminPassword(password string) error {
+	if s.config.AdminPasswordHash == "" {
+		return fmt.Errorf("admin password not configured")
+	}
+	return bcrypt.CompareHashAndPassword([]byte(s.config.AdminPasswordHash), []byte(password))
 }
 
 // UpdateConfig saves updated config fields. All fields are optional; empty strings are skipped.

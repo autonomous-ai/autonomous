@@ -1,7 +1,4 @@
-import { useEffect, useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-
-const API = "/api";
 
 const C = {
   bg:        "var(--lm-bg)",
@@ -17,23 +14,13 @@ const C = {
 
 export default function GwConfig() {
   useDocumentTitle("GW Config");
-  const [raw, setRaw] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`${API}/openclaw/config-json`)
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.status === 1) {
-          setRaw(JSON.stringify(res.data, null, 2));
-        } else {
-          setError(res.message ?? "Failed to load config");
-        }
-      })
-      .catch((e) => setError(String(e)))
-      .finally(() => setLoading(false));
-  }, []);
+  // /api/openclaw/config-json is now loopback-only (audit local F5c) so the
+  // browser can't fetch it. The raw openclaw.json holds gateway auth tokens —
+  // shipping it over the wire is exactly what the audit closed. This page
+  // now reads the on-device file via SSH or `cat /root/.openclaw/config/openclaw.json`.
+  const raw: string | null = null;
+  const error: string = "GW config is no longer exposed via HTTP. SSH to the device and read /root/.openclaw/config/openclaw.json — or use the Agent → Config view inside Monitor for the redacted summary.";
+  const loading = false;
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "monospace" }}>

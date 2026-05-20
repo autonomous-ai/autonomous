@@ -11,19 +11,23 @@ import (
 	"go-lamp.autonomous.ai/internal/device"
 	"go-lamp.autonomous.ai/internal/network"
 	"go-lamp.autonomous.ai/lib/lelamp"
+	"go-lamp.autonomous.ai/server/config"
 	"go-lamp.autonomous.ai/server/serializers"
+	"go-lamp.autonomous.ai/server/session"
 )
 
 // DeviceHandler represents the HTTP handler for device
 type DeviceHandler struct {
 	service        *device.Service
 	networkService *network.Service
+	config         *config.Config
 }
 
-func ProvideDeviceHandler(ds *device.Service, ns *network.Service) DeviceHandler {
+func ProvideDeviceHandler(ds *device.Service, ns *network.Service, cfg *config.Config) DeviceHandler {
 	return DeviceHandler{
 		service:        ds,
 		networkService: ns,
+		config:         cfg,
 	}
 }
 
@@ -52,6 +56,17 @@ func (h *DeviceHandler) Setup(c *gin.Context) {
 		return
 	}
 
+	// If operator supplied an admin password, set the session cookie now so the
+	// browser is logged in by the time it redirects post-setup. The hash itself
+	// is persisted asynchronously inside service.Setup; the cookie validates
+	// against SessionSecret (independent of the password hash), so there's no
+	// race — any subsequent /api/* call sees a valid session immediately.
+	if req.AdminPassword != "" {
+		if err := session.Issue(c, h.config); err != nil {
+			slog.Warn("setup: issue session failed", "component", "device", "error", err)
+		}
+	}
+
 	go func() {
 		time.Sleep(2 * time.Second)
 		if err := h.service.Setup(req); err != nil {
@@ -68,14 +83,17 @@ func (h *DeviceHandler) Setup(c *gin.Context) {
 
 // GetConfig godoc
 //
-//	@Summary	get current device config
+//	@Summary	get current device config (sanitized)
 //	@Schemes
-//	@Description	get current device config
+//	@Description	get current device config. Secrets (API keys, channel
+//	@Description	tokens, passwords) are returned as Has* booleans only —
+//	@Description	plaintext values never leave the device. Use PUT
+//	@Description	/api/device/config to update individual secret fields.
 //	@Tags			device
 //	@Success		200	{object}	serializers.ResponseSuccess
 //	@Router			/device/config [get]
 func (h *DeviceHandler) GetConfig(c *gin.Context) {
-	cfg := h.service.GetConfig()
+	cfg := h.service.GetPublicConfig()
 	c.JSON(http.StatusOK, serializers.ResponseSuccess(cfg))
 }
 

@@ -24,7 +24,7 @@ export function useEventSource(
     let es: EventSource | null = null;
     const open = () => {
       if (es !== null) return;
-      es = new EventSource(url);
+      es = new EventSource(url, { withCredentials: true });
       if (handlersRef.current.onOpen) es.addEventListener("open", () => handlersRef.current.onOpen?.());
       es.onmessage = (ev) => handlersRef.current.onMessage?.(ev);
       es.onerror = (ev) => handlersRef.current.onError?.(ev);

@@ -123,20 +123,13 @@ function AgentGWMenu({ section, setSection, closeSidebar }: {
 }) {
   const hasActive = section === "agent-config";
   const [open, setOpen] = useState(hasActive);
-  // OpenClaw Control UI 5.2 requires the gateway auth token as a URL fragment
-  // (`#token=…`) and sets X-Frame-Options: DENY + CSP frame-ancestors: 'none',
-  // so this link must open in a new tab — embedding is browser-blocked.
-  const [gwToken, setGwToken] = useState<string>("");
-  useEffect(() => {
-    fetch("/api/openclaw/config-json")
-      .then((r) => r.json())
-      .then((res) => {
-        const t = res?.data?.gateway?.auth?.token;
-        if (typeof t === "string" && t) setGwToken(t);
-      })
-      .catch(() => {});
-  }, []);
-  const gwHref = `/gw/chat?session=agent:main:main${gwToken ? `#token=${gwToken}` : ""}`;
+  // OpenClaw Control UI 5.2 sets X-Frame-Options: DENY so we open in a new
+  // tab. The gateway auth token used to ride along as a `#token=…` fragment
+  // fetched from /api/openclaw/config-json — that endpoint is now
+  // loopback-only (audit local F5c), so we drop the fragment entirely and
+  // let the on-device OpenClaw control UI handle its own auth. Off-device
+  // browsers reaching the link will be blocked by nginx /gw/ deny-LAN
+  // anyway (audit local F6).
   return (
     <div>
       <button
@@ -156,7 +149,7 @@ function AgentGWMenu({ section, setSection, closeSidebar }: {
       {open && (
         <div style={{ paddingLeft: 12 }}>
           <a
-            href={gwHref}
+            href="/gw/chat?session=agent:main:main"
             target="_blank"
             rel="noopener noreferrer"
             style={S.navItem(false)}
