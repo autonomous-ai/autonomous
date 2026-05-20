@@ -46,7 +46,7 @@ import (
 	_deviceMQTTDeliver "go-lamp.autonomous.ai/server/device/delivery/mqtt"
 	_healthHttpDeliver "go-lamp.autonomous.ai/server/health/delivery/http"
 	_networkHttpDeliver "go-lamp.autonomous.ai/server/network/delivery/http"
-	_openclawSseDeliver "go-lamp.autonomous.ai/đang giaserver/openclaw/delivery/sse"
+	_agentHttpDeliver "go-lamp.autonomous.ai/server/agent/delivery/http"
 	_sensingHttpDeliver "go-lamp.autonomous.ai/server/sensing/delivery/http"
 	"go-lamp.autonomous.ai/server/serializers"
 	"go-lamp.autonomous.ai/server/session"
@@ -63,7 +63,7 @@ type Server struct {
 	deviceHandler     _deviceHttpDeliver.DeviceHandler
 	deviceMQTTHandler _deviceMQTTDeliver.DeviceMQTTHandler
 	deviceGPIOHandler _deviceGPIODeliver.DeviceGPIOHandler
-	openclawHandler   _openclawSseDeliver.OpenClawHandler
+	agentHandler   _agentHttpDeliver.AgentHandler
 	sensingHandler    _sensingHttpDeliver.SensingHandler
 
 	agentGateway   domain.AgentGateway
@@ -118,7 +118,7 @@ func ProvideServer(
 	dh _deviceHttpDeliver.DeviceHandler,
 	dqth _deviceMQTTDeliver.DeviceMQTTHandler,
 	dgph _deviceGPIODeliver.DeviceGPIOHandler,
-	openclawH _openclawSseDeliver.OpenClawHandler,
+	agentH _agentHttpDeliver.AgentHandler,
 	sensingH _sensingHttpDeliver.SensingHandler,
 	ds *device.Service,
 	agentGW domain.AgentGateway,
@@ -136,7 +136,7 @@ func ProvideServer(
 		deviceHandler:     dh,
 		deviceMQTTHandler: dqth,
 		deviceGPIOHandler: dgph,
-		openclawHandler:   openclawH,
+		agentHandler:   agentH,
 		sensingHandler:    sensingH,
 		agentGateway:      agentGW,
 		networkService:    ns,
@@ -465,7 +465,7 @@ func (s *Server) Serve(closeFn func()) error {
 
 	eventCtx, cancelEvents := context.WithCancel(context.Background())
 	defer cancelEvents()
-	go s.agentGateway.StartWS(eventCtx, s.openclawHandler.HandleEvent)
+	go s.agentGateway.StartWS(eventCtx, s.agentHandler.HandleEvent)
 	go s.agentGateway.WatchIdentity(eventCtx)
 	go s.agentGateway.StartSkillWatcher(eventCtx)
 	// StartModelSync is launched from the startup-sequence goroutine AFTER
@@ -554,7 +554,7 @@ func (s *Server) Serve(closeFn func()) error {
 	monitor := api.Group("monitor")
 	monitor.POST("event", sameOriginOrLAN(), s.sensingHandler.PostMonitorEvent)
 
-	oc := api.Group("openclaw")
+	agent := api.Group("agent")
 	// Everything under /api/openclaw/ is admin-gated: status carries device
 	// state, events / flow-stream / recent / flow-events / flow-logs /
 	// analytics / compaction-latest contain conversation history + sensing
@@ -562,22 +562,22 @@ func (s *Server) Serve(closeFn func()) error {
 	// per-user behavioural records. config-json keeps its stricter
 	// `localOnlyMiddleware` (loopback callers only) — admin auth alone is
 	// not enough since the raw openclaw.json holds gateway tokens.
-	oc.POST("tts/stop", adminAuthMiddleware(s.config), s.openclawHandler.StopTTS)
-	oc.POST("busy", adminAuthMiddleware(s.config), s.openclawHandler.SetBusy)
-	oc.GET("status", adminAuthMiddleware(s.config), s.openclawHandler.Status)
-	oc.GET("events", adminAuthMiddleware(s.config), s.openclawHandler.Events)
-	oc.GET("recent", adminAuthMiddleware(s.config), s.openclawHandler.Recent)
-	oc.GET("flow-events", adminAuthMiddleware(s.config), s.openclawHandler.FlowEvents)
-	oc.GET("mood-history", adminAuthMiddleware(s.config), s.openclawHandler.MoodHistory)
-	oc.GET("wellbeing-history", adminAuthMiddleware(s.config), s.openclawHandler.WellbeingHistory)
-	oc.GET("posture-history", adminAuthMiddleware(s.config), s.openclawHandler.PostureHistory)
-	oc.GET("music-suggestion-history", adminAuthMiddleware(s.config), s.openclawHandler.MusicSuggestionHistory)
-	oc.GET("flow-stream", adminAuthMiddleware(s.config), s.openclawHandler.FlowStream)
-	oc.GET("flow-logs", adminAuthMiddleware(s.config), s.openclawHandler.FlowLogs)
-	oc.DELETE("flow-logs", adminAuthMiddleware(s.config), s.openclawHandler.ClearFlowLogs)
-	oc.GET("analytics", adminAuthMiddleware(s.config), s.openclawHandler.Analytics)
-	oc.GET("config-json", localOnlyMiddleware(), s.openclawHandler.ConfigJSON)
-	oc.GET("compaction-latest", adminAuthMiddleware(s.config), s.openclawHandler.CompactionLatest)
+	agent.POST("tts/stop", adminAuthMiddleware(s.config), s.agentHandler.StopTTS)
+	agent.POST("busy", adminAuthMiddleware(s.config), s.agentHandler.SetBusy)
+	agent.GET("status", adminAuthMiddleware(s.config), s.agentHandler.Status)
+	agent.GET("events", adminAuthMiddleware(s.config), s.agentHandler.Events)
+	agent.GET("recent", adminAuthMiddleware(s.config), s.agentHandler.Recent)
+	agent.GET("flow-events", adminAuthMiddleware(s.config), s.agentHandler.FlowEvents)
+	agent.GET("mood-history", adminAuthMiddleware(s.config), s.agentHandler.MoodHistory)
+	agent.GET("wellbeing-history", adminAuthMiddleware(s.config), s.agentHandler.WellbeingHistory)
+	agent.GET("posture-history", adminAuthMiddleware(s.config), s.agentHandler.PostureHistory)
+	agent.GET("music-suggestion-history", adminAuthMiddleware(s.config), s.agentHandler.MusicSuggestionHistory)
+	agent.GET("flow-stream", adminAuthMiddleware(s.config), s.agentHandler.FlowStream)
+	agent.GET("flow-logs", adminAuthMiddleware(s.config), s.agentHandler.FlowLogs)
+	agent.DELETE("flow-logs", adminAuthMiddleware(s.config), s.agentHandler.ClearFlowLogs)
+	agent.GET("analytics", adminAuthMiddleware(s.config), s.agentHandler.Analytics)
+	agent.GET("config-json", localOnlyMiddleware(), s.agentHandler.ConfigJSON)
+	agent.GET("compaction-latest", adminAuthMiddleware(s.config), s.agentHandler.CompactionLatest)
 
 	logs := api.Group("logs")
 	logs.GET("tail", adminAuthMiddleware(s.config), s.logTail)

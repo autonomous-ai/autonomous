@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"context"
@@ -41,7 +41,7 @@ func buildPoseBucketImagePaths(bucketID string, filenames []string) []string {
 }
 
 // HandleEvent processes incoming WebSocket events from the OpenClaw gateway.
-func (h *OpenClawHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) error {
+func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) error {
 	slog.Debug("event received", "component", "agent", "event", evt.Event)
 
 	// OpenClaw cron events: action="started" fires immediately before the

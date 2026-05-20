@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"encoding/json"
@@ -75,7 +75,7 @@ func extractHWCalls(text string) ([]hwCall, string) {
 // fireHWCalls fires hardware calls to LeLamp sequentially in a goroutine,
 // with full flow tracking, lastEmotion update, and monitorBus events.
 // Sequential order matters (e.g. emotion sequences must fire in order).
-func (h *OpenClawHandler) fireHWCalls(calls []hwCall, flowRunID string) {
+func (h *AgentHandler) fireHWCalls(calls []hwCall, flowRunID string) {
 	if len(calls) == 0 {
 		return
 	}

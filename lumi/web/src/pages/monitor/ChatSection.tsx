@@ -638,7 +638,7 @@ export function ChatSection({ events, isActive }: Props) {
   }, [activeId]);
 
   // Real-time monitor bus SSE — streaming deltas, thinking, tool calls
-  // Uses /api/openclaw/events (live bus) instead of flow-stream (file-based JSONL)
+  // Uses /api/agent/events (live bus) instead of flow-stream (file-based JSONL)
   const toolChipsRef = useRef<Map<string, ToolChip>>(new Map()); // key → chip for dedup
   const tokenUsageRef = useRef<ChatMessage["tokenUsage"]>(undefined); // token usage for current run
 

@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"bufio"
@@ -16,7 +16,7 @@ import (
 	"go-lamp.autonomous.ai/server/serializers"
 )
 
-func (h *OpenClawHandler) Analytics(c *gin.Context) {
+func (h *AgentHandler) Analytics(c *gin.Context) {
 	toDate := c.DefaultQuery("to", time.Now().Format("2006-01-02"))
 	fromDate := c.DefaultQuery("from", time.Now().AddDate(0, 0, -7).Format("2006-01-02"))
 

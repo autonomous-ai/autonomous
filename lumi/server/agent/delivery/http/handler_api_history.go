@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"net/http"
@@ -16,7 +16,7 @@ import (
 	"go-lamp.autonomous.ai/server/serializers"
 )
 
-func (h *OpenClawHandler) MoodHistory(c *gin.Context) {
+func (h *AgentHandler) MoodHistory(c *gin.Context) {
 	user := usercanon.Resolve(c.DefaultQuery("user", mood.CurrentUser()))
 	day := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	last := 100
@@ -46,7 +46,7 @@ func (h *OpenClawHandler) MoodHistory(c *gin.Context) {
 
 // WellbeingHistory returns wellbeing activity events for a user and day.
 // Query params: user=<name> (default: current user), date=YYYY-MM-DD (default today), last=<n> (default 100, max 500).
-func (h *OpenClawHandler) WellbeingHistory(c *gin.Context) {
+func (h *AgentHandler) WellbeingHistory(c *gin.Context) {
 	user := usercanon.Resolve(c.DefaultQuery("user", mood.CurrentUser()))
 	day := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	last := 100
@@ -71,7 +71,7 @@ func (h *OpenClawHandler) WellbeingHistory(c *gin.Context) {
 
 // PostureHistory returns posture coach events for a user and day.
 // Query params: user=<name> (default: current user), date=YYYY-MM-DD (default today), last=<n> (default 100, max 500).
-func (h *OpenClawHandler) PostureHistory(c *gin.Context) {
+func (h *AgentHandler) PostureHistory(c *gin.Context) {
 	user := usercanon.Resolve(c.DefaultQuery("user", mood.CurrentUser()))
 	day := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	last := 100
@@ -95,7 +95,7 @@ func (h *OpenClawHandler) PostureHistory(c *gin.Context) {
 }
 
 // MusicSuggestionHistory returns music suggestion events for a user.
-func (h *OpenClawHandler) MusicSuggestionHistory(c *gin.Context) {
+func (h *AgentHandler) MusicSuggestionHistory(c *gin.Context) {
 	user := usercanon.Resolve(c.DefaultQuery("user", mood.CurrentUser()))
 	day := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	last := 100

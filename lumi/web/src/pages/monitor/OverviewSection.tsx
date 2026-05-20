@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { S } from "./styles";
-import { HW } from "./types";
+import { API, HW } from "./types";
 
 const EMOTION_EMOJI: Record<string, string> = {
   happy: "😊", curious: "🤔", thinking: "💭", sad: "😢", excited: "🤩",
@@ -262,7 +262,7 @@ export function OverviewSection({
                   )}
                 </div>
                 {(voice.tts_speaking || musicPlaying) && (
-                  <button onClick={() => fetch("/api/openclaw/tts/stop", { method: "POST" }).catch(() => {})} style={{
+                  <button onClick={() => fetch(`${API}/agent/tts/stop`, { method: "POST" }).catch(() => {})} style={{
                     fontSize: 11, padding: "5px 14px", borderRadius: 6, fontWeight: 600, cursor: "pointer",
                     background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171",
                   }}>Stop</button>

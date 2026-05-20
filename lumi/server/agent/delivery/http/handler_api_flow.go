@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"bufio"
@@ -19,7 +19,7 @@ import (
 	"go-lamp.autonomous.ai/server/serializers"
 )
 
-func (h *OpenClawHandler) Recent(c *gin.Context) {
+func (h *AgentHandler) Recent(c *gin.Context) {
 	events := recentFlowFromJSONL(time.Now().Format("2006-01-02"), 500, h.agentGateway.GetConfiguredChannel())
 	if events == nil {
 		events = []domain.MonitorEvent{}
@@ -79,7 +79,7 @@ func recentFlowFromJSONL(day string, n int, channelName string) []domain.Monitor
 
 // FlowEvents returns flow events from JSONL file by date.
 // Query params: date=YYYY-MM-DD (default today), last=<n> (default 500, max 2000).
-func (h *OpenClawHandler) FlowEvents(c *gin.Context) {
+func (h *AgentHandler) FlowEvents(c *gin.Context) {
 	day := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
 	last := 500
 	if s := c.Query("last"); s != "" {
@@ -105,7 +105,7 @@ func (h *OpenClawHandler) FlowEvents(c *gin.Context) {
 //   user=<name>            (default: current user)
 //   date=YYYY-MM-DD        (default today)
 //   last=<n>               (default 100, max 500)
-func (h *OpenClawHandler) FlowStream(c *gin.Context) {
+func (h *AgentHandler) FlowStream(c *gin.Context) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -237,7 +237,7 @@ func flowEventToMonitor(fe flow.Event, channelName string) domain.MonitorEvent {
 // FlowLogs serves the daily flow JSONL log file for download.
 // Query params: ?date=YYYY-MM-DD (default today); ?last=N (optional) — if set, only the last N lines
 // are returned (same tail as GET /openclaw/flow-events?last=N). Omit ?last for the full day file.
-func (h *OpenClawHandler) FlowLogs(c *gin.Context) {
+func (h *AgentHandler) FlowLogs(c *gin.Context) {
 	date := c.Query("date")
 	if date == "" {
 		date = time.Now().Format("2006-01-02")
@@ -286,7 +286,7 @@ func (h *OpenClawHandler) FlowLogs(c *gin.Context) {
 
 // ClearFlowLogs truncates the daily flow JSONL log file.
 // Query param ?date=YYYY-MM-DD selects a historical file; defaults to today.
-func (h *OpenClawHandler) ClearFlowLogs(c *gin.Context) {
+func (h *AgentHandler) ClearFlowLogs(c *gin.Context) {
 	date := c.Query("date")
 	if date == "" {
 		date = time.Now().Format("2006-01-02")

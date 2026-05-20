@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"strings"
@@ -16,8 +16,8 @@ import (
 	"go-lamp.autonomous.ai/server/config"
 )
 
-// OpenClawHandler handles OpenClaw gateway WebSocket events and exposes monitor endpoints.
-type OpenClawHandler struct {
+// AgentHandler handles OpenClaw gateway WebSocket events and exposes monitor endpoints.
+type AgentHandler struct {
 	agentGateway domain.AgentGateway
 	monitorBus   *monitor.Bus
 	statusLED    *statusled.Service
@@ -152,8 +152,8 @@ type channelTurnState struct {
 // generous headroom for slow/loaded runs without false-positive correlations.
 const cronFireWindowMs int64 = 10_000
 
-// ProvideOpenClawHandler returns an OpenClaw events handler.
-func ProvideOpenClawHandler(gw domain.AgentGateway, bus *monitor.Bus, sled *statusled.Service) OpenClawHandler {
+// ProvideAgentHandler returns an OpenClaw events handler.
+func ProvideAgentHandler(gw domain.AgentGateway, bus *monitor.Bus, sled *statusled.Service) AgentHandler {
 	// Init flow emitter here so ws_connect events (fired from StartWS before any HTTP request)
 	// are broadcast to SSE. Lumi is a single-user device so the global trace ID is sufficient;
 	// concurrent turn interleaving is not a concern in normal operation.
@@ -167,7 +167,7 @@ func ProvideOpenClawHandler(gw domain.AgentGateway, bus *monitor.Bus, sled *stat
 	// struct is returned by value through wire — capturing &h.field here
 	// would write to a soon-to-be-discarded copy.
 	go populateOpenClawVersion()
-	return OpenClawHandler{
+	return AgentHandler{
 		agentGateway:         gw,
 		monitorBus:           bus,
 		statusLED:            sled,
@@ -187,7 +187,7 @@ func ProvideOpenClawHandler(gw domain.AgentGateway, bus *monitor.Bus, sled *stat
 
 // IsSleeping returns true when the last emotion expressed by the agent was "sleepy".
 // Used by SensingHandler to suppress passive sensing events during sleep mode.
-func (h *OpenClawHandler) IsSleeping() bool {
+func (h *AgentHandler) IsSleeping() bool {
 	h.lastEmotionMu.Lock()
 	defer h.lastEmotionMu.Unlock()
 	return h.lastEmotion == "sleepy"
@@ -196,7 +196,7 @@ func (h *OpenClawHandler) IsSleeping() bool {
 // consumeInterleavedDM atomically reads and removes the captured Telegram
 // chat_id for runID. Empty result means no interleaved Telegram message was
 // recorded for this turn — the normal TTS path applies.
-func (h *OpenClawHandler) consumeInterleavedDM(runID string) string {
+func (h *AgentHandler) consumeInterleavedDM(runID string) string {
 	if runID == "" {
 		return ""
 	}

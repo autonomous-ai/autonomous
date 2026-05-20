@@ -125,7 +125,7 @@ function AgentGWMenu({ section, setSection, closeSidebar }: {
   const [open, setOpen] = useState(hasActive);
   // OpenClaw Control UI 5.2 sets X-Frame-Options: DENY so we open in a new
   // tab. The gateway auth token used to ride along as a `#token=…` fragment
-  // fetched from /api/openclaw/config-json — that endpoint is now
+  // fetched from /api/agent/config-json — that endpoint is now
   // loopback-only (audit local F5c), so we drop the fragment entirely and
   // let the on-device OpenClaw control UI handle its own auth. Off-device
   // browsers reaching the link will be blocked by nginx /gw/ deny-LAN

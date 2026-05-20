@@ -14,7 +14,7 @@ const C = {
 
 export default function GwConfig() {
   useDocumentTitle("GW Config");
-  // /api/openclaw/config-json is now loopback-only (audit local F5c) so the
+  // /api/agent/config-json is now loopback-only (audit local F5c) so the
   // browser can't fetch it. The raw openclaw.json holds gateway auth tokens —
   // shipping it over the wire is exactly what the audit closed. This page
   // now reads the on-device file via SSH or `cat /root/.openclaw/config/openclaw.json`.

@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"log/slog"
@@ -42,7 +42,7 @@ const autoNewSessionCooldown = 30 * time.Second
 //   - keeps verbatim conversation history via a generated summary
 //   - blocks the agent for 30-60s+ while the summarize LLM call runs
 //   - summary can override SKILL.md (see docs/openclaw-compaction.md)
-func (h *OpenClawHandler) maybeAutoCompact(sessionKey string, totalTokens int, flowRunID string) {
+func (h *AgentHandler) maybeAutoCompact(sessionKey string, totalTokens int, flowRunID string) {
 	if totalTokens <= autoSessionThreshold {
 		return
 	}
@@ -85,7 +85,7 @@ func (h *OpenClawHandler) maybeAutoCompact(sessionKey string, totalTokens int, f
 //     clusters, owner identity, music suggestion history — those live
 //     outside the agent session JSONL and survive a session swap
 //   - no TTS notice — the swap is meant to be invisible
-func (h *OpenClawHandler) maybeAutoNewSession(sessionKey string, totalTokens int, flowRunID string) {
+func (h *AgentHandler) maybeAutoNewSession(sessionKey string, totalTokens int, flowRunID string) {
 	if totalTokens <= autoSessionThreshold {
 		return
 	}

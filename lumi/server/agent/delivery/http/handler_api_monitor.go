@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 var openclawSemverRe = regexp.MustCompile(`(\d+\.\d+\.\d+(?:[-+._][0-9A-Za-z.-]+)?)`)
 
 // openClawVersion caches the OpenClaw runtime version. Package-level (not
-// a struct field) because OpenClawHandler is returned by value through wire
+// a struct field) because AgentHandler is returned by value through wire
 // and a struct copy would orphan the field. Populated once at handler init
 // via populateOpenClawVersion(); stays valid until the process restarts.
 var openClawVersion atomic.Pointer[string]
@@ -53,7 +53,7 @@ func populateOpenClawVersion() {
 }
 
 // StopTTS interrupts active TTS playback on LeLamp.
-func (h *OpenClawHandler) StopTTS(c *gin.Context) {
+func (h *AgentHandler) StopTTS(c *gin.Context) {
 	if err := h.agentGateway.StopTTS(); err != nil {
 		slog.Warn("StopTTS failed", "component", "openclaw", "error", err)
 		c.JSON(http.StatusBadGateway, serializers.ResponseError(err.Error()))
@@ -65,13 +65,13 @@ func (h *OpenClawHandler) StopTTS(c *gin.Context) {
 // SetBusy marks the agent as busy from an external signal (e.g. turn-gate hook firing at
 // message:preprocessed before lifecycle_start SSE arrives). Closes the timing gap for
 // channel-initiated turns (Telegram, Slack, Discord) that bypass Lumi server entirely.
-func (h *OpenClawHandler) SetBusy(c *gin.Context) {
+func (h *AgentHandler) SetBusy(c *gin.Context) {
 	h.agentGateway.SetBusy(true)
 	c.JSON(http.StatusOK, serializers.ResponseSuccess(nil))
 }
 
 // Status returns the current agent connection status.
-func (h *OpenClawHandler) Status(c *gin.Context) {
+func (h *AgentHandler) Status(c *gin.Context) {
 	// Get real emotion from LeLamp (source of truth) instead of parsed text
 	emotion := h.fetchLeLampEmotion()
 
@@ -105,7 +105,7 @@ func (h *OpenClawHandler) Status(c *gin.Context) {
 
 // fetchLeLampEmotion calls LeLamp /emotion/status to get the current emotion.
 // Falls back to lastEmotion if LeLamp is unreachable.
-func (h *OpenClawHandler) fetchLeLampEmotion() string {
+func (h *AgentHandler) fetchLeLampEmotion() string {
 	emotion, err := lelamp.GetEmotion()
 	if err != nil {
 		h.lastEmotionMu.Lock()
@@ -116,7 +116,7 @@ func (h *OpenClawHandler) fetchLeLampEmotion() string {
 }
 
 // Events streams monitor bus events over SSE to connected web UI clients.
-func (h *OpenClawHandler) Events(c *gin.Context) {
+func (h *AgentHandler) Events(c *gin.Context) {
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -138,7 +138,7 @@ func (h *OpenClawHandler) Events(c *gin.Context) {
 }
 
 // ConfigJSON returns the raw openclaw.json contents for the gw-config UI.
-func (h *OpenClawHandler) ConfigJSON(c *gin.Context) {
+func (h *AgentHandler) ConfigJSON(c *gin.Context) {
 	data, err := h.agentGateway.GetConfigJSON()
 	if err != nil {
 		c.JSON(http.StatusOK, serializers.ResponseError(err.Error()))

@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"bufio"
@@ -46,7 +46,7 @@ type compactionRecord struct {
 //	?session=<key>  (default: agent:main:main)
 //	?at=<iso-ts>    (default: empty → newest record; when set, returns the compaction active
 //	                 at that moment, used to debug a specific turn)
-func (h *OpenClawHandler) CompactionLatest(c *gin.Context) {
+func (h *AgentHandler) CompactionLatest(c *gin.Context) {
 	raw, err := os.ReadFile(openclawSessionsIndex)
 	if err != nil {
 		c.JSON(http.StatusNotFound, serializers.ResponseError("sessions index not found: "+err.Error()))

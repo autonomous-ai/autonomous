@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"encoding/json"
@@ -153,7 +153,7 @@ func isChannelOriginatedRun(runIDs ...string) bool {
 // to Telegram at lifecycle:end, not the speaker), web chat (display-only),
 // and runs already flagged for TTS suppression (music playing / agent
 // already spoke via the built-in tts tool intercept).
-func (h *OpenClawHandler) canStreamSentenceTTS(runID, flowRunID string) bool {
+func (h *AgentHandler) canStreamSentenceTTS(runID, flowRunID string) bool {
 	if isChannelOriginatedRun(runID, flowRunID) {
 		return false
 	}

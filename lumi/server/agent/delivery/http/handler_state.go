@@ -1,4 +1,4 @@
-package sse
+package http
 
 import (
 	"log/slog"
@@ -6,7 +6,7 @@ import (
 )
 
 // accumulateAssistantDelta appends a delta to the buffer for the given runId.
-func (h *OpenClawHandler) accumulateAssistantDelta(runID, delta string) {
+func (h *AgentHandler) accumulateAssistantDelta(runID, delta string) {
 	if delta == "" {
 		return
 	}
@@ -53,7 +53,7 @@ func tailPreview(s string, n int) string {
 //   - any `<say>` wrapper (extractSayTag at end shifts content)
 //   - `NO_REPLY` / `HEARTBEAT_OK` sentinels (sanitizeAgentText strips
 //     these at end-flush; streamed text can't be unspoken)
-func (h *OpenClawHandler) tryFirstSentenceFlush(runID string) string {
+func (h *AgentHandler) tryFirstSentenceFlush(runID string) string {
 	h.assistantMu.Lock()
 	defer h.assistantMu.Unlock()
 
@@ -101,7 +101,7 @@ func (h *OpenClawHandler) tryFirstSentenceFlush(runID string) string {
 // already streamed to TTS for runID and clears the entry. Called at
 // lifecycle:end so the remainder POST sends only what was not already
 // streamed. Returns 0 when no sentence was streamed for this run.
-func (h *OpenClawHandler) consumeStreamedCleanLen(runID string) int {
+func (h *AgentHandler) consumeStreamedCleanLen(runID string) int {
 	h.assistantMu.Lock()
 	defer h.assistantMu.Unlock()
 	n, ok := h.streamedCleanLen[runID]
@@ -168,7 +168,7 @@ func isAsciiDigit(b byte) bool {
 // flushAssistantText returns the accumulated text for runId and clears the buffer.
 // HW markers are stripped here so they never appear in Telegram or other channel replies.
 // The caller is responsible for extracting and firing HW calls before flushing.
-func (h *OpenClawHandler) flushAssistantText(runID string) (string, []hwCall) {
+func (h *AgentHandler) flushAssistantText(runID string) (string, []hwCall) {
 	h.assistantMu.Lock()
 	defer h.assistantMu.Unlock()
 	buf, ok := h.assistantBuf[runID]
@@ -186,7 +186,7 @@ func (h *OpenClawHandler) flushAssistantText(runID string) (string, []hwCall) {
 // recordAssistantDelta increments streaming counters for runID and reports
 // whether this delta is the first one seen for the run. Caller emits
 // agent_first_token when isFirst==true.
-func (h *OpenClawHandler) recordAssistantDelta(runID, delta string) (isFirst bool) {
+func (h *AgentHandler) recordAssistantDelta(runID, delta string) (isFirst bool) {
 	if delta == "" {
 		return false
 	}
@@ -207,7 +207,7 @@ func (h *OpenClawHandler) recordAssistantDelta(runID, delta string) (isFirst boo
 
 // recordThinkingDelta is the thinking counterpart. Thinking text is
 // accumulated here because there is no separate per-run thinking buffer.
-func (h *OpenClawHandler) recordThinkingDelta(runID, delta string) (isFirst bool) {
+func (h *AgentHandler) recordThinkingDelta(runID, delta string) (isFirst bool) {
 	if delta == "" {
 		return false
 	}
@@ -228,7 +228,7 @@ func (h *OpenClawHandler) recordThinkingDelta(runID, delta string) (isFirst bool
 
 // drainStreamStats returns the stats snapshot for runID and clears it.
 // Returns nil when no streaming was recorded for the run.
-func (h *OpenClawHandler) drainStreamStats(runID string) *runStreamStats {
+func (h *AgentHandler) drainStreamStats(runID string) *runStreamStats {
 	h.streamStatsMu.Lock()
 	defer h.streamStatsMu.Unlock()
 	s, ok := h.streamStats[runID]
@@ -240,7 +240,7 @@ func (h *OpenClawHandler) drainStreamStats(runID string) *runStreamStats {
 }
 
 // suppressTTS flags a runID to skip TTS on lifecycle end with the given reason.
-func (h *OpenClawHandler) suppressTTS(runID, reason string) {
+func (h *AgentHandler) suppressTTS(runID, reason string) {
 	h.ttsSuppressMu.Lock()
 	defer h.ttsSuppressMu.Unlock()
 	// "music_playing" takes priority over "already_spoken" (speaker conflict is more important).
@@ -251,7 +251,7 @@ func (h *OpenClawHandler) suppressTTS(runID, reason string) {
 }
 
 // clearTTSSuppress removes the suppress flag for a runID and returns the reason (empty if none).
-func (h *OpenClawHandler) clearTTSSuppress(runID string) string {
+func (h *AgentHandler) clearTTSSuppress(runID string) string {
 	h.ttsSuppressMu.Lock()
 	defer h.ttsSuppressMu.Unlock()
 	reason := h.ttsSuppressReasons[runID]
@@ -261,7 +261,7 @@ func (h *OpenClawHandler) clearTTSSuppress(runID string) string {
 
 // resolveRunID maps an OpenClaw-assigned UUID back to the device idempotencyKey if known.
 // If no mapping exists, returns the original runID unchanged.
-func (h *OpenClawHandler) resolveRunID(runID string) string {
+func (h *AgentHandler) resolveRunID(runID string) string {
 	h.runIDMapMu.Lock()
 	defer h.runIDMapMu.Unlock()
 	if mapped, ok := h.runIDMap[runID]; ok {
@@ -271,7 +271,7 @@ func (h *OpenClawHandler) resolveRunID(runID string) string {
 }
 
 // mapRunID records that OpenClaw UUID corresponds to the given device trace (idempotencyKey).
-func (h *OpenClawHandler) mapRunID(openclawID, deviceID string) {
+func (h *AgentHandler) mapRunID(openclawID, deviceID string) {
 	h.runIDMapMu.Lock()
 	defer h.runIDMapMu.Unlock()
 	h.runIDMap[openclawID] = deviceID
