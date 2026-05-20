@@ -257,7 +257,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   const [faChannel, setFaChannel] = useState("");
   const [fdChannel, setFdChannel] = useState("");
 
-  // Face enroll — same flow as EditConfig.Face. Uses /hw/face endpoints
+  // Face enroll — same flow as EditConfig.Face. Uses /api/hardware/face endpoints
   // directly; only relevant in continue mode (lamp online).
   const {
     faceName, setFaceName,
