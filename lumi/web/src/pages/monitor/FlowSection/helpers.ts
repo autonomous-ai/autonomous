@@ -1267,12 +1267,19 @@ export function turnBilledTokens(turn: Turn): number {
 }
 
 // Extract input/output summary from a turn
-export function turnIO(turn: Turn): { input: string; output: string; hwOutput: string; snapshotUrls: string[] } {
+export function turnIO(turn: Turn): {
+  input: string;
+  output: string;
+  hwOutput: string;
+  snapshotUrls: string[];
+  poseBucket?: { id: string; files: string[] } | null;
+} {
   let input = "";
   let output = "";
   let outputFromIntent = false;
   let hwOutput = "";
   const snapshotUrls: string[] = [];
+  let poseBucket: { id: string; files: string[] } | null = null;
   const turnRunId = turn.runId;
   for (const ev of turn.events) {
     const evRunId = extractEventRunId(ev);
@@ -1293,6 +1300,17 @@ export function turnIO(turn: Turn): { input: string; output: string; hwOutput: s
         while ((snapMatch = snapRe.exec(dataMsg)) !== null) {
           const url = `/api/sensing/snapshot/${snapMatch[1]}`;
           if (!snapshotUrls.includes(url)) snapshotUrls.push(url);
+        }
+        // Pose bucket markers (motion.activity only) — emitted by lelamp
+        // when a posture nudge folds into the turn. Lumi strips them from
+        // the LLM-facing text but they survive in the sensing_input JSONL.
+        const bm = dataMsg.match(/\[pose_bucket:\s*([^\]\s]+)\]/);
+        if (bm) {
+          const wm = dataMsg.match(/\[pose_worst:\s*([^\]]+)\]/);
+          const files = wm
+            ? wm[1].split(",").map((f) => f.trim()).filter(Boolean)
+            : [];
+          poseBucket = { id: bm[1].trim(), files };
         }
       }
     }
@@ -1384,7 +1402,7 @@ export function turnIO(turn: Turn): { input: string; output: string; hwOutput: s
       }
     }
   }
-  return { input, output, hwOutput, snapshotUrls };
+  return { input, output, hwOutput, snapshotUrls, poseBucket };
 }
 
 // Scan a turn for the backend-injected `[context: current_user=X]` tag and

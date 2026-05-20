@@ -394,6 +394,13 @@ class PosePerception(Perception[cv2.typing.MatLike]):
                     "score": sample.score,
                     "risk_level": sample.risk_level,
                     "filename": filename,
+                    # Persist per-side body scores + angles too, so the
+                    # Flow Monitor popup can render the same joint table
+                    # the live Sensing tab shows (the deque is wiped at
+                    # reset_window — bucket.json is the only on-disk
+                    # source once a window has closed).
+                    "left": sample.raw_left,
+                    "right": sample.raw_right,
                 }
             )
         except Exception as e:
