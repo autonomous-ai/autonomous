@@ -115,15 +115,17 @@ if (typeof window !== "undefined" && !(window as unknown as { __lumiFetchPatched
     const isApiCall = url.startsWith("/api/") || url.includes("/api/");
     if (!isApiCall) return origFetch(input, init);
 
+    // `mode: "no-cors"` fetches (the mDNS probe in useSetupStatusPolling is
+    // the only intentional caller) must stay as the operator wrote them —
+    // both the Authorization header (not in the CORS safelist) and the
+    // forced `credentials: "include"` flip Chrome into preflight / private-
+    // network restriction behaviour that throws before the request leaves
+    // the page. Pass-through preserves the original "send raw ping, don't
+    // care about response body" semantics.
+    if (init?.mode === "no-cors") return origFetch(input, init);
+
     const headers = new Headers(init?.headers);
-    // CORS spec forbids non-safelisted headers (Authorization is one) on
-    // `mode: "no-cors"` requests — adding it makes Chrome throw TypeError
-    // before the request even leaves the page. The mDNS probe in
-    // useSetupStatusPolling deliberately uses no-cors to ping a cross-origin
-    // .local host, so skip the bearer there. The opaque response carries
-    // no auth value anyway.
-    const isNoCors = init?.mode === "no-cors";
-    if (!isNoCors && apiToken && !headers.has("Authorization")) {
+    if (apiToken && !headers.has("Authorization")) {
       headers.set("Authorization", `Bearer ${apiToken}`);
     }
     return origFetch(input, { ...init, headers, credentials: "include" });

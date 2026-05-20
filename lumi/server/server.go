@@ -248,15 +248,40 @@ func goSameOrigin(header, host string) bool {
 }
 
 // isAllowedOrigin returns true for same-host origins and approved external
-// domains (autonomous.ai subdomains for parent-app iframe embedding).
+// domains (autonomous.ai subdomains for parent-app embedding, sibling
+// lumi-*.local devices on the same LAN). Same-host wins for any IP or
+// .local hostname the device itself is reached on.
 func isAllowedOrigin(origin, requestHost string) bool {
 	if origin == "" {
 		return false
 	}
 	h := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(origin), "https://"), "http://")
 	h = strings.SplitN(h, "/", 2)[0]
-	// Same host (any IP or .local name the device is reached on).
-	return h == requestHost
+	// Port-insensitive comparison so :80/:5000 dev variants match the canonical host.
+	if i := strings.IndexByte(h, ':'); i >= 0 {
+		h = h[:i]
+	}
+	reqHost := requestHost
+	if i := strings.IndexByte(reqHost, ':'); i >= 0 {
+		reqHost = reqHost[:i]
+	}
+	if h == reqHost {
+		return true
+	}
+	// Autonomous parent app (www.autonomous.ai + any subdomain). Driven by
+	// product flows that embed Lumi screens or hit device APIs from the
+	// cloud dashboard; mixed-content rules still apply at the browser layer
+	// (HTTPS parent → HTTP device fails before CORS) — this just stops the
+	// device from rejecting the request when the parent reaches it over the
+	// LAN through a Tailscale/HTTPS-proxy fronting layer.
+	if h == "autonomous.ai" || strings.HasSuffix(h, ".autonomous.ai") {
+		return true
+	}
+	// Sibling Lumi devices on the same LAN (mDNS hostname `lumi-XXXX.local`).
+	if strings.HasPrefix(h, "lumi-") && strings.HasSuffix(h, ".local") {
+		return true
+	}
+	return false
 }
 
 func isLoopbackHost(host string) bool {
@@ -416,7 +441,11 @@ func corsMiddleware() gin.HandlerFunc {
 			c.Header("Access-Control-Allow-Origin", origin)
 			c.Header("Vary", "Origin")
 			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization")
+			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With")
+			// Required for the patched fetch (credentials: "include") to receive
+			// the session cookie on cross-origin responses from autonomous.ai
+			// or sibling lumi-*.local devices.
+			c.Header("Access-Control-Allow-Credentials", "true")
 		}
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
