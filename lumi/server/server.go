@@ -311,6 +311,21 @@ func localOnlyMiddleware() gin.HandlerFunc {
 // httputil.ReverseProxy disables response buffering for chunked / multipart
 // content out of the box. Long-running endpoints reuse the default 300s
 // proxy timeout configured at the http.Server level.
+// openapiProxy serves the in-iframe Swagger UI's `/openapi.json` fetch by
+// forwarding straight to LeLamp on loopback. Path stays as-is — FastAPI
+// generates the spec at /openapi.json on LeLamp, no rewrite needed.
+var openapiProxy = func() http.Handler {
+	target, _ := url.Parse("http://127.0.0.1:5001")
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	origDirector := proxy.Director
+	proxy.Director = func(req *http.Request) {
+		origDirector(req)
+		req.Header.Del("X-Forwarded-For")
+		req.Header.Del("X-Real-IP")
+	}
+	return proxy
+}()
+
 var hardwareProxy = func() http.Handler {
 	target, _ := url.Parse("http://127.0.0.1:5001")
 	proxy := httputil.NewSingleHostReverseProxy(target)
@@ -566,6 +581,14 @@ func (s *Server) Serve(closeFn func()) error {
 	// Replaces direct browser /hw/* access (audit web F5) so nginx /hw/
 	// allow 127.0.0.1; deny all; can stay locked down (audit local F2).
 	api.Any("/hardware/*path", adminAuthMiddleware(s.config), gin.WrapH(hardwareProxy))
+
+	// Top-level /openapi.json so the in-iframe LeLamp Swagger UI (loaded at
+	// /api/hardware/docs) can fetch its spec — FastAPI hardcodes the spec
+	// URL as the absolute path `/openapi.json` in the rendered HTML, so we
+	// expose it at the root. Admin-auth gated; cookie auto-attaches in the
+	// iframe context. Loopback-only on LeLamp side already enforced by the
+	// proxy's same upstream as `/api/hardware/*`.
+	r.GET("/openapi.json", adminAuthMiddleware(s.config), gin.WrapH(openapiProxy))
 
 	slog.Info("server started", "component", "server")
 

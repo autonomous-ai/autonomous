@@ -969,7 +969,11 @@ server {
   add_header X-Content-Type-Options "nosniff" always;
   add_header Referrer-Policy "no-referrer" always;
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
-  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' ws: wss:; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'" always;
+  # cdn.jsdelivr.net + fastapi.tiangolo.com whitelisted so LeLamp Swagger UI
+  # iframe (/hw/docs, /api/hardware/docs) renders. `'unsafe-inline'` on
+  # script-src is needed for FastAPI's inline SwaggerUIBundle bootstrap.
+  # Mirrors scripts/setup.sh.
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https://fastapi.tiangolo.com; font-src 'self' data: https://cdn.jsdelivr.net; media-src 'self' blob:; connect-src 'self' ws: wss: https://cdn.jsdelivr.net; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'" always;
 
   location / { try_files \$uri /index.html; }
   # Interactive shell WebSocket (xterm.js PTY) — must come before generic /api/.
@@ -994,6 +998,16 @@ server {
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
   }
+  # Top-level openapi.json proxied to Lumi backend so the in-iframe Swagger
+  # UI (loaded via /api/hardware/docs) can fetch its spec at the absolute
+  # path FastAPI hardcodes. Lumi adminAuthMiddleware gates the cookie/Bearer.
+  location = /openapi.json {
+    proxy_pass http://backend;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+  }
+
   location /api/ {
     proxy_pass http://backend;
     proxy_set_header Host \$host;

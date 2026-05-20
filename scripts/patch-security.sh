@@ -108,6 +108,41 @@ with open(path, "w") as f:
 print("[patch] nginx /api/system/shell: WebSocket upgrade block added")
 PYEOF
 
+# 3b'. nginx /openapi.json: add proxy block if missing (Swagger UI iframe spec)
+python3 - "$NGINX_CONF" <<'PYEOF'
+import sys
+path = sys.argv[1]
+with open(path) as f:
+    content = f.read()
+
+if "location = /openapi.json" in content:
+    print("[patch] nginx /openapi.json: already present, skipping")
+    sys.exit(0)
+
+# Anchor: insert just before `location /api/ {` (generic backend block).
+anchor = "  location /api/ {"
+if anchor not in content:
+    print("[patch] nginx /openapi.json: /api/ block not found, skipping")
+    sys.exit(0)
+
+block = (
+    "  # Top-level openapi.json proxied to Lumi backend so the in-iframe Swagger\n"
+    "  # UI (loaded via /api/hardware/docs) can fetch its spec at the absolute\n"
+    "  # path FastAPI hardcodes. Lumi adminAuthMiddleware gates the cookie/Bearer.\n"
+    "  location = /openapi.json {\n"
+    "    proxy_pass http://backend;\n"
+    "    proxy_set_header Host $host;\n"
+    "    proxy_set_header X-Real-IP $remote_addr;\n"
+    "    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+    "  }\n\n"
+)
+
+content = content.replace(anchor, block + anchor, 1)
+with open(path, "w") as f:
+    f.write(content)
+print("[patch] nginx /openapi.json: proxy block added")
+PYEOF
+
 # 3b. nginx /gw and /gw/: add allow/deny if missing (OpenClaw gateway local-only)
 python3 - "$NGINX_CONF" <<'PYEOF'
 import sys
@@ -156,10 +191,12 @@ with open(path) as f:
     content = f.read()
 
 if "Content-Security-Policy" in content:
-    # Headers already present from an earlier patch run. Upgrade DENY →
-    # SAMEORIGIN and frame-ancestors 'none' → 'self' so the Monitor page
-    # can embed in-house iframes (Swagger docs, gateway config). External
-    # sites still can't frame the device.
+    # Headers already present from an earlier patch run. Upgrade in place:
+    #   - DENY → SAMEORIGIN (allow same-origin iframe embedding)
+    #   - frame-ancestors 'none' → 'self' (CSP mirror of SAMEORIGIN)
+    #   - whitelist cdn.jsdelivr.net + fastapi.tiangolo.com so LeLamp Swagger
+    #     UI iframe (/hw/docs, /api/hardware/docs) renders. External sites
+    #     still can't frame the device or run other scripts.
     new_content = content
     new_content = new_content.replace(
         'add_header X-Frame-Options "DENY"',
@@ -169,10 +206,28 @@ if "Content-Security-Policy" in content:
         "frame-ancestors 'none'",
         "frame-ancestors 'self'",
     )
+    new_content = new_content.replace(
+        "script-src 'self';",
+        "script-src 'self' https://cdn.jsdelivr.net;",
+    )
+    new_content = new_content.replace(
+        "style-src 'self' 'unsafe-inline';",
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;",
+    )
+    new_content = new_content.replace(
+        "img-src 'self' data: blob:;",
+        "img-src 'self' data: blob: https://fastapi.tiangolo.com;",
+    )
+    # font-src wasn't in the original CSP — add only if missing.
+    if "font-src" not in new_content:
+        new_content = new_content.replace(
+            "media-src 'self' blob:;",
+            "font-src 'self' data: https://cdn.jsdelivr.net; media-src 'self' blob:;",
+        )
     if new_content != content:
         with open(path, "w") as f:
             f.write(new_content)
-        print("[patch] nginx security headers: upgraded DENY → SAMEORIGIN")
+        print("[patch] nginx security headers: upgraded (SAMEORIGIN + Swagger CDN whitelist)")
     else:
         print("[patch] nginx security headers: already up-to-date, skipping")
     sys.exit(0)
