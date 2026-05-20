@@ -13,6 +13,7 @@ import base64
 import json
 import logging
 import os
+import shutil
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -255,6 +256,21 @@ class RemotePoseEstimator:
 
 _REGIONS: tuple[str, ...] = ("neck", "trunk", "upper_arm", "lower_arm", "wrist")
 
+
+def _dir_size(path: str) -> int:
+    total: int = 0
+    try:
+        with os.scandir(path) as it:
+            for de in it:
+                if de.is_file(follow_symlinks=False):
+                    try:
+                        total += de.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        continue
+    except OSError:
+        pass
+    return total
+
 # dlbackend signed_flexion_angle currently returns the opposite sign of
 # its docstring; we flip on receive while waiting for the upstream fix.
 # lower_arm_angle is unsigned so it stays as-is.
@@ -327,82 +343,252 @@ class PosePerception(Perception[cv2.typing.MatLike]):
         self._samples_dir: str = os.path.join(
             config.SNAPSHOT_TMP_DIR, "sensing_pose"
         )
-        self._snapshots_dir: str = os.path.join(
-            self._samples_dir, "snapshots"
-        )
-        os.makedirs(self._snapshots_dir, exist_ok=True)
+        self._buckets_dir: str = os.path.join(self._samples_dir, "buckets")
+        os.makedirs(self._buckets_dir, exist_ok=True)
+        # Snapshot filenames recorded into the current bucket as they're
+        # written. Mirrors the deque so we can build the bucket.json + worst
+        # selection at finalize time without rescanning the dir.
+        self._bucket_snapshots: list[dict[str, Any]] = []
 
     def _samples_file_path(self, ts: float) -> str:
         day: str = time.strftime("%Y-%m-%d", time.localtime(ts))
         return os.path.join(self._samples_dir, f"samples_{day}.jsonl")
 
-    def _event_snapshot_path(self, ts: float) -> str:
-        return os.path.join(self._snapshots_dir, f"{int(ts)}.jpg")
+    def _current_bucket_id(self) -> str:
+        return f"{int(self._window_start_ts)}" if self._window_start_ts > 0 else ""
+
+    def _current_bucket_dir(self) -> str:
+        bid: str = self._current_bucket_id()
+        return os.path.join(self._buckets_dir, bid) if bid else ""
+
+    def _snapshot_filename(self, ts: float, score: int) -> str:
+        return f"{int(ts)}_{int(score)}.jpg"
 
     def _save_event_snapshot(
-        self, frame: cv2.typing.MatLike, result: PoseResult, ts: float
+        self,
+        frame: cv2.typing.MatLike,
+        result: PoseResult,
+        sample: "_PoseSample",
     ) -> None:
-        """Persist an annotated snapshot for this sample so the monitor can
-        click any table row to see the actual frame. File is named by
-        int(ts) — matches the int-floor of the JSONL `ts` field, so the FE
-        can build the URL from sample.ts directly. Rotation runs right
-        after each write to keep the dir under the configured caps."""
+        """Persist an annotated snapshot into the current bucket so the
+        monitor can click any sample row + so /dm can surface the worst
+        frames at end-of-window. We only save while a window is open —
+        pre-window samples are cleared at start_window() anyway."""
+        bucket_dir: str = self._current_bucket_dir()
+        if not bucket_dir:
+            return
         try:
+            os.makedirs(bucket_dir, exist_ok=True)
             annotated: cv2.typing.MatLike = _draw_pose_2d(
                 frame, result.pose_2d, result.ergo
             )
+            filename: str = self._snapshot_filename(sample.ts, sample.score)
             cv2.imwrite(
-                self._event_snapshot_path(ts),
+                os.path.join(bucket_dir, filename),
                 annotated,
                 [int(cv2.IMWRITE_JPEG_QUALITY), 80],
             )
+            self._bucket_snapshots.append(
+                {
+                    "ts": round(sample.ts, 2),
+                    "score": sample.score,
+                    "risk_level": sample.risk_level,
+                    "filename": filename,
+                }
+            )
         except Exception as e:
             logger.debug("[pose.sample] snapshot save failed: %s", e)
-            return
-        self._rotate_snapshots()
 
-    def _rotate_snapshots(self) -> None:
-        """Prune snapshots/ to fit both the time-retention and byte caps.
-        Cheap because called once per sample (1/min) and the dir is small."""
+    def _finalize_bucket(self, keep: bool, summary: dict[str, Any] | None) -> None:
+        """Close the current bucket. If `keep` is True, write bucket.json
+        with the full sample list + the worst-snapshot selection; otherwise
+        delete the bucket dir entirely. Called from reset_window()."""
+        bucket_dir: str = self._current_bucket_dir()
+        if not bucket_dir or not os.path.isdir(bucket_dir):
+            self._bucket_snapshots = []
+            return
+
+        if not keep:
+            try:
+                shutil.rmtree(bucket_dir)
+                logger.debug("[pose.bucket] dropped ephemeral bucket %s", bucket_dir)
+            except OSError as e:
+                logger.debug("[pose.bucket] drop failed: %s", e)
+            self._bucket_snapshots = []
+            return
+
+        worst: list[str] = (
+            list(summary.get("worst_snapshots", []) or [])
+            if summary
+            else self._select_worst_snapshots(summary)
+        )
+        payload: dict[str, Any] = {
+            "bucket_id": self._current_bucket_id(),
+            "window_start_ts": round(self._window_start_ts, 2),
+            "window_end_ts": round(time.time(), 2),
+            "kept": True,
+            "summary": summary,
+            "samples": list(self._bucket_snapshots),
+            "worst_snapshots": worst,
+        }
         try:
-            entries: list[tuple[float, int, str]] = []
-            with os.scandir(self._snapshots_dir) as it:
+            with open(os.path.join(bucket_dir, "bucket.json"), "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, separators=(",", ":"))
+            # Touch a sentinel for the pruner: presence of `.kept` flips a
+            # bucket into the long-retention pool (POSE_BUCKET_KEEP_S),
+            # absence means stale (window never closed properly).
+            open(os.path.join(bucket_dir, ".kept"), "a").close()
+        except OSError as e:
+            logger.warning("[pose.bucket] finalize write failed: %s", e)
+
+        self._bucket_snapshots = []
+        self._prune_old_buckets()
+
+    def _select_worst_snapshots(self, summary: dict[str, Any] | None) -> list[str]:
+        """Pick up to POSE_WORST_SNAPSHOTS_PER_BUCKET filenames that cover
+        the cases a user would want to see: highest ergo score, the
+        dominant-region representative, and the latest bad sample. Returns
+        filenames (relative to bucket dir), not full paths."""
+        cap: int = max(1, config.POSE_WORST_SNAPSHOTS_PER_BUCKET)
+        if not self._bucket_snapshots:
+            return []
+
+        sub_thr: int = config.POSE_REGION_HIGH_SUBSCORE
+        dominant: str = (summary or {}).get("dominant_region", "") or ""
+
+        # Index snapshots by ts to look up raw side data from the deque.
+        by_ts: dict[int, _PoseSample] = {int(s.ts): s for s in self._samples}
+
+        def _hi_in_region(s: _PoseSample, region: str) -> bool:
+            for body in (
+                (s.raw_left or {}).get("body_scores", {}) or {},
+                (s.raw_right or {}).get("body_scores", {}) or {},
+            ):
+                try:
+                    if int(body.get(region, 0) or 0) >= sub_thr:
+                        return True
+                except (TypeError, ValueError):
+                    continue
+            return False
+
+        # Restrict to actually-bad samples; if everything ended up "ok"
+        # somehow but we still kept the bucket, fall back to all samples.
+        bad_keys: list[int] = []
+        for entry in self._bucket_snapshots:
+            ts_key: int = int(entry["ts"])
+            s: _PoseSample | None = by_ts.get(ts_key)
+            if s is None:
+                continue
+            if s.risk_level >= 3 or any(_hi_in_region(s, r) for r in _REGIONS):
+                bad_keys.append(ts_key)
+        if not bad_keys:
+            bad_keys = [int(e["ts"]) for e in self._bucket_snapshots]
+
+        selected: list[int] = []
+
+        # 1. Highest ergo score among bad samples.
+        bad_keys_by_score: list[int] = sorted(
+            bad_keys,
+            key=lambda k: (by_ts[k].score if k in by_ts else 0),
+            reverse=True,
+        )
+        if bad_keys_by_score:
+            selected.append(bad_keys_by_score[0])
+
+        # 2. Dominant-region representative — highest score among samples
+        # where the dominant region itself crossed the sub-score threshold.
+        if dominant:
+            cands: list[int] = [
+                k for k in bad_keys_by_score
+                if k not in selected and k in by_ts and _hi_in_region(by_ts[k], dominant)
+            ]
+            if cands:
+                selected.append(cands[0])
+
+        # 3. Latest bad sample.
+        for k in sorted(bad_keys, reverse=True):
+            if k not in selected:
+                selected.append(k)
+                break
+
+        # Top up if we still have room (e.g. dominant region missed).
+        for k in bad_keys_by_score:
+            if len(selected) >= cap:
+                break
+            if k not in selected:
+                selected.append(k)
+
+        # Map back to filenames in chronological order so the FE / Telegram
+        # preview reads left-to-right oldest → newest.
+        selected_sorted: list[int] = sorted(set(selected))[:cap]
+        ts_to_file: dict[int, str] = {
+            int(e["ts"]): e["filename"] for e in self._bucket_snapshots
+        }
+        return [ts_to_file[k] for k in selected_sorted if k in ts_to_file]
+
+    def _prune_old_buckets(self) -> None:
+        """Drop kept buckets older than POSE_BUCKET_KEEP_S and trim the
+        kept-bucket pool to fit POSE_SNAPSHOT_MAX_BYTES (oldest first).
+        Also sweeps any orphan dirs lacking a .kept marker that are older
+        than one window duration — these are buckets whose finalize never
+        ran (process killed mid-window)."""
+        now: float = time.time()
+        keep_s: float = config.POSE_BUCKET_KEEP_S
+        orphan_grace: float = max(config.POSE_WINDOW_DURATION_S * 2, 600.0)
+
+        try:
+            entries: list[tuple[float, int, str, bool]] = []
+            with os.scandir(self._buckets_dir) as it:
                 for de in it:
-                    if not de.is_file() or not de.name.endswith(".jpg"):
+                    if not de.is_dir():
                         continue
+                    # Skip the currently-open bucket so we never prune our
+                    # own working dir mid-window.
+                    if self._window_start_ts > 0 and de.name == self._current_bucket_id():
+                        continue
+                    path: str = de.path
+                    kept_marker: str = os.path.join(path, ".kept")
+                    is_kept: bool = os.path.exists(kept_marker)
                     try:
-                        st = de.stat()
+                        mtime: float = os.path.getmtime(path)
                     except OSError:
                         continue
-                    entries.append((st.st_mtime, st.st_size, de.path))
+                    size: int = _dir_size(path)
+                    entries.append((mtime, size, path, is_kept))
         except OSError as e:
-            logger.debug("[pose.sample] rotate scan failed: %s", e)
+            logger.debug("[pose.bucket] prune scan failed: %s", e)
             return
 
         if not entries:
             return
 
         entries.sort(key=lambda e: e[0])  # oldest first
-        now: float = time.time()
-        retention: float = config.POSE_SNAPSHOT_RETENTION_S
-        max_bytes: int = config.POSE_SNAPSHOT_MAX_BYTES
 
-        kept: list[tuple[float, int, str]] = []
-        for mtime, size, path in entries:
-            if now - mtime > retention:
+        survivors: list[tuple[float, int, str, bool]] = []
+        for mtime, size, path, is_kept in entries:
+            age: float = now - mtime
+            if not is_kept and age > orphan_grace:
                 try:
-                    os.remove(path)
+                    shutil.rmtree(path)
+                    logger.debug("[pose.bucket] swept orphan %s (age %.0fs)", path, age)
                 except OSError:
                     pass
                 continue
-            kept.append((mtime, size, path))
+            if is_kept and age > keep_s:
+                try:
+                    shutil.rmtree(path)
+                except OSError:
+                    pass
+                continue
+            survivors.append((mtime, size, path, is_kept))
 
-        total: int = sum(s for _, s, _ in kept)
+        total: int = sum(s for _, s, _, _ in survivors)
         i: int = 0
-        while total > max_bytes and i < len(kept):
-            _, size, path = kept[i]
+        max_bytes: int = config.POSE_SNAPSHOT_MAX_BYTES
+        while total > max_bytes and i < len(survivors):
+            _, size, path, _ = survivors[i]
             try:
-                os.remove(path)
+                shutil.rmtree(path)
                 total -= size
             except OSError:
                 pass
@@ -487,7 +673,7 @@ class PosePerception(Perception[cv2.typing.MatLike]):
         # still get appended, and once start_window() fires they're already
         # in the deque for the new cycle.
         self._append_sample_file(sample)
-        self._save_event_snapshot(data, result, now)
+        self._save_event_snapshot(data, result, sample)
         window_age: float = (now - self._window_start_ts) if self._window_start_ts > 0 else 0.0
         logger.debug(
             "[pose.sample] ts=%.0f score=%d risk=%d samples=%d window_age=%.1fs",
@@ -518,13 +704,30 @@ class PosePerception(Perception[cv2.typing.MatLike]):
         if self._window_start_ts > 0.0:
             return
         self._samples.clear()
+        self._bucket_snapshots = []
         self._window_start_ts = time.time()
+        bucket_dir: str = self._current_bucket_dir()
+        if bucket_dir:
+            try:
+                os.makedirs(bucket_dir, exist_ok=True)
+            except OSError as e:
+                logger.debug("[pose.bucket] start create failed: %s", e)
 
     def reset_window(self) -> None:
-        """Clear samples and unanchor the window. Called by MotionPerception
-        at the end of every completed cycle (fire or no-fire) — every cycle
-        starts fresh, no carry-over. After reset, start_window() must be
-        called again before a new cycle begins."""
+        """Clear samples + finalize the bucket and unanchor the window.
+        Called by MotionPerception at the end of every completed cycle
+        (fire or no-fire) — every cycle starts fresh, no carry-over. After
+        reset, start_window() must be called again before a new cycle.
+
+        Bucket is kept (long retention) when bad_ratio >= POSE_BAD_RATIO so
+        the kept frames remain available for /dm attach + monitor replay;
+        otherwise it's deleted immediately to keep Pi disk lean."""
+        summary: dict[str, Any] | None = self._aggregate() if self._samples else None
+        keep: bool = bool(
+            summary is not None
+            and summary.get("bad_ratio", 0.0) >= config.POSE_BAD_RATIO
+        )
+        self._finalize_bucket(keep, summary)
         self._samples.clear()
         self._window_start_ts = 0.0
 
@@ -594,7 +797,7 @@ class PosePerception(Perception[cv2.typing.MatLike]):
 
         latest: _PoseSample = self._samples[-1]
         window_min: int = int(config.POSE_WINDOW_DURATION_S / 60)
-        return {
+        summary: dict[str, Any] = {
             "bad_ratio": round(bad_ratio, 2),
             "samples": len(self._samples),
             "bad_samples": len(bad),
@@ -606,7 +809,12 @@ class PosePerception(Perception[cv2.typing.MatLike]):
             "latest_risk_level": latest.risk_level,
             "latest_left": latest.raw_left,
             "latest_right": latest.raw_right,
+            "bucket_id": self._current_bucket_id(),
         }
+        # Pre-compute the worst selection so motion.py can lift it onto
+        # the event payload before reset_window() finalizes the bucket.
+        summary["worst_snapshots"] = self._select_worst_snapshots(summary)
+        return summary
 
     def get_posture_summary(self) -> dict[str, Any] | None:
         """Gated aggregation: returns the summary only when the window has

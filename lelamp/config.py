@@ -191,15 +191,24 @@ POSE_BAD_RATIO = float(os.environ.get("LELAMP_POSE_BAD_RATIO", "0.6"))
 # computer for at least POSE_WINDOW_DURATION_S — no separate "streak
 # minimum" needed. Window-reset after each cycle means the next fire is
 # naturally one window away — no separate cooldown needed.
-# Per-sample annotated JPEG retention. Files are written as
-# snapshots/<int(ts)>.jpg next to the daily JSONL; oldest are pruned when
-# any cap is hit. Lets the monitor UI click a sample row to see the actual
-# frame instead of only the most recent.
-POSE_SNAPSHOT_RETENTION_S = float(
-    os.environ.get("LELAMP_POSE_SNAPSHOT_RETENTION_S", str(24 * 3600))
+# Per-sample annotated JPEG retention. Snapshots are grouped per tumbling
+# window into buckets/<window_start_int>/<sample_ts_int>_<score>.jpg with
+# a bucket.json sidecar. When a window closes:
+#   - bad_ratio >= POSE_BAD_RATIO → bucket marked "kept" and survives up
+#     to POSE_BUCKET_KEEP_S for monitor replay + /dm image attach.
+#   - otherwise → bucket is deleted immediately.
+# Kept buckets are pruned oldest-first once the byte cap is exceeded.
+POSE_BUCKET_KEEP_S = float(
+    os.environ.get("LELAMP_POSE_BUCKET_KEEP_S", str(2 * 24 * 3600))
 )
 POSE_SNAPSHOT_MAX_BYTES = int(
     os.environ.get("LELAMP_POSE_SNAPSHOT_MAX_BYTES", str(50 * 1024 * 1024))
+)
+# Number of "worst" samples to surface from a kept bucket — used by the
+# monitor turn-card preview strip and the Telegram /dm attach. Selection
+# combines (highest score, dominant-region rep, latest bad sample).
+POSE_WORST_SNAPSHOTS_PER_BUCKET = int(
+    os.environ.get("LELAMP_POSE_WORST_SNAPSHOTS_PER_BUCKET", "3")
 )
 # TEMPORARY WORKAROUND — dlbackend's signed_flexion_angle returns the
 # opposite sign of its docstring ("Positive = forward flexion"): user
