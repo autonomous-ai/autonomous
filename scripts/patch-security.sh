@@ -13,6 +13,14 @@ set -euo pipefail
 LELAMP_SVC="/etc/systemd/system/lumi-lelamp.service"
 NGINX_CONF="/etc/nginx/conf.d/lumi.conf"
 
+# Hash watched files before patching so the end-of-script restart only fires
+# when something actually changed. Idempotent re-runs (everything already
+# patched) leave services untouched — avoids the ~5s 502 window the unconditional
+# restart caused on a no-op re-run.
+hash_file() { [ -e "$1" ] && sha256sum "$1" | awk '{print $1}' || echo "missing"; }
+NGINX_HASH_BEFORE=$(hash_file "$NGINX_CONF")
+LELAMP_HASH_BEFORE=$(hash_file "$LELAMP_SVC")
+
 echo "[patch] Starting security patch..."
 
 # 1. LeLamp systemd: bind 127.0.0.1 instead of 0.0.0.0
@@ -293,8 +301,23 @@ LUMI_VERSION=$(lumi-server --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-
 echo "[patch] lumi-server version: ${LUMI_VERSION:-unknown}"
 echo "[patch] To close port 5000 on LAN: run 'sudo software-update lumi' to get the latest binary."
 
-# 7. Apply
-nginx -t && nginx -s reload
-systemctl restart lumi-lelamp lumi
+# 7. Apply — only reload/restart when files actually changed. Avoids the
+# unnecessary 502 window on idempotent re-runs.
+NGINX_HASH_AFTER=$(hash_file "$NGINX_CONF")
+LELAMP_HASH_AFTER=$(hash_file "$LELAMP_SVC")
+
+if [ "$NGINX_HASH_BEFORE" != "$NGINX_HASH_AFTER" ]; then
+  echo "[patch] nginx config changed → reloading nginx"
+  nginx -t && nginx -s reload
+else
+  echo "[patch] nginx config unchanged, skipping reload"
+fi
+
+if [ "$LELAMP_HASH_BEFORE" != "$LELAMP_HASH_AFTER" ]; then
+  echo "[patch] lumi-lelamp.service changed → restarting lumi-lelamp + lumi"
+  systemctl restart lumi-lelamp lumi
+else
+  echo "[patch] lumi-lelamp.service unchanged, skipping service restart"
+fi
 
 echo "[patch] Done. Device is patched."
