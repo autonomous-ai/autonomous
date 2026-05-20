@@ -251,10 +251,6 @@ export interface TestTTSOptions {
   /** BCP-47 stt_language code; picks a friendly demo phrase in that language. */
   lang?: string;
   provider?: string;
-  ttsApiKey?: string;
-  ttsBaseUrl?: string;
-  llmApiKey?: string;
-  llmBaseUrl?: string;
 }
 
 const TTS_DEMO_PHRASES: Record<string, string> = {
@@ -269,20 +265,18 @@ function demoPhraseFor(lang?: string): string {
   return TTS_DEMO_PHRASES[lang] || TTS_DEMO_PHRASES.en;
 }
 
+/** POST /api/voice/preview — server reads the TTS API key + base URL from
+ *  cfg and forwards to LeLamp. Browser never sees or ships the credential
+ *  (audit web F13). Operator can still pick a non-default voice/provider for
+ *  the test by passing `provider` in opts. */
 export async function testTTSVoice(voice: string, opts: TestTTSOptions = {}): Promise<void> {
-  const apiKey = (opts.ttsApiKey && opts.ttsApiKey.trim()) || opts.llmApiKey || "";
-  const baseUrl = (opts.ttsBaseUrl && opts.ttsBaseUrl.trim()) || opts.llmBaseUrl || "";
-  // Routes through the Go hardware proxy so cookie/Bearer auth applies and
-  // the request never touches the direct /hw/voice endpoint.
-  await fetch(hwUrl("/voice/speak"), {
+  await apiRequest<boolean>(`${API_BASE}/api/voice/preview`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       text: opts.text || demoPhraseFor(opts.lang),
       voice,
       provider: opts.provider || undefined,
-      tts_api_key: apiKey || undefined,
-      tts_base_url: baseUrl || undefined,
     }),
   });
 }

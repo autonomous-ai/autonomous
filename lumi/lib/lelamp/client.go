@@ -177,6 +177,33 @@ func SpeakCachedInterruptible(text string) error {
 	return post("/voice/speak", body)
 }
 
+// SpeakPreview plays a TTS preview using the supplied voice/provider/credentials.
+// Lumi's /api/voice/preview handler uses this to fan out the operator's
+// "test voice" click without exposing the TTS API key in the browser body —
+// Lumi reads the key server-side from config and passes it here. Each arg
+// can be empty: LeLamp falls back to its own config-loaded defaults when a
+// field is missing, so partial overrides (e.g. just voice) work.
+func SpeakPreview(text, voice, provider, apiKey, baseURL string) error {
+	payload := map[string]any{"text": text}
+	if voice != "" {
+		payload["voice"] = voice
+	}
+	if provider != "" {
+		payload["provider"] = provider
+	}
+	if apiKey != "" {
+		payload["tts_api_key"] = apiKey
+	}
+	if baseURL != "" {
+		payload["tts_base_url"] = baseURL
+	}
+	body, _ := json.Marshal(payload)
+	// Generous timeout: ElevenLabs/OpenAI TTFB on first synthesis can run
+	// 1-3s; the default 5s `post` budget is tight when the preview phrase
+	// is long. Mirror PrerenderCached's window.
+	return postWithTimeout("/voice/speak", body, 30*time.Second)
+}
+
 // PrerenderCached asks lelamp to render+save WAV for text without playing.
 // Used at startup to warm the cache for known fillers/intent confirms so
 // the first runtime call is a hit. Idempotent: no-op when WAV already exists.

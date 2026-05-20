@@ -5,8 +5,7 @@ export function TTSSection({
   active, isContinue,
   ttsProvider, setTtsProvider, ttsProviders,
   ttsVoice, setTtsVoice, ttsVoices,
-  sttLanguage, ttsApiKey, ttsBaseUrl,
-  llmApiKey, llmUrl,
+  sttLanguage,
 }: {
   active: boolean;
   isContinue: boolean;
@@ -15,10 +14,6 @@ export function TTSSection({
   ttsVoice: string; setTtsVoice: (v: string) => void;
   ttsVoices: string[];
   sttLanguage: string;
-  ttsApiKey: string;
-  ttsBaseUrl: string;
-  llmApiKey: string;
-  llmUrl: string;
 }) {
   return (
     <SectionCard id="tts" title="Lumi's Voice" active={active}>
@@ -70,8 +65,6 @@ export function TTSSection({
             onClick={() => testTTSVoice(ttsVoice, {
               lang: sttLanguage,
               provider: ttsProvider,
-              ttsApiKey, ttsBaseUrl,
-              llmApiKey, llmBaseUrl: llmUrl,
             })}
             style={{
               marginTop: 8, width: "100%", padding: "8px 0",

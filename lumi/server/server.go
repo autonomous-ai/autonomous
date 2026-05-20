@@ -511,6 +511,11 @@ func (s *Server) Serve(closeFn func()) error {
 	// capture is Python's domain.
 	voice := api.Group("voice")
 	voice.POST("file/remove", s.sensingHandler.RemoveVoiceFile)
+	// TTS preview: web ships `{text, voice, provider}` only; server reads
+	// the TTS API key + base URL from cfg and forwards to LeLamp. Replaces
+	// the previous web-side `testTTSVoice` that POSTed tts_api_key through
+	// the hardware proxy (audit web F13).
+	voice.POST("preview", adminAuthMiddleware(s.config), s.voicePreview)
 
 	guard := api.Group("guard")
 	guard.POST("enable", s.sensingHandler.EnableGuard)
@@ -852,6 +857,31 @@ func (s *Server) loginHandler(c *gin.Context) {
 // Anyone who already exfiltrated the token can still use it until expiry.
 func (s *Server) logoutHandler(c *gin.Context) {
 	session.Clear(c)
+	c.JSON(http.StatusOK, serializers.ResponseSuccess(true))
+}
+
+// voicePreview plays a TTS preview through LeLamp using server-side
+// credentials. Body: {text, voice, provider}. The TTS API key + base URL
+// come from cfg (with the same LLM-fallback the runtime voice pipeline
+// uses) — they never leave the device. Audit web F13: previous flow
+// shipped tts_api_key in the request body straight to /hw/voice/speak.
+func (s *Server) voicePreview(c *gin.Context) {
+	var body struct {
+		Text     string `json:"text"`
+		Voice    string `json:"voice"`
+		Provider string `json:"provider"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || strings.TrimSpace(body.Text) == "" {
+		c.JSON(http.StatusBadRequest, serializers.ResponseError("text required"))
+		return
+	}
+	apiKey := s.config.GetTTSAPIKey()
+	baseURL := s.config.GetTTSBaseURL()
+	if err := lelamp.SpeakPreview(body.Text, body.Voice, body.Provider, apiKey, baseURL); err != nil {
+		slog.Warn("voice preview failed", "component", "voice", "error", err)
+		c.JSON(http.StatusBadGateway, serializers.ResponseError("preview failed: "+err.Error()))
+		return
+	}
 	c.JSON(http.StatusOK, serializers.ResponseSuccess(true))
 }
 

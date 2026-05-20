@@ -780,8 +780,6 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
                       ttsVoice={ttsVoice} setTtsVoice={setTtsVoice}
                       ttsVoices={ttsVoices}
                       sttLanguage={sttLanguage}
-                      ttsApiKey={ttsApiKey} ttsBaseUrl={ttsBaseUrl}
-                      llmApiKey={llmApiKey} llmUrl={llmUrl}
                     />
                   </div>
 

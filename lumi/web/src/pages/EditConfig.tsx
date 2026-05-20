@@ -519,7 +519,6 @@ export default function EditConfig() {
                   ttsVoice={ttsVoice} setTtsVoice={setTtsVoice}
                   ttsVoices={ttsVoices}
                   sttLanguage={sttLanguage}
-                  llmApiKey={llmApiKey} llmUrl={llmUrl}
                 />
 
                 <STTSection
