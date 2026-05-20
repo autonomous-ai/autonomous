@@ -152,18 +152,47 @@ Lifecycle window:
 2. **Reset** — `pose.reset_window()` gọi từ motion-side sau mỗi window complete (fire hay no-fire). Clear samples và unanchor. Window mới chỉ mở khi sedentary lại được observe.
 3. **Presence-loss reset** — `pose.py:_check_impl` cũng reset window khi presence drop, để user đi mất giữa cycle không leak samples cũ sang session sau.
 
-### Snapshot annotated cho từng event
+### Snapshot bucketed theo từng window
 
-Mỗi sample ghi 1 JPEG có overlay skeleton + nhãn RULA vào `/tmp/lumi-sensing-snapshots/sensing_pose/snapshots/<int(ts)>.jpg`. Rotation chạy sau mỗi lần ghi — file cũ hơn `POSE_SNAPSHOT_RETENTION_S` (default 24h) bị xóa, nếu tổng dir vẫn vượt `POSE_SNAPSHOT_MAX_BYTES` (default 50 MB) thì xóa từ cũ → mới đến khi dưới ngưỡng.
+Mỗi sample ghi 1 JPEG có overlay skeleton + nhãn RULA vào **bucket dir của window hiện tại**: `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<window_start_int>/<sample_ts_int>_<score>.jpg`. Tên file kèm ergo score → bucket tự mô tả trên disk, không cần đọc metadata.
 
-Hai endpoint:
+Khi `reset_window()` chạy:
+
+- nếu `bad_ratio >= POSE_BAD_RATIO` (window thật sự fire nudge) → bucket được finalize: tạo manifest `bucket.json` (samples + RULA hai bên + danh sách `worst_snapshots`) + marker `.kept`. Bucket kept giữ tới `POSE_BUCKET_KEEP_S` (default **2 ngày**).
+- ngược lại → bucket dir bị xoá ngay. Không nudge thì không cần lưu bằng chứng.
+
+Pruner sweep:
+
+- bucket kept cũ hơn `POSE_BUCKET_KEEP_S`, và
+- bucket orphan (không có `.kept`) cũ hơn `2 × POSE_WINDOW_DURATION_S` — đây là bucket mà `reset_window` chưa kịp chạy (process bị kill giữa window).
+
+Nếu tổng size vẫn vượt `POSE_SNAPSHOT_MAX_BYTES` (default 50 MB), kept bucket cũ nhất bị drop trước.
+
+Bốn endpoint:
 
 | Endpoint | Trả về |
 |---|---|
-| `GET /sensing/pose-snapshot` | JPEG mới nhất trong dir snapshots (back-compat cho ô preview live trên monitor) |
-| `GET /sensing/pose-snapshot/{ts}` | JPEG annotated của sample đó (`ts` = `int(sample.ts)` từ JSONL). 404 khi rotation đã dọn file |
+| `GET /sensing/pose-snapshot` | JPEG mới nhất across tất cả bucket dir (back-compat cho ô preview live trên monitor) |
+| `GET /sensing/pose-snapshot/{ts}` | JPEG annotated của sample đó. Scan mọi bucket tìm `<ts>_*.jpg`. 404 khi bucket đã bị prune |
+| `GET /sensing/pose-bucket/{bid}` | Manifest `bucket.json` — samples, RULA hai bên, summary, `worst_snapshots[]` |
+| `GET /sensing/pose-bucket/{bid}/img/{filename}` | Frame cụ thể từ kept bucket (dùng cho popup Flow Monitor) |
 
-Pose / Posture card trên monitor render thumbnail cho từng row sample trong bảng (lazy-loaded). Click thumbnail mở frame annotated của sample đó ở tab mới (kích thước gốc). Row cũ đã bị rotation dọn JPEG → thumbnail tự ẩn, các ô số liệu vẫn hiển thị.
+Sensing tab live trên monitor render thumbnail từng row sample (lazy-loaded, click → lightbox). Flow Monitor turn card show 3-tile strip (motion frame + 2 worst pose) + nút "LOAD MORE · pose bucket" → `PoseBucketModal` fetch `bucket.json` và render full table.
+
+### Surface vào `motion.activity`
+
+Khi window fire, `motion.py` append 2 marker vào message:
+
+```
+[pose_bucket: <window_start_int>]
+[pose_worst: <fn1>,<fn2>,<fn3>]
+```
+
+Cả 2 marker đều bị strip trước khi message tới LLM (mirror `[snapshot:]`); agent chỉ thấy `[posture_summary: ...]` ngôn ngữ tự nhiên. Text gốc (kèm marker) được giữ trong `sensing_input` JSONL → Flow Monitor đọc được bucket id mà không cần side channel.
+
+### `/dm` tự đính ảnh (Telegram)
+
+Khi agent quyết định nudge qua `/dm`, SSE handler của Lumi gọi `ConsumePoseBucketRun(runID)` (mirror `ConsumeGuardRun`). Nếu run có bucket stash, các `worst_snapshots` filenames được resolve thành path tuyệt đối dưới `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<bid>/` rồi gửi Telegram qua `sendMediaGroup` — caption nằm trên photo đầu, còn lại hiển thị thành gallery. Agent không biết bất kỳ file path nào; việc đính ảnh hoàn toàn do Lumi quyết định dựa trên việc `motion.activity` gốc có mang bucket hay không.
 
 ### Workaround sign góc (tạm thời)
 

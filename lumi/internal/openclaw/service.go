@@ -82,6 +82,14 @@ type Service struct {
 	webChatRunsMu sync.Mutex
 	webChatRuns   map[string]bool
 
+	// poseBucketRuns associates a motion.activity runID with the lelamp
+	// pose bucket whose window just fired. Populated by the sensing
+	// handler when it parses [pose_bucket:...] / [pose_worst:...] markers,
+	// consumed by the SSE /dm path so the worst frames can ride along on
+	// the Telegram DM without the agent needing to know file paths.
+	poseBucketRunsMu sync.Mutex
+	poseBucketRuns   map[string]poseBucketInfo
+
 	// pendingChat tracks outbound chat.sends not yet paired with a lifecycle.
 	// Each entry stores the idempotencyKey, the exact message text, and send
 	// time. UUID → idempotencyKey mapping is done by matching the OpenClaw
@@ -119,16 +127,27 @@ type pendingTrace struct {
 	sentAt  time.Time
 }
 
+// poseBucketInfo carries the lelamp bucket identifier and the pre-selected
+// worst-snapshot filenames for a single motion.activity turn. Filenames
+// stay raw (no path prefix) so the consumer can rebuild paths against
+// whichever snapshot tmp dir applies.
+type poseBucketInfo struct {
+	bucketID  string
+	filenames []string
+	markedAt  time.Time
+}
+
 // ProvideService constructs the openclaw service.
 func ProvideService(cfg *config.Config, bus *monitor.Bus, sled *statusled.Service) *Service {
 	s := &Service{
-		config:        cfg,
-		monitorBus:    bus,
-		statusLED:     sled,
-		pendingRPC:    make(map[string]chan json.RawMessage),
-		guardRuns:     make(map[string]string),
-		broadcastRuns: make(map[string]bool),
-		webChatRuns:   make(map[string]bool),
+		config:         cfg,
+		monitorBus:     bus,
+		statusLED:      sled,
+		pendingRPC:     make(map[string]chan json.RawMessage),
+		guardRuns:      make(map[string]string),
+		broadcastRuns:  make(map[string]bool),
+		webChatRuns:    make(map[string]bool),
+		poseBucketRuns: make(map[string]poseBucketInfo),
 	}
 	// Register channel senders.
 	s.channels = []domain.ChannelSender{

@@ -560,20 +560,41 @@ class MotionPerception(Perception[cv2.typing.MatLike]):
                 if summary is not None and summary["bad_ratio"] >= config.POSE_BAD_RATIO:
                     summary_with_streak: dict[str, Any] = dict(summary)
                     summary_with_streak["streak_min"] = streak_min
+                    # Bucket pointers are surfaced as separate markers (not
+                    # inside posture_summary) so the Lumi handler can lift
+                    # them off the message before stripping for the LLM —
+                    # the agent never sees the file paths. Mirrors the
+                    # existing [snapshot: …] marker pattern.
+                    bucket_id: str = str(summary.get("bucket_id", "") or "")
+                    worst_snaps: list[str] = list(summary.get("worst_snapshots") or [])
+                    # Don't ride bucket info inside the LLM-facing summary
+                    # JSON either — pop it so the agent sees only the
+                    # posture stats it actually reasons about.
+                    summary_with_streak.pop("bucket_id", None)
+                    summary_with_streak.pop("worst_snapshots", None)
                     message = (
                         f"{message}\n"
                         f"[computer_streak_min: {streak_min}]\n"
                         f"[posture_summary: "
                         f"{json.dumps(summary_with_streak, separators=(',', ':'))}]"
                     )
+                    if bucket_id:
+                        message = f"{message}\n[pose_bucket: {bucket_id}]"
+                    if worst_snaps:
+                        message = (
+                            f"{message}\n[pose_worst: "
+                            f"{','.join(worst_snaps)}]"
+                        )
                     posture_injected = True
                     logger.info(
                         "[motion] folding posture summary "
-                        "(streak=%dm bad_ratio=%.2f dominant=%s samples=%d)",
+                        "(streak=%dm bad_ratio=%.2f dominant=%s samples=%d bucket=%s worst=%d)",
                         streak_min,
                         summary["bad_ratio"],
                         summary["dominant_region"],
                         summary["samples"],
+                        bucket_id,
+                        len(worst_snaps),
                     )
             # Unconditional reset — a completed window with no fire (stretch
             # break in progress, bad_ratio under threshold, or too few samples

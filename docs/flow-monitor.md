@@ -283,6 +283,8 @@ The legacy `llm_first_token` flow event that was previously removed for being "r
 [icon] TYPE  PATH  STATUS  👤 user  ⏱ total  ⚡ ttft
 id: run-id
 IN   <input text>
+[snapshot strip — up to 3 thumbnails]
+[🪑 LOAD MORE · pose bucket <id>]   ← only when motion.activity carried a posture nudge
 OUT  🔊 <output text>
 N events
 ```
@@ -292,6 +294,8 @@ N events
 - **Path badge**: LOCAL (green) / AGENT (blue) — only set from events belonging to the same run
 - **⏱ total**: `turn.startTime → turn.endTime` (full server-observed window: input event → lifecycle_end / tts_send / chat_final). Green ≤5s, amber ≤15s, red >15s.
 - **⚡ TTFT** (time-to-first-token): `turn.startTime → first thinking/assistant_delta`. Matches the chat page Lumi-bubble stamp — the moment the user *sees* a reply begin. Gap between ⚡ and ⏱ = tail streaming + lifecycle close. Green ≤3s, amber ≤8s, red >8s. Hidden when no LLM stream (e.g., local intent match).
+- **Snapshot strip**: extracted from `[snapshot:]` markers in `sensing_input`. For `motion.activity` with a pose bucket, the strip is capped at 3 tiles (the activity snapshot + two worst pose snapshots). Clicking a tile opens the inline lightbox.
+- **Pose bucket popup**: when `[pose_bucket:]` is present, a `LOAD MORE` button surfaces `PoseBucketModal`, which fetches `/api/hardware/sensing/pose-bucket/<id>` (proxied to lelamp) and renders the full per-sample table — same monospace grid + click-thumbnail-to-lightbox as the live Sensing tab. Rows whose filename is in `worst_snapshots` are highlighted (red border, ⭐).
 
 The two badges are meant to be read together: ⚡ is *perceived* latency (what the user feels), ⏱ is *server* latency (what ops sees). Big gap = lots of tail streaming; small gap = short reply or fast lifecycle close.
 

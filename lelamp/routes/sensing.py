@@ -76,31 +76,68 @@ def get_sensing_state():
     return state.sensing_service.to_dict()
 
 
-def _pose_snapshots_dir() -> Path:
+def _pose_buckets_dir() -> Path:
     import lelamp.config as _cfg
-    return Path(_cfg.SNAPSHOT_TMP_DIR) / "sensing_pose" / "snapshots"
+    return Path(_cfg.SNAPSHOT_TMP_DIR) / "sensing_pose" / "buckets"
+
+
+def _find_pose_snapshot_for_ts(ts: int) -> Path | None:
+    """Locate a snapshot named `<ts>_<score>.jpg` across all buckets.
+    Bucket count is small (≤ a few dozen with 2-day retention) so an
+    O(buckets) scan stays cheap. Newest mtime wins on score collision."""
+    root: Path = _pose_buckets_dir()
+    if not root.is_dir():
+        return None
+    needle: str = f"{int(ts)}_"
+    best: Path | None = None
+    best_mtime: float = -1.0
+    try:
+        for bdir in root.iterdir():
+            if not bdir.is_dir():
+                continue
+            for entry in bdir.iterdir():
+                if not entry.is_file() or entry.suffix != ".jpg":
+                    continue
+                if not entry.name.startswith(needle):
+                    continue
+                try:
+                    mtime: float = entry.stat().st_mtime
+                except OSError:
+                    continue
+                if mtime > best_mtime:
+                    best_mtime = mtime
+                    best = entry
+    except OSError:
+        return None
+    return best
 
 
 @router.get("/sensing/pose-snapshot", tags=["Sensing"])
 def get_pose_snapshot():
     """Return the most recent annotated pose frame as JPEG.
 
-    Each sample writes its own snapshots/<int(ts)>.jpg; we serve whichever
-    is newest. Prefer /sensing/pose-snapshot/{ts} when you have a specific
+    Walks every bucket dir and picks the newest .jpg file regardless of
+    bucket. Prefer /sensing/pose-snapshot/{ts} when you have a specific
     sample timestamp (e.g. clicking a row in the monitor table)."""
-    snap_dir = _pose_snapshots_dir()
-    if not snap_dir.is_dir():
+    root: Path = _pose_buckets_dir()
+    if not root.is_dir():
         raise HTTPException(404, "No pose snapshot yet")
     newest: Path | None = None
     newest_mtime: float = -1.0
     try:
-        for entry in snap_dir.iterdir():
-            if not entry.is_file() or entry.suffix != ".jpg":
+        for bdir in root.iterdir():
+            if not bdir.is_dir():
                 continue
-            mtime = entry.stat().st_mtime
-            if mtime > newest_mtime:
-                newest_mtime = mtime
-                newest = entry
+            for entry in bdir.iterdir():
+                if not entry.is_file() or entry.suffix != ".jpg":
+                    continue
+                try:
+                    mtime = entry.stat().st_mtime
+                except OSError:
+                    continue
+                if mtime > newest_mtime:
+                    newest_mtime = mtime
+                    newest = entry
     except OSError as e:
         raise HTTPException(500, f"scan failed: {e}") from e
     if newest is None:
@@ -116,13 +153,53 @@ def get_pose_snapshot():
 def get_pose_snapshot_at(ts: int):
     """Return the annotated pose frame for a specific sample timestamp.
 
-    `ts` is int(unix-seconds) — matches int(sample.ts) from the JSONL /
-    monitor table. 404 when the file has been pruned by rotation
-    (default 24h retention or 50MB cap)."""
-    path = _pose_snapshots_dir() / f"{int(ts)}.jpg"
-    # Guard against path traversal even though FastAPI typed the param as int.
-    if not path.is_file() or path.parent.resolve() != _pose_snapshots_dir().resolve():
+    `ts` is int(unix-seconds) — matches int(sample.ts). Scans buckets/*
+    for `<ts>_<score>.jpg`. 404 when the file has been pruned (ephemeral
+    bucket dropped at window close, or kept bucket aged past retention)."""
+    path: Path | None = _find_pose_snapshot_for_ts(ts)
+    if path is None:
         raise HTTPException(404, "Snapshot not found (expired or never written)")
+    try:
+        data = path.read_bytes()
+    except OSError as e:
+        raise HTTPException(500, f"read failed: {e}") from e
+    return Response(content=data, media_type="image/jpeg")
+
+
+@router.get("/sensing/pose-bucket/{bucket_id}", tags=["Sensing"])
+def get_pose_bucket(bucket_id: str):
+    """Return the bucket.json manifest for a kept pose window. Used by the
+    Flow Monitor turn card popup to render the full sample table without
+    re-fetching `/sensing` (which only carries the live window)."""
+    if "/" in bucket_id or ".." in bucket_id or not bucket_id.isdigit():
+        raise HTTPException(404, "Bucket not found")
+    bdir: Path = _pose_buckets_dir() / bucket_id
+    manifest: Path = bdir / "bucket.json"
+    if not manifest.is_file() or bdir.resolve().parent != _pose_buckets_dir().resolve():
+        raise HTTPException(404, "Bucket not found (expired or never kept)")
+    try:
+        return json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise HTTPException(500, f"read failed: {e}") from e
+
+
+@router.get("/sensing/pose-bucket/{bucket_id}/img/{filename}", tags=["Sensing"])
+def get_pose_bucket_image(bucket_id: str, filename: str):
+    """Serve a single annotated frame from a kept bucket. Filename comes
+    from bucket.json (`samples[].filename` or `worst_snapshots[]`)."""
+    if "/" in bucket_id or ".." in bucket_id or not bucket_id.isdigit():
+        raise HTTPException(404, "Image not found")
+    if (
+        "/" in filename
+        or "\\" in filename
+        or ".." in filename
+        or not filename.endswith(".jpg")
+    ):
+        raise HTTPException(404, "Image not found")
+    path: Path = _pose_buckets_dir() / bucket_id / filename
+    root: Path = _pose_buckets_dir().resolve()
+    if not path.is_file() or root not in path.resolve().parents:
+        raise HTTPException(404, "Image not found")
     try:
         data = path.read_bytes()
     except OSError as e:

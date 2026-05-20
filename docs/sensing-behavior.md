@@ -152,18 +152,47 @@ Window lifecycle:
 2. **Reset** — `pose.reset_window()` called by motion-side after every completed window (fire or no-fire). Clears samples and unanchors. A new window only opens when sedentary is next observed.
 3. **Presence-loss reset** — `pose.py:_check_impl` also resets the window when presence drops, so a user who walks away mid-cycle doesn't leak stale samples into the next session.
 
-### Per-event annotated snapshots
+### Per-window bucketed snapshots
 
-Every sample writes its own annotated JPEG (skeleton overlay + RULA label) to `/tmp/lumi-sensing-snapshots/sensing_pose/snapshots/<int(ts)>.jpg`. Rotation runs after each write — files older than `POSE_SNAPSHOT_RETENTION_S` (default 24h) are pruned, and if the directory total still exceeds `POSE_SNAPSHOT_MAX_BYTES` (default 50 MB) the oldest are deleted until it fits.
+Each sample writes an annotated JPEG (skeleton overlay + RULA label) into the **current window's bucket dir**: `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<window_start_int>/<sample_ts_int>_<score>.jpg`. Filenames include the ergo score so the bucket itself is a self-describing on-disk record without re-reading metadata.
 
-Two endpoints:
+When `reset_window()` runs:
+
+- if `bad_ratio >= POSE_BAD_RATIO` (the window actually fired a nudge), the bucket is finalized with a `bucket.json` manifest (samples + per-side RULA + the pre-selected worst-snapshot filenames) and a `.kept` marker. Kept buckets survive for `POSE_BUCKET_KEEP_S` (default **2 days**).
+- otherwise the bucket dir is deleted immediately — no nudge, no need to keep evidence.
+
+A pruner sweeps:
+
+- kept buckets older than `POSE_BUCKET_KEEP_S`, and
+- orphan buckets (no `.kept` marker) older than `2 × POSE_WINDOW_DURATION_S` — these are buckets whose `reset_window` never ran (process killed mid-window).
+
+If the total still exceeds `POSE_SNAPSHOT_MAX_BYTES` (default 50 MB), the oldest kept buckets are dropped until it fits.
+
+Four endpoints:
 
 | Endpoint | Returns |
 |---|---|
-| `GET /sensing/pose-snapshot` | The newest `.jpg` in the snapshots dir (back-compat for the live preview tile in the monitor) |
-| `GET /sensing/pose-snapshot/{ts}` | The annotated JPEG for that specific sample (`ts` = `int(sample.ts)` from the JSONL). 404 once rotation prunes the file |
+| `GET /sensing/pose-snapshot` | The newest `.jpg` across all bucket dirs (back-compat for the live preview tile) |
+| `GET /sensing/pose-snapshot/{ts}` | The annotated JPEG for that specific sample. Scans every bucket for `<ts>_*.jpg`. 404 once rotation prunes the bucket |
+| `GET /sensing/pose-bucket/{bid}` | `bucket.json` manifest — samples, per-side RULA, summary, worst_snapshots[] |
+| `GET /sensing/pose-bucket/{bid}/img/{filename}` | A specific frame from a kept bucket (used by the Flow Monitor popup) |
 
-The monitor's Pose / Posture card renders one thumbnail per sample row in the table (lazy-loaded). Clicking a thumbnail opens that sample's annotated frame in a new tab at native resolution. Older rows whose JPEGs have been pruned by rotation simply hide their thumbnail; the numeric cells still render.
+The monitor's live Sensing tab renders one thumbnail per sample row (lazy-loaded, click → lightbox). The Flow Monitor turn card shows a 3-tile strip (motion frame + two worst pose frames) plus a "LOAD MORE · pose bucket" button → `PoseBucketModal` that fetches `bucket.json` and renders the full table.
+
+### Surfacing into `motion.activity`
+
+When a window fires, `motion.py` appends two markers to the existing message:
+
+```
+[pose_bucket: <window_start_int>]
+[pose_worst: <fn1>,<fn2>,<fn3>]
+```
+
+Both markers are stripped before the message reaches the LLM (mirror of `[snapshot:]`); the agent only sees the natural-language `[posture_summary: ...]`. The full text (with markers) is preserved in the `sensing_input` JSONL, so the Flow Monitor can read the bucket id without a side-channel.
+
+### `/dm` auto-attach (Telegram)
+
+When the agent decides to nudge via `/dm`, Lumi's SSE handler calls `ConsumePoseBucketRun(runID)` (mirror of `ConsumeGuardRun`). If the run has a stashed bucket, the worst-snapshot filenames are resolved against `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<bid>/` and shipped to Telegram via `sendMediaGroup` — caption rides on the first photo, the rest appear as a gallery. The agent itself stays unaware of file paths; image attachment is decided entirely by Lumi based on whether the originating `motion.activity` carried a bucket.
 
 ### Angle sign workaround (temporary)
 

@@ -135,6 +135,21 @@ Khi `SendToLeLampTTS` thật sự bị skip (loa không phát), Lumi emit `tts_s
 
 Khi OpenClaw emit `event:"cron"` với `action:"started"` (xem `src/cron/service/state.ts` của OpenClaw), Lumi cache `sessionKey` → mark `lifecycle_start` kế tiếp trên session đó (trong vòng 10 s) là cron fire → `isChannelRun` bị override thành `false` để loa lamp tự nói mà không cần marker `[HW:/speak]`. Marker vẫn giữ trong skill làm defense-in-depth fallback nếu cron event bị drop (`dropIfSlow: true` ở phía OpenClaw).
 
+### Pose bucket trên Turn card
+
+Với `motion.activity` mà window pose vừa fire, turn card hiển thị:
+
+```
+IN   <input text>
+[snapshot strip — tối đa 3 thumbnail: 1 motion + 2 worst pose]
+[🪑 LOAD MORE · pose bucket <id> · N worst]
+OUT  🔊 <output text>
+```
+
+- Strip được extract từ marker `[snapshot:]` + `[pose_bucket:]` / `[pose_worst:]` trong `sensing_input`. Click thumbnail mở lightbox inline (giống cũ).
+- Nút **LOAD MORE** mở `PoseBucketModal` → fetch `/api/hardware/sensing/pose-bucket/<id>` (proxy về lelamp) → render bảng từng sample (monospace + cột joint giống Sensing tab). Row có filename trong `worst_snapshots` được highlight (viền đỏ + ⭐) để xem nhanh khung tệ nhất.
+- Khi /dm fire, Lumi tự đính các worst snapshot vào Telegram qua `sendMediaGroup` — caption nằm trên ảnh đầu tiên, agent không cần biết file path. Xem `docs/sensing-behavior.md` mục "/dm auto-attach".
+
 ### Tool call display
 
 - Chỉ hiện tool events phase `"start"` (có args). Phase `update`/`result` không có args nên bỏ qua.

@@ -1,10 +1,13 @@
 import { useState } from "react";
 import type { Turn } from "./types";
 import { SOURCE_ICON, TURN_INPUT_FALLBACK } from "./types";
+import { HW } from "../types";
 import { turnIO, turnTokenStats, turnCurrentUser } from "./helpers";
+import { PoseBucketModal } from "./PoseBucketModal";
 
 export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pairTint?: string; onViewPipeline?: () => void }) {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [bucketOpen, setBucketOpen] = useState(false);
   const formatTurnTime = (iso: string): string => {
     const date = new Date(iso);
     const diffMs = Date.now() - date.getTime();
@@ -27,7 +30,23 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
     : turn.status === "error" ? "var(--lm-red)"
     : "var(--lm-amber)";
   const icon = SOURCE_ICON[turn.type] ?? SOURCE_ICON.unknown;
-  const { input, output, hwOutput, snapshotUrls } = turnIO(turn);
+  const { input, output, hwOutput, snapshotUrls, poseBucket } = turnIO(turn);
+  // When a motion.activity turn folded in a posture nudge, append the
+  // first two worst pose snapshots to the existing strip (capped to 3
+  // tiles total including the motion frame). The remaining samples are
+  // surfaced via the "Load more" → PoseBucketModal popup.
+  const baseSnaps: string[] = [...snapshotUrls];
+  let extraStrip: string[] = [];
+  if (poseBucket && poseBucket.files.length > 0) {
+    extraStrip = poseBucket.files.slice(0, 2).map(
+      (f) => `${HW}/sensing/pose-bucket/${encodeURIComponent(poseBucket.id)}/img/${encodeURIComponent(f)}`,
+    );
+  }
+  // 3-tile cap: keep at most 1 baseline snapshot + up to 2 bucket worst.
+  // When baseSnaps already has ≥3 we leave them alone (other event types).
+  const stripUrls: string[] = poseBucket
+    ? [...baseSnaps.slice(0, 1), ...extraStrip].slice(0, 3)
+    : baseSnaps;
   const tokenStats = turnTokenStats(turn);
   const currentUser = turnCurrentUser(turn);
   const hasBroadcast = turn.events.some((ev) =>
@@ -137,16 +156,16 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
         <span style={{ color: "var(--lm-teal)", fontWeight: 600, marginRight: 4 }}>IN</span>
         {input || TURN_INPUT_FALLBACK}
       </div>
-      {snapshotUrls.length > 0 && (
+      {stripUrls.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 4 }}>
-          {snapshotUrls.map((url, i) => (
+          {stripUrls.map((url, i) => (
             <img
               key={i}
               src={url}
               alt={`snapshot ${i + 1}`}
               onClick={() => setLightboxUrl(url)}
               style={{
-                width: snapshotUrls.length === 1 ? "100%" : "48%",
+                width: stripUrls.length === 1 ? "100%" : stripUrls.length === 2 ? "48%" : "32%",
                 maxWidth: 180, borderRadius: 6,
                 border: "1px solid var(--lm-border)", opacity: 0.9,
                 cursor: "pointer",
@@ -154,6 +173,31 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
             />
           ))}
         </div>
+      )}
+      {poseBucket && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setBucketOpen(true); }}
+          title="Open pose bucket viewer"
+          style={{
+            marginBottom: 6,
+            padding: "3px 8px",
+            borderRadius: 4,
+            background: "transparent",
+            border: "1px solid var(--lm-purple)55",
+            color: "var(--lm-purple)",
+            cursor: "pointer",
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: 0.3,
+          }}
+        >
+          🪑 LOAD MORE · pose bucket {poseBucket.id}
+          {poseBucket.files.length > 0 ? ` · ${poseBucket.files.length} worst` : ""}
+        </button>
+      )}
+      {bucketOpen && poseBucket && (
+        <PoseBucketModal bucketId={poseBucket.id} onClose={() => setBucketOpen(false)} />
       )}
       {lightboxUrl && (
         <div

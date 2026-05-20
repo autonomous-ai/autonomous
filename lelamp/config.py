@@ -165,16 +165,16 @@ POSE_ERGO_HIGH_RISK_THRESHOLD = int(os.environ.get("LELAMP_POSE_ERGO_HIGH_RISK_T
 # Posture is now sampled silently into a rolling buffer; MotionPerception
 # decides when to fold the summary into a motion.activity event.
 #
-# DEBUG VALUES (set 2026-05-19) — sampling 1 / 30s and window 20 min, so a
-# full evaluation cycle takes ~20 min during live testing. Swap to 60 s /
-# 3600 s for production (one env var each, no code change).
+# DEBUG VALUES — sampling 1 / 30s and window 10 min, so a full evaluation
+# cycle finishes in ~10 min during live testing (bucket feature shake-down).
+# Swap to 60 s / 3600 s for production (one env var each, no code change).
 POSE_SAMPLE_INTERVAL_S = float(os.environ.get("LELAMP_POSE_SAMPLE_INTERVAL_S", "30.0"))
 # Tumbling time window. At the end of every WINDOW_DURATION_S, MotionPerception
 # evaluates whatever samples have accumulated, decides whether to inject a
 # posture nudge, and ALWAYS resets the buffer + window start (regardless of
-# fire / no-fire). DEBUG = 1200 s (20 min); production target 3600 s (60 min)
+# fire / no-fire). DEBUG = 600 s (10 min); production target 3600 s (60 min)
 # — one variable, no test/prod branches in code.
-POSE_WINDOW_DURATION_S = float(os.environ.get("LELAMP_POSE_WINDOW_DURATION_S", "1200.0"))
+POSE_WINDOW_DURATION_S = float(os.environ.get("LELAMP_POSE_WINDOW_DURATION_S", "600.0"))
 # Noise floor — if the window completed but had fewer than this many real
 # samples (dlbackend missed most frames, presence flicker, etc.), skip the
 # inject. Statistical confidence is too low to nag the user.
@@ -193,15 +193,24 @@ POSE_BAD_RATIO = float(os.environ.get("LELAMP_POSE_BAD_RATIO", "0.6"))
 # computer for at least POSE_WINDOW_DURATION_S — no separate "streak
 # minimum" needed. Window-reset after each cycle means the next fire is
 # naturally one window away — no separate cooldown needed.
-# Per-sample annotated JPEG retention. Files are written as
-# snapshots/<int(ts)>.jpg next to the daily JSONL; oldest are pruned when
-# any cap is hit. Lets the monitor UI click a sample row to see the actual
-# frame instead of only the most recent.
-POSE_SNAPSHOT_RETENTION_S = float(
-    os.environ.get("LELAMP_POSE_SNAPSHOT_RETENTION_S", str(24 * 3600))
+# Per-sample annotated JPEG retention. Snapshots are grouped per tumbling
+# window into buckets/<window_start_int>/<sample_ts_int>_<score>.jpg with
+# a bucket.json sidecar. When a window closes:
+#   - bad_ratio >= POSE_BAD_RATIO → bucket marked "kept" and survives up
+#     to POSE_BUCKET_KEEP_S for monitor replay + /dm image attach.
+#   - otherwise → bucket is deleted immediately.
+# Kept buckets are pruned oldest-first once the byte cap is exceeded.
+POSE_BUCKET_KEEP_S = float(
+    os.environ.get("LELAMP_POSE_BUCKET_KEEP_S", str(2 * 24 * 3600))
 )
 POSE_SNAPSHOT_MAX_BYTES = int(
     os.environ.get("LELAMP_POSE_SNAPSHOT_MAX_BYTES", str(50 * 1024 * 1024))
+)
+# Number of "worst" samples to surface from a kept bucket — used by the
+# monitor turn-card preview strip and the Telegram /dm attach. Selection
+# combines (highest score, dominant-region rep, latest bad sample).
+POSE_WORST_SNAPSHOTS_PER_BUCKET = int(
+    os.environ.get("LELAMP_POSE_WORST_SNAPSHOTS_PER_BUCKET", "3")
 )
 # TEMPORARY WORKAROUND — dlbackend's signed_flexion_angle returns the
 # opposite sign of its docstring ("Positive = forward flexion"): user
