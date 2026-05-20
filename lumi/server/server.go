@@ -499,6 +499,15 @@ func (s *Server) Serve(closeFn func()) error {
 	// signed session cookie. No auth required (this is how you get auth).
 	api.POST("login", s.loginHandler)
 	api.POST("logout", s.logoutHandler)
+	// Exchange Bearer auth for a session cookie on the current origin.
+	// Used by the AP→.local post-setup redirect: lumi_session is bound to
+	// the AP origin and doesn't survive the host switch, so the web carries
+	// the Bearer (llm_api_key) across via URL fragment and exchanges it for
+	// a cookie here. adminAuthMiddleware already validates the Bearer (or an
+	// existing cookie), so the handler just mints a fresh cookie. No new
+	// capability vs. Bearer auth — both are root under the shared-secret
+	// threat model — purely a UX helper that survives refresh / new tabs.
+	api.POST("login/exchange", adminAuthMiddleware(s.config), s.loginExchangeHandler)
 
 	device := api.Group("device")
 	device.POST("setup", setupOrAdminMiddleware(s.config), s.deviceHandler.Setup)
@@ -887,6 +896,19 @@ func (s *Server) loginHandler(c *gin.Context) {
 // Anyone who already exfiltrated the token can still use it until expiry.
 func (s *Server) logoutHandler(c *gin.Context) {
 	session.Clear(c)
+	c.JSON(http.StatusOK, serializers.ResponseSuccess(true))
+}
+
+// loginExchangeHandler mints a session cookie for an already-authed
+// adminAuthMiddleware request. No body — the cookie is bound to the
+// response origin, which is exactly the property we need for the AP→.local
+// post-setup handoff.
+func (s *Server) loginExchangeHandler(c *gin.Context) {
+	if err := session.Issue(c, s.config); err != nil {
+		slog.Error("exchange session failed", "component", "auth", "error", err)
+		c.JSON(http.StatusInternalServerError, serializers.ResponseError("session issue failed"))
+		return
+	}
 	c.JSON(http.StatusOK, serializers.ResponseSuccess(true))
 }
 
