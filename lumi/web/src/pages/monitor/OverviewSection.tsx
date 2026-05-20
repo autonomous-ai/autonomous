@@ -75,6 +75,11 @@ export function OverviewSection({
   const emotionColor = EMOTION_COLOR[emotion] ?? "var(--lm-text-muted)";
   const emotionEmoji = EMOTION_EMOJI[emotion] ?? "✦";
 
+  // Software-update buttons in the Versions card are gated behind ?debug=true
+  // so the regular monitor view doesn't ship one-click OTA triggers (rate
+  // limit + admin auth still apply on the server side either way).
+  const isDebug = new URLSearchParams(window.location.search).get("debug") === "true";
+
   // Volume slider: local state for smooth dragging, API call only on release
   const [localVolume, setLocalVolume] = useState<number | null>(null);
   const draggingVolume = useRef(false);
@@ -519,9 +524,9 @@ export function OverviewSection({
           <div style={{ ...S.cardLabel, marginBottom: 10 }}>Versions</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <VersionRow name="Host"   color="var(--lm-text)"   version={null}                    uptime={sys?.uptime ?? null}                                   updateTarget={null} />
-            <VersionRow name="Web"    color="var(--lm-teal)"   version={webVersion}              uptime={null}                                                  updateTarget="web" />
-            <VersionRow name="Lumi"   color="var(--lm-amber)"  version={sys?.version ?? null}    uptime={sys?.serviceUptime ?? null}                            updateTarget="lumi" />
-            <VersionRow name="LeLamp" color="var(--lm-blue)"   version={lelampVersion}           uptime={sys?.lelampUptime ?? null}                             updateTarget="lelamp" />
+            <VersionRow name="Web"    color="var(--lm-teal)"   version={webVersion}              uptime={null}                                                  updateTarget={isDebug ? "web" : null} />
+            <VersionRow name="Lumi"   color="var(--lm-amber)"  version={sys?.version ?? null}    uptime={sys?.serviceUptime ?? null}                            updateTarget={isDebug ? "lumi" : null} />
+            <VersionRow name="LeLamp" color="var(--lm-blue)"   version={lelampVersion}           uptime={sys?.lelampUptime ?? null}                             updateTarget={isDebug ? "lelamp" : null} />
             <VersionRow name="Agent"  color="var(--lm-purple)" version={oc?.version ?? null}     uptime={oc?.connected ? (oc?.agentUptime ?? null) : null}      updateTarget={null} />
           </div>
         </div>
