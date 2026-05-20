@@ -43,6 +43,10 @@ export function useConfigPrefill(args: {
   setFaChannel: Dispatch<SetStateAction<string>>;
   setFdChannel: Dispatch<SetStateAction<string>>;
   setSttLanguage: Dispatch<SetStateAction<string>>;
+  // Surfaces cfg.has_admin_password so the page can show the admin-password
+  // fields only when the device hasn't been set up with one (fresh device or
+  // existing device migrating from pre-Login-UI builds).
+  setHasAdminPassword: Dispatch<SetStateAction<boolean>>;
 }) {
   const {
     urlParams, channelParam,
@@ -57,6 +61,7 @@ export function useConfigPrefill(args: {
     setMqttEndpoint, setMqttPort, setMqttUsername,
     setFaChannel, setFdChannel,
     setSttLanguage,
+    setHasAdminPassword,
   } = args;
 
   useEffect(() => {
@@ -112,7 +117,14 @@ export function useConfigPrefill(args: {
       // Saved language wins over the browser-locale default — the browser
       // guess only matters for a never-configured device. URL param trumps both.
       if (cfg.stt_language && !urlParams.sttLanguage) setSttLanguage(cfg.stt_language);
-    }).catch(() => {});
+      setHasAdminPassword(!!cfg.has_admin_password);
+    }).catch(() => {
+      // 401 = ConfigPublicResponse gated and we don't have a session yet.
+      // Treat that as "device may be missing admin password" so the field
+      // shows up — operator can set it and the Setup submit issues the
+      // cookie. Safer than hiding the field on a real migration target.
+      setHasAdminPassword(false);
+    });
     // Intentional empty deps — mount-only, like the original effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

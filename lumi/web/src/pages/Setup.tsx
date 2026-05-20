@@ -122,6 +122,13 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // ships to the server.
   const [adminPassword, setAdminPassword] = useState("");
   const [adminPasswordConfirm, setAdminPasswordConfirm] = useState("");
+  // hasAdminPassword mirrors cfg.has_admin_password from /api/device/config.
+  // True = device already has a bcrypt hash on file → hide the admin-password
+  // fields and don't require them. False = first-time or migration device
+  // missing the hash → show + require so the operator can't ship a setup
+  // submit without one. Starts true to avoid flashing the fields during the
+  // probe; useConfigPrefill flips it to false when the server reports missing.
+  const [hasAdminPassword, setHasAdminPassword] = useState(true);
   // mDNS hostname for the lamp on home Wi-Fi: `lumi-<suffix>.local`. Matches
   // what stage_ap sets via `hostnamectl set-hostname lumi-${SUFFIX_LC}` — both
   // sides derive the suffix from the device's hardware ID (Pi device-tree
@@ -227,19 +234,24 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // Per-section "done" detection drives the ✓ checkmark in the sidebar and
   // the auto-scroll-to-next-pending behavior in continue mode. We treat a
   // section as done when its config has the value the user came here to set.
+  // Secret fields don't round-trip through GET /api/device/config anymore
+  // (ConfigPublicResponse returns has_* booleans only), so check `*Loaded`
+  // alongside the raw form value — operator typing into the field also
+  // counts as done, but a saved-but-not-retyped secret still shows the green
+  // tick from its presence boolean.
   const sectionDone: Record<SectionId, boolean> = {
-    // device-section requires admin password to be set AND confirmed before
-    // submit is enabled. Existing-device "continue" mode skips the password
-    // check since the device may already have one set from initial provision.
-    device: !!deviceId && (isContinue || (!!adminPassword && adminPassword === adminPasswordConfirm)),
+    // device-section is "done" when a device id exists AND, if the lamp has
+    // no admin password on file yet, the operator has filled + confirmed one.
+    // Devices that already have a hash satisfy the gate automatically.
+    device: !!deviceId && (hasAdminPassword || (!!adminPassword && adminPassword === adminPasswordConfirm)),
     wifi: !!ssid,
-    llm: !!llmApiKey,
+    llm: !!llmApiKey || llmLoaded.apiKey,
     language: true, // Auto/empty is a valid choice — never block on this.
     channel: channel === "telegram"
-      ? !!teleToken
+      ? (!!teleToken || channelLoaded.teleToken)
       : channel === "slack"
-        ? !!slackBotToken
-        : !!discordBotToken,
+        ? (!!slackBotToken || channelLoaded.slackBotToken)
+        : (!!discordBotToken || channelLoaded.discordBotToken),
     tts: !!ttsVoice,
     voice: faceOwners.some((p) => (p.voice_samples?.length ?? 0) > 0),
     face: faceOwners.some((p) => p.photo_count > 0),
@@ -322,6 +334,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
     setMqttEndpoint, setMqttPort, setMqttUsername,
     setFaChannel, setFdChannel,
     setSttLanguage,
+    setHasAdminPassword,
   });
 
   useSetupStatusPolling({
@@ -358,15 +371,19 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    // Block submit when the admin password doesn't match. Initial-provision
-    // requires a password; continue-mode (already provisioned) lets it skip.
-    if (!isContinue && adminPassword !== adminPasswordConfirm) {
-      setError("Admin password and confirmation don't match.");
-      return;
-    }
-    if (!isContinue && !adminPassword) {
-      setError("Pick an admin password — you'll use it to sign in later.");
-      return;
+    // Require an admin password only when the device doesn't already have
+    // one on file. Already-provisioned devices that pre-date the Login UI
+    // batch land here with hasAdminPassword=false and must pick one now;
+    // devices that have a hash skip the check entirely.
+    if (!hasAdminPassword) {
+      if (!adminPassword) {
+        setError("Pick an admin password — you'll use it to sign in later.");
+        return;
+      }
+      if (adminPassword !== adminPasswordConfirm) {
+        setError("Admin password and confirmation don't match.");
+        return;
+      }
     }
     setLoading(true);
     try {
@@ -695,7 +712,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
                     active={activeSection === "device"}
                     deviceId={deviceId} setDeviceId={setDeviceId}
                     mac={mac}
-                    {...(isContinue ? {} : {
+                    {...(hasAdminPassword ? {} : {
                       adminPassword,
                       setAdminPassword,
                       adminPasswordConfirm,

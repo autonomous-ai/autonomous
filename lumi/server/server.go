@@ -343,20 +343,23 @@ var hardwareProxy = func() http.Handler {
 // compare on the bearer path keeps timing channels closed. Empty configured key
 // AND empty session secret both fail closed (503 admin auth not configured).
 //
-// setupOnlyMiddleware blocks POST /api/device/setup once provisioning is
-// complete. After setup the device should be edited via PUT /api/device/config
-// (admin-auth gated), not re-provisioned — leaving setup open means a caller
-// who reaches the endpoint can swap WiFi/channels/LLM keys and rebind the
-// lamp to attacker infrastructure. Re-setup intentionally requires a manual
-// reset (flip set_up_completed false on-device).
-func setupOnlyMiddleware(cfg *config.Config) gin.HandlerFunc {
+// setupOrAdminMiddleware gates POST /api/device/setup with a hybrid policy:
+//   - SetUpCompleted == false → open (fresh device; no admin exists yet, can't
+//     require auth or first-boot is impossible)
+//   - SetUpCompleted == true  → adminAuthMiddleware (re-setup is a config
+//     rewrite, treat it as an admin op — Bearer llm_api_key or session cookie)
+//
+// Replaces the old setupOnlyMiddleware (audit go F8a) so the web `#force`
+// re-setup path still works for operators who own the admin credential, while
+// keeping the original audit goal (no unauthed re-setup post-provision).
+func setupOrAdminMiddleware(cfg *config.Config) gin.HandlerFunc {
+	authMW := adminAuthMiddleware(cfg)
 	return func(c *gin.Context) {
-		if cfg.SetUpCompleted {
-			c.JSON(http.StatusForbidden, serializers.ResponseError("setup already completed; use PUT /api/device/config to edit"))
-			c.Abort()
+		if !cfg.SetUpCompleted {
+			c.Next()
 			return
 		}
-		c.Next()
+		authMW(c)
 	}
 }
 
@@ -483,7 +486,7 @@ func (s *Server) Serve(closeFn func()) error {
 	api.POST("logout", s.logoutHandler)
 
 	device := api.Group("device")
-	device.POST("setup", setupOnlyMiddleware(s.config), s.deviceHandler.Setup)
+	device.POST("setup", setupOrAdminMiddleware(s.config), s.deviceHandler.Setup)
 	device.GET("setup/status", s.deviceHandler.SetupStatus)
 	device.POST("channel", adminAuthMiddleware(s.config), s.deviceHandler.ChangeChannel)
 	// GET config is admin-gated now. Pre-login web can no longer bootstrap
