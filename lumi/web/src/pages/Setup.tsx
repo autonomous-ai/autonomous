@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { getNetworks, setupDevice } from "@/lib/api";
+import { getNetworks, safeSearch, setupDevice } from "@/lib/api";
 import { useTheme } from "@/lib/useTheme";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useSetupUrlParams } from "@/hooks/setup/useSetupUrlParams";
@@ -600,7 +600,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
                           // no-ops the same-URL click and they stay stuck on
                           // the "Lumi is online!" screen even though the lamp
                           // is reachable in continue mode now.
-                          href={`http://${lumiMdnsHost}.local${window.location.pathname}${window.location.search}`}
+                          href={`http://${lumiMdnsHost}.local${window.location.pathname}${safeSearch()}`}
                           onClick={(e) => {
                             if (window.location.hostname === `${lumiMdnsHost}.local`) {
                               e.preventDefault();

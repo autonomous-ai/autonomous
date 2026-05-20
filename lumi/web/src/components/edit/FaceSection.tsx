@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { hwUrl } from "@/lib/api";
 import { C, Field, SectionCard } from "@/components/setup/shared";
 import type { FaceOwner } from "@/hooks/setup/useFaceEnroll";
 
@@ -167,9 +168,9 @@ export function FaceSection({
                     {p.photos.map((photo) => (
                       <div key={photo} style={{ position: "relative", width: 56, height: 56 }}>
                         <img
-                          src={`/hw/face/photo/${p.label}/${photo}`}
+                          src={hwUrl(`/face/photo/${encodeURIComponent(p.label)}/${encodeURIComponent(photo)}`)}
                           title={photo}
-                          onClick={() => window.open(`/hw/face/photo/${p.label}/${photo}`, "_blank")}
+                          onClick={() => window.open(hwUrl(`/face/photo/${encodeURIComponent(p.label)}/${encodeURIComponent(photo)}`), "_blank", "noopener,noreferrer")}
                           style={{
                             width: 56, height: 56, borderRadius: 8, objectFit: "cover",
                             border: `1px solid ${C.border}`, cursor: "pointer", display: "block",

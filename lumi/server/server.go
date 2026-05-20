@@ -18,6 +18,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -845,7 +846,7 @@ func (s *Server) logTail(c *gin.Context) {
 		c.JSON(http.StatusOK, serializers.ResponseSuccess(map[string]any{
 			"source": source,
 			"path":   "journalctl -u " + unit,
-			"lines":  lines,
+			"lines":  redactLogLines(lines),
 			"error":  errMsg,
 		}))
 		return
@@ -883,7 +884,7 @@ func (s *Server) logTail(c *gin.Context) {
 	c.JSON(http.StatusOK, serializers.ResponseSuccess(map[string]any{
 		"source": source,
 		"path":   pattern,
-		"lines":  allLines,
+		"lines":  redactLogLines(allLines),
 	}))
 }
 
@@ -959,7 +960,7 @@ func (s *Server) logStream(c *gin.Context) {
 				for {
 					line, err := tails[i].reader.ReadString('\n')
 					if len(line) > 0 {
-						c.SSEvent("log", strings.TrimRight(line, "\n"))
+						c.SSEvent("log", redactLogLine(strings.TrimRight(line, "\n")))
 					}
 					if err != nil {
 						break
@@ -969,6 +970,39 @@ func (s *Server) logStream(c *gin.Context) {
 			return true
 		}
 	})
+}
+
+// logSecretPatterns scrub api keys / tokens / passwords out of log lines
+// before they're shipped to the web monitor. Plaintext secrets occasionally
+// land in stdout (config dumps, third-party SDK debug output, error context
+// echoing the request body) — without this, /api/logs/tail and /logs/stream
+// would leak them to any authenticated admin caller and to anyone capturing
+// the browser session log.
+var logSecretPatterns = []struct {
+	re  *regexp.Regexp
+	rep string
+}{
+	// key=value | "key": "value" | key: value — covers env-style, JSON, YAML
+	{regexp.MustCompile(`(?i)((?:api[_-]?key|token|secret|password)\s*["']?\s*[=:]\s*["']?)[A-Za-z0-9\-_./+]{4,}`), "${1}***"},
+	// Authorization: Bearer <token> — common log line shape for HTTP request dumps
+	{regexp.MustCompile(`(?i)(authorization\s*:\s*bearer\s+)\S+`), "${1}***"},
+	// Bare OpenAI/Anthropic/Codex style keys appearing without an obvious key= prefix
+	{regexp.MustCompile(`sk-(?:proj-|ant-|svcacct-)?[A-Za-z0-9_\-]{20,}`), "sk-***"},
+}
+
+func redactLogLine(line string) string {
+	out := line
+	for _, p := range logSecretPatterns {
+		out = p.re.ReplaceAllString(out, p.rep)
+	}
+	return out
+}
+
+func redactLogLines(lines []string) []string {
+	for i := range lines {
+		lines[i] = redactLogLine(lines[i])
+	}
+	return lines
 }
 
 // journalTail returns the last n lines from a systemd journal unit.
@@ -1024,7 +1058,7 @@ func (s *Server) streamJournal(c *gin.Context, unit string) {
 			if !ok {
 				return false
 			}
-			c.SSEvent("log", line)
+			c.SSEvent("log", redactLogLine(line))
 			// Drain any buffered lines to batch SSE writes.
 			for {
 				select {
@@ -1032,7 +1066,7 @@ func (s *Server) streamJournal(c *gin.Context, unit string) {
 					if !ok {
 						return false
 					}
-					c.SSEvent("log", l)
+					c.SSEvent("log", redactLogLine(l))
 				default:
 					return true
 				}
@@ -1040,6 +1074,18 @@ func (s *Server) streamJournal(c *gin.Context, unit string) {
 		}
 	})
 }
+
+// softwareUpdateLastFire tracks the last time each OTA target was triggered, so
+// a stuck/looping caller can't kick off back-to-back force-checks. Bootstrap's
+// downloader is idempotent but the resulting service restarts (lumi-server +
+// systemd reload + journal noise) are not free; 30 s is enough to absorb a
+// double-click without hiding genuine retries.
+var (
+	softwareUpdateLastFire   = map[string]time.Time{}
+	softwareUpdateLastFireMu sync.Mutex
+)
+
+const softwareUpdateMinInterval = 30 * time.Second
 
 // softwareUpdate triggers an OTA update for a single named component via the bootstrap worker.
 // POST /api/system/software-update/:target  (target: lumi | web | lelamp)
@@ -1050,6 +1096,22 @@ func (s *Server) softwareUpdate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, serializers.ResponseError("unknown target: "+target))
 		return
 	}
+
+	// Per-target rate limit. Returns 429 with retry-after so the web button
+	// can surface a useful message instead of looking broken.
+	softwareUpdateLastFireMu.Lock()
+	if last, ok := softwareUpdateLastFire[target]; ok {
+		if wait := softwareUpdateMinInterval - time.Since(last); wait > 0 {
+			softwareUpdateLastFireMu.Unlock()
+			c.Header("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+			c.JSON(http.StatusTooManyRequests,
+				serializers.ResponseError(fmt.Sprintf("software-update %s rate-limited, retry in %ds", target, int(wait.Seconds())+1)))
+			return
+		}
+	}
+	softwareUpdateLastFire[target] = time.Now()
+	softwareUpdateLastFireMu.Unlock()
+
 	url := "http://127.0.0.1:8080/force-check/" + target
 	req, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, url, nil)
 	if err != nil {

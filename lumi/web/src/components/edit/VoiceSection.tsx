@@ -211,7 +211,7 @@ export function VoiceSection({
                           </button>
                         </>
                       ) : (
-                        <a href={url} target="_blank" rel="noreferrer"
+                        <a href={url} target="_blank" rel="noopener noreferrer"
                           style={{ fontSize: 10, color: C.amber, textDecoration: "none", padding: "2px 6px", border: `1px solid ${C.border}`, borderRadius: 4 }}>
                           {viewLabel}
                         </a>

@@ -54,6 +54,41 @@ export function hwUrl(path: string): string {
   return apiToken ? withApiToken(url) : url;
 }
 
+// Setup query params that may carry secrets. When a redirect or shareable
+// link preserves window.location.search, these must be stripped so the
+// token doesn't propagate to a new origin, browser history, proxy log, or
+// any clipboard the user pastes the URL into.
+const SECRET_QUERY_KEYS = [
+  "tele_token",
+  "slack_bot_token",
+  "slack_app_token",
+  "discord_bot_token",
+  "llm_api_key",
+  "deepgram_api_key",
+  "stt_api_key",
+  "tts_api_key",
+  "mqtt_password",
+  "password",
+];
+
+/** Return window.location.search (or the given query string) with every
+ *  known secret key removed. Preserves harmless params like `debug=true`. */
+export function safeSearch(search?: string): string {
+  const raw = search ?? (typeof window !== "undefined" ? window.location.search : "");
+  if (!raw) return "";
+  const p = new URLSearchParams(raw);
+  let changed = false;
+  for (const k of SECRET_QUERY_KEYS) {
+    if (p.has(k)) {
+      p.delete(k);
+      changed = true;
+    }
+  }
+  if (!changed) return raw;
+  const out = p.toString();
+  return out ? `?${out}` : "";
+}
+
 // Global fetch interceptor: attaches Authorization: Bearer to any request
 // that targets /api/hardware/* (the Go hardware proxy). Avoids refactoring
 // ~65 raw fetch sites in the monitor — they keep their existing

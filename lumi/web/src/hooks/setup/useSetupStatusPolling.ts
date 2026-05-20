@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { getSetupStatus } from "@/lib/api";
+import { getSetupStatus, safeSearch } from "@/lib/api";
 
 export type SetupPhase = "connecting" | "connected" | "failed";
 
@@ -92,7 +92,7 @@ export function useSetupStatusPolling({
     let cancelled = false;
     const targetHost = `${lumiMdnsHost}.local`;
     const base = `http://${targetHost}`;
-    const newURL = `${base}${window.location.pathname}${window.location.search}`;
+    const newURL = `${base}${window.location.pathname}${safeSearch()}`;
     const navigate = () => {
       if (window.location.hostname === targetHost) {
         window.location.reload();
@@ -135,7 +135,7 @@ export function useSetupStatusPolling({
     let cancelled = false;
     let attempt = 0;
     const base = `http://${lumiMdnsHost}.local`;
-    const target = `${base}${window.location.pathname}${window.location.search}`;
+    const target = `${base}${window.location.pathname}${safeSearch()}`;
     let timer: number | undefined;
     const probe = async () => {
       attempt += 1;

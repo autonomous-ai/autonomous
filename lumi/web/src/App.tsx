@@ -5,7 +5,7 @@ import Setup from "@/pages/Setup";
 import Monitor from "@/pages/monitor";
 import EditConfig from "@/pages/EditConfig";
 import GwConfig from "@/pages/GwConfig";
-import { checkInternet, getApiToken, getDeviceConfig, getSetupStatus } from "@/lib/api";
+import { checkInternet, getApiToken, getDeviceConfig, getSetupStatus, safeSearch } from "@/lib/api";
 
 // Detect Tailscale access by either:
 //  - CGNAT IPv4 in 100.64.0.0/10 (100.64.0.0 – 100.127.255.255), or
@@ -50,7 +50,7 @@ function SetupGate() {
         //     browser auto-resolves to the new IP on every wifi change)
         const isCanonicalMdns = here.endsWith(".local");
         if (s.lan_ip && s.lan_ip !== here && !isTailscaleHost(here) && !isCanonicalMdns) {
-          window.location.replace(`http://${s.lan_ip}${window.location.pathname}${window.location.search}`);
+          window.location.replace(`http://${s.lan_ip}${window.location.pathname}${safeSearch()}`);
           return;
         }
       } catch { /* keep showing continue mode if status endpoint fails */ }

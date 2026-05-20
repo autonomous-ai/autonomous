@@ -177,7 +177,11 @@ export function FaceOwnersSection() {
   const openFile = async (label: string, filepath: string) => {
     const isImg = /\.(jpg|jpeg|png|bmp)$/i.test(filepath);
     if (isImg) {
-      window.open(hwUrl(`/face/photo/${label}/${filepath}`), "_blank");
+      window.open(
+        hwUrl(`/face/photo/${encodeURIComponent(label)}/${encodeURIComponent(filepath)}`),
+        "_blank",
+        "noopener,noreferrer",
+      );
       return;
     }
     const isAudio = /\.(wav|mp3|ogg|webm)$/i.test(filepath);
@@ -832,7 +836,7 @@ export function FaceOwnersSection() {
                           style={{ position: "relative", width: 56, height: 56 }}
                         >
                           <img
-                            src={hwUrl(`/face/photo/${person.label}/${photo}`)}
+                            src={hwUrl(`/face/photo/${encodeURIComponent(person.label)}/${encodeURIComponent(photo)}`)}
                             style={{
                               width: "100%", height: "100%",
                               objectFit: "cover",
@@ -1113,7 +1117,7 @@ export function FaceOwnersSection() {
                           }}>
                             <audio
                               controls preload="none"
-                              src={hwUrl(`/voice/strangers/audio/${cluster.hash}/${encodeURIComponent(s.filename)}`)}
+                              src={hwUrl(`/voice/strangers/audio/${encodeURIComponent(cluster.hash)}/${encodeURIComponent(s.filename)}`)}
                               style={{ height: 22, flexShrink: 0, width: 180 }}
                             />
                             <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

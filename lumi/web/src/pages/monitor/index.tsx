@@ -158,7 +158,7 @@ function AgentGWMenu({ section, setSection, closeSidebar }: {
           <a
             href={gwHref}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             style={S.navItem(false)}
             onClick={closeSidebar}
             title="Opens in a new tab — OpenClaw blocks iframe embedding"
