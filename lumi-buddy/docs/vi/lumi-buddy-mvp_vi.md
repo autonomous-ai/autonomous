@@ -204,6 +204,8 @@ Mỗi phase ship & review độc lập được.
 
 ### Phase 1I — Docs + dọn dẹp
 
+**Status:** ⏳ Deferred — VERSION_BUDDY file, target `build-buddy` trong Makefile root, và check doc drift còn lại. Skip vì Leo đang dev solo; quay lại khi project được share hoặc sắp release.
+
 **Files:**
 - Verify `docs/lumi-buddy.md` match implementation thực (update nếu drift)
 - Verify `docs/vi/lumi-buddy_vi.md` match

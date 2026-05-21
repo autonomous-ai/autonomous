@@ -20,6 +20,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/buddy/pair/start", state.HandlePairStart)
 	mux.HandleFunc("POST /api/buddy/pair/confirm", state.HandlePairConfirm)
+	mux.HandleFunc("DELETE /api/buddy/self", state.HandleSelfRevoke)
 	mux.HandleFunc("GET /api/buddy/ws", state.HandleWS)
 	mux.HandleFunc("POST /api/buddy/command", state.HandleCommand)
 

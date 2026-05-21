@@ -44,6 +44,11 @@ func (s *State) HandleWS(w http.ResponseWriter, r *http.Request) {
 	s.setWS(ws)
 	logf("✓ buddy connected: %s", record.BuddyID)
 
+	// Hello ping (mirrors production `Service.Greet`) — fires one ping right
+	// after connect so the buddy's Activity window shows a ✓ row immediately,
+	// confirming end-to-end reachability without waiting for a real command.
+	go s.greet(record.BuddyID)
+
 	defer func() {
 		s.clearWS()
 		_ = ws.Close()
@@ -116,6 +121,21 @@ func (s *State) HandleCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(raw)
+}
+
+// greet fires a single `ping` command after a buddy connects so the buddy app
+// gets immediate visible feedback (one ✓ row in its Activity window). Runs in
+// its own goroutine because Dispatch blocks on the WS read loop that the
+// caller goroutine is about to start.
+func (s *State) greet(buddyID string) {
+	cmd := newCommand("ping", map[string]any{"from": "mock-lamp", "hello": true})
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+	defer cancel()
+	if _, err := s.Dispatch(ctx, cmd); err != nil {
+		logf("hello ping failed for %s: %v", buddyID, err)
+		return
+	}
+	logf("hello ping ok for %s", buddyID)
 }
 
 // Dispatch sends a command to the buddy over the open WS and waits for the response with the

@@ -70,6 +70,21 @@ func (s *State) savePairing(record PairingRecord) {
 	s.paired = &record
 }
 
+// clearPairing drops the in-memory pairing record + closes the WS if one is
+// open. Mirrors production `Service.Unpair`: used when the buddy app itself
+// initiates an unpair (via DELETE /api/buddy/self) so the mock matches Pi
+// behaviour during local dev.
+func (s *State) clearPairing() {
+	s.mu.Lock()
+	ws := s.ws
+	s.paired = nil
+	s.ws = nil
+	s.mu.Unlock()
+	if ws != nil {
+		_ = ws.Close()
+	}
+}
+
 // lookupByToken returns a copy of the pairing if the token matches.
 func (s *State) lookupByToken(token string) *PairingRecord {
 	s.mu.Lock()

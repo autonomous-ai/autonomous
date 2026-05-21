@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // Mirrors the production handlers that will live in
@@ -55,6 +56,28 @@ func (s *State) HandlePairConfirm(w http.ResponseWriter, r *http.Request) {
 	s.savePairing(record)
 	logf("✓ buddy paired: name=%q os=%q id=%s", req.Name, req.OSVersion, record.BuddyID)
 	writeJSON(w, http.StatusOK, pairConfirmResponse{Token: record.Token, BuddyID: record.BuddyID})
+}
+
+// HandleSelfRevoke mirrors production `BuddyHandler.RevokeSelf`: the buddy app
+// calls this (with its own Bearer token) right before clearing local Keychain
+// state, so the mock drops the pairing record at the same time. Without this,
+// re-pairing inside the same mock session would think a stale buddy is still
+// present.
+func (s *State) HandleSelfRevoke(w http.ResponseWriter, r *http.Request) {
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing bearer"})
+		return
+	}
+	token := strings.TrimPrefix(auth, "Bearer ")
+	record := s.lookupByToken(token)
+	if record == nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid token"})
+		return
+	}
+	s.clearPairing()
+	logf("✓ buddy self-revoked: %s", record.BuddyID)
+	writeJSON(w, http.StatusOK, map[string]bool{"revoked": true})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
