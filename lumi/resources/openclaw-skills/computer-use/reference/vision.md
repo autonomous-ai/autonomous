@@ -37,22 +37,34 @@ The endpoint is localhost-only (lamp-internal). The lamp dispatches over the bud
 
 ## Coordinate system — read this once before clicking
 
-All x/y in vision actions are in **CGEvent global display space**: top-left origin, units = **points** (not pixels). On a Retina Mac the screenshot pixels are 2× the click coordinates.
+**Rule: always screenshot at ~1280px wide.** This is the resolution Claude was trained against for computer use, and clicks land more accurately when the image fed to your reasoning matches that scale. Larger screenshots cause undershoot; much smaller ones lose small UI like close buttons. Compute the `scale` param from the native pixel width (one-time `list_displays` call at session start):
 
 ```
-result.path           absolute path to PNG on the user's Mac (saved by buddy)
-result.width/height   PNG dimensions in PIXELS
-result.display_scale  pixels-per-point for the captured display (e.g. 2.0 for Retina)
+scale = 1280 / displays[0].pixel_width        # use is_main:true display
 ```
 
-To convert a pixel coordinate you measured in the screenshot to a click target:
+Examples:
+- 13" MacBook Retina (2560×1600 native pixels) → `scale ≈ 0.50`
+- 16" MacBook Retina (3456×2234 native pixels) → `scale ≈ 0.37`
+- External 4K (3840×2160 native pixels) → `scale ≈ 0.33`
+- Non-Retina 1080p (1920×1080 native pixels) → `scale ≈ 0.67`
+
+Click targets are in **CGEvent points** (top-left origin), not pixels. Once the screenshot is exactly 1280px wide, the conversion from a pixel coord you read in that image to a click point is:
 
 ```
-click_x_points = pixel_x / display_scale
-click_y_points = pixel_y / display_scale
+click_x_points = pixel_in_screenshot_x * point_width / 1280
+click_y_points = pixel_in_screenshot_y * point_height / 1280   # use point_width ratio, height follows
 ```
 
-If you forget to divide on a Retina display, your click lands at roughly half the intended position — usually outside the target.
+`point_width` and `point_height` come from `list_displays` (it returns `width`/`height` in points and `pixel_width`/`pixel_height` in pixels). For the single-display common case the math collapses to:
+
+```
+ratio = point_width / 1280        # cache this for the whole session
+click_x_points = pixel_x * ratio
+click_y_points = pixel_y * ratio
+```
+
+If you forget the ratio (or skip the scale-to-1280 step), the click lands at the wrong spot — usually outside the target on Retina.
 
 For multi-display setups, call `list_displays` first and pick the display the user is asking about (typically `is_main: true`). Pass that display's `id` to `screenshot` and use the same display's `x`/`y` origin offset when computing click coords.
 
@@ -85,52 +97,61 @@ The non-vision actions from the parent SKILL.md (`open_app`, `open_url`, `type_t
 Some practical rules for the loop:
 
 - **One action per iteration.** Don't batch multiple clicks before re-screenshotting — the screen state may have shifted (modal appeared, focus changed, animation in progress).
+- **Evaluate after every step.** After each action, take a screenshot and carefully evaluate if you achieved the right outcome. Show your thinking explicitly: *"I have evaluated step X — the modal opened as expected, ready for step Y"* or *"I clicked but nothing changed; the button label was misread, retrying with neighbouring coord"*. Don't assume an action worked just because the click endpoint returned `ok:true` — only the next screenshot proves it.
+- **Prefer keyboard shortcuts when the target is risky.** Dropdowns, scrollbars, tiny icons, and chrome (close/minimise dots) are notoriously hard to click accurately at 1280×800. If a keyboard shortcut exists (`cmd+w` to close tab, `cmd+,` to open preferences, `cmd+f` to focus search, `tab` + `enter` to navigate forms), use `key_combo` instead of `click_at`. More reliable, no coord math.
 - **Wait briefly after navigations.** After `open_url` or a click that opens a new view, sleep ~500-1000 ms before the next screenshot so the page can render. In bash: `sleep 1`.
-- **Stop the loop on success or after ~6-8 iterations.** Vision is unreliable; if you can't make progress in that many steps, tell the user what you saw and ask for a more specific instruction.
+- **Stop the loop on success or after ~6-8 iterations.** Vision is unreliable; if you can't make progress in that many steps, tell the user what you saw and ask for a more specific instruction. Looping past 8 attempts almost never succeeds — accept the limitation honestly rather than spending more tokens on guesswork.
 - **Stop on error.** If `data.ok: false`, surface the error to the user — do not retry blindly. `"Screen Recording access required"` and `"Accessibility access required"` need the user to grant permission in System Settings; no amount of retrying will fix that.
 - **Don't narrate every step.** Speak one short caring sentence at the start ("Let me have a look") and one at the end ("Done — clicked the Submit button."). All the screenshot/click reasoning stays in `thinking`.
 
 ## Reading the screenshot
 
-The screenshot result includes `path` (filesystem path on the user's Mac, visible only to the buddy app) and optionally `image_b64`. The lamp-side LLM cannot read the user's filesystem, so to actually **see** the image you must request base64:
+The screenshot result includes `path` (filesystem path on the user's Mac, visible only to the buddy app) and optionally `image_b64`. The lamp-side LLM cannot read the user's filesystem, so to actually **see** the image you must request base64.
+
+**Recipe — call once at session start, then reuse:**
 
 ```bash
+# 1. Discover the display so you know what scale to ask for.
 curl -s -X POST http://127.0.0.1:5000/api/buddy/command \
   -H 'Content-Type: application/json' \
-  -d '{"action":"screenshot","params":{"scale":0.5,"return_format":"base64"},"timeout_ms":15000}'
+  -d '{"action":"list_displays","params":{},"timeout_ms":3000}'
+# Returns: {displays:[{id, is_main, width, height, pixel_width, pixel_height, scale,…}],…}
+# Pick the is_main display. Compute scale = 1280 / pixel_width. Cache it.
+
+# 2. Every screenshot uses that scale.
+curl -s -X POST http://127.0.0.1:5000/api/buddy/command \
+  -H 'Content-Type: application/json' \
+  -d '{"action":"screenshot","params":{"scale":<cached_scale>,"return_format":"base64"},"timeout_ms":15000}'
 ```
 
-`scale: 0.5` shrinks the PNG by half before encoding (still readable for most UI tasks, ~4× fewer tokens than full Retina). Use `scale: 0.25` for very wide displays. Use `scale: 1.0` only when fine pixel detail matters (small text, dense UI).
+Why not `scale: 1.0`? On a 4K Retina display a full-res PNG is 4-6MB and ~5-8 million pixels — Claude undershoots clicks because the trained dim is much smaller, plus you burn tokens. `scale: 0.5` (the old default) was an approximation that works for 13" Retina but is too small on a 16" and too large on a non-Retina display. Anchor on the 1280px target instead.
 
-The `image_b64` field is a plain base64-encoded PNG. To consume it in your reasoning, treat it as image input on the next turn.
+The `image_b64` field is a plain base64-encoded PNG. Treat it as image input in your next reasoning step.
 
 ## Example flows
 
 ### A — Click a button with no accessibility label (e.g. a custom web button)
 
+Session state (computed once at start): display is 3840×2160 native pixels, 1920×1080 points (display_scale=2.0). So `scale = 1280/3840 ≈ 0.33`, and the click-conversion ratio is `point_width / 1280 = 1920/1280 = 1.5`.
+
 ```bash
-# 1. take screenshot
+# 1. Screenshot at the cached scale.
 curl -s -X POST http://127.0.0.1:5000/api/buddy/command \
   -H 'Content-Type: application/json' \
-  -d '{"action":"screenshot","params":{"scale":0.5,"return_format":"base64"},"timeout_ms":15000}'
-# → returns image_b64, width 1920, height 1080, display_scale 2.0 (so original was 3840x2160)
-# → I see the "Subscribe" button at pixel (1600, 800) IN THE SCALED IMAGE
-# → original pixel coords: (3200, 1600) ; point coords: (1600, 800) after dividing by display_scale 2.0
-#   BUT WAIT — I already requested scale 0.5, so the image is half size. The pixel I read (1600, 800) in the
-#   scaled image corresponds to (3200, 1600) in the ORIGINAL screenshot, which is (1600, 800) in points.
-#   Click target in points = pixel_in_scaled_image / scale / display_scale * display_scale = pixel_in_scaled_image / scale
-#   With scale=0.5, divide pixel_in_scaled by 0.5 → original pixel → divide by display_scale → points.
-#   Simpler: with scale=0.5 and display_scale=2.0, points = pixel_in_scaled / (0.5 * 2.0) = pixel_in_scaled / 1.0.
+  -d '{"action":"screenshot","params":{"scale":0.33,"return_format":"base64"},"timeout_ms":15000}'
+# → image is 1280×720 (close to target). I see "Subscribe" at pixel (800, 400) in the image.
+# → click target in points = (800*1.5, 400*1.5) = (1200, 600).
 
-# 2. click
+# 2. Click.
 curl -s -X POST http://127.0.0.1:5000/api/buddy/command \
   -H 'Content-Type: application/json' \
-  -d '{"action":"click_at","params":{"x":1600,"y":800,"button":"left"},"timeout_ms":3000}'
+  -d '{"action":"click_at","params":{"x":1200,"y":600,"button":"left"},"timeout_ms":3000}'
 
-# 3. verify
+# 3. Verify (and start the next step's reasoning from this image, not the previous one).
+sleep 1
 curl -s -X POST http://127.0.0.1:5000/api/buddy/command \
   -H 'Content-Type: application/json' \
-  -d '{"action":"screenshot","params":{"scale":0.5,"return_format":"base64"},"timeout_ms":15000}'
+  -d '{"action":"screenshot","params":{"scale":0.33,"return_format":"base64"},"timeout_ms":15000}'
 ```
 
 ### B — Read text off a dialog
