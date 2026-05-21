@@ -81,6 +81,25 @@ final class PairingManager {
         try store.clear()
     }
 
+    // Best-effort notification to the lamp that we're revoking the pairing on
+    // our side. Without this, the lamp keeps the pairing record alive and the
+    // web UI still shows "paired" until either the admin revokes manually or
+    // the next failed WS handshake. We don't block local unpair on this — if
+    // the lamp is unreachable, the local revoke proceeds anyway.
+    func notifyRevokeSelf(host: String, token: String) async {
+        let normalized = normalizeHost(host)
+        guard let url = URL(string: "http://\(normalized)/api/buddy/self") else { return }
+        var req = URLRequest(url: url)
+        req.httpMethod = "DELETE"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.timeoutInterval = 5
+        do {
+            _ = try await URLSession.shared.data(for: req)
+        } catch {
+            // Silent — lamp may be offline. Local unpair still happens.
+        }
+    }
+
     func current() -> PairingRecord? {
         return try? store.load()
     }

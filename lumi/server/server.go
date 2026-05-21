@@ -609,6 +609,11 @@ func (s *Server) Serve(closeFn func()) error {
 	buddy.POST("pair/confirm", s.buddyHandler.PairConfirm)
 	buddy.GET("status", adminAuthMiddleware(s.config), s.buddyHandler.Status)
 	buddy.DELETE("", adminAuthMiddleware(s.config), s.buddyHandler.Revoke)
+	// /self auth via Bearer token (the buddy app's own token), used when the
+	// user unpairs from inside the buddy app — symmetric counterpart to the
+	// admin DELETE above. Keeps lamp + buddy state in sync without manual web
+	// UI clicks.
+	buddy.DELETE("self", s.buddyHandler.RevokeSelf)
 	buddy.GET("ws", s.buddyHandler.WS)
 	buddy.POST("command", localOnlyMiddleware(), s.buddyHandler.Command)
 	// /exec/:action is the marker-friendly variant used by OpenClaw skills via

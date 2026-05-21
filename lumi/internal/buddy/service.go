@@ -101,3 +101,31 @@ func (s *Service) Connected() bool {
 func (s *Service) Dispatch(ctx context.Context, cmd Command) (json.RawMessage, error) {
 	return s.dispatcher.Dispatch(ctx, cmd)
 }
+
+// Greet fires a `ping` command immediately after the buddy WS connects. The
+// goal is purely UX: the buddy's Activity window shows one ✓ row right away,
+// so the user gets visual confirmation that the lamp can actually reach this
+// Mac. Without this, the Activity window stays empty until the first real
+// command, which can be minutes later — leaving the user to wonder whether
+// pairing actually worked.
+//
+// Best-effort: a failure here is logged but does not affect the WS connection.
+// Caller should invoke from a goroutine because Dispatch blocks until the
+// buddy responds or times out.
+func (s *Service) Greet(buddyID string) {
+	cmd := Command{
+		ID:        NewCommandID(),
+		Action:    "ping",
+		Params:    map[string]any{"from": "lamp", "hello": true},
+		TimeoutMs: 5000,
+		IssuedAt:  time.Now().UTC().Format(time.RFC3339),
+		IssuedBy:  "lamp:hello",
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+	defer cancel()
+	if _, err := s.dispatcher.Dispatch(ctx, cmd); err != nil {
+		slog.Warn("buddy hello ping failed", "component", "buddy", "id", buddyID, "error", err)
+		return
+	}
+	slog.Info("buddy hello ping ok", "component", "buddy", "id", buddyID)
+}

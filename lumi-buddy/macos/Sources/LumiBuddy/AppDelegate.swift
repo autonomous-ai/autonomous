@@ -71,10 +71,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func unpair() {
-        connection?.disconnect()
-        connection = nil
-        try? pairingManager?.unpair()
-        AppState.shared.setPairing(.notPaired)
+        // Tell the lamp first so it drops its pairing record before we forget
+        // our token. Fire-and-forget with a 5s timeout inside notifyRevokeSelf;
+        // local state always clears on completion regardless of lamp reachability.
+        let snapshot = pairingManager?.current()
+        let manager = pairingManager
+        Task {
+            if let record = snapshot, let manager {
+                await manager.notifyRevokeSelf(host: record.lampHost, token: record.token)
+            }
+            await MainActor.run { [weak self] in
+                self?.connection?.disconnect()
+                self?.connection = nil
+                try? self?.pairingManager?.unpair()
+                AppState.shared.setPairing(.notPaired)
+            }
+        }
     }
 
     private func startConnection(record: PairingRecord) {

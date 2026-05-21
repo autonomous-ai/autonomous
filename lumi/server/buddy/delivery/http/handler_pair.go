@@ -1,7 +1,9 @@
 package http
 
 import (
+	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go-lamp.autonomous.ai/server/serializers"
@@ -22,6 +24,31 @@ type pairConfirmRequest struct {
 	Name        string `json:"name"`
 	Fingerprint string `json:"fingerprint"`
 	OSVersion   string `json:"os_version"`
+}
+
+// RevokeSelf clears the pairing when the buddy app itself initiates unpair
+// (user clicks "Revoke pairing" in the menu bar). Buddy authenticates with its
+// Bearer token so this can't be triggered by random LAN clients. Without this
+// endpoint, the lamp would keep a stale pairing record and the buddy would
+// have to re-fail a WS handshake before the lamp notices anything is wrong.
+func (h *BuddyHandler) RevokeSelf(c *gin.Context) {
+	auth := c.GetHeader("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		c.JSON(http.StatusUnauthorized, serializers.ResponseError("missing bearer"))
+		return
+	}
+	token := strings.TrimPrefix(auth, "Bearer ")
+	record := h.service.ValidateToken(token)
+	if record == nil {
+		c.JSON(http.StatusUnauthorized, serializers.ResponseError("invalid token"))
+		return
+	}
+	slog.Info("buddy self-revoke", "component", "buddy", "id", record.BuddyID, "name", record.Name)
+	if err := h.service.Unpair(); err != nil {
+		c.JSON(http.StatusInternalServerError, serializers.ResponseError(err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, serializers.ResponseSuccess(gin.H{"revoked": true}))
 }
 
 // PairConfirm exchanges a valid code for a long-lived token. Anonymous (the

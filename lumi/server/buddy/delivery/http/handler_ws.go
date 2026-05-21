@@ -39,6 +39,12 @@ func (h *BuddyHandler) WS(c *gin.Context) {
 		return
 	}
 	h.service.RegisterConnection(conn)
+	// Fire a hello ping in the background so the buddy app's Activity window
+	// gets one immediate ✓ row — confirms end-to-end reachability the moment
+	// pairing completes. Must run in a goroutine: Dispatch blocks until the
+	// buddy responds, which can only happen after RunReadLoop below starts
+	// pumping the WS.
+	go h.service.Greet(record.BuddyID)
 	// Block on the read loop in this request goroutine. Gin will keep the
 	// HTTP request "alive" until this returns, which is what we want for a
 	// long-lived WS.
