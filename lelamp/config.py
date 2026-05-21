@@ -276,9 +276,6 @@ SPEAKER_EMBEDDING_API_KEY: str = DL_API_KEY
 SPEECH_EMOTION_ENABLED: bool = (
     os.environ.get("LELAMP_SPEECH_EMOTION_ENABLED", "true").lower() == "true"
 )
-SPEECH_EMOTION_CONFIDENCE_THRESHOLD: float = float(
-    os.environ.get("LELAMP_SPEECH_EMOTION_CONFIDENCE_THRESHOLD", "0.5")
-)
 SPEECH_EMOTION_FLUSH_S: float = float(
     os.environ.get("LELAMP_SPEECH_EMOTION_FLUSH_S", "10.0")
 )

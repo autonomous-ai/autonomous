@@ -27,7 +27,9 @@ Anti-spam guards (matched to face emotion):
 
     1. submit() drops audio shorter than MIN_AUDIO_S
     2. submit() drops empty user
-    3. worker drops results below CONFIDENCE_THRESHOLD
+    3. worker drops results below the per-label threshold from
+       constants.CONFIDENCE_THRESHOLD_BY_LABEL (DEFAULT_CONFIDENCE_THRESHOLD
+       for unlisted labels)
     4. flush drops neutral/<unk>/other labels
     5. flush dedups by (user, bucket) over DEDUP_WINDOW_S
 """
@@ -50,6 +52,7 @@ from lelamp.service.voice.speech_emotion.base import (
     BaseSpeechEmotionRecognizer,
 )
 from lelamp.service.voice.speech_emotion.constants import (
+    CONFIDENCE_THRESHOLD_BY_LABEL,
     DEFAULT_CONFIDENCE_THRESHOLD,
     DEFAULT_DEDUP_WINDOW_S,
     DEFAULT_DL_SER_ENDPOINT,
@@ -57,6 +60,7 @@ from lelamp.service.voice.speech_emotion.constants import (
     DEFAULT_MIN_AUDIO_S,
     DEFAULT_QUEUE_MAXSIZE,
     SENSING_EVENT_TYPE,
+    SpeechEmotionLabel
 )
 from lelamp.service.voice.speech_emotion.emotion2vec import Emotion2VecRecognizer
 from lelamp.service.voice.speech_emotion.utils import (
@@ -64,6 +68,7 @@ from lelamp.service.voice.speech_emotion.utils import (
     format_message,
     is_neutral,
     normalize_label,
+    threshold_for,
 )
 
 logger = logging.getLogger("lelamp.voice.speech_emotion")
@@ -76,9 +81,6 @@ _DEDUP_WINDOW_S: float = float(
 )
 _MIN_AUDIO_S: float = float(
     getattr(config, "SPEECH_EMOTION_MIN_AUDIO_S", DEFAULT_MIN_AUDIO_S)
-)
-_CONFIDENCE_THRESHOLD: float = float(
-    getattr(config, "SPEECH_EMOTION_CONFIDENCE_THRESHOLD", DEFAULT_CONFIDENCE_THRESHOLD)
 )
 _API_URL: str = getattr(config, "SPEECH_EMOTION_API_URL", "") or ""
 _API_KEY: str = getattr(config, "SPEECH_EMOTION_API_KEY", "") or ""
@@ -95,7 +97,7 @@ class _Job:
 @dataclass(slots=True)
 class _Inference:
     user: str
-    label: str
+    label: SpeechEmotionLabel
     confidence: float
     duration_s: float
     ts: float
@@ -130,7 +132,6 @@ class SpeechEmotionService:
         flush_s: float = _FLUSH_S,
         dedup_window_s: float = _DEDUP_WINDOW_S,
         min_audio_s: float = _MIN_AUDIO_S,
-        confidence_threshold: float = _CONFIDENCE_THRESHOLD,
         lumi_url: str = _LUMI_URL,
         queue_maxsize: int = DEFAULT_QUEUE_MAXSIZE,
     ):
@@ -140,7 +141,6 @@ class SpeechEmotionService:
         self._flush_s: float = flush_s
         self._dedup_window_s: float = dedup_window_s
         self._min_audio_s: float = min_audio_s
-        self._confidence_threshold: float = confidence_threshold
         self._lumi_url: str = lumi_url
 
         # mutable state — guarded by _lock
@@ -158,8 +158,10 @@ class SpeechEmotionService:
             self._start_workers()
             logger.info(
                 "[speech_emotion] SERVICE STARTED — flush=%.1fs dedup=%.1fs "
-                "min_audio=%.1fs conf>=%.2f lumi_url=%s recognizer=%s",
-                flush_s, dedup_window_s, min_audio_s, confidence_threshold,
+                "min_audio=%.1fs per-label thresholds=%s default=%.2f "
+                "lumi_url=%s recognizer=%s",
+                flush_s, dedup_window_s, min_audio_s,
+                CONFIDENCE_THRESHOLD_BY_LABEL, DEFAULT_CONFIDENCE_THRESHOLD,
                 self._lumi_url, type(self._recognizer).__name__,
             )
         else:
@@ -242,7 +244,6 @@ class SpeechEmotionService:
             }
 
     # --- worker thread ----------------------------------------------------
-
     def _start_workers(self) -> None:
         self._worker_thread = threading.Thread(
             target=self._worker_loop, name="speech-emotion-worker", daemon=True,
@@ -288,16 +289,18 @@ class SpeechEmotionService:
             "[speech_emotion] recognize OK: user=%r label=%s confidence=%.3f (took %.2fs)",
             job.user, result.label, result.confidence, elapsed,
         )
-        if result.confidence < self._confidence_threshold:
+        label = SpeechEmotionLabel(normalize_label(result.label))
+        label_threshold = threshold_for(label)
+        if result.confidence < label_threshold:
             logger.info(
                 "[speech_emotion] DROP — low confidence: %s %.3f < %.2f",
-                result.label, result.confidence, self._confidence_threshold,
+                label, result.confidence, label_threshold,
             )
             return
 
         inf = _Inference(
             user=job.user,
-            label=normalize_label(result.label),
+            label=label,
             confidence=result.confidence,
             duration_s=job.duration_s,
             ts=time.time(),
