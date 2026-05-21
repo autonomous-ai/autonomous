@@ -7,36 +7,44 @@ up the service or hitting dlbackend.
 from __future__ import annotations
 
 from lelamp.service.voice.speech_emotion.constants import (
+    CONFIDENCE_THRESHOLD_BY_LABEL,
+    DEFAULT_CONFIDENCE_THRESHOLD,
     HEDGE_BY_BUCKET,
     LABEL_BUCKETS,
     NEUTRAL_LABELS,
+    SpeechEmotionLabel,
 )
-
 
 def normalize_label(label: str) -> str:
     return (label or "").strip().lower()
 
 
-def is_neutral(label: str) -> bool:
-    return normalize_label(label) in NEUTRAL_LABELS
+def is_neutral(label: SpeechEmotionLabel | str) -> bool:
+    return label in NEUTRAL_LABELS
 
 
-def bucket_for(label: str) -> str:
-    return LABEL_BUCKETS.get(normalize_label(label), "other")
+def bucket_for(label: SpeechEmotionLabel | str) -> str:
+    return LABEL_BUCKETS.get(label, "other")
+
+
+def threshold_for(label: SpeechEmotionLabel | str) -> float:
+    return CONFIDENCE_THRESHOLD_BY_LABEL.get(
+        label, DEFAULT_CONFIDENCE_THRESHOLD,
+    )
 
 
 def hedge_for(bucket: str) -> str:
     return HEDGE_BY_BUCKET.get(bucket, "do not over-react")
 
 
-def format_message(label: str, confidence: float, bucket: str) -> str:
+def format_message(label: SpeechEmotionLabel, confidence: float, bucket: str) -> str:
     """Hedged sensing message — symmetric with face emotion processor.
 
     Skill parsers on Lumi extract the raw label via regex on the
     "Speech emotion detected: <Label>." prefix; everything inside the
     parentheses is human-readable hint for the agent.
     """
-    nice = normalize_label(label).capitalize() or "Unknown"
+    nice = label.value.capitalize() or "Unknown"
     return (
         f"Speech emotion detected: {nice}. "
         f"(weak voice cue; confidence={confidence:.2f}; "
