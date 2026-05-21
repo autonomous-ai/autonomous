@@ -24,6 +24,19 @@ The marker hits `/api/buddy/exec/<action>` on the lamp, which dispatches over th
 3. Place markers at the **start of the reply**, then add a short confirmation that TTS will speak.
 4. If no Mac is paired, say so and tell the user to set it up via the Lumi web UI Buddy card.
 
+### When to load `reference/vision.md` instead
+
+The marker pattern below covers ~90% of computer-use requests: launching apps, opening URLs, typing into the focused field, keyboard shortcuts, named-button clicks. It is fire-and-forget — fast, but cannot return data.
+
+Load `reference/vision.md` and follow its synchronous bash/curl loop **only** when the task requires actually seeing the screen:
+
+- "Click the blue button in the toolbar" / "click the X on that dialog" (no stable accessibility label)
+- "What's on my screen right now?" / "Read me the error dialog"
+- "Drag the slider to the middle" / "move that window over here"
+- Multi-step UI navigation where each step depends on what appears next
+
+Do NOT load vision for tasks the marker actions already handle — vision is slower and far less reliable (~22-40% per multi-step task).
+
 ## Examples
 
 Input: "Open Chrome on my computer"
