@@ -97,7 +97,8 @@ func (h *AgentHandler) fireHWCalls(calls []hwCall, flowRunID string) {
 			if strings.HasPrefix(c.path, "/wellbeing/") ||
 				strings.HasPrefix(c.path, "/mood/") ||
 				strings.HasPrefix(c.path, "/music-suggestion/") ||
-				strings.HasPrefix(c.path, "/posture/") {
+				strings.HasPrefix(c.path, "/posture/") ||
+				strings.HasPrefix(c.path, "/buddy/") {
 				postURL = "http://127.0.0.1:5000/api" + c.path
 			}
 			resp, err := http.Post(postURL, "application/json", strings.NewReader(c.body))
@@ -160,6 +161,9 @@ func (h *AgentHandler) fireHWCalls(calls []hwCall, flowRunID string) {
 			case strings.HasPrefix(c.path, "/posture/"):
 				flow.Log("hw_posture", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
 				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_posture", Summary: c.path + " " + c.body, RunID: flowRunID})
+			case strings.HasPrefix(c.path, "/buddy/"):
+				flow.Log("hw_buddy", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_buddy", Summary: c.path + " " + c.body, RunID: flowRunID})
 			default:
 				flow.Log("hw_call", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
 			}

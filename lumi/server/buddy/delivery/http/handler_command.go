@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -57,6 +58,51 @@ func (h *BuddyHandler) Command(c *gin.Context) {
 	// Buddy's response is already shaped {id, ok, result, error, duration_ms}.
 	// Pass it through inside the lumi envelope so callers get a consistent
 	// {status: 1, data: <buddy-response>, message: null}.
+	var inner map[string]any
+	if err := json.Unmarshal(raw, &inner); err != nil {
+		c.JSON(http.StatusOK, serializers.ResponseSuccess(json.RawMessage(raw)))
+		return
+	}
+	c.JSON(http.StatusOK, serializers.ResponseSuccess(inner))
+}
+
+// Exec is the marker-friendly entry point used by OpenClaw skills via the
+// `[HW:/buddy/exec/<action>:{...}]` inline marker. URL path carries the action;
+// JSON body is the params blob. This sidesteps the HW-marker regex limitation
+// (no nested `{}` allowed in body) by keeping params flat per call.
+//
+// For richer use (vision loop, multi-step) the OpenClaw skill should call
+// /api/buddy/command directly with the full Command schema.
+func (h *BuddyHandler) Exec(c *gin.Context) {
+	action := c.Param("action")
+	if action == "" {
+		c.JSON(http.StatusBadRequest, serializers.ResponseError("missing action"))
+		return
+	}
+	body, _ := io.ReadAll(c.Request.Body)
+	params := map[string]any{}
+	if len(body) > 0 {
+		if err := json.Unmarshal(body, &params); err != nil {
+			c.JSON(http.StatusBadRequest, serializers.ResponseError("invalid params json: "+err.Error()))
+			return
+		}
+	}
+	cmd := buddy.Command{
+		ID:        buddy.NewCommandID(),
+		Action:    action,
+		Params:    params,
+		TimeoutMs: 10000,
+		IssuedAt:  time.Now().UTC().Format(time.RFC3339),
+		IssuedBy:  "skill:hw-marker",
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 15*time.Second)
+	defer cancel()
+
+	raw, err := h.service.Dispatch(ctx, cmd)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, serializers.ResponseError(err.Error()))
+		return
+	}
 	var inner map[string]any
 	if err := json.Unmarshal(raw, &inner); err != nil {
 		c.JSON(http.StatusOK, serializers.ResponseSuccess(json.RawMessage(raw)))

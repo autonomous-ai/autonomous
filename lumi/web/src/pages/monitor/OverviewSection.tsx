@@ -34,6 +34,7 @@ function useEmotionPresets() {
 }
 import type { SystemInfo, NetworkInfo, HWHealth, OCStatus, PresenceInfo, VoiceStatus, ServoState, DisplayState, AudioVolume, LEDColor, SceneInfo } from "./types";
 import { StatusDot, HWBadge, SignalBars, formatUptime, SoftwareUpdateButton } from "./components";
+import { BuddyCard } from "./BuddyCard";
 
 export function OverviewSection({
   sys,
@@ -517,7 +518,7 @@ export function OverviewSection({
         ) : <span style={{ color: "var(--lm-text-muted)" }}>Loading…</span>}
       </div>
 
-      {/* Versions & per-target software-update buttons.
+      {/* Versions + Lumi Buddy pairing.
           OS uptime sits in the host row; detailed CPU/RAM/Disk live in System tab. */}
       <div className="lm-grid-4">
         <div style={S.card}>
@@ -530,6 +531,7 @@ export function OverviewSection({
             <VersionRow name="Agent"  color="var(--lm-purple)" version={oc?.version ?? null}     uptime={oc?.connected ? (oc?.agentUptime ?? null) : null}      updateTarget={null} />
           </div>
         </div>
+        <BuddyCard />
       </div>
 
     </div>
