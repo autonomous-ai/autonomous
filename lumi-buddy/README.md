@@ -25,31 +25,45 @@ The MVP targets macOS only. Each platform lives in its own subfolder so toolchai
 
 Requirements: macOS 13 (Ventura)+, Swift 5.9+ (Xcode 15 or Command Line Tools).
 
-```bash
-cd macos
-swift --version    # verify
-swift run          # dev — shows 💡 in menu bar
-```
-
-A 💡 icon appears in the macOS menu bar. Click it for the menu (Pair, About, Quit). No Dock icon (intentional — accessory-only app).
-
-Release build:
+The `Makefile` at this directory wraps everything. From `lumi-buddy/`:
 
 ```bash
-cd macos
-swift build -c release
-./.build/release/LumiBuddy
+make help       # list all targets
+make run        # dev — runs in foreground (Ctrl-C to stop)
+make app        # build dist/LumiBuddy.app
+make open       # launch the bundled .app
+make install    # copy bundled .app to /Applications
+make audit      # tail the audit log
+make kill       # stop any running LumiBuddy
+make clean      # remove all build artifacts
+make mock       # run mock-lamp (Go) — test buddy without real lumi side
 ```
 
-### Distribution (MVP)
+Behind the scenes `make run` calls `swift run` inside `macos/`. Use it if you don't want to remember the SPM commands.
 
-No code signing or notarization yet. First run is blocked by Gatekeeper:
+### First launch (Gatekeeper)
 
-1. Build the release binary as above
-2. Bundle into an `.app` (TODO — Phase 1I)
-3. Right-click the `.app` → **Open** → confirm in the dialog
+No code signing yet. First time launching the bundled `.app` Gatekeeper will block it:
 
-Apple Developer signing comes in v2.0.
+1. `make app` to build `dist/LumiBuddy.app`
+2. Finder → right-click the `.app` → **Open** → confirm in the dialog
+3. Subsequent launches work normally (`make open` or double-click)
+
+Apple Developer signing + notarization comes in v2.0.
+
+## Testing end-to-end with mock-lamp
+
+Until the real lumi Go side lands, you can drive the buddy from a tiny Go mock server. See [`mock-lamp/README.md`](mock-lamp/README.md). Two terminals:
+
+```bash
+# Terminal 1
+make run        # buddy menu bar app
+
+# Terminal 2
+make mock       # prints pairing code, drops you into a REPL
+```
+
+Then in buddy's menu → **Pair with Lumi…** → host `localhost:8765` + the 6-digit code. The mock's REPL sends commands (`ping`, `open_app Calculator`, `type_text hello`, etc.) over the WebSocket.
 
 ---
 

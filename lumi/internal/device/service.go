@@ -346,19 +346,31 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 	if thinkingChanged {
 		s.config.LLMDisableThinking = data.LLMDisableThinking
 	}
-	// STT / TTS API keys + base URLs and Deepgram key: blanks intentionally
-	// clear so the operator can switch STT provider (deepgram ↔ autonomous)
-	// or revert to the LLM fallback via the GetXxx helpers.
-	s.config.DeepgramAPIKey = data.DeepgramAPIKey
-	s.config.STTAPIKey = data.STTAPIKey
-	s.config.TTSAPIKey = data.TTSAPIKey
-	s.config.STTBaseURL = data.STTBaseURL
-	s.config.TTSBaseURL = data.TTSBaseURL
+	// PATCH semantics: empty = leave existing value alone. Stops the Settings
+	// page (which ships its full form body even when the operator only edited
+	// one tab) from wiping STT/TTS/Deepgram fields it never showed.
+	if data.DeepgramAPIKey != "" {
+		s.config.DeepgramAPIKey = data.DeepgramAPIKey
+	}
+	if data.STTAPIKey != "" {
+		s.config.STTAPIKey = data.STTAPIKey
+	}
+	if data.TTSAPIKey != "" {
+		s.config.TTSAPIKey = data.TTSAPIKey
+	}
+	if data.STTBaseURL != "" {
+		s.config.STTBaseURL = data.STTBaseURL
+	}
+	if data.TTSBaseURL != "" {
+		s.config.TTSBaseURL = data.TTSBaseURL
+	}
 	// Operators pick a language; the matching Deepgram SKU is auto-derived
 	// because end users don't know which model handles which language.
 	prevLang := s.config.STTLanguage
-	s.config.STTLanguage = data.STTLanguage
-	s.config.STTModel = sttModelForLanguage(data.STTLanguage)
+	if data.STTLanguage != "" {
+		s.config.STTLanguage = data.STTLanguage
+		s.config.STTModel = sttModelForLanguage(data.STTLanguage)
+	}
 	langChanged := prevLang != s.config.STTLanguage
 	if data.TTSProvider != "" {
 		s.config.TTSProvider = data.TTSProvider
@@ -408,10 +420,15 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 			s.config.TelegramUserID = data.TelegramUserID
 		}
 	}
-	// MQTT endpoint: update (empty string clears it)
-	s.config.MQTTEndpoint = data.MQTTEndpoint
-	s.config.MQTTUsername = data.MQTTUsername
-	s.config.MQTTPassword = data.MQTTPassword
+	if data.MQTTEndpoint != "" {
+		s.config.MQTTEndpoint = data.MQTTEndpoint
+	}
+	if data.MQTTUsername != "" {
+		s.config.MQTTUsername = data.MQTTUsername
+	}
+	if data.MQTTPassword != "" {
+		s.config.MQTTPassword = data.MQTTPassword
+	}
 	if data.MQTTPort != 0 {
 		s.config.MQTTPort = data.MQTTPort
 	}

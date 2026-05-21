@@ -2,12 +2,100 @@ import Cocoa
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
+    private var discovery: LampDiscovery?
+    private var pairingManager: PairingManager?
+    private var dispatcher: CommandDispatcher?
+    private var connection: LumiConnection?
+    private var auditLog: AuditLog?
+    private var pairingWindow: PairingWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        menuBarController = MenuBarController()
+        let store = PairingStore()
+        let audit = AuditLog()
+        let dispatcher = CommandDispatcher(auditLog: audit)
+        let pairingManager = PairingManager(store: store)
+
+        self.auditLog = audit
+        self.dispatcher = dispatcher
+        self.pairingManager = pairingManager
+
+        // Bonjour discovery — best-effort. If lamp doesn't advertise `_lumi._tcp`,
+        // user pairs by typing `lumi-xxxx.local` manually.
+        let discovery = LampDiscovery()
+        discovery.onLampsChanged = { lamps in
+            AppState.shared.setDiscoveredLamps(lamps)
+        }
+        discovery.start()
+        self.discovery = discovery
+
+        menuBarController = MenuBarController(
+            onPair: { [weak self] host in self?.showPairing(host: host) },
+            onUnpair: { [weak self] in self?.unpair() },
+            onTogglePause: { paused in AppState.shared.setPaused(paused) },
+            onAbout: { [weak self] in self?.showAbout() },
+            onQuit: { NSApp.terminate(nil) }
+        )
+
+        // Auto-reconnect if a record already exists from a previous run.
+        if let record = pairingManager.current() {
+            AppState.shared.setPairing(.paired(buddyID: record.buddyID, lampHost: record.lampHost))
+            startConnection(record: record)
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        connection?.disconnect()
+        discovery?.stop()
+    }
+
+    // MARK: - actions
+
+    private func showPairing(host: String?) {
+        guard let pairingManager else { return }
+        let controller = PairingWindowController(manager: pairingManager, initialHost: host)
+        controller.onSuccess = { [weak self] record in
+            AppState.shared.setPairing(.paired(buddyID: record.buddyID, lampHost: record.lampHost))
+            self?.startConnection(record: record)
+        }
+        pairingWindow = controller
+        NSApp.activate(ignoringOtherApps: true)
+        controller.window?.center()
+        controller.showWindow(nil)
+        controller.window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func unpair() {
+        connection?.disconnect()
+        connection = nil
+        try? pairingManager?.unpair()
+        AppState.shared.setPairing(.notPaired)
+    }
+
+    private func startConnection(record: PairingRecord) {
+        connection?.disconnect()
+        guard let dispatcher else { return }
+        let c = LumiConnection(host: record.lampHost, token: record.token, dispatcher: dispatcher)
+        c.connect()
+        connection = c
+    }
+
+    private func showAbout() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Lumi Buddy"
+        alert.informativeText = """
+            Native macOS companion that lets your Lumi lamp control this Mac \
+            via voice commands processed by OpenClaw.
+
+            MVP build: pairing, persistent WebSocket, command execution. \
+            Lamp-side Go endpoints are required for end-to-end use; see \
+            lumi-buddy/docs/lumi-buddy-mvp.md.
+            """
+        alert.alertStyle = .informational
+        alert.runModal()
     }
 }

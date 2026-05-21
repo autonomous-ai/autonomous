@@ -4,63 +4,173 @@ final class MenuBarController: NSObject {
     private let statusItem: NSStatusItem
     private let menu = NSMenu()
 
-    override init() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let onPair: (String?) -> Void
+    private let onUnpair: () -> Void
+    private let onTogglePause: (Bool) -> Void
+    private let onAbout: () -> Void
+    private let onQuit: () -> Void
+
+    init(
+        onPair: @escaping (String?) -> Void,
+        onUnpair: @escaping () -> Void,
+        onTogglePause: @escaping (Bool) -> Void,
+        onAbout: @escaping () -> Void,
+        onQuit: @escaping () -> Void
+    ) {
+        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        self.onPair = onPair
+        self.onUnpair = onUnpair
+        self.onTogglePause = onTogglePause
+        self.onAbout = onAbout
+        self.onQuit = onQuit
         super.init()
 
+        statusItem.menu = menu
+        AppState.shared.onChange = { [weak self] in self?.rebuild() }
+        rebuild()
+    }
+
+    private func rebuild() {
+        let state = AppState.shared
+
         if let button = statusItem.button {
-            button.title = "💡"
-            button.toolTip = "Lumi Buddy"
+            button.title = iconTitle(for: state)
+            button.toolTip = headerText(for: state)
         }
 
-        buildMenu()
-        statusItem.menu = menu
+        menu.removeAllItems()
+
+        let header = NSMenuItem(title: headerText(for: state), action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(header)
+        menu.addItem(.separator())
+
+        switch state.pairing {
+        case .notPaired:
+            addUnpairedItems(lamps: state.discoveredLamps)
+        case .paired(_, let host):
+            addPairedItems(host: host, connection: state.connection, paused: state.paused)
+        }
+
+        menu.addItem(.separator())
+
+        let about = NSMenuItem(title: "About Lumi Buddy", action: #selector(aboutAction), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+
+        let quit = NSMenuItem(title: "Quit Lumi Buddy", action: #selector(quitAction), keyEquivalent: "q")
+        quit.target = self
+        menu.addItem(quit)
     }
 
-    private func buildMenu() {
-        let statusItemEntry = NSMenuItem(title: "Lumi Buddy — Not paired", action: nil, keyEquivalent: "")
-        statusItemEntry.isEnabled = false
-        menu.addItem(statusItemEntry)
+    // MARK: - header text + icon
 
-        menu.addItem(NSMenuItem.separator())
-
-        let pairItem = NSMenuItem(title: "Pair with Lumi…", action: #selector(pairAction(_:)), keyEquivalent: "p")
-        pairItem.target = self
-        menu.addItem(pairItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let aboutItem = NSMenuItem(title: "About Lumi Buddy", action: #selector(aboutAction(_:)), keyEquivalent: "")
-        aboutItem.target = self
-        menu.addItem(aboutItem)
-
-        let quitItem = NSMenuItem(title: "Quit Lumi Buddy", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        menu.addItem(quitItem)
+    private func iconTitle(for state: AppState) -> String {
+        switch state.pairing {
+        case .notPaired: return "💡"
+        case .paired:
+            switch state.connection {
+            case .connected: return state.paused ? "💡⏸" : "💡✅"
+            case .connecting: return "💡⏳"
+            case .error: return "💡⚠️"
+            case .disconnected: return "💡⚪️"
+            }
+        }
     }
 
-    @objc private func aboutAction(_ sender: Any?) {
+    private func headerText(for state: AppState) -> String {
+        switch state.pairing {
+        case .notPaired:
+            return "Lumi Buddy — Not paired"
+        case .paired(_, let host):
+            switch state.connection {
+            case .connected:
+                return state.paused ? "Paused · paired with \(host)" : "Connected to \(host)"
+            case .connecting:
+                return "Connecting to \(host)…"
+            case .error(let msg):
+                return "Disconnected: \(msg)"
+            case .disconnected:
+                return "Disconnected from \(host)"
+            }
+        }
+    }
+
+    // MARK: - menu sections
+
+    private func addUnpairedItems(lamps: [LampInfo]) {
+        if lamps.isEmpty {
+            let none = NSMenuItem(title: "No lamps discovered yet", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            menu.addItem(none)
+        } else {
+            let label = NSMenuItem(title: "Discovered lamps:", action: nil, keyEquivalent: "")
+            label.isEnabled = false
+            menu.addItem(label)
+            for lamp in lamps {
+                let item = NSMenuItem(title: "  \(lamp.host)", action: #selector(pairDiscovered(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = lamp.host
+                menu.addItem(item)
+            }
+        }
+        let manual = NSMenuItem(title: "Pair with Lumi…", action: #selector(pairManual), keyEquivalent: "p")
+        manual.target = self
+        menu.addItem(manual)
+    }
+
+    private func addPairedItems(host: String, connection: ConnectionStatus, paused: Bool) {
+        let pauseTitle = paused ? "Resume command execution" : "Pause command execution"
+        let pause = NSMenuItem(title: pauseTitle, action: #selector(togglePauseAction), keyEquivalent: "")
+        pause.target = self
+        menu.addItem(pause)
+
+        if let record = AppState.shared.lastCommand {
+            let symbol = record.ok ? "✓" : "✗"
+            let line = "Last command: \(record.action) \(symbol)"
+            let last = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+            last.isEnabled = false
+            menu.addItem(last)
+        }
+
+        menu.addItem(.separator())
+        let unpair = NSMenuItem(title: "Revoke pairing…", action: #selector(unpairAction), keyEquivalent: "")
+        unpair.target = self
+        menu.addItem(unpair)
+    }
+
+    // MARK: - actions
+
+    @objc private func pairDiscovered(_ sender: NSMenuItem) {
+        onPair(sender.representedObject as? String)
+    }
+
+    @objc private func pairManual() {
+        onPair(nil)
+    }
+
+    @objc private func togglePauseAction() {
+        onTogglePause(!AppState.shared.paused)
+    }
+
+    @objc private func unpairAction() {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
-        alert.messageText = "Lumi Buddy"
-        alert.informativeText = """
-            MVP scaffold (Phase 1A).
-
-            Pair this Mac with your Lumi lamp to allow voice-driven \
-            computer control. Networking, pairing, and command execution \
-            land in subsequent phases.
-
-            See docs/lumi-buddy-mvp.md for the full plan.
-            """
-        alert.alertStyle = .informational
-        alert.runModal()
+        alert.messageText = "Revoke pairing?"
+        alert.informativeText = "Your Lumi lamp will no longer be able to control this Mac until you pair again."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Revoke")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            onUnpair()
+        }
     }
 
-    @objc private func pairAction(_ sender: Any?) {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Pairing not yet implemented"
-        alert.informativeText = "This scaffold is Phase 1A. Pairing flow lands in Phase 1C."
-        alert.alertStyle = .informational
-        alert.runModal()
+    @objc private func aboutAction() {
+        onAbout()
+    }
+
+    @objc private func quitAction() {
+        onQuit()
     }
 }
