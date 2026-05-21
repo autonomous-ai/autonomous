@@ -6,3 +6,4 @@ DerivedData/
 *.xcworkspace/
 .DS_Store
 xcuserdata/
+dist/
