@@ -1,6 +1,6 @@
 ---
 name: computer-use
-description: Control the user's Mac via the paired Lumi Buddy companion app. Two paths — (A) fast inline HW markers for known intents (open/close apps, URLs, type into focused field, keyboard shortcuts, named-button clicks); (B) the `computer` tool (registered by the `lumi-computer-use` OpenClaw plugin) for vision-driven tasks (screenshot, click at coordinate, drag, read screen text). Always try Path A first; only call the `computer` tool when the task requires actually seeing the screen. Use when the user asks Lumi to do something on their COMPUTER (e.g. "open Chrome", "go to Gmail", "join Meet at <code>", "close Slack", "type … into my Mac", "copy … to clipboard", "click the blue button on my screen", "what's on my Mac right now?"). Do NOT use for hardware control of the lamp itself (LED, scene, emotion, music, servo) — those are separate skills. Do NOT use if no Mac is paired (the lamp web UI shows pairing status under the Buddy card).
+description: Control the user's Mac via the paired Lumi Buddy companion app — open/close apps, navigate URLs in Chrome, type text into focused fields, fire keyboard shortcuts, show desktop notifications, write to clipboard, click named UI buttons via macOS Accessibility. Also covers vision-driven tasks (screenshot, find/click unlabelled UI, read text off the screen, drag) — those load `reference/vision.md` for the synchronous see-think-act loop. Use when the user explicitly asks Lumi to do something on their COMPUTER (e.g. "open Chrome", "go to Gmail", "join Meet", "close Slack", "type … into my Mac", "copy … to clipboard", "click the blue button on my screen", "what's on my Mac right now?"). Do NOT use for hardware control of the lamp itself (LED, scene, emotion, music, servo) — those are separate skills. Do NOT use if no Mac is paired (the lamp web UI shows pairing status under the Buddy card).
 ---
 
 # Computer Use (Mac via Lumi Buddy)
@@ -24,22 +24,18 @@ The marker hits `/api/buddy/exec/<action>` on the lamp, which dispatches over th
 3. Place markers at the **start of the reply**, then add a short confirmation that TTS will speak.
 4. If no Mac is paired, say so and tell the user to set it up via the Lumi web UI Buddy card.
 
-### Two paths — pick the right one
+### When to load `reference/vision.md` instead
 
-The skill has **two complementary surfaces**. Pick based on the task.
+The marker pattern below covers ~90% of computer-use requests: launching apps, opening URLs, typing into the focused field, keyboard shortcuts, named-button clicks. It is fire-and-forget — fast, but cannot return data.
 
-**Path A — HW markers (this skill).** Fire-and-forget, no return value, ~100% reliable when the action matches a known intent. Use for: launching apps, opening URLs (including deep links), typing into the focused field, keyboard shortcuts, named-button clicks (when Accessibility tree exposes the label). Examples are listed below.
+Load `reference/vision.md` and follow its synchronous bash/curl loop **only** when the task requires actually seeing the screen:
 
-**Path B — `computer` tool (separate tool, registered by the `lumi-computer-use` OpenClaw plugin).** Native tool-call loop. Lets you take screenshots, observe the screen, and click at coordinates you compute yourself. Use ONLY when the task requires actually *seeing* the screen:
+- "Click the blue button in the toolbar" / "click the X on that dialog" (no stable accessibility label)
+- "What's on my screen right now?" / "Read me the error dialog"
+- "Drag the slider to the middle" / "move that window over here"
+- Multi-step UI navigation where each step depends on what appears next
 
-- "Click that blue button in the toolbar" (no stable label / not a known intent)
-- "Read me what the dialog says" / "What's on screen now?"
-- "Drag the slider to the middle" / multi-step UI navigation
-- Any task where a deep link or marker action cannot do the job
-
-Path B is slower (multiple Anthropic round-trips, screenshots upload) and less reliable (~20-30% per multi-step task on uncommon UI). **Always try Path A first.** Only invoke the `computer` tool when no marker action covers the request, or when the user explicitly asks Lumi to "look at the screen".
-
-When you use Path B, call `computer({action: "screenshot"})` first to see the screen, then issue one action per turn (click_at / type / key / scroll), screenshot again to verify, and stop after at most 6-8 iterations. The tool description has the full action reference.
+Do NOT load vision for tasks the marker actions already handle — vision is slower and far less reliable (~22-40% per multi-step task).
 
 ## Examples
 
@@ -187,7 +183,7 @@ Markers fire in order. Useful patterns:
 - **No nested JSON** in marker params (the marker regex doesn't support nested `{}`). All actions above take flat params.
 - **One action per marker.** Don't try to batch multiple ops into a single marker body.
 - **Don't use this skill for lamp hardware** (LED, scene, emotion, audio playback on the lamp speaker, servo, display) — those are separate skills.
-- **Don't fire `screenshot`, `click_at`, `scroll`, `mouse_move`, `drag`, `cursor_pos`** through inline markers — those need return values. Use the **`computer` tool** (Path B above) when the task requires seeing the screen. The tool is provided by the `lumi-computer-use` OpenClaw plugin and exposes the Anthropic-style action set (screenshot, left_click, type, key, scroll, …).
+- **Don't fire `screenshot`, `click_at`, `scroll`, `mouse_move`, `drag`, `read_clipboard`, `cursor_pos`, `list_displays`** through inline markers. Those need return values (vision loop) and use a different transport. If the task needs visual reasoning (find an unlabelled button, drag a slider, read text off the screen), load `reference/vision.md` and follow its synchronous bash/curl pattern instead.
 - **Match the user's input language** in the TTS confirmation (English in, English out; Vietnamese in, Vietnamese out). Keep the TTS reply to one short sentence.
 - **If the user asks for lamp-side actions** ("turn yellow", "play music", "show emotion"), redirect to the appropriate skill (`led-control`, `music`, `emotion`, `scene`).
 
