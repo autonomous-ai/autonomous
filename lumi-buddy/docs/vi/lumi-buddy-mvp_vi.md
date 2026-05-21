@@ -45,6 +45,8 @@ Mỗi phase ship & review độc lập được.
 
 ### Phase 1A — Folder + scaffold Swift
 
+**Status:** ✓ Done.
+
 **Files:**
 - `lumi-buddy/README.md`
 - `lumi-buddy/macos/Package.swift`
@@ -57,6 +59,8 @@ Mỗi phase ship & review độc lập được.
 
 ### Phase 1B — Discovery lamp (mDNS)
 
+**Status:** ✓ Done — Bonjour browse `_lumi._tcp` chạy; có fallback nhập hostname tay.
+
 **Files:**
 - `lumi-buddy/macos/Sources/LumiBuddy/Discovery/LampDiscovery.swift`
 - `lumi-buddy/macos/Sources/LumiBuddy/Discovery/LampInfo.swift`
@@ -67,6 +71,8 @@ Mỗi phase ship & review độc lập được.
 > Note: confirm tên service mDNS hiện có của lamp. Hiện publish `lumi-<last4hex>.local`; có thể cần advertise thêm service `_lumi._tcp.local` cho browsable. Có thể cần sửa nhỏ bên lelamp/lumi (xem §lamp-side dưới).
 
 ### Phase 1C — Luồng pairing
+
+**Status:** ✓ Done — code 6 số + lưu token trong `buddies.json` (lamp) và Keychain (Mac). Có thêm `DELETE /api/buddy/self` (Bearer-auth) để khi user unpair từ buddy app, lamp cũng xóa record — 2 phía sync.
 
 **File buddy:**
 - `lumi-buddy/macos/Sources/LumiBuddy/Pairing/PairingManager.swift`
@@ -106,6 +112,8 @@ Mỗi phase ship & review độc lập được.
 
 ### Phase 1D — WebSocket connection
 
+**Status:** ✓ Done — WS persistent + reconnect có backoff. Lamp tự fire 1 lệnh `ping` "hello" ngay sau khi connect để Activity window bên buddy hiện 1 dòng ✓ ngay, user xác nhận chain thông suốt.
+
 **File buddy:**
 - `lumi-buddy/macos/Sources/LumiBuddy/Connection/LumiConnection.swift`
 - `lumi-buddy/macos/Sources/LumiBuddy/Connection/Reconnect.swift`
@@ -129,6 +137,8 @@ Mỗi phase ship & review độc lập được.
 
 ### Phase 1E — Command executor (bên buddy)
 
+**Status:** ✓ Done — 16 executors (MVP set + `screenshot`, `click_at`, `scroll`, `mouse_move`, `drag`, `read_clipboard`, `write_clipboard`, `click_button` qua Accessibility, `cursor_pos`, `list_displays`). Các vision executors landed sớm hơn vision phase chính thức để skill bash+curl (`computer-use/reference/vision.md`) dùng được luôn.
+
 **Files:**
 - `lumi-buddy/macos/Sources/LumiBuddy/Commands/Command.swift` (type)
 - `lumi-buddy/macos/Sources/LumiBuddy/Commands/CommandDispatcher.swift`
@@ -148,6 +158,8 @@ Mỗi phase ship & review độc lập được.
 
 ### Phase 1F — Dispatch command (bên lumi Go)
 
+**Status:** ✓ Done — sync `/api/buddy/command` (localOnly) + marker-friendly `/api/buddy/exec/:action`. Cross-compile `GOOS=linux GOARCH=arm64 go build ./...` sạch. Có debug log instrumentation suốt chain (handler_hw → exec/command handler → dispatcher → ws read loop) để truy từng stage khi turn fail.
+
 **Files:**
 - `lumi/internal/buddy/dispatcher.go`
 - `lumi/server/buddy/delivery/http/handler_command.go`
@@ -164,6 +176,8 @@ Mỗi phase ship & review độc lập được.
 
 ### Phase 1G — OpenClaw skill
 
+**Status:** ✓ Done — `SKILL.md` chỉ English, theo style led-control / scene, intent-based fire-and-forget HW markers (`[HW:/buddy/exec/<action>:{...}]`). Plus `reference/vision.md` opt-in cho task cần thực sự nhìn màn hình (bash + curl loop tới `/api/buddy/command`). Vision reference được tune theo guidance Anthropic Computer Use (anchor screenshot ~1280px wide, evaluate sau mỗi step, ưu tiên keyboard shortcut khi click coord rủi ro).
+
 **Files (vị trí tùy convention skill của OpenClaw):**
 - `computer-use/SKILL.md`
 - `computer-use/script.sh` (hoặc tương đương)
@@ -175,6 +189,8 @@ Mỗi phase ship & review độc lập được.
 - Skill xử lý gracefully "chưa pair buddy nào" ("chưa có máy tính nào kết nối")
 
 ### Phase 1H — Hoàn thiện web UI
+
+**Status:** ✓ Done — `BuddyCard` trong Monitor Overview hiện pair/status/revoke. Buddy app cũng có thêm Activity submenu trên menu bar + cửa sổ "Activity" riêng (terminal-tail style) để user audit recent commands không phải mở file audit log. Path audit log: `~/Library/Application Support/LumiBuddy/audit.log`.
 
 **Files:**
 - Update `lumi/web/src/pages/PairedComputers.tsx`

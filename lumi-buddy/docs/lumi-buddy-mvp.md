@@ -45,6 +45,8 @@ Each phase is independently shippable and reviewable.
 
 ### Phase 1A — Folder + Swift scaffold
 
+**Status:** ✓ Done.
+
 **Files:**
 - `lumi-buddy/README.md`
 - `lumi-buddy/macos/Package.swift`
@@ -57,6 +59,8 @@ Each phase is independently shippable and reviewable.
 
 ### Phase 1B — Lamp discovery (mDNS)
 
+**Status:** ✓ Done — Bonjour browse for `_lumi._tcp` works; manual hostname fallback also wired.
+
 **Files:**
 - `lumi-buddy/macos/Sources/LumiBuddy/Discovery/LampDiscovery.swift`
 - `lumi-buddy/macos/Sources/LumiBuddy/Discovery/LampInfo.swift`
@@ -67,6 +71,8 @@ Each phase is independently shippable and reviewable.
 > Note: confirm lamp's existing mDNS service name. Currently it publishes `lumi-<last4hex>.local`; may need to also advertise a `_lumi._tcp.local` service for browsability. May require a small lelamp/lumi tweak (see lamp-side §1 below).
 
 ### Phase 1C — Pairing flow
+
+**Status:** ✓ Done — 6-digit code + token persistence in `buddies.json` + Keychain on the Mac. Includes `DELETE /api/buddy/self` (Bearer-auth) so a user-initiated unpair in the buddy app also drops the lamp's record, keeping both sides in sync.
 
 **Buddy files:**
 - `lumi-buddy/macos/Sources/LumiBuddy/Pairing/PairingManager.swift`
@@ -106,6 +112,8 @@ Each phase is independently shippable and reviewable.
 
 ### Phase 1D — WebSocket connection
 
+**Status:** ✓ Done — persistent WS with backoff reconnect. Lamp fires a `ping` hello command immediately after connect so the user's Activity window shows one ✓ row right away, confirming end-to-end reachability.
+
 **Buddy files:**
 - `lumi-buddy/macos/Sources/LumiBuddy/Connection/LumiConnection.swift`
 - `lumi-buddy/macos/Sources/LumiBuddy/Connection/Reconnect.swift`
@@ -129,6 +137,8 @@ Each phase is independently shippable and reviewable.
 
 ### Phase 1E — Command executors (buddy side)
 
+**Status:** ✓ Done — 16 executors (the MVP set above plus `screenshot`, `click_at`, `scroll`, `mouse_move`, `drag`, `read_clipboard`, `write_clipboard`, `click_button` via Accessibility, `cursor_pos`, `list_displays`). The vision-shaped executors land here ahead of the formal vision phase so the bash+curl reference skill (`computer-use/reference/vision.md`) can use them today.
+
 **Files:**
 - `lumi-buddy/macos/Sources/LumiBuddy/Commands/Command.swift` (types)
 - `lumi-buddy/macos/Sources/LumiBuddy/Commands/CommandDispatcher.swift`
@@ -148,6 +158,8 @@ Each phase is independently shippable and reviewable.
 
 ### Phase 1F — Command dispatch (lumi Go side)
 
+**Status:** ✓ Done — sync `/api/buddy/command` (localOnly) + marker-friendly `/api/buddy/exec/:action`. Cross-compile `GOOS=linux GOARCH=arm64 go build ./...` clean. Debug log instrumentation across the chain (handler_hw → exec/command handler → dispatcher → ws read loop) so a failed turn is traceable to the exact stage.
+
 **Files:**
 - `lumi/internal/buddy/dispatcher.go`
 - `lumi/server/buddy/delivery/http/handler_command.go`
@@ -164,6 +176,8 @@ Each phase is independently shippable and reviewable.
 
 ### Phase 1G — OpenClaw skill
 
+**Status:** ✓ Done — English-only `SKILL.md` following the led-control / scene style, intent-based fire-and-forget HW markers (`[HW:/buddy/exec/<action>:{...}]`). Plus an opt-in `reference/vision.md` for tasks that genuinely require seeing the screen (bash + curl loop against `/api/buddy/command`). The vision reference was tuned with Anthropic Computer Use prompting guidance (anchor screenshots at ~1280px wide, evaluate after every step, prefer keyboard shortcuts when coord clicks are risky).
+
 **Files (location depends on OpenClaw skill conventions):**
 - `computer-use/SKILL.md`
 - `computer-use/script.sh` (or whatever scripting OpenClaw uses)
@@ -176,6 +190,8 @@ Each phase is independently shippable and reviewable.
 
 ### Phase 1H — Web UI polish
 
+**Status:** ✓ Done — `BuddyCard` in the Monitor Overview shows pair/status/revoke. The buddy app side also got a native menu-bar Activity submenu plus a separate "Activity" window (terminal-tail style) so the user can audit recent commands without opening the audit log file. Audit log path: `~/Library/Application Support/LumiBuddy/audit.log`.
+
 **Files:**
 - Update `lumi/web/src/pages/PairedComputers.tsx`
 - Update `lumi/web/src/components/` as needed
@@ -187,6 +203,8 @@ Each phase is independently shippable and reviewable.
 - Visual indicator if a command is in flight
 
 ### Phase 1I — Docs + housekeeping
+
+**Status:** ⏳ Deferred — VERSION_BUDDY file, root Makefile `build-buddy` target, and per-doc drift checks remain. Skipped for now because Leo is iterating solo; revisit when the project is shared or about to be released.
 
 **Files:**
 - Verify `docs/lumi-buddy.md` matches actual implementation (update if drift)
