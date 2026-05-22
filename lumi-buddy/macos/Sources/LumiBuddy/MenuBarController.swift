@@ -70,14 +70,25 @@ final class MenuBarController: NSObject {
     // MARK: - header text + icon
 
     private func iconSymbol(for state: AppState) -> NSImage? {
+        // `lit` = lamp visibly "on": paired, healthy WS, not paused. In that
+        // state we drop template mode and paint the bulb in system yellow so
+        // it actually looks lit against the menu bar — `isTemplate=true` would
+        // flatten lightbulb.fill into the same monochrome silhouette as the
+        // outline, making "paired+connected" indistinguishable from "not paired".
         let name: String
+        var lit = false
         switch state.pairing {
         case .notPaired:
             name = "lightbulb"
         case .paired:
             switch state.connection {
             case .connected:
-                name = state.paused ? "pause.fill" : "lightbulb.fill"
+                if state.paused {
+                    name = "pause.fill"
+                } else {
+                    name = "lightbulb.fill"
+                    lit = true
+                }
             case .connecting:
                 name = "lightbulb"
             case .error:
@@ -86,9 +97,16 @@ final class MenuBarController: NSObject {
                 name = "lightbulb.slash"
             }
         }
-        let img = NSImage(systemSymbolName: name, accessibilityDescription: headerText(for: state))
-        img?.isTemplate = true
-        return img
+        let base = NSImage(systemSymbolName: name, accessibilityDescription: headerText(for: state))
+        guard let base else { return nil }
+        if lit {
+            let config = NSImage.SymbolConfiguration(paletteColors: [NSColor.systemYellow])
+            let coloured = base.withSymbolConfiguration(config) ?? base
+            coloured.isTemplate = false
+            return coloured
+        }
+        base.isTemplate = true
+        return base
     }
 
     private func headerText(for state: AppState) -> String {
