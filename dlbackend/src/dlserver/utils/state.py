@@ -5,6 +5,7 @@ Routers call getters to access the loaded models.
 """
 
 from core.perception.action.perception import ActionPerception
+from core.perception.audio.predictors.base import AudioEmbedder
 from core.perception.emotion.perception import EmotionPerception
 from core.perception.object.perception import ObjectPerception
 from core.perception.pose.perception import PosePerception
@@ -13,6 +14,7 @@ _action_model: ActionPerception | None = None
 _emotion_model: EmotionPerception | None = None
 _pose_model: PosePerception | None = None
 _object_models: dict[str, ObjectPerception] = {}
+_audio_embedder: AudioEmbedder | None = None
 
 
 def get_action_model() -> ActionPerception | None:
@@ -53,3 +55,12 @@ def get_object_model(name: str) -> ObjectPerception | None:
 def set_object_models(models: dict[str, ObjectPerception]) -> None:
     global _object_models
     _object_models = models
+
+
+def get_audio_embedder() -> AudioEmbedder | None:
+    return _audio_embedder
+
+
+def set_audio_embedder(embedder: AudioEmbedder | None) -> None:
+    global _audio_embedder
+    _audio_embedder = embedder

@@ -133,6 +133,9 @@ class HumanActionRecognizer(PredictorBase[Video, RawHumanActionDetection]):
         **kwargs: Any,
     ) -> list[RawHumanActionDetection]:
         """Run inference on buffered frames, return raw prediction (numpy arrays)."""
+        if self._session is None:
+            msg = f"{self.__class__.__name__} session cannot be None"
+            raise RuntimeError(msg)
 
         if preprocess:
             input = self.preprocess(input)
@@ -180,9 +183,7 @@ class HumanActionRecognizer(PredictorBase[Video, RawHumanActionDetection]):
         resized: cv2t.MatLike = cv2.resize(frame_rgb, None, fx=r, fy=r)
         nh, nw = resized.shape[:2]
         half_h, half_w = target_h // 2, target_w // 2
-        return resized[
-            nh // 2 - half_h : nh // 2 + half_h, nw // 2 - half_w : nw // 2 + half_w
-        ]
+        return resized[nh // 2 - half_h : nh // 2 + half_h, nw // 2 - half_w : nw // 2 + half_w]
 
     @override
     def preprocess(

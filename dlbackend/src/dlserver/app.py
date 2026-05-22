@@ -19,10 +19,9 @@ from fastapi import Depends, FastAPI, HTTPException, Security
 from fastapi.security import APIKeyHeader
 
 from config import settings
-from dlserver.routes import audio_recognizer as audio_recognizer_protocol
 from dlserver.routes import speech_emotion_recognizer as ser_protocol
 from dlserver.routes.action import router as action_ws_router
-from dlserver.routes.audio_recognizer import router as audio_recognizer_router
+from dlserver.routes.audio import router as audio_router
 from dlserver.routes.emotion import http_router as emotion_http_router
 from dlserver.routes.emotion import ws_router as emotion_ws_router
 from dlserver.routes.health import router as health_router
@@ -33,16 +32,19 @@ from dlserver.routes.pose import ws_router as pose_ws_router
 from dlserver.routes.speech_emotion_recognizer import router as ser_router
 from dlserver.utils.state import (
     get_action_model,
+    get_audio_embedder,
     get_emotion_model,
     get_object_models,
     get_pose_model,
     set_action_model,
+    set_audio_embedder,
     set_emotion_model,
     set_object_models,
     set_pose_model,
 )
 from factory import (
     build_action_perception,
+    build_audio_embedder,
     build_emotion_perception,
     build_object_perceptions,
     build_pose_perception,
@@ -93,13 +95,16 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning("Failed to load emotion model: %s", e)
 
-    # -- Audio recognizer --
-    logger.info("Loading audio recognizer...")
-    try:
-        audio_recognizer_protocol._get_audio_recognizer()
-        logger.info("Audio recognizer ready")
-    except Exception as e:
-        logger.warning("Failed to load audio recognizer: %s", e)
+    # -- Audio embedder --
+    if settings.audio_embedder.enabled:
+        logger.info("Loading audio embedder...")
+        try:
+            audio_embedder = build_audio_embedder()
+            audio_embedder.start()
+            set_audio_embedder(audio_embedder)
+            logger.info("Audio embedder ready")
+        except Exception as e:
+            logger.warning("Failed to load audio embedder: %s", e)
 
     logger.info("Loading speech emotion recognizer...")
     try:
@@ -144,6 +149,9 @@ async def lifespan(app: FastAPI):
         await pose_model.stop()
     for name, model in get_object_models().items():
         await model.stop()
+    audio_embedder = get_audio_embedder()
+    if audio_embedder is not None:
+        audio_embedder.stop()
     logger.info("DL backend shutdown complete")
 
 
@@ -157,7 +165,7 @@ app.include_router(emotion_ws_router, prefix="/lelamp/api/dl")
 app.include_router(emotion_http_router, prefix="/lelamp/api/dl", dependencies=[Depends(verify_api_key)])
 app.include_router(health_router, prefix="/lelamp/api/dl", dependencies=[Depends(verify_api_key)])
 app.include_router(
-    audio_recognizer_router, prefix="/lelamp/api/dl", dependencies=[Depends(verify_api_key)]
+    audio_router, prefix="/lelamp/api/dl", dependencies=[Depends(verify_api_key)]
 )
 app.include_router(ser_router, prefix="/lelamp/api/dl", dependencies=[Depends(verify_api_key)])
 app.include_router(pose_ws_router, prefix="/lelamp/api/dl")

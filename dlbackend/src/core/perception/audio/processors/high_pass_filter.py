@@ -1,0 +1,36 @@
+"""High-pass filter to remove DC offset and low-frequency rumble."""
+
+import numpy as np
+from scipy.signal import butter, sosfiltfilt
+
+from core.models.media import Audio
+
+from .base import AudioProcessorBase
+
+
+class HighPassFilter(AudioProcessorBase):
+    """4th-order Butterworth high-pass filter (zero-phase)."""
+
+    def __init__(self, cutoff_hz: float = 80.0, order: int = 4) -> None:
+        super().__init__()
+        self._cutoff_hz: float = cutoff_hz
+        self._order: int = order
+
+    def process(self, input: Audio) -> Audio:
+        if input.waveform.shape[0] == 0:
+            return input
+
+        nyq: float = 0.5 * float(input.sample_rate)
+        if self._cutoff_hz <= 0.0 or self._cutoff_hz >= nyq:
+            return input
+
+        try:
+            sos = butter(self._order, self._cutoff_hz / nyq, btype="highpass", output="sos")
+            filtered = sosfiltfilt(sos, input.waveform)
+            return Audio(
+                waveform=np.asarray(filtered, dtype=np.float32),
+                sample_rate=input.sample_rate,
+            )
+        except Exception as exc:
+            self._logger.warning("HighPassFilter failed, passing through: %s", exc)
+            return input

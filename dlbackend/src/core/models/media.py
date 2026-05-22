@@ -2,8 +2,18 @@ from dataclasses import dataclass
 from typing import NamedTuple
 
 import cv2.typing as cv2t
+import numpy as np
+import numpy.typing as npt
 
 from core.enums import GraphEnum
+
+
+@dataclass
+class Audio:
+    waveform: npt.NDArray[np.float32]
+    """Shape: (T,) — mono float32 waveform."""
+
+    sample_rate: int
 
 
 @dataclass

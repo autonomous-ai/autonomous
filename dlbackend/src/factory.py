@@ -17,6 +17,9 @@ from core.models.object import ObjectPerceptionSessionConfig
 from core.models.pose import PosePerceptionSessionConfig
 from core.perception.action.perception import ActionPerception
 from core.perception.action.utils import ActionRecognizerFactory
+from core.perception.audio.predictors.base import AudioEmbedder
+from core.perception.audio.processors.utils import AudioProcessorFactory
+from core.perception.audio.utils import create_embedder
 from core.perception.emotion.perception import EmotionPerception
 from core.perception.emotion.utils import EmotionRecognizerFactory
 from core.perception.face.utils import FaceDetectorFactory
@@ -24,7 +27,11 @@ from core.perception.object.perception import ObjectPerception
 from core.perception.object.utils import ObjectDetectorFactory
 from core.perception.person.utils import PersonDetectorFactory
 from core.perception.pose.perception import PosePerception
-from core.perception.pose.utils import ErgoAssessorFactory, PoseEstimator2DFactory, PoseLifter3DFactory
+from core.perception.pose.utils import (
+    ErgoAssessorFactory,
+    PoseEstimator2DFactory,
+    PoseLifter3DFactory,
+)
 
 logger: logging.Logger = logging.getLogger(__name__)
 
@@ -36,7 +43,9 @@ logger: logging.Logger = logging.getLogger(__name__)
 
 def build_action_perception() -> ActionPerception:
     """Create ActionPerception with factories from settings."""
-    action_ckpt: Path | None = Path(settings.action.ckpt_path) if settings.action.ckpt_path else None
+    action_ckpt: Path | None = (
+        Path(settings.action.ckpt_path) if settings.action.ckpt_path else None
+    )
     action_frame_size: tuple[int, int] | None = None
     if settings.action.w is not None and settings.action.h is not None:
         action_frame_size = (settings.action.h, settings.action.w)
@@ -72,7 +81,9 @@ def build_action_perception() -> ActionPerception:
 
 def build_emotion_perception() -> EmotionPerception:
     """Create EmotionPerception with factories from settings."""
-    emotion_ckpt: Path | None = Path(settings.emotion.ckpt_path) if settings.emotion.ckpt_path else None
+    emotion_ckpt: Path | None = (
+        Path(settings.emotion.ckpt_path) if settings.emotion.ckpt_path else None
+    )
 
     emotion_factory = EmotionRecognizerFactory(
         model_name=settings.emotion.model,
@@ -82,7 +93,10 @@ def build_emotion_perception() -> EmotionPerception:
     face_factory = FaceDetectorFactory(model_name=FaceDetectorEnum.YUNET)
 
     default_config: EmotionPerceptionSessionConfig | None = None
-    if settings.emotion.confidence_threshold is not None or settings.emotion.frame_interval is not None:
+    if (
+        settings.emotion.confidence_threshold is not None
+        or settings.emotion.frame_interval is not None
+    ):
         default_config = EmotionPerceptionSessionConfig(
             confidence_threshold=settings.emotion.confidence_threshold or 0.5,
             frame_interval=settings.emotion.frame_interval or 1.0,
@@ -110,8 +124,14 @@ def build_pose_perception() -> PosePerception:
             Path(settings.pose.lifter_3d_ckpt_path) if settings.pose.lifter_3d_ckpt_path else None
         )
         lifter_3d_input_size: tuple[int, int] | None = None
-        if settings.pose.lifter_3d_frame_w is not None and settings.pose.lifter_3d_frame_h is not None:
-            lifter_3d_input_size = (settings.pose.lifter_3d_frame_w, settings.pose.lifter_3d_frame_h)
+        if (
+            settings.pose.lifter_3d_frame_w is not None
+            and settings.pose.lifter_3d_frame_h is not None
+        ):
+            lifter_3d_input_size = (
+                settings.pose.lifter_3d_frame_w,
+                settings.pose.lifter_3d_frame_h,
+            )
         lifter_3d_factory = PoseLifter3DFactory(
             model_name=settings.pose.lifter_3d,
             model_path=lifter_3d_ckpt,
@@ -154,7 +174,9 @@ def build_object_perceptions() -> dict[str, ObjectPerception]:
             continue
 
         model_path: Path | None = Path(det_settings.model_path) if det_settings.model_path else None
-        classes_path: Path | None = Path(det_settings.classes_path) if det_settings.classes_path else None
+        classes_path: Path | None = (
+            Path(det_settings.classes_path) if det_settings.classes_path else None
+        )
 
         factory = ObjectDetectorFactory(
             model_name=name,
@@ -173,3 +195,31 @@ def build_object_perceptions() -> dict[str, ObjectPerception]:
         )
 
     return perceptions
+
+
+def build_audio_embedder() -> AudioEmbedder:
+    """Create an AudioEmbedder from settings."""
+    model_path: Path | None = (
+        Path(settings.audio_embedder.model_path) if settings.audio_embedder.model_path else None
+    )
+
+    proc = settings.audio_embedder.processor
+    processor_factory = AudioProcessorFactory(
+        target_sample_rate=proc.target_sample_rate,
+        enable_resample=proc.enable_resample,
+        enable_high_pass=proc.enable_high_pass,
+        high_pass_cutoff_hz=proc.high_pass_cutoff_hz,
+        enable_noise_reduce=proc.enable_noise_reduce,
+        noise_reduce_stationary=proc.noise_reduce_stationary,
+        enable_vad=proc.enable_vad,
+        vad_min_duration_sec=proc.vad_min_duration_sec,
+        vad_min_voice_ratio=proc.vad_min_voice_ratio,
+        enable_rms_normalize=proc.enable_rms_normalize,
+        rms_target=proc.rms_target,
+    )
+
+    return create_embedder(
+        model_name=settings.audio_embedder.model,
+        model_path=model_path,
+        processor_factory=processor_factory,
+    )

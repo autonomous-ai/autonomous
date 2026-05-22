@@ -13,6 +13,7 @@ from core.enums import (
     PoseEstimator2DEnum,
     SpeechEmotionRecognizerEnum,
 )
+from core.enums.audio import AudioEmbedderEnum
 from core.enums.pose import ErgoAssessorEnum, PoseLifter3DEnum
 
 
@@ -76,6 +77,27 @@ class SpeechEmotionRecognizerSetting(BaseModel):
     providers: str = ""
 
 
+class AudioProcessorSetting(BaseModel):
+    target_sample_rate: int = 16000
+    enable_resample: bool = True
+    enable_high_pass: bool = True
+    high_pass_cutoff_hz: float = 80.0
+    enable_noise_reduce: bool = True
+    noise_reduce_stationary: bool = False
+    enable_vad: bool = True
+    vad_min_duration_sec: float = 0.5
+    vad_min_voice_ratio: float = 0.4
+    enable_rms_normalize: bool = True
+    rms_target: float = 0.1
+
+
+class AudioEmbedderSetting(BaseModel):
+    enabled: bool = False
+    model: AudioEmbedderEnum = AudioEmbedderEnum.RESNET34
+    model_path: str | None = None
+    processor: AudioProcessorSetting = AudioProcessorSetting()
+
+
 class CryptoSetting(BaseModel):
     enabled: bool = True
     key_dir: Path = Path.home() / ".dlbackend" / "keys"
@@ -132,6 +154,7 @@ class Settings(BaseSettings):
     pose: PoseSetting = PoseSetting()
     person_detector: PersonDetectorSetting = PersonDetectorSetting()
     object_detector: ObjectDetectorSetting = ObjectDetectorSetting()
+    audio_embedder: AudioEmbedderSetting = AudioEmbedderSetting()
 
     crypto: CryptoSetting = CryptoSetting()
     lb: LBSetting = LBSetting()
