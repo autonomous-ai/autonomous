@@ -113,13 +113,6 @@ func (s *Service) Dispatch(ctx context.Context, cmd Command) (json.RawMessage, e
 // Caller should invoke from a goroutine because Dispatch blocks until the
 // buddy responds or times out.
 func (s *Service) Greet(buddyID string) {
-	// macOS Ventura's CFNetwork (Darwin 22.x) needs a beat after the 101 to
-	// transition from HTTP to WS mode. If the server pushes a frame within ~1ms
-	// of the handshake, the client misreads the frame as HTTP and retries the
-	// upgrade on the same TCP socket — the server is already in WS mode and
-	// trips "bad opcode 7, bad MASK". Captured via tcpdump on the lo:5000
-	// interface 2026-05-22.
-	time.Sleep(500 * time.Millisecond)
 	cmd := Command{
 		ID:        NewCommandID(),
 		Action:    "ping",
