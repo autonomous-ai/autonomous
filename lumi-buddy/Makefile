@@ -3,13 +3,15 @@
 
 APP_NAME   := LumiBuddy
 BUNDLE_ID  := network.autonomous.ai.lumi-buddy
-VERSION    := 0.0.2
+VERSION    := 0.0.4
 
 MACOS_DIR  := macos
 DIST_DIR   := dist
 INFO_PLIST := $(MACOS_DIR)/Info.plist
 BUILD_DIR  := $(MACOS_DIR)/.build
-RELEASE_BIN := $(BUILD_DIR)/release/$(APP_NAME)
+# Universal binary output path — `swift build --arch arm64 --arch x86_64` writes here,
+# not the per-arch `.build/release/`. Lets one DMG run on both Apple Silicon and Intel.
+RELEASE_BIN := $(BUILD_DIR)/apple/Products/Release/$(APP_NAME)
 APP_BUNDLE := $(DIST_DIR)/$(APP_NAME).app
 DMG_FILE   := $(DIST_DIR)/$(APP_NAME)-$(VERSION).dmg
 DMG_STAGE  := $(DIST_DIR)/dmg-stage
@@ -43,8 +45,8 @@ run: ## Run buddy in dev mode (foreground)
 build: ## Build debug binary
 	cd $(MACOS_DIR) && swift build
 
-release: ## Build release binary at macos/.build/release/LumiBuddy
-	cd $(MACOS_DIR) && swift build -c release
+release: ## Build universal release binary (arm64 + x86_64) at macos/.build/apple/Products/Release/LumiBuddy
+	cd $(MACOS_DIR) && swift build -c release --arch arm64 --arch x86_64
 
 check: ## Compile-only check (no link)
 	cd $(MACOS_DIR) && swift build --build-tests

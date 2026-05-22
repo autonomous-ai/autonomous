@@ -62,8 +62,17 @@ final class LumiConnection {
         var req = URLRequest(url: url)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 
-        let config = URLSessionConfiguration.default
+        // `.ephemeral` gives this WS its own CFNetwork connection pool, separate
+        // from `URLSession.shared` (used by PairingManager for HTTP POST). On
+        // macOS Ventura, sharing the pool causes a kept-alive HTTP socket from
+        // pair/confirm to be reused for the WS upgrade — the server then reads
+        // a stale "GET ..." request as a WS frame and trips "RSV1 set, bad
+        // opcode 7, bad MASK".
+        let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = 30
+        config.httpShouldUsePipelining = false
+        config.urlCache = nil
+        config.httpCookieStorage = nil
         let session = URLSession(configuration: config)
         self.session = session
 
