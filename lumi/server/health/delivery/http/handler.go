@@ -18,6 +18,7 @@ import (
 	"go-lamp.autonomous.ai/internal/device"
 	"go-lamp.autonomous.ai/internal/network"
 	"go-lamp.autonomous.ai/lib/lelamp"
+	agenthttp "go-lamp.autonomous.ai/server/agent/delivery/http"
 	"go-lamp.autonomous.ai/server/config"
 	"go-lamp.autonomous.ai/server/serializers"
 )
@@ -64,6 +65,7 @@ func (h *HealthHandler) SystemInfo(c *gin.Context) {
 		"goRoutines": runtime.NumGoroutine(),
 		"version":    config.LumiVersion,
 		"deviceId":   h.config.DeviceID,
+		"agent":      h.agentInfo(),
 	}
 
 	// Parse /proc/meminfo for RAM + swap (KB).
@@ -88,6 +90,30 @@ func (h *HealthHandler) SystemInfo(c *gin.Context) {
 	info["diskPercent"] = diskPercent
 
 	c.JSON(http.StatusOK, serializers.ResponseSuccess(info))
+}
+
+// agentInfo returns the OpenClaw agent connection snapshot — name, connected
+// state, emotion, version, and uptime counters. Public (no auth) by virtue of
+// living on /api/system/info; payload is intentionally non-sensitive (no
+// session token value, no PII).
+func (h *HealthHandler) agentInfo() map[string]any {
+	emotion, _ := lelamp.GetEmotion()
+	var uptime int64
+	if connectedAt := h.agentGateway.ConnectedAt(); connectedAt > 0 {
+		uptime = time.Now().Unix() - connectedAt
+		if uptime < 0 {
+			uptime = 0
+		}
+	}
+	return map[string]any{
+		"name":        h.agentGateway.Name(),
+		"connected":   h.agentGateway.IsReady(),
+		"sessionKey":  h.agentGateway.GetSessionKey() != "",
+		"emotion":     emotion,
+		"version":     agenthttp.GetOpenClawVersion(),
+		"uptime":      uptime,
+		"agentUptime": h.agentGateway.AgentUptime(),
+	}
 }
 
 // readDiskUsage returns total, used (in MB) and usage percent for the given path.

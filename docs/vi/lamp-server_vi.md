@@ -15,7 +15,7 @@
 
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/system/info` | CPU, RAM, temp, uptime, version |
+| GET | `/api/system/info` | CPU, RAM, temp, uptime, version, trạng thái agent (name/connected/emotion/version/uptime) |
 | GET | `/api/system/network` | WiFi SSID, IP, signal, internet status |
 | GET | `/api/system/dashboard` | Snapshot tổng hợp (OpenClaw + config + HW) |
 

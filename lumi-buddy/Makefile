@@ -22,7 +22,7 @@ AUDIT_LOG  := $(HOME)/Library/Application Support/LumiBuddy/audit.log
 
 MOCK_DIR := mock-lamp
 
-.PHONY: help run build release app install open clean audit kill all check mock mock-build dmg icon
+.PHONY: help run build release app install open clean audit kill all check mock mock-build dmg icon app-signed dmg-signed notarize
 
 .DEFAULT_GOAL := help
 
@@ -132,3 +132,78 @@ mock: ## Run the mock lamp server (Go) — test buddy without real lumi side
 
 mock-build: ## Compile-only check for mock-lamp
 	cd $(MOCK_DIR) && go vet ./... && go build ./...
+
+# ----------------------------------------------------------------------------
+# Release signing (Apple Developer ID — for distribution to outside users).
+#
+# Required env vars (set in your shell, not committed):
+#   DEV_ID_APP       e.g. "Developer ID Application: Autonomous Inc (ABCDE12345)"
+#                    — exact name as it appears in `security find-identity -v`
+#   NOTARY_PROFILE   keychain profile alias created via:
+#                    `xcrun notarytool store-credentials lumi-notary --apple-id X --team-id Y --password Z`
+#                    — replace `lumi-notary` with whatever you stored
+#
+# Quick start for the dev doing the Apple Developer enrolment, full step-by-step:
+#   lumi-buddy/docs/release-signing.md
+# ----------------------------------------------------------------------------
+
+DEV_ID_APP     ?=
+NOTARY_PROFILE ?=
+
+app-signed: release $(ICNS_FILE) ## Bundle + sign .app with Developer ID + hardened runtime (requires DEV_ID_APP)
+	@if [ -z "$(DEV_ID_APP)" ]; then \
+		echo "ERROR: DEV_ID_APP env var is required (e.g. 'Developer ID Application: Foo Inc (TEAMID)')."; \
+		echo "       See lumi-buddy/docs/release-signing.md for setup."; \
+		exit 1; \
+	fi
+	@echo "==> Bundling $(APP_BUNDLE) for release signing"
+	@rm -rf "$(APP_BUNDLE)"
+	@mkdir -p "$(APP_BUNDLE)/Contents/MacOS"
+	@mkdir -p "$(APP_BUNDLE)/Contents/Resources"
+	@cp "$(RELEASE_BIN)" "$(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)"
+	@cp "$(INFO_PLIST)" "$(APP_BUNDLE)/Contents/Info.plist"
+	@cp "$(ICNS_FILE)" "$(APP_BUNDLE)/Contents/Resources/AppIcon.icns"
+	@chmod +x "$(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)"
+	@echo "==> Signing with $(DEV_ID_APP)"
+	@codesign --force --options runtime --timestamp \
+		--sign "$(DEV_ID_APP)" \
+		--identifier "$(BUNDLE_ID)" \
+		"$(APP_BUNDLE)"
+	@codesign --verify --deep --strict --verbose=2 "$(APP_BUNDLE)" 2>&1 | sed 's/^/    /'
+	@spctl --assess --type execute --verbose=4 "$(APP_BUNDLE)" 2>&1 | sed 's/^/    /' || true
+	@echo "==> Signed: $(APP_BUNDLE)"
+
+dmg-signed: app-signed ## Build signed .app → package DMG → sign DMG → notarize → staple (requires DEV_ID_APP + NOTARY_PROFILE)
+	@if [ -z "$(NOTARY_PROFILE)" ]; then \
+		echo "ERROR: NOTARY_PROFILE env var is required (keychain profile created via xcrun notarytool store-credentials)."; \
+		echo "       See lumi-buddy/docs/release-signing.md for setup."; \
+		exit 1; \
+	fi
+	@echo "==> Packaging $(DMG_FILE)"
+	@rm -f "$(DMG_FILE)"
+	@rm -rf "$(DMG_STAGE)"
+	@mkdir -p "$(DMG_STAGE)"
+	@cp -R "$(APP_BUNDLE)" "$(DMG_STAGE)/"
+	@ln -s /Applications "$(DMG_STAGE)/Applications"
+	@hdiutil create -volname "$(DMG_VOL)" -srcfolder "$(DMG_STAGE)" \
+		-ov -format UDZO "$(DMG_FILE)" >/dev/null
+	@rm -rf "$(DMG_STAGE)"
+	@echo "==> Signing DMG"
+	@codesign --force --sign "$(DEV_ID_APP)" --timestamp "$(DMG_FILE)"
+	@echo "==> Submitting to Apple notarization (this can take 1-5 min)"
+	@xcrun notarytool submit "$(DMG_FILE)" \
+		--keychain-profile "$(NOTARY_PROFILE)" \
+		--wait
+	@echo "==> Stapling ticket"
+	@xcrun stapler staple "$(DMG_FILE)"
+	@xcrun stapler validate "$(DMG_FILE)" 2>&1 | sed 's/^/    /'
+	@spctl --assess --type open --context context:primary-signature --verbose=4 "$(DMG_FILE)" 2>&1 | sed 's/^/    /' || true
+	@echo "==> Done: $(DMG_FILE) (signed + notarized + stapled)"
+	@echo "    Send this DMG to users — Gatekeeper accepts without right-click → Open."
+
+notarize: ## Re-submit an existing DMG for notarization (skips build + sign; use if a previous notarize failed)
+	@if [ -z "$(NOTARY_PROFILE)" ]; then echo "ERROR: NOTARY_PROFILE required"; exit 1; fi
+	@if [ ! -f "$(DMG_FILE)" ]; then echo "ERROR: $(DMG_FILE) not found — run 'make dmg-signed' first"; exit 1; fi
+	@xcrun notarytool submit "$(DMG_FILE)" --keychain-profile "$(NOTARY_PROFILE)" --wait
+	@xcrun stapler staple "$(DMG_FILE)"
+	@xcrun stapler validate "$(DMG_FILE)"
