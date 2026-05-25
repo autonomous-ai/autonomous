@@ -19,7 +19,7 @@ import (
 
 const (
 	defaultLumiSensingURL = "http://127.0.0.1:5000/api/sensing/event"
-	defaultEventType      = "voice_command"
+	defaultEventType      = "voice"
 )
 
 var forwardClient = &http.Client{Timeout: 2 * time.Second}
