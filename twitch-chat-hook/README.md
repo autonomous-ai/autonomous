@@ -9,6 +9,7 @@ Drop-in Go reference for hooking Twitch live-stream chat messages into a backend
 - `twitch/` — types, HMAC signature verification, minimal Helix client (token, subscribe, list, delete, user lookup).
 - `cmd/webhook/` — HTTPS webhook receiver. Verifies signature, handles the challenge handshake, dedupes redeliveries, dispatches `channel.chat.message` events to `handleChatMessage`.
 - `cmd/subscribe/` — one-shot CLI that creates the subscription against Helix.
+- `cmd/irc/` — anonymous IRC reader fallback. No app / token / 2FA required. Use while the EventSub path is blocked on Developer Console access; same output format as `handleChatMessage`. See [Fallback: anonymous IRC](#fallback-anonymous-irc).
 
 Copy `twitch/` into your BE module, then wire `handleChatMessage` to whatever you actually want (queue, DB, service call).
 
@@ -58,6 +59,20 @@ After subscribe, the webhook log should show `verified subscription <id>`. Then 
 
 If your bot runs on a user machine (no public HTTPS), use EventSub over WebSocket instead — same subscription type, same event shape, different transport. Open `wss://eventsub.wss.twitch.tv/ws`, take the `session_id` from the welcome frame, then call `POST /eventsub/subscriptions` with `transport.method=websocket` and `transport.session_id=<id>`. The HMAC verification code in `twitch/verify.go` is not used in that path — events arrive over the same WS.
 
+## Fallback: anonymous IRC
+
+If you cannot reach the Developer Console (e.g. 2FA blocked, account region rejected) and just need chat text flowing into your code, use `cmd/irc`. It connects to Twitch's legacy IRC gateway with an anonymous `justinfan<digits>` nick — no app, no token, no 2FA — and prints the same `[twitch-chat] #<channel> <<user>> <text>` line that `handleChatMessage` produces.
+
+```bash
+go run ./cmd/irc -channel <broadcaster_login>
+# multi-channel: -channel foo,bar,baz
+```
+
+Caveats:
+- Read-only. Cannot send messages.
+- No HMAC, no `message_id`, no event metadata (cheer/reply/badges). If you need any of that, you need EventSub.
+- Twitch has announced IRC deprecation. Treat this as a short-term workaround, not a permanent transport.
+
 ## Files
 
 ```
@@ -67,7 +82,8 @@ twitch-chat-hook/
 ├── README.md
 ├── cmd/
 │   ├── webhook/main.go      HTTPS webhook receiver
-│   └── subscribe/main.go    create subscription CLI
+│   ├── subscribe/main.go    create subscription CLI
+│   └── irc/main.go          anonymous IRC fallback (no app required)
 └── twitch/
     ├── types.go             EventSub payload types
     ├── verify.go            HMAC SHA256 verification
