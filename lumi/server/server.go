@@ -866,6 +866,7 @@ func (s *Server) handleSetUpCompleteChange(setupCompleted bool) {
 			// sync via atomic tmp+rename); running them concurrently would
 			// race and could clobber sync's writes.
 			safego.Go("model-sync", func() { s.agentGateway.StartModelSync(s.monitorCtx) })
+			safego.Go("primary-model-watch", func() { s.agentGateway.StartPrimaryModelWatch(s.monitorCtx) })
 
 			if ok := s.deviceService.WaitForAgentReady(120 * time.Second); ok {
 				slog.Info("agent gateway ready", "component", "server")

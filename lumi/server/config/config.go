@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"go-lamp.autonomous.ai/lib/mqtt"
 )
@@ -19,6 +20,11 @@ const configPath = "config/config.json"
 var LumiVersion = "dev"
 
 type Config struct {
+	// mu serialises LLMModel mutations and config.Save() so the primary-model
+	// watcher goroutine (syncPrimaryFromFile) cannot race with HTTP handlers
+	// (device.UpdateConfig) that set LLMModel concurrently.
+	mu sync.Mutex
+
 	HttpPort int `json:"httpPort" yaml:"httpPort" validate:"required"`
 
 	// Channel type: "telegram" or "slack" (empty defaults to telegram for backward compat)
@@ -217,20 +223,31 @@ func (c *Config) ResetToDefault() error {
 	return c.Save()
 }
 
-// Save writes the config to the config file.
-func (c Config) Save() error {
+// WithLockSave is the canonical way to mutate config fields and persist them.
+// It acquires mu, runs fn (which may set any fields on c), marshals the result,
+// and writes to disk — all under the same lock so two concurrent callers cannot
+// produce a "newer marshal wins the race but older write lands last" stale
+// snapshot on disk.
+//
+// The notify send happens after the lock is released to keep the critical
+// section as short as possible.
+func (c *Config) WithLockSave(fn func(*Config)) error {
+	c.mu.Lock()
+	fn(c)
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
+		c.mu.Unlock()
 		return fmt.Errorf("marshal config: %w", err)
 	}
-
 	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
+	if mkErr := os.MkdirAll(dir, 0755); mkErr != nil {
+		c.mu.Unlock()
+		return fmt.Errorf("create config dir: %w", mkErr)
 	}
-
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
-		return fmt.Errorf("write config %s: %w", configPath, err)
+	writeErr := os.WriteFile(configPath, data, 0600)
+	c.mu.Unlock() // release before notify so listeners are not blocked
+	if writeErr != nil {
+		return fmt.Errorf("write config %s: %w", configPath, writeErr)
 	}
 	if c.notify != nil {
 		select {
@@ -239,6 +256,30 @@ func (c Config) Save() error {
 		}
 	}
 	return nil
+}
+
+// Save flushes the current config fields to disk under the config mutex.
+// Prefer WithLockSave for any path that also mutates fields.
+func (c *Config) Save() error {
+	return c.WithLockSave(func(*Config) {})
+}
+
+// SetLLMModel atomically sets LLMModel and saves the config in a single lock
+// cycle (no gap between the field write and the marshal). Intended for
+// background goroutines (e.g. primary-model watcher) updating a single field.
+func (c *Config) SetLLMModel(key string) error {
+	return c.WithLockSave(func(c *Config) {
+		c.LLMModel = key
+	})
+}
+
+// LLMModelKey returns LLMModel under the config mutex. Use this in goroutines
+// that read LLMModel concurrently with WithLockSave paths.
+func (c *Config) LLMModelKey() string {
+	c.mu.Lock()
+	key := c.LLMModel
+	c.mu.Unlock()
+	return key
 }
 
 // GetTTSAPIKey returns the TTS provider API key, falling back to LLMAPIKey

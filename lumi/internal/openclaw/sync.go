@@ -30,7 +30,18 @@ import (
 // fatal — the device must keep running.
 //
 // Restarts the openclaw gateway only when the file actually changed.
+// Holds primarySyncMu for the entire read-modify-write cycle so it cannot
+// interleave with other openclaw.json writers (watcher, refresh, setup).
+// The network fetch happens before the lock to keep the critical section short.
 func (s *Service) SyncModelsFromAPI() (bool, error) {
+	resp, err := FetchModelsFromAPI()
+	if err != nil {
+		return false, fmt.Errorf("fetch models: %w", err)
+	}
+
+	s.primarySyncMu.Lock()
+	defer s.primarySyncMu.Unlock()
+
 	configPath := filepath.Join(s.config.OpenclawConfigDir, "openclaw.json")
 	raw, err := os.ReadFile(configPath)
 	if err != nil {
@@ -47,11 +58,6 @@ func (s *Service) SyncModelsFromAPI() (bool, error) {
 	autonomousMap, ok := autonomousProviderMap(configData)
 	if !ok {
 		return false, nil
-	}
-
-	resp, err := FetchModelsFromAPI()
-	if err != nil {
-		return false, fmt.Errorf("fetch models: %w", err)
 	}
 
 	return applyModelsToConfig(configPath, configData, autonomousMap, resp.Models)
@@ -178,6 +184,10 @@ func applyModelsToConfig(configPath string, configData map[string]any, autonomou
 	if err != nil {
 		return false, fmt.Errorf("marshal openclaw config: %w", err)
 	}
+	// Write the current primary into the flag so the watcher can match by
+	// content: model-list sync never changes primary, so the flag value equals
+	// whatever is already set, and the watcher correctly skips this write.
+	setLumiWriteFlag(filepath.Dir(configPath), extractPrimaryModel(configData))
 	if err := atomicWriteFile(configPath, written, 0600); err != nil {
 		return false, fmt.Errorf("write openclaw config: %w", err)
 	}

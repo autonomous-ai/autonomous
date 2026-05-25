@@ -250,6 +250,17 @@ type AgentGateway interface {
 	// the gateway only when the file actually changed.
 	StartModelSync(ctx context.Context)
 
+	// UpdatePrimaryModel patches agents.defaults.model.primary in openclaw.json
+	// to "autonomous/{modelKey}" and restarts the gateway. No-op when modelKey
+	// is empty or when openclaw.json does not exist yet.
+	UpdatePrimaryModel(modelKey string) error
+
+	// StartPrimaryModelWatch watches the openclaw config directory for external
+	// changes to openclaw.json. When a change is detected without a Lumi write
+	// flag, it reads the new primary model and syncs it to config.LLMModel
+	// (only when provider == "autonomous"; others are silently ignored).
+	StartPrimaryModelWatch(ctx context.Context)
+
 	// GetConfiguredChannel returns the primary messaging channel type configured
 	// in the agent runtime (e.g. "telegram", "discord", "slack").
 	// Returns "channel" if none can be determined.

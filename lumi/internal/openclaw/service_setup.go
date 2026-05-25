@@ -297,8 +297,15 @@ func (s *Service) SetupAgent(data domain.SetupRequest) error {
 	if err := os.MkdirAll(s.config.OpenclawConfigDir, 0755); err != nil {
 		return fmt.Errorf("create openclaw config dir: %w", err)
 	}
-	if err := os.WriteFile(configPath, written, 0600); err != nil {
-		return fmt.Errorf("write openclaw config: %w", err)
+	// Serialise flag+file write under primarySyncMu so this cannot interleave
+	// with the watcher (syncPrimaryFromFile) or other openclaw.json writers.
+	expectedPrimary := customProviderName + "/" + defaultModel.Key
+	s.primarySyncMu.Lock()
+	setLumiWriteFlag(s.config.OpenclawConfigDir, expectedPrimary)
+	writeErr := os.WriteFile(configPath, written, 0600)
+	s.primarySyncMu.Unlock()
+	if writeErr != nil {
+		return fmt.Errorf("write openclaw config: %w", writeErr)
 	}
 	if err := chownRuntimeUserIfRoot(configPath, openclawRuntimeUser); err != nil {
 		return fmt.Errorf("set openclaw config ownership: %w", err)
@@ -323,6 +330,12 @@ func (s *Service) SetupAgent(data domain.SetupRequest) error {
 // the whole flow.
 func (s *Service) AddChannel(ctx context.Context, data domain.AddChannelRequest) error {
 	channel := data.EffectiveChannel()
+
+	// Hold primarySyncMu for the full read-modify-write cycle so this cannot
+	// interleave with SyncModelsFromAPI or RefreshModelsConfig writing a newer
+	// version of openclaw.json between our ReadFile and our WriteFile.
+	s.primarySyncMu.Lock()
+	defer s.primarySyncMu.Unlock()
 
 	configPath := filepath.Join(s.config.OpenclawConfigDir, "openclaw.json")
 	var configData map[string]interface{}
@@ -440,6 +453,13 @@ func (s *Service) AddChannel(ctx context.Context, data domain.AddChannelRequest)
 	if err != nil {
 		return fmt.Errorf("marshal openclaw config: %w", err)
 	}
+	// AddChannel does not change the primary model — write the existing primary
+	// into the flag so the watcher correctly identifies this as a Lumi write.
+	// primarySyncMu is already held for the full RMW cycle (acquired at entry).
+	existingPrimary := extractPrimaryModel(configData)
+	if existingPrimary != "" {
+		setLumiWriteFlag(s.config.OpenclawConfigDir, existingPrimary)
+	}
 	if err := os.WriteFile(configPath, written, 0600); err != nil {
 		return fmt.Errorf("write openclaw config: %w", err)
 	}
@@ -487,7 +507,12 @@ func (s *Service) ResetAgent() error {
 
 // RefreshModelsConfig patches the models reasoning fields in openclaw.json
 // based on current config and restarts the agent. Safe to call after UpdateConfig.
+// Holds primarySyncMu for the entire read-modify-write cycle so it cannot
+// interleave with other openclaw.json writers (watcher, model-sync, setup).
 func (s *Service) RefreshModelsConfig() error {
+	s.primarySyncMu.Lock()
+	defer s.primarySyncMu.Unlock()
+
 	configPath := filepath.Join(s.config.OpenclawConfigDir, "openclaw.json")
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -499,6 +524,10 @@ func (s *Service) RefreshModelsConfig() error {
 	}
 
 	disableThinking := s.config.LLMThinkingDisabled()
+	// Read LLMModel under config.mu so it cannot race with a concurrent
+	// WithLockSave call. Lock order: primarySyncMu (held) → config.mu (acquired
+	// here briefly) — consistent with syncPrimaryFromFile's order.
+	currentModel := s.config.LLMModelKey()
 
 	// Patch models.providers.autonomous.models[*].reasoning
 	if modelsMap, ok := configData["models"].(map[string]any); ok {
@@ -519,14 +548,44 @@ func (s *Service) RefreshModelsConfig() error {
 		}
 	}
 
+	// Conditionally sync agents.defaults.model.primary. Only overwrite it when
+	// the current provider is autonomous — if the user switched OpenClaw to a
+	// non-autonomous provider (e.g. openai/gpt-4) externally, we must not
+	// silently reset it back to the Lumi-managed model.
+	currentPrimary := extractPrimaryModel(configData)
+	prov, _, _ := splitProviderModel(currentPrimary)
+	var flagPrimary string // value written into the Lumi-write flag
+	if currentPrimary == "" || prov == customProviderName {
+		// No primary set yet, or it belongs to us — safe to update.
+		newPrimary := customProviderName + "/" + currentModel
+		agents := ensureMap(configData, "agents")
+		defaults := ensureMap(agents, "defaults")
+		modelMap := ensureMap(defaults, "model")
+		modelMap["primary"] = newPrimary
+		defaults["model"] = modelMap
+		agents["defaults"] = defaults
+		configData["agents"] = agents
+		flagPrimary = newPrimary
+		slog.Info("refreshed models config in openclaw.json", "component", "openclaw", "disableThinking", disableThinking, "primary", newPrimary)
+	} else {
+		// Non-autonomous provider is active; preserve it and log state drift so
+		// operators know why the Lumi-side model and OpenClaw diverge.
+		flagPrimary = currentPrimary
+		slog.Warn("[refresh] non-autonomous provider active, skipping primary patch (state drift)",
+			"current", currentPrimary, "lumi_model", s.config.LLMModel)
+	}
+
 	written, err := json.MarshalIndent(configData, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal openclaw config: %w", err)
 	}
+	// Write the flag BEFORE the file so the watcher can match by content and
+	// correctly skip this Lumi-initiated write regardless of the provider.
+	setLumiWriteFlag(s.config.OpenclawConfigDir, flagPrimary)
 	if err := os.WriteFile(configPath, written, 0600); err != nil {
 		return fmt.Errorf("write openclaw config: %w", err)
 	}
-	slog.Info("refreshed models config in openclaw.json", "component", "openclaw", "disableThinking", disableThinking)
+	slog.Debug("wrote openclaw.json after models config refresh", "component", "openclaw", "disableThinking", disableThinking)
 
 	if err := restartOpenclawGateway(); err != nil {
 		return err
