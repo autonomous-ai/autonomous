@@ -12,7 +12,7 @@ from config import settings
 from core.enums.face import FaceDetectorEnum
 from core.enums.object import ObjectDetectorEnum
 from core.models.action import ActionPerceptionSessionConfig
-from core.models.emotion import EmotionPerceptionSessionConfig
+from core.models.facial_emotion import EmotionPerceptionSessionConfig
 from core.models.object import ObjectPerceptionSessionConfig
 from core.models.pose import PosePerceptionSessionConfig
 from core.perception.action.perception import ActionPerception
@@ -20,9 +20,11 @@ from core.perception.action.utils import ActionRecognizerFactory
 from core.perception.audio.predictors.base import AudioEmbedder
 from core.perception.audio.processors.utils import AudioProcessorFactory
 from core.perception.audio.utils import create_embedder
-from core.perception.emotion.perception import EmotionPerception
-from core.perception.emotion.utils import EmotionRecognizerFactory
+from core.perception.audio_emotion.perception import AudioEmotionPerception
+from core.perception.audio_emotion.utils import AudioEmotionRecognizerFactory
 from core.perception.face.utils import FaceDetectorFactory
+from core.perception.facial_emotion.perception import EmotionPerception
+from core.perception.facial_emotion.utils import EmotionRecognizerFactory
 from core.perception.object.perception import ObjectPerception
 from core.perception.object.utils import ObjectDetectorFactory
 from core.perception.person.utils import PersonDetectorFactory
@@ -82,11 +84,11 @@ def build_action_perception() -> ActionPerception:
 def build_emotion_perception() -> EmotionPerception:
     """Create EmotionPerception with factories from settings."""
     emotion_ckpt: Path | None = (
-        Path(settings.emotion.ckpt_path) if settings.emotion.ckpt_path else None
+        Path(settings.fer.ckpt_path) if settings.fer.ckpt_path else None
     )
 
     emotion_factory = EmotionRecognizerFactory(
-        model_name=settings.emotion.model,
+        model_name=settings.fer.model,
         model_path=emotion_ckpt,
     )
 
@@ -94,12 +96,12 @@ def build_emotion_perception() -> EmotionPerception:
 
     default_config: EmotionPerceptionSessionConfig | None = None
     if (
-        settings.emotion.confidence_threshold is not None
-        or settings.emotion.frame_interval is not None
+        settings.fer.confidence_threshold is not None
+        or settings.fer.frame_interval is not None
     ):
         default_config = EmotionPerceptionSessionConfig(
-            confidence_threshold=settings.emotion.confidence_threshold or 0.5,
-            frame_interval=settings.emotion.frame_interval or 1.0,
+            confidence_threshold=settings.fer.confidence_threshold or 0.5,
+            frame_interval=settings.fer.frame_interval or 1.0,
         )
 
     return EmotionPerception(
@@ -222,4 +224,20 @@ def build_audio_embedder() -> AudioEmbedder:
         model_name=settings.audio_embedder.model,
         model_path=model_path,
         processor_factory=processor_factory,
+    )
+
+
+def build_audio_emotion_perception() -> AudioEmotionPerception:
+    """Create AudioEmotionPerception from settings."""
+    ckpt_path: Path | None = (
+        Path(settings.ser.ckpt_path) if settings.ser.ckpt_path else None
+    )
+
+    factory = AudioEmotionRecognizerFactory(
+        model_name=settings.ser.model,
+        model_path=ckpt_path,
+    )
+
+    return AudioEmotionPerception(
+        audio_emotion_recognizer_factory=factory,
     )

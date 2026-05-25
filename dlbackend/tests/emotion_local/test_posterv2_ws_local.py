@@ -12,9 +12,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from dlserver.utils.state import get_emotion_model, set_emotion_model
-from core.perception.emotion.constants import RESOURCES_DIR
-from core.perception.emotion.perception import EmotionPerception
-from core.perception.emotion.utils import EmotionRecognizerFactory
+from core.perception.facial_emotion.constants import RESOURCES_DIR
+from core.perception.facial_emotion.perception import EmotionPerception
+from core.perception.facial_emotion.utils import EmotionRecognizerFactory
 from core.perception.face.utils import FaceDetectorFactory
 
 POSTERV2_EMOTIONS: list[str] = (RESOURCES_DIR / "posterv2_classes.txt").read_text().strip().split("\n")

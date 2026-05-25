@@ -1,5 +1,5 @@
 from .action import HumanActionRecognizerEnum
-from .emotion import EmotionRecognizerEnum
+from .facial_emotion import EmotionRecognizerEnum
 from .person import PersonDetectorEnum
 from .pose import GraphEnum, PoseEstimator2DEnum
 from .speech_emotion_recognizer import SpeechEmotionRecognizerEnum

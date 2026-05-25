@@ -8,18 +8,11 @@ import soundfile as sf
 
 from core.models.media import Audio
 from core.perception.audio.predictors.base import AudioEmbedder
+from core.perception.audio.processors.exceptions import PreprocessRejected
 from core.perception.audio.processors.utils import AudioProcessorFactory
+from core.perception.audio.processors.voice_activity_filter import VoiceActivityFilter
 
-MODEL_PATH = (
-    Path.cwd()
-    / "src"
-    / "core"
-    / "perception"
-    / "audio_recognition"
-    / "models"
-    / "wespeaker-voxceleb-resnet34-LM"
-    / "voxceleb_resnet34_LM.onnx"
-)
+MODEL_PATH = Path.cwd() / "local" / "wespeaker_resnet34.onnx"
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "audio"
 
@@ -169,3 +162,47 @@ class TestChunkEmbeddings:
 
         assert np.mean(a_sims) < 0.4
         assert np.mean(b_sims) < 0.4
+
+
+class TestRejection:
+    def test_predict_before_start_raises(self, speaker_a_audios):
+        emb = AudioEmbedder(model_path=MODEL_PATH, processor_factory=AudioProcessorFactory(
+            enable_resample=False, enable_high_pass=False,
+            enable_noise_reduce=False, enable_vad=False, enable_rms_normalize=False,
+        ))
+        with pytest.raises(RuntimeError, match="not ready"):
+            emb.predict([speaker_a_audios[0]])
+
+    def test_predict_after_stop_raises(self, speaker_a_audios):
+        emb = AudioEmbedder(model_path=MODEL_PATH, processor_factory=AudioProcessorFactory(
+            enable_resample=False, enable_high_pass=False,
+            enable_noise_reduce=False, enable_vad=False, enable_rms_normalize=False,
+        ))
+        emb.start()
+        emb.stop()
+        with pytest.raises(RuntimeError, match="not ready"):
+            emb.predict([speaker_a_audios[0]])
+
+
+class TestPreprocessRejection:
+    def test_vad_rejects_silence(self):
+        vad = VoiceActivityFilter(min_duration_sec=0.5)
+        vad.start()
+        silence = Audio(
+            waveform=np.zeros(16000, dtype=np.float32),
+            sample_rate=16000,
+        )
+        with pytest.raises(PreprocessRejected):
+            vad.process(silence)
+        vad.stop()
+
+    def test_vad_rejects_too_short(self):
+        vad = VoiceActivityFilter(min_duration_sec=10.0)
+        vad.start()
+        short = Audio(
+            waveform=np.random.randn(8000).astype(np.float32),
+            sample_rate=16000,
+        )
+        with pytest.raises(PreprocessRejected):
+            vad.process(short)
+        vad.stop()

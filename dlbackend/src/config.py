@@ -30,7 +30,6 @@ class ActionSetting(BaseModel):
     enabled: bool = True
     model: HumanActionRecognizerEnum = HumanActionRecognizerEnum.X3D
     ckpt_path: str | None = None
-    # Optional overrides — None means use model-specific class defaults
     confidence_threshold: float | None = None
     max_frames: int | None = None
     frame_interval: float | None = None
@@ -38,11 +37,10 @@ class ActionSetting(BaseModel):
     h: int | None = None
 
 
-class EmotionSetting(BaseModel):
+class FERSetting(BaseModel):
     enabled: bool = True
     model: EmotionRecognizerEnum = EmotionRecognizerEnum.POSTERV2
     ckpt_path: str | None = None
-    # Optional overrides — None means use model-specific class defaults
     confidence_threshold: float | None = None
     frame_interval: float | None = None
 
@@ -51,7 +49,6 @@ class PoseSetting(BaseModel):
     enabled: bool = True
     model: PoseEstimator2DEnum = PoseEstimator2DEnum.RTMPOSE
     ckpt_path: str | None = None
-    # Optional overrides — None means use class defaults from PosePerceptionSessionConfig
     confidence_threshold_2d: float | None = None
     min_valid_keypoints: int | None = None
     lifter_3d: PoseLifter3DEnum | None = PoseLifter3DEnum.TCPFORMER
@@ -62,19 +59,11 @@ class PoseSetting(BaseModel):
     ergo_confidence_threshold: float | None = None
 
 
-class SpeechEmotionRecognizerSetting(BaseModel):
-    """Service-level knobs for the SER engine.
-
-    Engine selection and model-file path live at top level
-    (``ser_recognition_model`` / ``ser_recognition_ckpt_path``) to mirror
-    the action / emotion configs. The settings here are runtime tunables
-    forwarded to the engine constructor.
-    """
-
-    sample_rate: int = 16000
-    intra_op_threads: int = 4
-    # ONNX Runtime execution providers, comma-separated. Leave empty for
-    providers: str = ""
+class SERSetting(BaseModel):
+    enabled: bool = True
+    model: SpeechEmotionRecognizerEnum = SpeechEmotionRecognizerEnum.EMOTION2VEC
+    ckpt_path: str | None = None
+    labels_path: str | None = None
 
 
 class AudioProcessorSetting(BaseModel):
@@ -142,15 +131,9 @@ class Settings(BaseSettings):
 
     cache_dir: Path = Path.home() / ".dlbackend"
 
-    ser_recognition_model: SpeechEmotionRecognizerEnum = (
-        SpeechEmotionRecognizerEnum.EMOTION2VEC_PLUS_LARGE
-    )
-    ser_recognition_ckpt_path: str | None = None
-    ser_recognition_labels_path: str | None = None
-    ser: SpeechEmotionRecognizerSetting = SpeechEmotionRecognizerSetting()
-
     action: ActionSetting = ActionSetting()
-    emotion: EmotionSetting = EmotionSetting()
+    fer: FERSetting = FERSetting()
+    ser: SERSetting = SERSetting()
     pose: PoseSetting = PoseSetting()
     person_detector: PersonDetectorSetting = PersonDetectorSetting()
     object_detector: ObjectDetectorSetting = ObjectDetectorSetting()

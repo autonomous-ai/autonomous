@@ -11,9 +11,9 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from core.perception.emotion.constants import RESOURCES_DIR
-from core.perception.emotion.perception import EmotionPerception
-from core.perception.emotion.utils import EmotionRecognizerFactory
+from core.perception.facial_emotion.constants import RESOURCES_DIR
+from core.perception.facial_emotion.perception import EmotionPerception
+from core.perception.facial_emotion.utils import EmotionRecognizerFactory
 from core.perception.face.utils import FaceDetectorFactory
 from dlserver.utils.state import get_emotion_model, set_emotion_model
 

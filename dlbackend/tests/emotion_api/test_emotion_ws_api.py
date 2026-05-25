@@ -16,7 +16,7 @@ import pytest_asyncio
 import websockets
 from dotenv import load_dotenv
 
-from core.perception.emotion.constants import RESOURCES_DIR
+from core.perception.facial_emotion.constants import RESOURCES_DIR
 
 POSTERV2_EMOTIONS: list[str] = (RESOURCES_DIR / "posterv2_classes.txt").read_text().strip().split("\n")
 EMOTIONS_8: list[str] = (RESOURCES_DIR / "emonet_8_classes.txt").read_text().strip().split("\n")

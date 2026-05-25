@@ -1,4 +1,4 @@
-from .emotion import (
+from .facial_emotion import (
     Emotion,
     EmotionDetection,
     EmotionPerceptionSessionConfig,

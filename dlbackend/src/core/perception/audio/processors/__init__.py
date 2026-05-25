@@ -1,6 +1,7 @@
 from .base import AudioProcessorBase
 from .composite import CompositeAudioProcessor
 from .high_pass_filter import HighPassFilter
+from .mono_converter import MonoConverter
 from .noise_reducer import NoiseReducer
 from .resampler import Resampler
 from .rms_normalizer import RMSNormalizer
@@ -12,6 +13,7 @@ __all__ = [
     "AudioProcessorFactory",
     "CompositeAudioProcessor",
     "HighPassFilter",
+    "MonoConverter",
     "NoiseReducer",
     "Resampler",
     "RMSNormalizer",

@@ -2,7 +2,16 @@
        start start-dlserver start-lbserver \
        start-runpod-master start-runpod-slave start-nginx start-runpod-dlserver start-runpod-lbserver stop-runpod-dlserver stop-runpod-lbserver start-jupyter \
        info \
-       test test-api test-local test-action test-action-api test-action-local test-emotion test-emotion-api test-emotion-local test-pose test-pose-api test-pose-local test-audio test-audio-api test-audio-local lint
+       test test-api test-local \
+       test-action test-action-api test-action-local \
+       test-fer test-fer-api test-fer-local \
+       test-ser test-ser-api test-ser-local \
+       test-pose test-pose-api test-pose-local \
+       test-object test-object-api test-object-local \
+       test-audio test-audio-api test-audio-local \
+       test-crypto test-crypto-api test-crypto-local \
+       test-lb test-lb-local \
+       lint
 
 # ---------------------------------------------------------------------------
 # Variables
@@ -156,9 +165,9 @@ info:
 test:
 	python -m pytest tests/ -v
 
-test-api: test-action-api test-emotion-api test-pose-api test-object-api test-audio-api
+test-api: test-action-api test-fer-api test-ser-api test-pose-api test-object-api test-audio-api test-crypto-api
 
-test-local: test-action-local test-emotion-local test-pose-local test-object-local test-audio-local
+test-local: test-action-local test-fer-local test-ser-local test-pose-local test-object-local test-audio-local test-crypto-local test-lb-local
 
 test-action: test-action-api test-action-local
 
@@ -168,13 +177,21 @@ test-action-api:
 test-action-local:
 	python -m pytest tests/action_local/ -v
 
-test-emotion: test-emotion-api test-emotion-local
+test-fer: test-fer-api test-fer-local
 
-test-emotion-api:
+test-fer-api:
 	python -m pytest tests/emotion_api/ -v
 
-test-emotion-local:
+test-fer-local:
 	python -m pytest tests/emotion_local/ -v
+
+test-ser: test-ser-api test-ser-local
+
+test-ser-api:
+	python -m pytest tests/audio_emotion_api/ -v
+
+test-ser-local:
+	python -m pytest tests/audio_emotion_local/ -v
 
 test-pose: test-pose-api test-pose-local
 
@@ -199,6 +216,19 @@ test-audio-api:
 
 test-audio-local:
 	python -m pytest tests/audio_local/ -v
+
+test-crypto: test-crypto-api test-crypto-local
+
+test-crypto-api:
+	python -m pytest tests/crypto_api/ -v
+
+test-crypto-local:
+	python -m pytest tests/crypto/ -v
+
+test-lb: test-lb-local
+
+test-lb-local:
+	python -m pytest tests/lb_local/ -v
 
 lint:
 	ruff check src/ tests/

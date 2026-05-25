@@ -202,9 +202,8 @@ class AudioEmbedder(PredictorBase[Audio, RawAudioEmbedding]):
         """
         mean = chunk_embeddings.mean(axis=0)
         norm = np.linalg.norm(mean)
-        if norm < 1e-10:
-            return mean
-        return (mean / norm).astype(np.float32)
+
+        return (mean / (norm + 1e-10)).astype(np.float32)
 
     @override
     def _predict_impl(

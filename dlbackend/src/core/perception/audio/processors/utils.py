@@ -2,6 +2,7 @@
 
 from core.perception.audio.processors.composite import CompositeAudioProcessor
 from core.perception.audio.processors.high_pass_filter import HighPassFilter
+from core.perception.audio.processors.mono_converter import MonoConverter
 from core.perception.audio.processors.noise_reducer import NoiseReducer
 from core.perception.audio.processors.resampler import Resampler
 from core.perception.audio.processors.rms_normalizer import RMSNormalizer
@@ -39,6 +40,7 @@ class AudioProcessorFactory:
 
     def create(self) -> CompositeAudioProcessor:
         processors = []
+        processors.append(MonoConverter())
         if self._enable_resample:
             processors.append(Resampler(target_sample_rate=self._target_sample_rate))
         if self._enable_high_pass:

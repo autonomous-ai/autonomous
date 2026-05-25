@@ -9,7 +9,7 @@ from silero_vad import get_speech_timestamps, load_silero_vad
 from typing_extensions import override
 
 from core.models.media import Audio
-from core.perception.audio_recognition.audio_preprocess import (
+from core.perception.audio.processors.exceptions import (
     REJECT_LOW_VOICE_RATIO,
     REJECT_TOO_SHORT,
     REJECT_VAD_REMOVED_ALL,
