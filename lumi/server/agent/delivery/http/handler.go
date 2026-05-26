@@ -35,6 +35,11 @@ type AgentHandler struct {
 	assistantMu      sync.Mutex
 	assistantBuf     map[string]*strings.Builder
 	streamedCleanLen map[string]int
+	// ADDED 2026-05-26: count of leading HW markers fired at stream-time per
+	// runID. Used at lifecycle:end to skip already-fired markers (avoid
+	// double-fire). Cleared on lifecycle:end / channel-turn finalize. Shares
+	// assistantMu — same per-runID scope as the buffer it tracks markers in.
+	firedHWCount map[string]int
 
 	// ttsSuppressReasons tracks runIDs that should skip TTS on lifecycle end.
 	// Value is the reason: "music_playing" (speaker shared with audio) or
@@ -173,6 +178,7 @@ func ProvideAgentHandler(gw domain.AgentGateway, bus *monitor.Bus, sled *statusl
 		statusLED:            sled,
 		assistantBuf:         make(map[string]*strings.Builder),
 		streamedCleanLen:     make(map[string]int),
+		firedHWCount:         make(map[string]int),
 		streamStats:          make(map[string]*runStreamStats),
 		ttsSuppressReasons:   make(map[string]string),
 		runIDMap:             make(map[string]string),

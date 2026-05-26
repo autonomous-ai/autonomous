@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"go-lamp.autonomous.ai/domain"
 	"go-lamp.autonomous.ai/lib/flow"
@@ -85,6 +86,132 @@ func extractHWCalls(text string) ([]hwCall, string) {
 	return calls, strings.TrimSpace(hwMarkerRe.ReplaceAllString(text, ""))
 }
 
+// ADDED 2026-05-26: extractLeadingHWCalls returns markers that appear BEFORE
+// the first non-marker, non-whitespace text. Used at stream-time to fire only
+// markers preceding the streaming sentence; inline markers (between sentences)
+// stay deferred to lifecycle:end to preserve position-in-text semantics.
+// Caller hands the resulting count to recordFiredHWCount so lifecycle:end can
+// skip these markers via extractHWCalls's stable in-order output.
+func extractLeadingHWCalls(text string) []hwCall {
+	matches := hwMarkerRe.FindAllStringSubmatchIndex(text, -1)
+	var calls []hwCall
+	expectedPos := 0
+	for _, m := range matches {
+		start, end := m[0], m[1]
+		// Only whitespace allowed between previous end and this marker's start.
+		for expectedPos < start {
+			c := text[expectedPos]
+			if c != ' ' && c != '\n' && c != '\t' && c != '\r' {
+				return calls
+			}
+			expectedPos++
+		}
+		calls = append(calls, hwCall{path: text[m[2]:m[3]], body: text[m[4]:m[5]]})
+		expectedPos = end
+	}
+	return calls
+}
+
+// ADDED 2026-05-26: fireHWCall runs the per-marker POST + flow tracking +
+// monitorBus emit + lastEmotion update for one call. Extracted from
+// fireHWCalls so both async (default 5s timeout) and sync (100ms stream-time)
+// paths share identical side-effects. Returns true on HTTP success (2xx/3xx).
+func (h *AgentHandler) fireHWCall(c hwCall, flowRunID string, client *http.Client) bool {
+	// /broadcast, /speak, /dm are internal control markers — not LeLamp endpoints.
+	if c.path == "/broadcast" || c.path == "/speak" || c.path == "/dm" {
+		return true
+	}
+	// Lumi-bound HW markers (log writes that live on Lumi, not LeLamp):
+	//   /wellbeing/log         → POST :5000/api/wellbeing/log
+	//   /mood/log              → POST :5000/api/mood/log (signal + decision share endpoint, kind in body)
+	//   /music-suggestion/log  → POST :5000/api/music-suggestion/log
+	//   /posture/log           → POST :5000/api/posture/log (nudge/praise/recap rows)
+	postURL := lelamp.BaseURL + c.path
+	if strings.HasPrefix(c.path, "/wellbeing/") ||
+		strings.HasPrefix(c.path, "/mood/") ||
+		strings.HasPrefix(c.path, "/music-suggestion/") ||
+		strings.HasPrefix(c.path, "/posture/") ||
+		strings.HasPrefix(c.path, "/buddy/") {
+		postURL = "http://127.0.0.1:5000/api" + c.path
+	}
+	isBuddy := strings.HasPrefix(c.path, "/buddy/")
+	if isBuddy {
+		slog.Info("HW marker → buddy POST", "component", "openclaw", "url", postURL, "body", c.body)
+	}
+	resp, err := client.Post(postURL, "application/json", strings.NewReader(c.body))
+	if err != nil {
+		slog.Warn("HW marker call failed", "component", "openclaw", "path", c.path, "error", err)
+		return false
+	}
+	hwOK := resp.StatusCode < 400
+	if !hwOK {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		resp.Body.Close()
+		slog.Warn("HW marker error response", "component", "openclaw", "path", c.path, "status", resp.StatusCode, "body", string(errBody))
+
+		// /servo/track start has ~800ms latency (freeze + YOLO). By
+		// the time this goroutine sees the 400, the LLM's optimistic
+		// TTS ("Following the cup") has already played. Speak a
+		// corrective apology so the user doesn't think tracking
+		// succeeded. Only for the exact start path — /stop and
+		// /update have different semantics.
+		if c.path == "/servo/track" {
+			target := parseTrackTarget(c.body)
+			if err := lelamp.Speak(trackFailMessage(target)); err != nil {
+				slog.Warn("track fallback TTS failed", "component", "openclaw", "error", err)
+			}
+		}
+	} else {
+		if isBuddy {
+			okBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+			resp.Body.Close()
+			slog.Info("HW marker → buddy OK", "component", "openclaw", "path", c.path, "response", string(okBody))
+		} else {
+			resp.Body.Close()
+			slog.Info("HW marker fired", "component", "openclaw", "path", c.path)
+		}
+	}
+	switch {
+	case strings.Contains(c.path, "/emotion"):
+		flow.Log("hw_emotion", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+		if hwOK {
+			if e := parseEmotion(c.body); e != "" {
+				h.lastEmotionMu.Lock()
+				h.lastEmotion = e
+				h.lastEmotionMu.Unlock()
+			}
+		}
+		h.monitorBus.Push(domain.MonitorEvent{Type: "hw_emotion", Summary: c.path + " " + c.body, RunID: flowRunID})
+	case strings.Contains(c.path, "/scene"), strings.Contains(c.path, "/led"):
+		flow.Log("hw_led", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+		h.monitorBus.Push(domain.MonitorEvent{Type: "hw_led", Summary: c.path + " " + c.body, RunID: flowRunID})
+	case strings.Contains(c.path, "/servo"):
+		flow.Log("hw_servo", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+		h.monitorBus.Push(domain.MonitorEvent{Type: "hw_servo", Summary: c.path + " " + c.body, RunID: flowRunID})
+	case strings.Contains(c.path, "/audio"):
+		flow.Log("hw_audio", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+		h.monitorBus.Push(domain.MonitorEvent{Type: "hw_audio", Summary: c.path + " " + c.body, RunID: flowRunID})
+	case strings.HasPrefix(c.path, "/wellbeing/"):
+		flow.Log("hw_wellbeing", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+		h.monitorBus.Push(domain.MonitorEvent{Type: "hw_wellbeing", Summary: c.path + " " + c.body, RunID: flowRunID})
+	case strings.HasPrefix(c.path, "/mood/"):
+		flow.Log("hw_mood", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+		h.monitorBus.Push(domain.MonitorEvent{Type: "hw_mood", Summary: c.path + " " + c.body, RunID: flowRunID})
+	case strings.HasPrefix(c.path, "/music-suggestion/"):
+		flow.Log("hw_music_suggestion", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+		h.monitorBus.Push(domain.MonitorEvent{Type: "hw_music_suggestion", Summary: c.path + " " + c.body, RunID: flowRunID})
+	case strings.HasPrefix(c.path, "/posture/"):
+		flow.Log("hw_posture", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+		h.monitorBus.Push(domain.MonitorEvent{Type: "hw_posture", Summary: c.path + " " + c.body, RunID: flowRunID})
+	case strings.HasPrefix(c.path, "/buddy/"):
+		flow.Log("hw_buddy", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+		h.monitorBus.Push(domain.MonitorEvent{Type: "hw_buddy", Summary: c.path + " " + c.body, RunID: flowRunID})
+	default:
+		flow.Log("hw_call", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
+	}
+	return hwOK
+}
+
 // fireHWCalls fires hardware calls to LeLamp sequentially in a goroutine,
 // with full flow tracking, lastEmotion update, and monitorBus events.
 // Sequential order matters (e.g. emotion sequences must fire in order).
@@ -93,103 +220,30 @@ func (h *AgentHandler) fireHWCalls(calls []hwCall, flowRunID string) {
 		return
 	}
 	go func() {
+		client := &http.Client{Timeout: 5 * time.Second}
 		for _, c := range calls {
-			// /broadcast, /speak, /dm are internal control markers — not LeLamp endpoints.
-			if c.path == "/broadcast" || c.path == "/speak" || c.path == "/dm" {
-				continue
-			}
-			// Lumi-bound HW markers (log writes that live on Lumi, not LeLamp):
-			//   /wellbeing/log         → POST :5000/api/wellbeing/log
-			//   /mood/log              → POST :5000/api/mood/log (signal + decision share endpoint, kind in body)
-			//   /music-suggestion/log  → POST :5000/api/music-suggestion/log
-			//   /posture/log           → POST :5000/api/posture/log (nudge/praise/recap rows)
-			// Lets the agent fire side-effect POSTs without consuming a tool
-			// turn — fireHWCalls runs async in this goroutine and the reply
-			// text is already on its way to TTS.
-			postURL := lelamp.BaseURL + c.path
-			if strings.HasPrefix(c.path, "/wellbeing/") ||
-				strings.HasPrefix(c.path, "/mood/") ||
-				strings.HasPrefix(c.path, "/music-suggestion/") ||
-				strings.HasPrefix(c.path, "/posture/") ||
-				strings.HasPrefix(c.path, "/buddy/") {
-				postURL = "http://127.0.0.1:5000/api" + c.path
-			}
-			isBuddy := strings.HasPrefix(c.path, "/buddy/")
-			if isBuddy {
-				slog.Info("HW marker → buddy POST", "component", "openclaw", "url", postURL, "body", c.body)
-			}
-			resp, err := http.Post(postURL, "application/json", strings.NewReader(c.body))
-			if err != nil {
-				slog.Warn("HW marker call failed", "component", "openclaw", "path", c.path, "error", err)
-				continue
-			}
-			hwOK := resp.StatusCode < 400
-			if !hwOK {
-				errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-				resp.Body.Close()
-				slog.Warn("HW marker error response", "component", "openclaw", "path", c.path, "status", resp.StatusCode, "body", string(errBody))
-
-				// /servo/track start has ~800ms latency (freeze + YOLO). By
-				// the time this goroutine sees the 400, the LLM's optimistic
-				// TTS ("Following the cup") has already played. Speak a
-				// corrective apology so the user doesn't think tracking
-				// succeeded. Only for the exact start path — /stop and
-				// /update have different semantics.
-				if c.path == "/servo/track" {
-					target := parseTrackTarget(c.body)
-					if err := lelamp.Speak(trackFailMessage(target)); err != nil {
-						slog.Warn("track fallback TTS failed", "component", "openclaw", "error", err)
-					}
-				}
-			} else {
-				if isBuddy {
-					okBody, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-					resp.Body.Close()
-					slog.Info("HW marker → buddy OK", "component", "openclaw", "path", c.path, "response", string(okBody))
-				} else {
-					resp.Body.Close()
-					slog.Info("HW marker fired", "component", "openclaw", "path", c.path)
-				}
-			}
-			switch {
-			case strings.Contains(c.path, "/emotion"):
-				flow.Log("hw_emotion", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
-				if hwOK {
-					if e := parseEmotion(c.body); e != "" {
-						h.lastEmotionMu.Lock()
-						h.lastEmotion = e
-						h.lastEmotionMu.Unlock()
-					}
-				}
-				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_emotion", Summary: c.path + " " + c.body, RunID: flowRunID})
-			case strings.Contains(c.path, "/scene"), strings.Contains(c.path, "/led"):
-				flow.Log("hw_led", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
-				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_led", Summary: c.path + " " + c.body, RunID: flowRunID})
-			case strings.Contains(c.path, "/servo"):
-				flow.Log("hw_servo", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
-				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_servo", Summary: c.path + " " + c.body, RunID: flowRunID})
-			case strings.Contains(c.path, "/audio"):
-				flow.Log("hw_audio", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
-				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_audio", Summary: c.path + " " + c.body, RunID: flowRunID})
-				// music.play logged via flow.Log above
-			case strings.HasPrefix(c.path, "/wellbeing/"):
-				flow.Log("hw_wellbeing", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
-				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_wellbeing", Summary: c.path + " " + c.body, RunID: flowRunID})
-			case strings.HasPrefix(c.path, "/mood/"):
-				flow.Log("hw_mood", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
-				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_mood", Summary: c.path + " " + c.body, RunID: flowRunID})
-			case strings.HasPrefix(c.path, "/music-suggestion/"):
-				flow.Log("hw_music_suggestion", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
-				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_music_suggestion", Summary: c.path + " " + c.body, RunID: flowRunID})
-			case strings.HasPrefix(c.path, "/posture/"):
-				flow.Log("hw_posture", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
-				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_posture", Summary: c.path + " " + c.body, RunID: flowRunID})
-			case strings.HasPrefix(c.path, "/buddy/"):
-				flow.Log("hw_buddy", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
-				h.monitorBus.Push(domain.MonitorEvent{Type: "hw_buddy", Summary: c.path + " " + c.body, RunID: flowRunID})
-			default:
-				flow.Log("hw_call", map[string]any{"path": c.path, "args": c.body, "run_id": flowRunID}, flowRunID)
-			}
+			h.fireHWCall(c, flowRunID, client)
 		}
 	}()
+}
+
+// ADDED 2026-05-26: fireHWCallsSync fires markers SYNCHRONOUSLY with a tight
+// per-call timeout. Used at stream-time when subsequent TTS depends on LeLamp
+// state mutations (e.g. /scene/off must unmute speaker before /voice/speak).
+// On per-call failure/timeout, kicks an async fallback for that one call so
+// it still fires eventually — caller proceeds to TTS regardless, so worst
+// case degrades to legacy "marker fires async after TTS" behavior (no new
+// failure mode introduced).
+func (h *AgentHandler) fireHWCallsSync(calls []hwCall, flowRunID string) {
+	if len(calls) == 0 {
+		return
+	}
+	client := &http.Client{Timeout: 100 * time.Millisecond}
+	for _, c := range calls {
+		if !h.fireHWCall(c, flowRunID, client) {
+			// HTTP error or timeout — kick async fallback so the marker still
+			// fires (legacy behavior). Caller proceeds to TTS without waiting.
+			h.fireHWCalls([]hwCall{c}, flowRunID)
+		}
+	}
 }

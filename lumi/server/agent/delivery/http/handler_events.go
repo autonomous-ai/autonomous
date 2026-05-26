@@ -684,6 +684,27 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 				if sentence := h.tryFirstSentenceFlush(payload.RunID); sentence != "" {
 					cleaned := sanitizeAgentText(sentence)
 					if cleaned != "" {
+						// ADDED 2026-05-26: fire leading HW markers SYNC before TTS POST so
+						// state mutations (e.g. /scene/off → speaker unmute) apply in LeLamp
+						// before /voice/speak-queue arrives. Without this, TTS races ahead
+						// and gets rejected while speaker is still muted by a prior scene.
+						// extractLeadingHWCalls only picks markers BEFORE first non-marker
+						// text, so inline markers (between sentences) stay deferred to
+						// lifecycle:end and preserve position-in-text semantics.
+						h.assistantMu.Lock()
+						buf := h.assistantBuf[payload.RunID]
+						rawSnapshot := ""
+						if buf != nil {
+							rawSnapshot = buf.String()
+						}
+						h.assistantMu.Unlock()
+						if rawSnapshot != "" {
+							leading := extractLeadingHWCalls(rawSnapshot)
+							if len(leading) > 0 {
+								h.fireHWCallsSync(leading, flowRunID)
+								h.recordFiredHWCount(payload.RunID, len(leading))
+							}
+						}
 						slog.Info("streaming first sentence to TTS",
 							"component", "agent",
 							"run_id", flowRunID,
@@ -754,6 +775,14 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 				streamedLen = len(text)
 			}
 			streamed := streamedLen > 0
+			// ADDED 2026-05-26: skip leading HW markers already fired at stream-time
+			// (see fireHWCallsSync call earlier). extractHWCalls returns markers in
+			// stable source order, so [firedAtStream:] is the remainder.
+			firedAtStream := h.consumeFiredHWCount(payload.RunID)
+			if firedAtStream > len(hwCalls) {
+				firedAtStream = len(hwCalls)
+			}
+			hwCalls = hwCalls[firedAtStream:]
 			if text != "" || len(hwCalls) > 0 || streamed {
 				// Fire HW calls with full tracking (flow.Log + lastEmotion + monitorBus).
 				h.fireHWCalls(hwCalls, flowRunID)
@@ -1489,6 +1518,12 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 		hwCalls, cleanText := extractHWCalls(fullText)
 		cleanText = extractSayTag(cleanText)
 		cleanText = sanitizeAgentText(cleanText)
+
+		// ADDED 2026-05-26: drain any leftover firedHWCount for this runID so
+		// the per-runID map doesn't leak. Channel turns don't stream-fire
+		// markers today (no tryFirstSentenceFlush on this path), so the
+		// count is normally 0 — call is defensive against future changes.
+		_ = h.consumeFiredHWCount(runID)
 
 		// Fire HW markers (LED, emotion, servo, audio) on the local lamp
 		// even though the spoken text goes back to the originating channel.

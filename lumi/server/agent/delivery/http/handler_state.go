@@ -112,6 +112,35 @@ func (h *AgentHandler) consumeStreamedCleanLen(runID string) int {
 	return n
 }
 
+// ADDED 2026-05-26: firedHWCount helpers — track leading HW markers fired at
+// stream-time so lifecycle:end can skip them (avoid double-fire).
+//
+// readFiredHWCount returns the current fired count for runID (0 if none).
+// Does NOT delete the entry — stream-time may fire more markers as buf grows.
+func (h *AgentHandler) readFiredHWCount(runID string) int {
+	h.assistantMu.Lock()
+	defer h.assistantMu.Unlock()
+	return h.firedHWCount[runID]
+}
+
+// recordFiredHWCount sets the fired count for runID, called after stream-time
+// fires markers so lifecycle:end knows where to skip from.
+func (h *AgentHandler) recordFiredHWCount(runID string, count int) {
+	h.assistantMu.Lock()
+	defer h.assistantMu.Unlock()
+	h.firedHWCount[runID] = count
+}
+
+// consumeFiredHWCount returns the fired count and deletes the entry. Called
+// at lifecycle:end (and channel-turn finalize) after the dedupe slice is taken.
+func (h *AgentHandler) consumeFiredHWCount(runID string) int {
+	h.assistantMu.Lock()
+	defer h.assistantMu.Unlock()
+	n := h.firedHWCount[runID]
+	delete(h.firedHWCount, runID)
+	return n
+}
+
 // hasPartialHWMarker reports whether text contains a `[HW:` opener with no
 // matching `]` before EOF. extractHWCalls only matches complete markers, so
 // a partial marker would survive into cleaned text and could be split
