@@ -401,14 +401,15 @@ type MQTTOAuthRemoveData struct {
 // OAuthTokenEntry is the on-disk representation of a single provider's token
 // inside access_tokens.json.
 type OAuthTokenEntry struct {
-	AccessToken  string   `json:"access_token"`
-	RefreshToken string   `json:"refresh_token,omitempty"`
-	TokenType    string   `json:"token_type,omitempty"`
-	ExpiresAt    int64    `json:"expires_at,omitempty"`
-	Scopes       []string `json:"scopes,omitempty"`
-	UserEmail    string   `json:"user_email,omitempty"`
-	ClientID     string   `json:"client_id,omitempty"`
-	ObtainedAt   int64    `json:"obtained_at"` // unix seconds when this device received the token
+	AccessToken    string   `json:"access_token"`
+	RefreshToken   string   `json:"refresh_token,omitempty"`
+	TokenType      string   `json:"token_type,omitempty"`
+	ExpiresAt      int64    `json:"expires_at,omitempty"`
+	Scopes         []string `json:"scopes,omitempty"`
+	UserEmail      string   `json:"user_email,omitempty"`
+	ClientID       string   `json:"client_id,omitempty"`
+	ObtainedAt     int64    `json:"obtained_at"`               // unix seconds when this device received the token
+	RefreshRevoked bool     `json:"refresh_revoked,omitempty"` // set when the backend returned invalid_grant — skip until user re-auths
 }
 
 // AccessTokensFile is the on-disk schema for workspace/configs/access_tokens.json.

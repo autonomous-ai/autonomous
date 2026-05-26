@@ -853,6 +853,11 @@ func (s *Server) handleSetUpCompleteChange(setupCompleted bool) {
 		slog.Info("setup completed, starting status reporter", "component", "config")
 		safego.Go("status-reporter", func() { s.deviceService.StartStatusReporter(s.monitorCtx) })
 
+		// Keep Google (Workspace) access tokens fresh: they expire after 1 hour
+		// and the device holds only the refresh_token, so the actual exchange
+		// runs on the backend. Loop refreshes them before they lapse.
+		safego.Go("oauth-refresh", func() { s.deviceMQTTHandler.StartOAuthRefreshLoop(s.monitorCtx) })
+
 		s.restartMQTT()
 
 		safego.Go("startup-sequence", func() {
