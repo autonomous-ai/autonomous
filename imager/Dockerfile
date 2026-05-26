@@ -18,6 +18,10 @@ RUN which wpa_passphrase
 
 WORKDIR /work
 COPY build.sh /work/build.sh
-RUN chmod +x /work/build.sh
+COPY build-orangepi.sh /work/build-orangepi.sh
+COPY lib /work/lib
+RUN chmod +x /work/build.sh /work/build-orangepi.sh
 
+# Default to RPi build; override at run-time by appending the script path
+# (Makefile passes /work/build-orangepi.sh when TARGET=opi).
 CMD ["/work/build.sh"]

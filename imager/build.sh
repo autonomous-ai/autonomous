@@ -118,7 +118,8 @@ USERNAME="system"           # Linux user created on the image
 PASSWORD="12345"            # Password for the user
 OUT_IMG_SIZE="8G"           # Output image size (expands to full SD on first boot)
 OTA_METADATA_URL="https://storage.googleapis.com/s3-autonomous-upgrade-3/lumi/ota/metadata.json"
-AP_CHANNEL="6"              # Wi-Fi AP channel
+AP_BAND="${AP_BAND:-2.4}"   # 2.4 or 5 (5 GHz needs supported regulatory domain + chip)
+AP_CHANNEL="${AP_CHANNEL:-}" # default: 6 for 2.4 GHz, 36 for 5 GHz
 COUNTRY_CODE="US"           # Regulatory country code for hostapd
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -581,7 +582,10 @@ DEBIAN_FRONTEND=noninteractive TERM=xterm chroot ${MNT} apt-get install -y \
   libgpiod2 \
   python3-dev python3-spidev \
   libsm6 libxext6 libgl1 \
-  libjpeg-dev zlib1g-dev libfreetype6-dev libopenjp2-7-dev libtiff-dev
+  libjpeg-dev zlib1g-dev libfreetype6-dev libopenjp2-7-dev libtiff-dev \
+  openresolv \
+  avahi-daemon avahi-utils libnss-mdns \
+  bluez
 # Purge NetworkManager and its dependencies completely
 DEBIAN_FRONTEND=noninteractive TERM=xterm chroot ${MNT} apt-get purge -y --auto-remove \
   network-manager network-manager-gnome 2>/dev/null || true
@@ -710,6 +714,7 @@ chroot ${MNT} /bin/bash <<CHROOT_STAGES
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 export OTA_METADATA_URL="${OTA_METADATA_URL}"
+export AP_BAND="${AP_BAND}"
 export AP_CHANNEL="${AP_CHANNEL}"
 export COUNTRY_CODE="${COUNTRY_CODE}"
 
@@ -1073,6 +1078,13 @@ systemctl enable nginx
 #   connect-wifi:    writes wpa_supplicant config and calls device-sta-mode
 echo "[stage] Setup AP"
 
+# Ignore any Pi Imager / Armbian WiFi credentials baked into the image. The
+# stock wpa_supplicant.conf would otherwise be picked up by the global
+# wpa_supplicant.service and pre-empt our per-interface AP/STA flow.
+if [ -f /etc/wpa_supplicant/wpa_supplicant.conf ]; then
+  mv /etc/wpa_supplicant/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf.bak 2>/dev/null || true
+fi
+
 # wpa_supplicant config for wlan0 — country code only, no network block.
 # In AP mode we don't connect to any network; this file just provides the
 # regulatory domain so the driver allows the AP to broadcast.
@@ -1095,19 +1107,44 @@ RestartSec=5
 EOF
 
 # hostapd config — SSID placeholder "Lumi-XXXX" is replaced at runtime
-# by device-ap-mode using the actual Pi serial number
-cat > /etc/hostapd/hostapd.conf <<EOF
+# by device-ap-mode using the actual Pi serial number. AP_BAND switches between
+# 2.4 GHz (hw_mode=g, default channel 6) and 5 GHz (hw_mode=a + ieee80211ac=1,
+# default channel 36). 5 GHz needs a regulatory domain that permits it AND a
+# chip/driver that supports AP mode on 5 GHz (Pi 5 yes, OrangePi 4 Pro yes,
+# Pi 4 driver-dependent).
+if [ "\${AP_BAND}" = "5" ]; then
+  HWMODE=a
+  CHANNEL="\${AP_CHANNEL:-36}"
+  cat > /etc/hostapd/hostapd.conf <<EOF
 interface=wlan0
 driver=nl80211
 ssid=Lumi-XXXX
-hw_mode=g
-channel=\${AP_CHANNEL}
+hw_mode=\$HWMODE
+channel=\$CHANNEL
+country_code=\${COUNTRY_CODE}
+ieee80211n=1
+ieee80211ac=1
+wmm_enabled=1
+auth_algs=1
+ignore_broadcast_ssid=0
+EOF
+else
+  HWMODE=g
+  CHANNEL="\${AP_CHANNEL:-6}"
+  cat > /etc/hostapd/hostapd.conf <<EOF
+interface=wlan0
+driver=nl80211
+ssid=Lumi-XXXX
+hw_mode=\$HWMODE
+channel=\$CHANNEL
 country_code=\${COUNTRY_CODE}
 ieee80211n=1
 wmm_enabled=1
 auth_algs=1
 ignore_broadcast_ssid=0
 EOF
+fi
+echo "[stage] AP band=\${AP_BAND} channel=\$CHANNEL"
 echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' > /etc/default/hostapd
 
 # dnsmasq config — DHCP range 192.168.100.50-150 on wlan0
@@ -1147,10 +1184,39 @@ systemctl disable wpa_supplicant@wlan0 2>/dev/null || true
 systemctl mask wpa_supplicant@wlan0 2>/dev/null || true
 killall wpa_supplicant 2>/dev/null || true
 systemctl stop dhcpcd 2>/dev/null || true
-# Set SSID to Lumi-XXXX using last 4 chars of Pi serial
-SERIAL=\$(tr -d '\0' </proc/device-tree/serial-number 2>/dev/null) || SERIAL=\$(awk '/Serial/{print \$3}' /proc/cpuinfo)
-AP_SSID="Lumi-\${SERIAL: -4}"
+# Pi 5: device-tree serial; Pi 4: cpuinfo Serial.
+# Non-Pi boards (OrangePi 4 Pro etc.) lack both — fall back to the ethernet
+# MAC so the AP SSID still gets a stable per-device suffix.
+SERIAL=\$(tr -d '\0' </proc/device-tree/serial-number 2>/dev/null || true)
+if [ -z "\$SERIAL" ]; then
+  SERIAL=\$(awk '/^Serial/ {print \$3}' /proc/cpuinfo 2>/dev/null || true)
+fi
+if [ -z "\$SERIAL" ]; then
+  for iface in eth0 end0; do
+    mac=\$(cat "/sys/class/net/\$iface/address" 2>/dev/null | tr -d ':' || true)
+    if [ -n "\$mac" ] && [ "\$mac" != "000000000000" ]; then
+      SERIAL=\$mac
+      break
+    fi
+  done
+fi
+SUFFIX=\${SERIAL: -4}
+AP_SSID="Lumi-\${SUFFIX}"
 [ -f /etc/hostapd/hostapd.conf ] && sed -i "s/^ssid=.*/ssid=\${AP_SSID}/" /etc/hostapd/hostapd.conf
+
+# mDNS hostname so the web UI can redirect AP→STA via .local without knowing
+# the LAN IP. Lowercase because URLs in the wild aren't case-normalized even
+# though mDNS itself is.
+SUFFIX_LC=\$(echo "\$SUFFIX" | tr '[:upper:]' '[:lower:]')
+LUMI_HOSTNAME="lumi-\${SUFFIX_LC}"
+hostnamectl set-hostname "\$LUMI_HOSTNAME" 2>/dev/null || hostname "\$LUMI_HOSTNAME" || true
+if grep -q '^127\.0\.1\.1' /etc/hosts; then
+  sed -i "s/^127\.0\.1\.1.*/127.0.1.1 \$LUMI_HOSTNAME/" /etc/hosts
+else
+  echo "127.0.1.1 \$LUMI_HOSTNAME" >> /etc/hosts
+fi
+systemctl enable avahi-daemon 2>/dev/null || true
+systemctl restart avahi-daemon 2>/dev/null || true
 # Set regulatory domain from hostapd config
 REG=\$(grep '^country_code=' /etc/hostapd/hostapd.conf 2>/dev/null | cut -d= -f2); [ -z "\$REG" ] && REG=US
 iw reg set "\$REG" 2>/dev/null || true
@@ -1243,6 +1309,21 @@ chmod +x /usr/local/bin/connect-wifi
 # The global service would conflict with our per-interface instance
 systemctl mask wpa_supplicant.service 2>/dev/null || true
 
+# ── stage: resolvconf DNS fallback ───────────────────────────────────────────
+# Static fallback so /etc/resolv.conf is never completely empty — matters in AP
+# mode (hostapd up, no upstream DHCP lease for wlan0) and during the brief
+# window between dhcpcd start and the first lease. Appended via openresolv's
+# name_servers= so it joins, not replaces, the DHCP-supplied nameservers.
+# (Symlink /etc/resolv.conf → /run/resolvconf/resolv.conf is done post-chroot
+# because the chroot's resolv.conf is bind-replaced with the host's during
+# build and restored after — touching it here would have no effect.)
+echo "[stage] resolvconf DNS fallback"
+if [ -f /etc/resolvconf.conf ]; then
+  grep -q '^name_servers=' /etc/resolvconf.conf || echo 'name_servers="1.1.1.1 8.8.8.8"' >> /etc/resolvconf.conf
+else
+  echo 'name_servers="1.1.1.1 8.8.8.8"' > /etc/resolvconf.conf
+fi
+
 # ── stage: PulseAudio echo cancellation (for LeLamp mic/speaker) ─────────────
 # PulseAudio WebRTC AEC prevents speaker audio from feeding back into the mic.
 # This is critical for LeLamp's voice interaction on the smart lamp hardware.
@@ -1257,6 +1338,19 @@ set-default-source aec_source
 set-default-sink aec_sink
 PULSE_EOF
 fi
+
+# Keep PulseAudio off the lamp speaker codec. lelamp's TTS opens this card
+# directly via ALSA hw for a persistent low-latency OutputStream, and aplay
+# in the music pipeline also writes to it via plug:lamp_speaker. If PA
+# auto-loads module-alsa-card for the same card, the device becomes
+# exclusively held and every other consumer fails open with EBUSY.
+# ATTR{id} values: sndi2s4 = OrangePi onboard ES8389 codec; wm8960soundcard
+# = Raspberry Pi (Seeed wm8960 hat).
+cat > /etc/udev/rules.d/91-pulseaudio-lelamp-ignore.rules <<'UDEV_EOF'
+# Keep PulseAudio away from the lamp speaker codec so lelamp can own it.
+SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
+SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
+UDEV_EOF
 
 # ── stage: LeLamp (Python hardware runtime) ─────────────────────────────────
 # LeLamp manages hardware drivers (LED, servo, camera, audio) via a Python
@@ -1328,6 +1422,20 @@ CHROOT_STAGES
 
 # Restore resolv.conf and clean up chroot artifacts
 mv ${MNT}/etc/resolv.conf.bak ${MNT}/etc/resolv.conf 2>/dev/null || true
+
+# Hand /etc/resolv.conf over to resolvconf so the static fallback in
+# /etc/resolvconf.conf (1.1.1.1 / 8.8.8.8) is always present even with no
+# DHCP lease (e.g. AP mode). Only rewrite when the restored file is a plain
+# file with no nameservers — leave RPi OS / systemd-resolved-managed setups
+# alone. resolvconf -u will run on first boot when dhcpcd starts.
+if [ -e ${MNT}/etc/resolv.conf ] && [ ! -L ${MNT}/etc/resolv.conf ]; then
+  if ! grep -qE '^[[:space:]]*nameserver[[:space:]]+' ${MNT}/etc/resolv.conf 2>/dev/null; then
+    echo "==> Linking /etc/resolv.conf -> /run/resolvconf/resolv.conf in image"
+    rm -f ${MNT}/etc/resolv.conf
+    mkdir -p ${MNT}/run/resolvconf
+    ln -sf /run/resolvconf/resolv.conf ${MNT}/etc/resolv.conf
+  fi
+fi
 
 # Kill any processes still running inside the chroot (e.g. sshd, dbus-daemon
 # spawned by apt post-install triggers). If these survive into the golden image
@@ -1709,15 +1817,17 @@ WEB_URL=\$(jq -r '.web.url // empty'         "\$META")
 LUMI_URL=\$(jq -r '.lumi.url // empty'       "\$META")
 BOOTSTRAP_URL=\$(jq -r '.bootstrap.url // empty' "\$META")
 LELAMP_URL=\$(jq -r '.lelamp.url // empty'   "\$META")
+BUDDY_URL=\$(jq -r '."claude-desktop-buddy".url // empty' "\$META")
 WEB_VER=\$(jq -r '.web.version // empty'     "\$META")
 LUMI_VER=\$(jq -r '.lumi.version // empty'   "\$META")
 BOOTSTRAP_VER=\$(jq -r '.bootstrap.version // empty' "\$META")
 LELAMP_VER=\$(jq -r '.lelamp.version // empty' "\$META")
+BUDDY_VER=\$(jq -r '."claude-desktop-buddy".version // empty' "\$META")
 rm -f "\$META"
 [ -z "\$WEB_URL" ] || [ -z "\$LUMI_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
   echo "ERROR: OTA metadata missing web.url, lumi.url or bootstrap.url"; exit 1
 }
-echo "[overlay] web=\$WEB_VER lumi=\$LUMI_VER bootstrap=\$BOOTSTRAP_VER lelamp=\$LELAMP_VER"
+echo "[overlay] web=\$WEB_VER lumi=\$LUMI_VER bootstrap=\$BOOTSTRAP_VER lelamp=\$LELAMP_VER buddy=\$BUDDY_VER"
 
 # ── stage: backend binaries ──────────────────────────────────────────────────
 echo "[overlay] Install backend binaries"
@@ -1784,6 +1894,39 @@ if [ -n "\$LELAMP_URL" ]; then
     exit 1
   }
   echo "[overlay] LeLamp: uv sync complete"
+
+  # Patch webrtcvad: replace pkg_resources import (removed in Python 3.12+).
+  # Without this lelamp crashes on first import of webrtcvad on a fresh Py3.12 venv.
+  WEBRTCVAD_PY=\$(find "\$LELAMP_DIR/.venv" -name "webrtcvad.py" -path "*/site-packages/*" 2>/dev/null | head -1)
+  if [ -n "\$WEBRTCVAD_PY" ] && grep -q "import pkg_resources" "\$WEBRTCVAD_PY" 2>/dev/null; then
+    echo "[overlay] LeLamp: patching webrtcvad for Python 3.12+ (pkg_resources removal)"
+    cat > "\$WEBRTCVAD_PY" <<'WEBRTCVAD_EOF'
+try:
+    import pkg_resources
+    __version__ = pkg_resources.get_distribution('webrtcvad').version
+except Exception:
+    __version__ = '2.0.10'
+
+import _webrtcvad
+
+class Vad(object):
+    def __init__(self, mode=None):
+        self._vad = _webrtcvad.create()
+        _webrtcvad.init(self._vad)
+        if mode is not None:
+            self.set_mode(mode)
+    def set_mode(self, mode):
+        _webrtcvad.set_mode(self._vad, mode)
+    def is_speech(self, buf, sample_rate, length=None):
+        length = length or int(len(buf) / 2)
+        if length * 2 > len(buf):
+            raise IndexError('buffer has %s frames, but length argument was %s' % (int(len(buf) / 2.0), length))
+        return _webrtcvad.process(self._vad, sample_rate, buf, length)
+
+def valid_rate_and_frame_length(rate, frame_length):
+    return _webrtcvad.valid_rate_and_frame_length(rate, frame_length)
+WEBRTCVAD_EOF
+  fi
   cd /
 else
   echo "[overlay] WARN: No lelamp URL in OTA metadata, skipping LeLamp download"
@@ -1794,6 +1937,52 @@ echo "[overlay] Download web UI"
 retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/web.zip '\$WEB_URL'" 5
 unzip -o -q /tmp/web.zip -d /usr/share/nginx/html/setup
 rm -f /tmp/web.zip
+
+# ── stage: Claude Desktop Buddy (BLE plugin, optional) ───────────────────────
+# Optional BLE bridge that pairs the lamp with Claude Desktop. The Mac-side
+# "Lumi Buddy" Swift app is a separate component and is NOT installed here.
+# Service name is lumi-buddy.service for legacy parity with setup.sh.
+if [ -n "\$BUDDY_URL" ]; then
+  echo "[overlay] Install Claude Desktop Buddy"
+  BUDDY_DIR="/opt/claude-desktop-buddy"
+  mkdir -p "\$BUDDY_DIR" /root/config
+  retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/buddy.zip '\$BUDDY_URL'" 5
+  unzip -o -q /tmp/buddy.zip -d /tmp/buddy-extract
+  rm -f /tmp/buddy.zip
+  if [ -f /tmp/buddy-extract/buddy-plugin ]; then
+    cp -f /tmp/buddy-extract/buddy-plugin "\$BUDDY_DIR/buddy-plugin"
+    chmod +x "\$BUDDY_DIR/buddy-plugin"
+  fi
+  if [ ! -f /root/config/buddy.json ] && [ -f /tmp/buddy-extract/config/buddy.json ]; then
+    cp -f /tmp/buddy-extract/config/buddy.json /root/config/buddy.json
+  fi
+  echo "\$BUDDY_VER" > "\$BUDDY_DIR/VERSION_BUDDY"
+  rm -rf /tmp/buddy-extract
+  cat > /etc/systemd/system/lumi-buddy.service <<UNIT
+[Unit]
+Description=Lumi Claude Desktop Buddy (BLE)
+After=bluetooth.target lumi.service
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=\$BUDDY_DIR
+ExecStart=\$BUDDY_DIR/buddy-plugin -config /root/config/buddy.json
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=lumi-buddy
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable lumi-buddy
+else
+  echo "[overlay] WARN: No claude-desktop-buddy URL in OTA metadata, skipping buddy install"
+fi
 
 echo "[overlay] All overlay stages complete"
 OVERLAY_STAGES
