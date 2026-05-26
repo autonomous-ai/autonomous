@@ -213,7 +213,17 @@ class MusicService:
 
     @property
     def playing(self) -> bool:
-        return self._playing
+        if not self._playing:
+            return False
+        # Self-heal: ffmpeg can hang on a full stderr pipe and never reach
+        # the finally that clears _playing. If every tracked subprocess is
+        # gone, the flag is lying — clear it so TTS isn't blocked forever.
+        procs = [self._aplay_proc, self._ffmpeg_proc, self._ytdlp_proc]
+        if all(p is None or p.poll() is not None for p in procs):
+            logger.warning("playing flag stuck True with no live procs — self-healing")
+            self._playing = False
+            return False
+        return True
 
     @property
     def current_title(self) -> Optional[str]:
@@ -271,15 +281,31 @@ class MusicService:
         thread.start()
         return True
 
+    @staticmethod
+    def _terminate_proc(proc):
+        # SIGTERM then SIGKILL fallback. ffmpeg installs a SIGTERM handler
+        # that tries to flush stderr on shutdown — if stderr is already
+        # blocked, terminate() hangs forever. SIGKILL can't be caught.
+        if not proc or proc.poll() is not None:
+            return
+        try:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                try:
+                    proc.kill()
+                    proc.wait(timeout=2)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     def stop(self):
         """Stop current playback."""
         self._stop_event.set()
         for proc in [self._aplay_proc, self._ffmpeg_proc, self._ytdlp_proc]:
-            if proc and proc.poll() is None:
-                try:
-                    proc.terminate()
-                except Exception:
-                    pass
+            self._terminate_proc(proc)
 
     def _play_file_sync(self, path: str, title: Optional[str] = None, person: str = ""):
         """Play a local audio file via ffmpeg directly to ALSA."""
@@ -311,6 +337,7 @@ class MusicService:
             self._ffmpeg_proc = subprocess.Popen(
                 [
                     "ffmpeg",
+                    "-hide_banner", "-loglevel", "error", "-nostats",
                     "-i", path,
                     "-ac", "2",
                     "-ar", "44100",
@@ -360,11 +387,7 @@ class MusicService:
             _stopped_by = "error"
         finally:
             for proc in [self._aplay_proc, self._ffmpeg_proc]:
-                if proc and proc.poll() is None:
-                    try:
-                        proc.terminate()
-                    except Exception:
-                        pass
+                self._terminate_proc(proc)
             self._aplay_proc = None
             _log_play_event(path, self._current_title, _started_at, time.time(), _stopped_by, person)
             self._ffmpeg_proc = None
@@ -439,6 +462,7 @@ class MusicService:
             self._ffmpeg_proc = subprocess.Popen(
                 [
                     "ffmpeg",
+                    "-hide_banner", "-loglevel", "error", "-nostats",
                     "-threads", "1",
                     "-i", "pipe:0",
                     "-ac", "2",
@@ -494,11 +518,7 @@ class MusicService:
             _stopped_by = "error"
         finally:
             for proc in [self._aplay_proc, self._ffmpeg_proc, self._ytdlp_proc]:
-                if proc and proc.poll() is None:
-                    try:
-                        proc.terminate()
-                    except Exception:
-                        pass
+                self._terminate_proc(proc)
             _log_play_event(query, self._current_title, _started_at, time.time(), _stopped_by, person)
             self._aplay_proc = None
             self._ffmpeg_proc = None
