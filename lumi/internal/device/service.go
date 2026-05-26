@@ -363,7 +363,9 @@ func (s *Service) VerifyAdminPassword(password string) error {
 }
 
 // UpdateConfig saves updated config fields. All fields are optional; empty strings are skipped.
-// WiFi SSID/password are saved to config only (no reconnect). Restart Lumi for all changes to take full effect.
+// Side effects per field cluster: wifi → connect-wifi (wpa_supplicant reload),
+// llm_model/thinking → openclaw, stt_language → openclaw NewSession + lelamp,
+// voice-pipeline fields → lelamp. Other fields persist only; restart Lumi for full effect.
 func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 	// bcrypt is CPU-intensive; compute before acquiring the config lock.
 	var adminHash string
@@ -384,6 +386,7 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 		thinkingChanged bool
 		wifiChanged     bool
 		langChanged     bool
+		voiceChanged    bool
 		newModel        string
 		newSSID         string
 		newPassword     string
@@ -393,6 +396,18 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 	if err := s.config.WithLockSave(func(c *config.Config) {
 		prevModel := c.LLMModel
 		prevLang = c.STTLanguage
+		// Snapshot voice-pipeline fields lelamp reads at boot (lelamp/server.py
+		// :317-388 + lelamp/config.py:103-104). Used to gate lumi-lelamp restart
+		// so wifi/channel/MQTT/admin-only saves don't bounce TTS.
+		prevLLMAPIKey := c.LLMAPIKey
+		prevLLMBaseURL := c.LLMBaseURL
+		prevDeepgramAPIKey := c.DeepgramAPIKey
+		prevSTTAPIKey := c.STTAPIKey
+		prevTTSAPIKey := c.TTSAPIKey
+		prevSTTBaseURL := c.STTBaseURL
+		prevTTSBaseURL := c.TTSBaseURL
+		prevTTSProvider := c.TTSProvider
+		prevTTSVoice := c.TTSVoice
 
 		if data.LLMAPIKey != "" {
 			c.LLMAPIKey = data.LLMAPIKey
@@ -518,6 +533,16 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 		if adminHash != "" {
 			c.AdminPasswordHash = adminHash
 		}
+
+		voiceChanged = c.LLMAPIKey != prevLLMAPIKey ||
+			c.LLMBaseURL != prevLLMBaseURL ||
+			c.DeepgramAPIKey != prevDeepgramAPIKey ||
+			c.STTAPIKey != prevSTTAPIKey ||
+			c.TTSAPIKey != prevTTSAPIKey ||
+			c.STTBaseURL != prevSTTBaseURL ||
+			c.TTSBaseURL != prevTTSBaseURL ||
+			c.TTSProvider != prevTTSProvider ||
+			c.TTSVoice != prevTTSVoice
 	}); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
@@ -564,8 +589,12 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 			}()
 		}
 	}
-	// Re-push voice config to LeLamp on any config change
-	s.RePushVoiceConfig()
+	// Restart lumi-lelamp only when a field it reads at boot actually changed.
+	// stt_language is covered by langChanged (lelamp reads it via stt_language /
+	// derived stt_model). Wifi/channel/MQTT/admin saves skip the restart.
+	if voiceChanged || langChanged {
+		s.RePushVoiceConfig()
+	}
 	return nil
 }
 

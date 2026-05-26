@@ -426,7 +426,7 @@ export default function EditConfig() {
           <span style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
             {SECTIONS.find((s) => s.id === activeSection)?.label}
           </span>
-          {activeSection !== "face" && (
+          {activeSection !== "face" && activeSection !== "voice" && (
             <button
               form="edit-form"
               type="submit"
