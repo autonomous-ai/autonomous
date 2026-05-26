@@ -215,12 +215,15 @@ class MusicService:
     def playing(self) -> bool:
         if not self._playing:
             return False
-        # Self-heal: ffmpeg can hang on a full stderr pipe and never reach
-        # the finally that clears _playing. If every tracked subprocess is
-        # gone, the flag is lying — clear it so TTS isn't blocked forever.
+        # Music thread holds _lock for its entire run, including the yt-dlp
+        # resolve phase (1-5s before procs spawn) where all _*_proc fields
+        # are still None. Treat lock-held as "playing" so TTS rejection stays
+        # in effect during resolve. Self-heal only when no thread is in flight.
+        if self._lock.locked():
+            return True
         procs = [self._aplay_proc, self._ffmpeg_proc, self._ytdlp_proc]
         if all(p is None or p.poll() is not None for p in procs):
-            logger.warning("playing flag stuck True with no live procs — self-healing")
+            logger.warning("playing flag stuck True with no music thread — self-healing")
             self._playing = False
             return False
         return True
