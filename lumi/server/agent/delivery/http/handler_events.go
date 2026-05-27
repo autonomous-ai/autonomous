@@ -784,8 +784,14 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 			}
 			hwCalls = hwCalls[firedAtStream:]
 			if text != "" || len(hwCalls) > 0 || streamed {
-				// Fire HW calls with full tracking (flow.Log + lastEmotion + monitorBus).
-				h.fireHWCalls(hwCalls, flowRunID)
+				// ADDED 2026-05-27: fire SYNC (was h.fireHWCalls async) so state-
+				// changing markers like /scene/off apply before the lifecycle-end
+				// TTS POST below races ahead and gets rejected on still-muted
+				// speaker. Single-sentence responses skip stream-time fire (no
+				// sentence boundary) — without sync here, the race returns.
+				// fireHWCallsSync has 100ms per-call timeout + async fallback,
+				// so heavy markers (e.g. /servo/track) don't block TTS.
+				h.fireHWCallsSync(hwCalls, flowRunID)
 
 				// [2026-05-11] DISABLED — TTS suppress on /audio/play was killing the
 				// agent's main reply (e.g. "Mình chọn River Flows in You…") and
