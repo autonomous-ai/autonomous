@@ -22,6 +22,6 @@ COPY build-orangepi.sh /work/build-orangepi.sh
 COPY lib /work/lib
 RUN chmod +x /work/build.sh /work/build-orangepi.sh
 
-# Default to RPi build; override at run-time by appending the script path
-# (Makefile passes /work/build-orangepi.sh when TARGET=opi).
-CMD ["/work/build.sh"]
+# Default to OrangePi build; the Makefile overrides at run-time by appending
+# /work/build.sh when TARGET=rpi.
+CMD ["/work/build-orangepi.sh"]

@@ -2,15 +2,15 @@
 # imager Makefile
 # =============================================================================
 # Targets:
-#   make build                 — RPi 5 golden image (default)
-#   make TARGET=opi build      — OrangePi (Armbian) golden image (skeleton)
+#   make build                 — OrangePi (Armbian) golden image (default, skeleton)
+#   make TARGET=rpi build      — Raspberry Pi 5 (RPi OS) golden image
 #   make sd-card-list          — list disks for flashing
 #   make sd-card-test DISK=N   — test SD card with 100 MB dd
-#   make sd-card-flash DISK=N  — flash golden.img to /dev/diskN
-#   make sd-card-flash-opi DISK=N — flash golden-opi.img to /dev/diskN
+#   make sd-card-flash DISK=N  — flash the default-target image to /dev/diskN
+#   make sd-card-flash TARGET=rpi DISK=N — flash RPi image instead
 # =============================================================================
 
-TARGET ?= rpi
+TARGET ?= opi
 BUILD_SCRIPT_rpi := build.sh
 BUILD_SCRIPT_opi := build-orangepi.sh
 BUILD_SCRIPT := $(BUILD_SCRIPT_$(TARGET))
@@ -64,6 +64,3 @@ endif
 	sync
 	diskutil eject /dev/disk$(DISK) 2>/dev/null || true
 	@echo "==> Flash complete"
-
-sd-card-flash-opi:
-	$(MAKE) sd-card-flash TARGET=opi DISK=$(DISK)

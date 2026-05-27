@@ -7,8 +7,8 @@ Produces ready-to-flash SD card images that boot straight into AP/hotspot mode
 
 | Board | Builder | Output | Status |
 |-------|---------|--------|--------|
+| **OrangePi 4 Pro (Armbian Trixie) — default** | `build-orangepi.sh` | `output/golden-opi.img` | **skeleton — needs hardware verification + chroot stage port** |
 | Raspberry Pi 5 (RPi OS Trixie arm64) | `build.sh` | `output/golden.img` | working |
-| OrangePi 4 Pro (Armbian Trixie) | `build-orangepi.sh` | `output/golden-opi.img` | **skeleton — needs hardware verification + chroot stage port** |
 
 OrangePi 5 / 5 Plus / Zero variants: swap `ARMBIAN_BOARD` env var when invoking
 `build-orangepi.sh`. Untested.
@@ -16,14 +16,14 @@ OrangePi 5 / 5 Plus / Zero variants: swap `ARMBIAN_BOARD` env var when invoking
 ## Quick start
 
 ```bash
-# RPi 5 (default)
+# OrangePi (default)
 make build
 make sd-card-list                       # find your SD card disk number
 make sd-card-flash DISK=N
 
-# OrangePi
-make TARGET=opi build
-make sd-card-flash-opi DISK=N
+# Raspberry Pi 5 (explicit opt-in)
+make TARGET=rpi build
+make sd-card-flash TARGET=rpi DISK=N
 ```
 
 The first run downloads ~2 GB (base OS image) + builds for ~20 min. Subsequent
