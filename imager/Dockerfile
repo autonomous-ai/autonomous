@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y \
     qemu-utils \
     qemu-user-static \
     wget \
+    curl \
+    ca-certificates \
     wpasupplicant \
     xz-utils \
     rsync \
