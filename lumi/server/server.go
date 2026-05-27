@@ -314,6 +314,28 @@ func hostOnly(addr string) string {
 	return strings.Trim(addr, "[]")
 }
 
+// adminOrLoopbackAuth gates an endpoint with a hybrid policy: a strict-loopback
+// origin (no nginx proxy headers) bypasses auth entirely; everything else must
+// pass adminAuthMiddleware. Used by /api/system/factory-reset so the lelamp
+// GPIO long-press trigger can reach the endpoint with no Bearer (the device
+// might not even be set up yet — physical button = authority) while web calls
+// from the LAN still need admin credentials.
+func adminOrLoopbackAuth(cfg *config.Config) gin.HandlerFunc {
+	admin := adminAuthMiddleware(cfg)
+	return func(c *gin.Context) {
+		remoteHost := hostOnly(c.Request.RemoteAddr)
+		xff := firstForwardedFor(c.GetHeader("X-Forwarded-For"))
+		realIP := strings.TrimSpace(c.GetHeader("X-Real-IP"))
+		if isLoopbackHost(remoteHost) &&
+			(xff == "" || isLoopbackHost(xff)) &&
+			(realIP == "" || isLoopbackHost(realIP)) {
+			c.Next()
+			return
+		}
+		admin(c)
+	}
+}
+
 // localOnlyMiddleware blocks any request whose real client IP is not loopback.
 // Checks RemoteAddr, X-Forwarded-For, and X-Real-IP so nginx-proxied LAN
 // requests are still rejected even though the TCP peer is always 127.0.0.1.
@@ -525,6 +547,7 @@ func (s *Server) Serve(closeFn func()) error {
 	system.GET("network", s.healthHandler.NetworkInfo)
 	system.GET("dashboard", s.healthHandler.Dashboard)
 	system.POST("software-update/:target", adminAuthMiddleware(s.config), s.softwareUpdate)
+	system.POST("factory-reset", adminOrLoopbackAuth(s.config), systemshell.FactoryReset)
 	system.POST("exec", localOnlyMiddleware(), s.execCommand)
 	// xterm.js shell: admin-gated. WS upgrade doesn't carry the Bearer header
 	// in browsers, so the cookie path inside adminAuthMiddleware is the live
