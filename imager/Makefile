@@ -20,8 +20,9 @@ $(error Unknown TARGET=$(TARGET). Supported: rpi, opi)
 endif
 
 # Image filename per target so RPi + OPi builds don't clobber each other.
+# OPi build produces .img.xz (compressed); RPi build produces raw .img.
 IMG_FILE_rpi := golden.img
-IMG_FILE_opi := golden-opi.img
+IMG_FILE_opi := golden-opi.img.xz
 IMG_FILE := $(IMG_FILE_$(TARGET))
 
 build:
@@ -60,7 +61,12 @@ ifndef DISK
 endif
 	@echo "==> Flashing ./output/$(IMG_FILE) to /dev/disk$(DISK)..."
 	diskutil unmountDisk force /dev/disk$(DISK)
-	sudo dd if=./output/$(IMG_FILE) of=/dev/disk$(DISK) bs=64m conv=fsync status=progress
+	@# Compressed (.xz) images decompress on the fly; raw .img dd directly.
+	@if [ "$(suffix $(IMG_FILE))" = ".xz" ]; then \
+		xz -dc ./output/$(IMG_FILE) | sudo dd of=/dev/disk$(DISK) bs=64m conv=fsync status=progress; \
+	else \
+		sudo dd if=./output/$(IMG_FILE) of=/dev/disk$(DISK) bs=64m conv=fsync status=progress; \
+	fi
 	sync
 	diskutil eject /dev/disk$(DISK) 2>/dev/null || true
 	@echo "==> Flash complete"
