@@ -118,7 +118,7 @@ class LBSetting(BaseModel):
     backends: str = ""  # comma-separated backend URLs, e.g. "http://127.0.0.1:8888"
     host: str = "0.0.0.0"
     port: int = 7999
-    internal_prefix: str = "/_internal"
+    internal_prefix: str = ""
 
 
 class Settings(BaseSettings):
