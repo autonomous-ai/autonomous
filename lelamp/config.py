@@ -105,7 +105,7 @@ DL_API_KEY = _lumi_cfg_get("llm_api_key") or os.environ.get("DL_API_KEY", "")
 DL_HEARTBEAT_INTERVAL_S = float(os.environ.get("LELAMP_DL_HEARTBEAT_INTERVAL_S", "60.0"))
 
 # --- DL backend encryption (RSA + AES-256-GCM) ---
-DL_ENCRYPTION_ENABLED: bool = os.environ.get("LELAMP_DL_ENCRYPTION", "false").lower() in ("1", "true", "yes")
+DL_ENCRYPTION_ENABLED: bool = os.environ.get("LELAMP_DL_ENCRYPTION", "true").lower() in ("1", "true", "yes")
 DL_ENCRYPTION_REQUIRED: bool = os.environ.get("LELAMP_DL_ENCRYPTION_REQUIRED", "false").lower() in ("1", "true", "yes")
 DL_PUBLIC_KEY_FILE: str = os.environ.get("DL_PUBLIC_KEY_FILE", "")
 DL_PUBLIC_KEY_ENDPOINT = os.environ.get("DL_PUBLIC_KEY_ENDPOINT", "/crypto/public-key")
