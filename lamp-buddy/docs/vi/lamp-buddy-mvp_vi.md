@@ -21,7 +21,7 @@
 - Command executor: `open_app`, `close_app`, `open_url`, `type_text`, `key_combo`, `notification`, `ping`
 - Lamp Go: package `internal/buddy/` + 7 HTTP route + WS gateway
 - OpenClaw skill `computer-use` (intent → command cơ bản)
-- Web UI: page "Paired Computers" ở `lumi/web/`
+- Web UI: page "Paired Computers" ở `lamp/web/`
 - Audit log (backend file only — chưa có UI ở MVP)
 
 **Ngoài scope (chờ sau MVP):**
@@ -59,16 +59,16 @@ Mỗi phase ship & review độc lập được.
 
 ### Phase 1B — Discovery lamp (mDNS)
 
-**Status:** ✓ Done — Bonjour browse `_lumi._tcp` chạy; có fallback nhập hostname tay.
+**Status:** ✓ Done — Bonjour browse `_lamp._tcp` chạy; có fallback nhập hostname tay.
 
 **Files:**
 - `lamp-buddy/macos/Sources/LampBuddy/Discovery/LampDiscovery.swift`
 - `lamp-buddy/macos/Sources/LampBuddy/Discovery/LampInfo.swift`
 - Update `MenuBarController.swift` để hiện lamp tìm thấy
 
-**Acceptance:** Khi lamp đang chạy trên LAN (advertise `_lumi._tcp.local`), menu buddy hiện ví dụ `lamp-a1b2.local — 192.168.1.50` như item bấm được. Cũng có: option nhập hostname thủ công.
+**Acceptance:** Khi lamp đang chạy trên LAN (advertise `_lamp._tcp.local`), menu buddy hiện ví dụ `lamp-a1b2.local — 192.168.1.50` như item bấm được. Cũng có: option nhập hostname thủ công.
 
-> Note: confirm tên service mDNS hiện có của lamp. Hiện publish `lamp-<last4hex>.local`; có thể cần advertise thêm service `_lumi._tcp.local` cho browsable. Có thể cần sửa nhỏ bên lelamp/lumi (xem §lamp-side dưới).
+> Note: confirm tên service mDNS hiện có của lamp. Hiện publish `lamp-<last4hex>.local`; có thể cần advertise thêm service `_lamp._tcp.local` cho browsable. Có thể cần sửa nhỏ bên lelamp/lumi (xem §lamp-side dưới).
 
 ### Phase 1C — Luồng pairing
 
@@ -80,21 +80,21 @@ Mỗi phase ship & review độc lập được.
 - `lamp-buddy/macos/Sources/LampBuddy/Pairing/PairingWindow.swift` (UI nhập code)
 
 **File Lamp Go:**
-- `lumi/internal/buddy/types.go`
-- `lumi/internal/buddy/store.go`
-- `lumi/internal/buddy/pairing.go`
-- `lumi/internal/buddy/service.go`
-- `lumi/server/buddy/delivery/http/handler.go`
-- `lumi/server/buddy/delivery/http/handler_pair.go`
-- `lumi/internal/buddy/wire.go`
-- Sửa: `lumi/server/server.go` (đăng ký route)
-- Sửa: `lumi/server/wire.go` (provider)
+- `lamp/internal/buddy/types.go`
+- `lamp/internal/buddy/store.go`
+- `lamp/internal/buddy/pairing.go`
+- `lamp/internal/buddy/service.go`
+- `lamp/server/buddy/delivery/http/handler.go`
+- `lamp/server/buddy/delivery/http/handler_pair.go`
+- `lamp/internal/buddy/wire.go`
+- Sửa: `lamp/server/server.go` (đăng ký route)
+- Sửa: `lamp/server/wire.go` (provider)
 - Chạy: `make generate`
 
 **File Lamp web:**
-- `lumi/web/src/pages/PairedComputers.tsx` (sơ — chỉ hiện code)
-- Update `lumi/web/src/App.tsx` (route)
-- Update `lumi/web/src/lib/api.ts` (endpoint pair)
+- `lamp/web/src/pages/PairedComputers.tsx` (sơ — chỉ hiện code)
+- Update `lamp/web/src/App.tsx` (route)
+- Update `lamp/web/src/lib/api.ts` (endpoint pair)
 
 **Route thêm:**
 - `POST /api/buddy/pair/start`
@@ -115,14 +115,14 @@ Mỗi phase ship & review độc lập được.
 **Status:** ✓ Done — WS persistent + reconnect có backoff. Lamp tự fire 1 lệnh `ping` "hello" ngay sau khi connect để Activity window bên buddy hiện 1 dòng ✓ ngay, user xác nhận chain thông suốt.
 
 **File buddy:**
-- `lamp-buddy/macos/Sources/LampBuddy/Connection/LumiConnection.swift`
+- `lamp-buddy/macos/Sources/LampBuddy/Connection/LampConnection.swift`
 - `lamp-buddy/macos/Sources/LampBuddy/Connection/Reconnect.swift`
 
 **File Lamp Go:**
-- `lumi/internal/buddy/registry.go`
-- `lumi/internal/buddy/ws.go`
-- `lumi/server/buddy/delivery/http/handler_ws.go`
-- Update: `lumi/server/server.go` (đăng ký route WS)
+- `lamp/internal/buddy/registry.go`
+- `lamp/internal/buddy/ws.go`
+- `lamp/server/buddy/delivery/http/handler_ws.go`
+- Update: `lamp/server/server.go` (đăng ký route WS)
 
 **Route thêm:**
 - `GET /api/buddy/ws` (WS upgrade)
@@ -161,8 +161,8 @@ Mỗi phase ship & review độc lập được.
 **Status:** ✓ Done — sync `/api/buddy/command` (localOnly) + marker-friendly `/api/buddy/exec/:action`. Cross-compile `GOOS=linux GOARCH=arm64 go build ./...` sạch. Có debug log instrumentation suốt chain (handler_hw → exec/command handler → dispatcher → ws read loop) để truy từng stage khi turn fail.
 
 **Files:**
-- `lumi/internal/buddy/dispatcher.go`
-- `lumi/server/buddy/delivery/http/handler_command.go`
+- `lamp/internal/buddy/dispatcher.go`
+- `lamp/server/buddy/delivery/http/handler_command.go`
 - Update: wire provider, chạy `make generate`
 
 **Route thêm:**
@@ -193,8 +193,8 @@ Mỗi phase ship & review độc lập được.
 **Status:** ✓ Done — `BuddyCard` trong Monitor Overview hiện pair/status/revoke. Buddy app cũng có thêm Activity submenu trên menu bar + cửa sổ "Activity" riêng (terminal-tail style) để user audit recent commands không phải mở file audit log. Path audit log: `~/Library/Application Support/LampBuddy/audit.log`.
 
 **Files:**
-- Update `lumi/web/src/pages/PairedComputers.tsx`
-- Update `lumi/web/src/components/` nếu cần
+- Update `lamp/web/src/pages/PairedComputers.tsx`
+- Update `lamp/web/src/components/` nếu cần
 
 **Acceptance:**
 - Page list buddy đã pair với tên, OS, last seen, online/offline
@@ -224,7 +224,7 @@ Mỗi phase ship & review độc lập được.
 
 ## Lamp-side cần verify trước Phase 1B
 
-1. **mDNS browsability** — confirm lamp publish `_lumi._tcp.local` cho `NWBrowser`. Nếu chỉ có host record `lamp-xxxx.local`, cần thêm service publishing (chắc trong `lumi` startup hoặc avahi config).
+1. **mDNS browsability** — confirm lamp publish `_lamp._tcp.local` cho `NWBrowser`. Nếu chỉ có host record `lamp-xxxx.local`, cần thêm service publishing (chắc trong `lumi` startup hoặc avahi config).
 2. **Convention header admin auth** — confirm endpoint buddy mới dùng `Authorization: Bearer <token>` (cookie hay bearer); reuse pattern `project_security_login_ui_batch.md`.
 3. **Vị trí OpenClaw skill** — tìm xem skill đang sống ở đâu, naming convention, lamp đăng ký skill thế nào. (Có thể trong filesystem lamp `~/.openclaw/skills/<name>/SKILL.md`.)
 
@@ -252,7 +252,7 @@ lamp-buddy/
         │   ├── PairingStore.swift
         │   └── PairingWindow.swift
         ├── Connection/
-        │   ├── LumiConnection.swift
+        │   ├── LampConnection.swift
         │   └── Reconnect.swift
         ├── Commands/
         │   ├── Command.swift
@@ -271,9 +271,9 @@ lamp-buddy/
 
 Subfolder `lamp-buddy/windows/` và `lamp-buddy/linux/` sẽ host port tương lai (v1.2+). Mỗi platform self-contained để toolchain không "lây" lẫn nhau.
 
-### Go (`lumi/`)
+### Go (`lamp/`)
 ```
-lumi/internal/buddy/
+lamp/internal/buddy/
 ├── types.go
 ├── store.go
 ├── pairing.go
@@ -283,7 +283,7 @@ lumi/internal/buddy/
 ├── service.go
 └── wire.go
 
-lumi/server/buddy/delivery/http/
+lamp/server/buddy/delivery/http/
 ├── handler.go
 ├── handler_pair.go
 ├── handler_ws.go
@@ -291,13 +291,13 @@ lumi/server/buddy/delivery/http/
 ```
 
 Sửa:
-- `lumi/server/server.go` (đăng ký route)
-- `lumi/server/wire.go` (provider set)
-- `lumi/server/wire_gen.go` (regenerated)
+- `lamp/server/server.go` (đăng ký route)
+- `lamp/server/wire.go` (provider set)
+- `lamp/server/wire_gen.go` (regenerated)
 
-### Web (`lumi/web/`)
+### Web (`lamp/web/`)
 ```
-lumi/web/src/
+lamp/web/src/
 ├── pages/PairedComputers.tsx (mới)
 ├── App.tsx (sửa — thêm route)
 └── lib/api.ts (sửa — thêm endpoint buddy)
@@ -352,7 +352,7 @@ lumi/web/src/
 
 ## Risk riêng của MVP
 
-1. **Publishing mDNS service** — nếu lamp chưa publish `_lumi._tcp.local` (chỉ host record), buddy không browse được nếu không sửa nhỏ bên lamp.
+1. **Publishing mDNS service** — nếu lamp chưa publish `_lamp._tcp.local` (chỉ host record), buddy không browse được nếu không sửa nhỏ bên lamp.
 2. **Convention skill OpenClaw** — chưa biết cho đến khi inspect. Có thể ảnh hưởng design phase 1G.
 3. **UX permission lần chạy đầu** — Accessibility prompt 1 lần; nếu user deny mà mình không re-prompt sạch, action keyboard fail âm thầm. Cần UX fallback.
 4. **WS keepalive qua Mac sleep** — Mac sleep kill WS. Reconnect phải xử lý gracefully.

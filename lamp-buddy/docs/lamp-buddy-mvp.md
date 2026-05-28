@@ -68,7 +68,7 @@ Each phase is independently shippable and reviewable.
 
 **Acceptance:** When a lamp is running on LAN (advertises `_lamp._tcp.local`), buddy menu shows e.g. `lamp-a1b2.local — 192.168.1.50` as a clickable item. Also: manual hostname entry option.
 
-> Note: confirm lamp's existing mDNS service name. Currently it publishes `lamp-<last4hex>.local`; may need to also advertise a `_lamp._tcp.local` service for browsability. May require a small lelamp/lumi tweak (see lamp-side §1 below).
+> Note: confirm lamp's existing mDNS service name. Currently it publishes `lamp-<last4hex>.local`; may need to also advertise a `_lamp._tcp.local` service for browsability. May require a small lelamp/lamp tweak (see lamp-side §1 below).
 
 ### Phase 1C — Pairing flow
 
@@ -115,7 +115,7 @@ Each phase is independently shippable and reviewable.
 **Status:** ✓ Done — persistent WS with backoff reconnect. Lamp fires a `ping` hello command immediately after connect so the user's Activity window shows one ✓ row right away, confirming end-to-end reachability.
 
 **Buddy files:**
-- `lamp-buddy/macos/Sources/LampBuddy/Connection/LumiConnection.swift`
+- `lamp-buddy/macos/Sources/LampBuddy/Connection/LampConnection.swift`
 - `lamp-buddy/macos/Sources/LampBuddy/Connection/Reconnect.swift`
 
 **Lamp Go files:**
@@ -224,7 +224,7 @@ Each phase is independently shippable and reviewable.
 
 ## Lamp-side prerequisites (verify before Phase 1B)
 
-1. **mDNS browsability** — confirm lamp publishes `_lamp._tcp.local` for `NWBrowser`. If only `lamp-xxxx.local` host record exists, add service publishing (likely in `lumi` startup or avahi config).
+1. **mDNS browsability** — confirm lamp publishes `_lamp._tcp.local` for `NWBrowser`. If only `lamp-xxxx.local` host record exists, add service publishing (likely in `lamp` startup or avahi config).
 2. **Admin auth header convention** — confirm whether new buddy endpoints should use `Authorization: Bearer <token>` (cookie or bearer); reuse `project_security_login_ui_batch.md` patterns.
 3. **OpenClaw skill location** — find where existing skills live, naming convention, how lamp registers them. (Possibly in lamp's filesystem `~/.openclaw/skills/<name>/SKILL.md`.)
 
@@ -252,7 +252,7 @@ lamp-buddy/
         │   ├── PairingStore.swift
         │   └── PairingWindow.swift
         ├── Connection/
-        │   ├── LumiConnection.swift
+        │   ├── LampConnection.swift
         │   └── Reconnect.swift
         ├── Commands/
         │   ├── Command.swift
@@ -271,7 +271,7 @@ lamp-buddy/
 
 Subfolders `lamp-buddy/windows/` and `lamp-buddy/linux/` will host future ports (v1.2+). Each platform self-contained so toolchains don't cross-contaminate.
 
-### Go (`lumi/`)
+### Go (`lamp/`)
 ```
 lamp/internal/buddy/
 ├── types.go
