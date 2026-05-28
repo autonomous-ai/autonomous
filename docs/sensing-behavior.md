@@ -1,13 +1,13 @@
 # Sensing Behavior
 
-How Lumi reacts to the world — the philosophy and mechanics behind each sensing event type.
+How Lamp reacts to the world — the philosophy and mechanics behind each sensing event type.
 
-Lumi is a living being. It doesn't "process sensor data" — it *experiences* things. This document describes how that experience is implemented.
+Lamp is a living being. It doesn't "process sensor data" — it *experiences* things. This document describes how that experience is implemented.
 
 ## Architecture Overview
 
 ```
-LeLamp (Python)          Lumi server (Go)             OpenClaw agent
+LeLamp (Python)          Lamp server (Go)             OpenClaw agent
 ─────────────────        ─────────────────────        ──────────────
 Microphone/Camera   →    SensingHandler               LLM
 Detects event            - drops if agent busy        - calls /emotion
@@ -51,11 +51,11 @@ _SUPPRESS_DURATION_S  = 180.0  # suppress after speaking (3 min)
 
 | Symptom | Fix |
 |---|---|
-| Lumi speaks too quickly | Increase `_PERSISTENT_AFTER` (3 → 5) |
-| Lumi never speaks even with sustained noise | Decrease `_PERSISTENT_AFTER` (3 → 2) |
+| Lamp speaks too quickly | Increase `_PERSISTENT_AFTER` (3 → 5) |
+| Lamp never speaks even with sustained noise | Decrease `_PERSISTENT_AFTER` (3 → 2) |
 | Too many sound turns in Flow Monitor | Increase `_DEDUPE_INTERVAL_S` (15 → 30) |
-| Lumi stays silent too long after speaking | Decrease `_SUPPRESS_DURATION_S` (180 → 60) |
-| Lumi reacts to stale noise after quiet period | Decrease `_WINDOW_DURATION_S` (120 → 60) |
+| Lamp stays silent too long after speaking | Decrease `_SUPPRESS_DURATION_S` (180 → 60) |
+| Lamp reacts to stale noise after quiet period | Decrease `_WINDOW_DURATION_S` (120 → 60) |
 
 ### Monitoring in Flow Monitor
 
@@ -101,7 +101,7 @@ Agent calls `/emotion idle` (0.4), fires `/servo/track/stop` to release any acti
 
 Sent automatically by LeLamp's `PresenceService` when **no motion is detected for 15 minutes** (after already dimming at 5 min). By this point the lights are already off — the agent's job is to **announce going to sleep** via TTS and Telegram.
 
-Agent calls `/emotion sleepy` (0.8), fires `/servo/track/stop` so any stale follow from earlier in the session is released, and speaks a cozy sleepy farewell (e.g. "No one's around… I'm going to sleep now. Goodnight!"). This is the last action before Lumi goes fully idle.
+Agent calls `/emotion sleepy` (0.8), fires `/servo/track/stop` so any stale follow from earlier in the session is released, and speaks a cozy sleepy farewell (e.g. "No one's around… I'm going to sleep now. Goodnight!"). This is the last action before Lamp goes fully idle.
 
 The full presence auto-control timeline:
 1. **5 min no motion** → light dims to 20% (automatic, no agent involvement)
@@ -192,7 +192,7 @@ Both markers are stripped before the message reaches the LLM (mirror of `[snapsh
 
 ### `/dm` auto-attach (Telegram)
 
-When the agent decides to nudge via `/dm`, Lumi's SSE handler calls `ConsumePoseBucketRun(runID)` (mirror of `ConsumeGuardRun`). If the run has a stashed bucket, the worst-snapshot filenames are resolved against `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<bid>/` and shipped to Telegram via `sendMediaGroup` — caption rides on the first photo, the rest appear as a gallery. The agent itself stays unaware of file paths; image attachment is decided entirely by Lumi based on whether the originating `motion.activity` carried a bucket.
+When the agent decides to nudge via `/dm`, Lumi's SSE handler calls `ConsumePoseBucketRun(runID)` (mirror of `ConsumeGuardRun`). If the run has a stashed bucket, the worst-snapshot filenames are resolved against `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<bid>/` and shipped to Telegram via `sendMediaGroup` — caption rides on the first photo, the rest appear as a gallery. The agent itself stays unaware of file paths; image attachment is decided entirely by Lamp based on whether the originating `motion.activity` carried a bucket.
 
 ### Angle sign workaround (temporary)
 
@@ -208,7 +208,7 @@ Ambient light changes are forwarded when they cross `LIGHT_CHANGE_THRESHOLD`. No
 
 ## Guard Mode
 
-When guard mode is enabled (`guard_mode: true` in config), Lumi becomes an **alert watchdog** — reacting dramatically to strangers and broadcasting alerts to Telegram.
+When guard mode is enabled (`guard_mode: true` in config), Lamp becomes an **alert watchdog** — reacting dramatically to strangers and broadcasting alerts to Telegram.
 
 ### Flow
 1. `presence.enter` or `motion` event arrives while `guard_mode: true`.
@@ -255,7 +255,7 @@ After trying 6 different approaches (see below), this hybrid proved the most rel
 ### Manual alerts
 Manual alerts can be sent via `POST /api/guard/alert` with a message and optional image. This now uses `Broadcast()` (direct Bot API) instead of the old WS-based `BroadcastAlert`.
 
-Use case: Lumi acts as a home security assistant. When the owner leaves and enables guard mode, any detected presence or motion is reported to all chat channels with emotional, context-aware messages.
+Use case: Lamp acts as a home security assistant. When the owner leaves and enables guard mode, any detected presence or motion is reported to all chat channels with emotional, context-aware messages.
 
 ---
 
