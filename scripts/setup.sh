@@ -729,7 +729,7 @@ server {
     proxy_send_timeout 86400s;
   }
 
-  # Lumi Buddy (macOS companion) persistent WebSocket. Same Upgrade + long-
+  # Lamp Buddy (macOS companion) persistent WebSocket. Same Upgrade + long-
   # timeout requirements as /api/system/shell. Must come BEFORE the generic
   # /api/ block so the exact match wins.
   location = /api/buddy/ws {
