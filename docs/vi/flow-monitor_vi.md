@@ -6,9 +6,9 @@ Tài liệu đầy đủ bằng tiếng Anh: [`docs/flow-monitor.md`](../flow-mo
 
 Flow Monitor là lớp quan sát end-to-end cho agent turn: ghi JSONL (`local/flow_events_YYYY-MM-DD.jsonl`), stream SSE tới UI. **Chỉ quan sát** — không đổi hành vi thiết bị hay business logic.
 
-**Run ID từ Lumi (`chat.send`):** idempotency dùng tiền tố `lumi-chat-*` (trước đây `lumi-sensing-*`). Đó là **mọi** tin gửi qua WebSocket từ Lumi (sensing POST, wake greeting, …), **không** có nghĩa log đó chỉ là sound/voice — đừng nhầm với Telegram chỉ vì thấy chữ “sensing” trong log cũ.
+**Run ID từ Lamp (`chat.send`):** idempotency dùng tiền tố `lumi-chat-*` (trước đây `lumi-sensing-*`). Đó là **mọi** tin gửi qua WebSocket từ Lamp (sensing POST, wake greeting, …), **không** có nghĩa log đó chỉ là sound/voice — đừng nhầm với Telegram chỉ vì thấy chữ “sensing” trong log cũ.
 
-**Map UUID → `lumi-chat-*`:** Hành vi runId của OpenClaw phụ thuộc version. **5.2** (và một số path 5.4 hiếm) generate UUID mới — Lumi map UUID → idempotencyKey. **5.4** chủ yếu echo idempotencyKey trực tiếp làm runId — runId đã là device trace, không cần map. Một chat.send có thể tạo cả Phase 1 (echo) lẫn Phase 2 (UUID embedded run) trong burst/drain. SSE handler branch theo `payload.RunID` format: Lumi-format → `RemovePendingChatTraceByRunID` (xoá entry match khỏi queue, không map); UUID → FIFO pop + map. Sau đó `resolveRunID` dùng cho agent stream **và** luồng `chat` để tránh cùng một turn bị hai `run_id` trên Monitor.
+**Map UUID → `lumi-chat-*`:** Hành vi runId của OpenClaw phụ thuộc version. **5.2** (và một số path 5.4 hiếm) generate UUID mới — Lamp map UUID → idempotencyKey. **5.4** chủ yếu echo idempotencyKey trực tiếp làm runId — runId đã là device trace, không cần map. Một chat.send có thể tạo cả Phase 1 (echo) lẫn Phase 2 (UUID embedded run) trong burst/drain. SSE handler branch theo `payload.RunID` format: Lumi-format → `RemovePendingChatTraceByRunID` (xoá entry match khỏi queue, không map); UUID → FIFO pop + map. Sau đó `resolveRunID` dùng cho agent stream **và** luồng `chat` để tránh cùng một turn bị hai `run_id` trên Monitor.
 
 **Pending-trace orphan (regression 0.0.465, fix 0.0.468):** Bản trước skip pop khi runId Lumi-format → entry kẹt lại làm orphan → UUID lifecycle kế tiếp pop nhầm → 2 reply khác nhau bị gắn cùng 1 turn (cascade off-by-one ~2 min cho tới khi TTL hết). Fix: dùng `RemovePendingChatTraceByRunID` để xoá entry chính xác thay vì skip.
 
@@ -18,7 +18,7 @@ Flow Monitor là lớp quan sát end-to-end cho agent turn: ghi JSONL (`local/fl
 
 **Field `type` trong `chat_send`:** event `chat_send` có field `type` = `"user"` (user thật / sensing-driven) hoặc `"system"` (skill watcher, wake greeting). Phân biệt chỉ ở flow event — WS RPC `chat.send` gửi sang OpenClaw giống hệt nhau. Auto-compact **không** sinh `chat_send`; nó gọi RPC `sessions.compact` trực tiếp qua `CompactSession`.
 
-**Đo TTFT / warmup:** Khoảng `lifecycle_start → first thinking/assistant delta` = LLM warmup thực (model reasoning silently trước khi token đầu chảy ra). Lumi tính từ marker JSONL `agent_first_token` / `thinking_first_token` (xem dưới) hoặc fallback sang live delta event trong RAM nếu có.
+**Đo TTFT / warmup:** Khoảng `lifecycle_start → first thinking/assistant delta` = LLM warmup thực (model reasoning silently trước khi token đầu chảy ra). Lamp tính từ marker JSONL `agent_first_token` / `thinking_first_token` (xem dưới) hoặc fallback sang live delta event trong RAM nếu có.
 
 **Stream summary events (re-added 2026-05-19):** Raw `assistant_delta` / `thinking` deltas chỉ ở RAM (monitorBus), KHÔNG ghi JSONL — để tránh ~50–500 dòng/turn. Hậu quả: load lại Flow Monitor cho turn cũ → pipeline rect mất hẳn row streaming. Fix: backend emit 4 flow event nhẹ thay thế:
 
@@ -33,28 +33,28 @@ Tối đa 4 dòng JSONL bonus / turn (thực tế 0–2). Stream name từ OpenC
 
 **Badge `⏱` vs `⚡` trên Turn card:**
 - **⏱ total** = `turn.startTime → turn.endTime` (input event → `lifecycle_end` / `tts_send` / `chat_final`) — toàn bộ window server-side. Đây là **server-observed turn duration**.
-- **⚡ TTFT** = `turn.startTime → first thinking/assistant_delta` — khớp với timestamp Lumi bubble trên chat page (lúc user **thấy** reply bắt đầu). Đây là **perceived latency**.
+- **⚡ TTFT** = `turn.startTime → first thinking/assistant_delta` — khớp với timestamp Lamp bubble trên chat page (lúc user **thấy** reply bắt đầu). Đây là **perceived latency**.
 - Khoảng cách ⚡ ↔ ⏱ = tail-streaming các token còn lại + lifecycle close. Reply ngắn → 2 con gần bằng nhau; reply dài → gap rõ rệt.
 - Ngưỡng màu: ⏱ green ≤5s / amber ≤15s / red >15s. ⚡ green ≤3s / amber ≤8s / red >8s.
 - ⚡ ẩn khi không có LLM stream (local intent match, dropped, queued).
 
-**Khoảng `chat_send → lifecycle_start`** = OpenClaw init (network + load session/context + boot agent), KHÔNG phải LLM. Đo từ `chat_send` (Lumi) tới `lifecycle_start` (OpenClaw event đầu tiên).
+**Khoảng `chat_send → lifecycle_start`** = OpenClaw init (network + load session/context + boot agent), KHÔNG phải LLM. Đo từ `chat_send` (Lamp) tới `lifecycle_start` (OpenClaw event đầu tiên).
 
 **OpenClaw section trên diagram (2026-05-08 redesign):** 3 node cũ (LLM Start / Thinking / Tool Exec) đã được gộp thành 1 **Event Pipeline rect** chạy giữa Agent Call và Response. Rect hiển thị danh sách events do OpenClaw emit, gộp các delta liên tiếp cùng loại thành 1 dòng tóm tắt (`thinking · 5.2s · 200 chunks · ~4k chars`). Edges ra HW (LED/servo/emotion/audio/lumi_gate) anchor từ cạnh phải pipeline. Aggregation rules + lý do redesign: `docs/debug/flow-monitor-pipeline.md`.
 
 ## Sơ đồ Turn Pipeline (SVG)
 
-Component `FlowDiagram` trong `lumi/web/src/pages/Monitor.tsx` vẽ **ba vùng** (màu viền nền):
+Component `FlowDiagram` trong `lamp/web/src/pages/Monitor.tsx` vẽ **ba vùng** (màu viền nền):
 
 | Vùng | Màu | Node |
 |------|-----|------|
-| **Lumi Server** | Teal | Intent, Local, Cron, Gate |
+| **Lamp Server** | Teal | Intent, Local, Cron, Gate |
 | **LeLamp** | Amber | MIC, CAM, EMO, LED, SERVO, TTS |
 | **OpenClaw** | Blue | Agent, TG In, Tool, Think, Response, TG Out |
 
-### Lumi (hàng trên)
+### Lamp (hàng trên)
 
-- **Cron** là stage **Lumi** (lịch/timer thuộc Lumi), **không** nằm trong cụm OpenClaw. Trên SVG, Cron cùng hàng với Intent/Local nhưng **`x` trùng cột Agent** để cạnh Cron→Agent là **đường dọc**.
+- **Cron** là stage **Lamp** (lịch/timer thuộc Lamp), **không** nằm trong cụm OpenClaw. Trên SVG, Cron cùng hàng với Intent/Local nhưng **`x` trùng cột Agent** để cạnh Cron→Agent là **đường dọc**.
 
 ### LeLamp
 
@@ -64,12 +64,12 @@ Component `FlowDiagram` trong `lumi/web/src/pages/Monitor.tsx` vẽ **ba vùng**
   - **LED** (`hw_led`) — `/led/solid`, `/led/effect`, `/scene`, `/led/off`
   - **SERVO** (`hw_servo`) — `/servo/aim`, `/servo/play`
   - **TTS** (`tts_speak`) — `/voice/speak`, text-to-speech
-- Đây là hardware calls trực tiếp từ OpenClaw tools, không qua Lumi.
+- Đây là hardware calls trực tiếp từ OpenClaw tools, không qua Lamp.
 - Đường nối từ LOCAL → output nodes dùng **elbow routing** (gấp khúc bên trái) để tránh cắt qua node trung gian.
 
-### Lumi Gate
+### Lamp Gate
 
-- **Lumi Gate** nằm giữa OpenClaw output và LeLamp TTS. Lumi listen WS events để phối hợp:
+- **Lamp Gate** nằm giữa OpenClaw output và LeLamp TTS. Lamp listen WS events để phối hợp:
   - Tool có `/audio/play` → suppress TTS (không speak chồng nhạc)
   - Tool có `/led/*` → pause ambient breathing (không ghi đè màu agent set)
   - Assistant text accumulate → flush sang TTS khi lifecycle_end
@@ -89,17 +89,17 @@ Bảng tọa độ gần đúng và ASCII grid: xem mục *Turn Pipeline* và *A
 
 | File | Vai trò |
 |------|---------|
-| `lumi/lib/flow/flow.go` | Emit flow, JSONL, API runID từng event |
-| `lumi/server/sensing/delivery/http/handler.go` | Sensing → flow.Start/End |
-| `lumi/server/openclaw/delivery/sse/handler.go` | Agent → flow.Log, map runID |
-| `lumi/internal/openclaw/service.go` | sendChat / idempotencyKey |
-| `lumi/web/src/pages/Monitor.tsx` | `groupIntoTurns`, `FlowDiagram`, v.v. |
+| `lamp/lib/flow/flow.go` | Emit flow, JSONL, API runID từng event |
+| `lamp/server/sensing/delivery/http/handler.go` | Sensing → flow.Start/End |
+| `lamp/server/openclaw/delivery/sse/handler.go` | Agent → flow.Log, map runID |
+| `lamp/internal/openclaw/service.go` | sendChat / idempotencyKey |
+| `lamp/web/src/pages/Monitor.tsx` | `groupIntoTurns`, `FlowDiagram`, v.v. |
 
 **Tải để so sánh:** nút **↓ Bundle** trên Flow Panel tải cùng lúc JSONL tail server, snapshot UI và OpenClaw debug payload (xem bảng *Turns list vs downloaded log* trong `docs/flow-monitor.md`).
 
 ### Lấy tin nhắn user từ Telegram
 
-OpenClaw chat stream **không bao giờ broadcast `role:"user"`** — chỉ emit `role:"assistant"`. Để lấy nội dung tin nhắn + tên người gửi, Lumi gọi `chat.history` **WebSocket RPC** trên cùng WS connection đang dùng nhận events:
+OpenClaw chat stream **không bao giờ broadcast `role:"user"`** — chỉ emit `role:"assistant"`. Để lấy nội dung tin nhắn + tên người gửi, Lamp gọi `chat.history` **WebSocket RPC** trên cùng WS connection đang dùng nhận events:
 
 ```
 →  {"type":"req","id":"history-1","method":"chat.history",
@@ -118,7 +118,7 @@ Chi tiết:
 - **Pending RPC tracking**: `pendingRPC` map match response về đúng caller qua request ID.
 - **Hai phase emit**: `chat_input` đầu tiên fire ngay với placeholder trung tính `[chat]` (chưa có text). Goroutine lấy xong → fire `chat_input` thứ 2 với message + label chọn theo `senderLabel` / prefix message → UI pick event có content.
 - **Frontend type upgrade**: emit đầu tiên pin `turn.type = "chat"` (từ summary `[chat]`). Khi emit thứ 2 tới, `groupIntoTurns` chạy lại `isTurnStart` để derive type cụ thể từ message prefix (`emotion.detected` / `speech_emotion.detected` / `voice` / `telegram` / …) và upgrade `turn.type` — **chỉ** khi đang còn ở placeholder `"chat"` (hoặc `"unknown"`), không đè type đã specific. Trước fix này, type bị kẹt ở `"chat"` (label CHAT, icon ❓) vì `refineTurnTypeFromSensingInputs` không nhận `"chat"` là channel type. Prefix `[speech_emotion]` map về `speech_emotion.detected` và được gom vào source `mic` (voice-driven), không phải `cam`, dù label có chữ "emotion".
-- **Label routing (emit thứ 2)**: (1) `senderLabel` có → `[telegram:Gray]` (real channel user). (2) `senderLabel` rỗng + message khớp prefix Lumi-internal → `[voice]` / `[emotion]` / `[speech_emotion]` / `[activity]` / `[wellbeing]` / `[music]` / `[sensing]` / `[system]` (sensing/voice event Lumi đã post qua chat.send, OpenClaw merge vào UUID host turn này qua steer mode). (3) Còn lại → generic `[chat]`. Trước đây mọi UUID channel-turn đều bị gán nhãn theo configured channel (`[telegram]`), nhận nhầm steer-merged self-fire là Telegram.
+- **Label routing (emit thứ 2)**: (1) `senderLabel` có → `[telegram:Gray]` (real channel user). (2) `senderLabel` rỗng + message khớp prefix Lamp-internal → `[voice]` / `[emotion]` / `[speech_emotion]` / `[activity]` / `[wellbeing]` / `[music]` / `[sensing]` / `[system]` (sensing/voice event Lamp đã post qua chat.send, OpenClaw merge vào UUID host turn này qua steer mode). (3) Còn lại → generic `[chat]`. Trước đây mọi UUID channel-turn đều bị gán nhãn theo configured channel (`[telegram]`), nhận nhầm steer-merged self-fire là Telegram.
 - **Best-effort**: timeout 3 giây, fail thì giữ nguyên placeholder generic `[chat]` — tốt hơn là gán nhầm vào channel cụ thể.
 - **Heartbeat**: Cron 30 phút cũng trigger `lifecycle_start` — last user message sẽ là system prompt, không phải user thật.
 - **Token usage**: `chat.history` cũng được gọi lúc `lifecycle_end` để lấy token usage. OpenClaw `lifecycle_end` không có field `usage`. Token nằm trong last `role:"assistant"` message của history response: `usage: {input, output, totalTokens, cacheRead, cacheWrite}`. Emit thành `token_usage` flow event với `source: "chat_history"`.
@@ -129,11 +129,11 @@ OpenClaw agent trả `NO_REPLY` (hoặc dạng cắt ngắn `NO`, `NO_RE`, `NO_.
 
 ### TTS suppress event
 
-Khi `SendToLeLampTTS` thật sự bị skip (loa không phát), Lumi emit `tts_suppressed` thay vì `tts_send`. Field `data.reason` discriminate: `channel_run` (real Telegram user turn — detect qua runID có prefix `tg-` Lumi tự sinh trong `session.message` handler, hoặc `channelRuns` map mark từ chat.history fallback; reply đi qua OpenClaw session fan-out thay vì loa lamp), `music_playing` (audio đang chiếm loa), `already_spoken` (built-in tts tool đã route trước), `web_chat` (Flow Monitor chat — reply chỉ hiện trên web UI). UI hiển thị 🔇 ở Lumi Gate column thay vì 🔊 — tránh case trước đây log nói "TTS" nhưng loa im. Classifier chỉ dùng positive evidence: UUID runs từ OpenClaw steer-mode self-fire, cron fire, heartbeat KHÔNG bị coi là `channel_run` và VẪN phát loa.
+Khi `SendToLeLampTTS` thật sự bị skip (loa không phát), Lamp emit `tts_suppressed` thay vì `tts_send`. Field `data.reason` discriminate: `channel_run` (real Telegram user turn — detect qua runID có prefix `tg-` Lamp tự sinh trong `session.message` handler, hoặc `channelRuns` map mark từ chat.history fallback; reply đi qua OpenClaw session fan-out thay vì loa lamp), `music_playing` (audio đang chiếm loa), `already_spoken` (built-in tts tool đã route trước), `web_chat` (Flow Monitor chat — reply chỉ hiện trên web UI). UI hiển thị 🔇 ở Lamp Gate column thay vì 🔊 — tránh case trước đây log nói "TTS" nhưng loa im. Classifier chỉ dùng positive evidence: UUID runs từ OpenClaw steer-mode self-fire, cron fire, heartbeat KHÔNG bị coi là `channel_run` và VẪN phát loa.
 
 ### Cron-fire auto-force TTS
 
-Khi OpenClaw emit `event:"cron"` với `action:"started"` (xem `src/cron/service/state.ts` của OpenClaw), Lumi cache `sessionKey` → mark `lifecycle_start` kế tiếp trên session đó (trong vòng 10 s) là cron fire → `isChannelRun` bị override thành `false` để loa lamp tự nói mà không cần marker `[HW:/speak]`. Marker vẫn giữ trong skill làm defense-in-depth fallback nếu cron event bị drop (`dropIfSlow: true` ở phía OpenClaw).
+Khi OpenClaw emit `event:"cron"` với `action:"started"` (xem `src/cron/service/state.ts` của OpenClaw), Lamp cache `sessionKey` → mark `lifecycle_start` kế tiếp trên session đó (trong vòng 10 s) là cron fire → `isChannelRun` bị override thành `false` để loa lamp tự nói mà không cần marker `[HW:/speak]`. Marker vẫn giữ trong skill làm defense-in-depth fallback nếu cron event bị drop (`dropIfSlow: true` ở phía OpenClaw).
 
 ### Pose bucket trên Turn card
 
@@ -148,7 +148,7 @@ OUT  🔊 <output text>
 
 - Strip được extract từ marker `[snapshot:]` + `[pose_bucket:]` / `[pose_worst:]` trong `sensing_input`. Click thumbnail mở lightbox inline (giống cũ).
 - Nút **LOAD MORE** mở `PoseBucketModal` → fetch `/api/hardware/sensing/pose-bucket/<id>` (proxy về lelamp) → render bảng từng sample (monospace + cột joint giống Sensing tab). Row có filename trong `worst_snapshots` được highlight (viền đỏ + ⭐) để xem nhanh khung tệ nhất.
-- Khi /dm fire, Lumi tự đính các worst snapshot vào Telegram qua `sendMediaGroup` — caption nằm trên ảnh đầu tiên, agent không cần biết file path. Xem `docs/sensing-behavior.md` mục "/dm auto-attach".
+- Khi /dm fire, Lamp tự đính các worst snapshot vào Telegram qua `sendMediaGroup` — caption nằm trên ảnh đầu tiên, agent không cần biết file path. Xem `docs/sensing-behavior.md` mục "/dm auto-attach".
 
 ### Tool call display
 
@@ -167,7 +167,7 @@ Session OpenClaw agent auto-compact khi context vượt ~80k tokens. Mỗi lần
 
 **Endpoint:** `GET /api/openclaw/compaction-latest?session=<key>` (mặc định `agent:main:main`). Response format: `{status:1, data:{found, sessionFile, timestamp, tokensBefore, summary, details:{readFiles}, ...}}`.
 
-Dùng khi Lumi viện rule mà grep không thấy trong bất kỳ `lumi/resources/openclaw-skills/**/SKILL.md` — gần như 100% nguồn là compaction summary, không phải skill đang load. Handler: `lumi/server/openclaw/delivery/sse/handler_api_compaction.go`.
+Dùng khi Lamp viện rule mà grep không thấy trong bất kỳ `lamp/resources/openclaw-skills/**/SKILL.md` — gần như 100% nguồn là compaction summary, không phải skill đang load. Handler: `lamp/server/openclaw/delivery/sse/handler_api_compaction.go`.
 
 ## Issue đang mở
 

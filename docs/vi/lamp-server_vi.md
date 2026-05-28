@@ -1,8 +1,8 @@
-# Lumi Server API — Tài Liệu
+# Lamp Server API — Tài Liệu
 
-> Lumi Server (Go, Gin framework) chạy trên port 5000.
+> Lamp Server (Go, Gin framework) chạy trên port 5000.
 
-## Lumi Server Endpoints (Go, :5000)
+## Lamp Server Endpoints (Go, :5000)
 
 ### Health
 
@@ -85,7 +85,7 @@ Config field: `guard_mode` trong `config/config.json` (bool, mặc định `fals
 | `presence.leave` | Camera (3 tick liên tục không thấy mặt) | Không | Người rời đi |
 | `light.level` | Camera (mean brightness) | Không | Ánh sáng môi trường thay đổi đáng kể (>30/255) |
 | `sound` | Mic (RMS energy) | Không | Tiếng động lớn |
-| `presence.away` | PresenceService (15 phút không chuyển động) | Không | Không ai xung quanh 15+ phút — Lumi đi ngủ |
+| `presence.away` | PresenceService (15 phút không chuyển động) | Không | Không ai xung quanh 15+ phút — Lamp đi ngủ |
 | `motion.activity` | MotionPerception (khi PRESENT) | Không | Phát hiện hoạt động khi user có mặt — emotional actions được ghi qua Mood skill |
 
 **Flow xử lý:**
@@ -98,7 +98,7 @@ Config field: `guard_mode` trong `config/config.json` (bool, mặc định `fals
 
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| GET | `/api/openclaw/status` | Trạng thái kết nối WS; gồm `uptime` (uptime WS phía Lumi) và `agentUptime` (uptime tiến trình OpenClaw, không reset khi Lumi restart) |
+| GET | `/api/openclaw/status` | Trạng thái kết nối WS; gồm `uptime` (uptime WS phía Lamp) và `agentUptime` (uptime tiến trình OpenClaw, không reset khi Lamp restart) |
 | GET | `/api/openclaw/events` | SSE stream events real-time |
 | GET | `/api/openclaw/recent` | 100 events gần nhất (ring buffer) |
 
@@ -199,7 +199,7 @@ Cần sensing có camera (InsightFace). Mặc định ảnh người đã đăng
 |--------|----------|-------|
 | GET | `/user/info?name=X` | Metadata user: `name`, `is_friend`, `telegram_id`, `telegram_username`. Mặc định `"unknown"` nếu thiếu name. Tự tạo folder. |
 
-> Wellbeing activity history giờ nằm trên Lumi HTTP API (port 5000). Xem `POST /api/wellbeing/log` và `GET /api/openclaw/wellbeing-history` — entries ghi JSONL tại `/root/local/users/{user}/wellbeing/YYYY-MM-DD.jsonl` với schema `{ts, seq, hour, action, notes}` (action ∈ `drink`/`break`/`sedentary`/`emotional`). LeLamp không còn host endpoint wellbeing.
+> Wellbeing activity history giờ nằm trên Lamp HTTP API (port 5000). Xem `POST /api/wellbeing/log` và `GET /api/openclaw/wellbeing-history` — entries ghi JSONL tại `/root/local/users/{user}/wellbeing/YYYY-MM-DD.jsonl` với schema `{ts, seq, hour, action, notes}` (action ∈ `drink`/`break`/`sedentary`/`emotional`). LeLamp không còn host endpoint wellbeing.
 
 ### Display (GC9A01 1.28" LCD tròn)
 
@@ -232,7 +232,7 @@ Cần sensing có camera (InsightFace). Mặc định ảnh người đã đăng
 
 ## Response Format
 
-Lumi Server (Go):
+Lamp Server (Go):
 ```json
 {"status": 1, "data": {...}, "message": null}   // success
 {"status": 0, "data": null, "message": "error"}  // failure
@@ -242,7 +242,7 @@ LeLamp (Python): FastAPI standard JSON responses.
 
 ## Startup
 
-1. Lumi Server khởi động Gin trên :5000
+1. Lamp Server khởi động Gin trên :5000
 2. Đọc `config/config.json`
 3. Nếu `SetUpCompleted`:
    - Kết nối OpenClaw WebSocket
@@ -252,7 +252,7 @@ LeLamp (Python): FastAPI standard JSON responses.
 
 ## Local Intent Matching
 
-Khi nhận `voice_command` hoặc `voice` event, Lumi check local intent trước (~50ms):
+Khi nhận `voice_command` hoặc `voice` event, Lamp check local intent trước (~50ms):
 
 | Lệnh | Hành động |
 |-------|-----------|

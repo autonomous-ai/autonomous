@@ -1,8 +1,8 @@
-# Lumi Server API — Documentation
+# Lamp Server API — Documentation
 
-> Lumi Server (Go, Gin framework) runs on port 5000.
+> Lamp Server (Go, Gin framework) runs on port 5000.
 
-## Lumi Server Endpoints (Go, :5000)
+## Lamp Server Endpoints (Go, :5000)
 
 ### Health
 
@@ -85,7 +85,7 @@ Config field: `guard_mode` in `config/config.json` (bool, default `false`). The 
 | `presence.leave` | Camera (3 consecutive ticks without face) | No | Person left |
 | `light.level` | Camera (mean brightness) | No | Significant ambient light change (>30/255) |
 | `sound` | Mic (RMS energy) | No | Loud noise |
-| `presence.away` | PresenceService (15 min no motion) | No | No one around for 15+ min — Lumi going to sleep |
+| `presence.away` | PresenceService (15 min no motion) | No | No one around for 15+ min — Lamp going to sleep |
 | `motion.activity` | MotionPerception (while PRESENT) | No | Activity detected while user is present — emotional actions logged via Mood skill |
 
 **Processing flow:**
@@ -98,7 +98,7 @@ Config field: `guard_mode` in `config/config.json` (bool, default `false`). The 
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/openclaw/status` | WS connection status; includes `uptime` (Lumi WS uptime) and `agentUptime` (OpenClaw process uptime, survives Lumi restarts) |
+| GET | `/api/openclaw/status` | WS connection status; includes `uptime` (Lamp WS uptime) and `agentUptime` (OpenClaw process uptime, survives Lamp restarts) |
 | GET | `/api/openclaw/events` | SSE stream real-time events |
 | GET | `/api/openclaw/recent` | 100 most recent events (ring buffer) |
 
@@ -199,7 +199,7 @@ Requires sensing with camera (InsightFace). Enrolled person JPEGs persist under 
 |--------|----------|-------------|
 | GET | `/user/info?name=X` | User metadata: `name`, `is_friend`, `telegram_id`, `telegram_username`. Defaults to `"unknown"` if name omitted. Auto-creates folder. |
 
-> Wellbeing activity history lives on the Lumi HTTP API (port 5000). See `POST /api/wellbeing/log` and `GET /api/openclaw/wellbeing-history` — entries are JSONL under `/root/local/users/{user}/wellbeing/YYYY-MM-DD.jsonl` with schema `{ts, seq, hour, action, notes}` (action ∈ `drink`/`break`/`sedentary`/`emotional`). LeLamp no longer hosts wellbeing endpoints.
+> Wellbeing activity history lives on the Lamp HTTP API (port 5000). See `POST /api/wellbeing/log` and `GET /api/openclaw/wellbeing-history` — entries are JSONL under `/root/local/users/{user}/wellbeing/YYYY-MM-DD.jsonl` with schema `{ts, seq, hour, action, notes}` (action ∈ `drink`/`break`/`sedentary`/`emotional`). LeLamp no longer hosts wellbeing endpoints.
 
 ### Display (GC9A01 1.28" round LCD)
 
@@ -232,7 +232,7 @@ Requires sensing with camera (InsightFace). Enrolled person JPEGs persist under 
 
 ## Response Format
 
-Lumi Server (Go):
+Lamp Server (Go):
 ```json
 {"status": 1, "data": {...}, "message": null}   // success
 {"status": 0, "data": null, "message": "error"}  // failure
@@ -242,7 +242,7 @@ LeLamp (Python): FastAPI standard JSON responses.
 
 ## Startup
 
-1. Lumi Server starts Gin on :5000
+1. Lamp Server starts Gin on :5000
 2. Reads `config/config.json`
 3. If `SetUpCompleted`:
    - Connect OpenClaw WebSocket
@@ -252,7 +252,7 @@ LeLamp (Python): FastAPI standard JSON responses.
 
 ## Local Intent Matching
 
-When receiving a `voice_command` or `voice` event, Lumi checks local intent first (~50ms):
+When receiving a `voice_command` or `voice` event, Lamp checks local intent first (~50ms):
 
 | Command | Action |
 |---------|--------|

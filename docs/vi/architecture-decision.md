@@ -33,7 +33,7 @@ Dự án AI Lamp trải qua nhiều giai đoạn tìm hướng kiến trúc trư
 **Kiến trúc Hybrid 3 tầng**: OpenClaw (AI) → Lamp Server (Go) → LeLamp Runtime (Python) → Phần cứng.
 
 Nguyên tắc cốt lõi:
-- **Tầng hệ thống** (Go Lumi) hoạt động **KHÔNG cần OpenClaw** — thiết bị luôn phản hồi được.
+- **Tầng hệ thống** (Go Lamp) hoạt động **KHÔNG cần OpenClaw** — thiết bị luôn phản hồi được.
 - **Điều khiển hướng người dùng** thông qua OpenClaw skills gọi HTTP API.
 - **LeLamp runtime** chỉ làm hardware drivers — không chứa logic AI.
 - **Không dùng MCP** — dùng SKILL.md native của OpenClaw.
@@ -112,7 +112,7 @@ Hoạt động **KHÔNG cần OpenClaw**. Nếu OpenClaw ngừng, thiết bị v
 
 ### Autonomous Sensing Loop (Tầng 1.5)
 
-Lumi chạy sensing loop liên tục, chi phí thấp, phát hiện sự kiện trên thiết bị (**edge detection**). Khi phát hiện sự kiện đáng kể → đẩy context cho OpenClaw để AI quyết định hành động. Proactive behavior mà không tốn LLM tokens liên tục.
+Lamp chạy sensing loop liên tục, chi phí thấp, phát hiện sự kiện trên thiết bị (**edge detection**). Khi phát hiện sự kiện đáng kể → đẩy context cho OpenClaw để AI quyết định hành động. Proactive behavior mà không tốn LLM tokens liên tục.
 
 ```
 Sensing Loop (Lamp Server, luôn chạy):
@@ -129,7 +129,7 @@ Sensing Loop (Lamp Server, luôn chạy):
 **Rule-based** (không cần AI): auto-dim khi vắng, adjust brightness khi trời tối, idle animations.
 **AI-driven** (OpenClaw quyết định): chào hỏi, phản ứng mood, empathy, gợi ý theo lịch.
 
-**Kế thừa từ lobster (nay nằm trong thư mục `lumi/`):**
+**Kế thừa từ lobster (nay nằm trong thư mục `lamp/`):**
 
 ```
 server/server.go          — HTTP server (Gin, port 5000)
@@ -497,12 +497,12 @@ Tất cả hardware endpoints chạy trực tiếp trên LeLamp FastAPI (:5001).
 
 | Thành phần | Trạng thái |
 |---|---|
-| 10 SKILL.md files | ✅ `lumi/resources/openclaw-skills/` |
+| 10 SKILL.md files | ✅ `lamp/resources/openclaw-skills/` |
 | LeLamp 38 endpoints | ✅ `lelamp/server.py` |
-| Sensing event routing | ✅ `lumi/server/sensing/` |
-| Local intent matching | ✅ `lumi/internal/intent/` |
+| Sensing event routing | ✅ `lamp/server/sensing/` |
+| Local intent matching | ✅ `lamp/internal/intent/` |
 | Voice pipeline (VAD + Deepgram) | ✅ `lelamp/service/voice/` |
-| Ambient idle behaviors | ✅ `lumi/internal/ambient/` |
+| Ambient idle behaviors | ✅ `lamp/internal/ambient/` |
 
 ### Phần Cứng ↔ Tầng Mapping
 
@@ -522,6 +522,6 @@ Tất cả hardware endpoints chạy trực tiếp trên LeLamp FastAPI (:5001).
 
 - [x] **Bridge Go ↔ Python**: HTTP proxy. LeLamp chạy FastAPI trên `127.0.0.1:5001`, Lamp Server proxy request từ port 5000. Đơn giản, dễ debug, không tight coupling.
 - [x] **Xử lý camera**: On-device OpenCV trong LeLamp Python. Frame diff cho motion detection trong sensing loop.
-- [x] **Đầu vào audio**: LeLamp owns mic. Local VAD (RMS energy) + on-demand Deepgram STT. Wake word "Hey Lumi" detected trong transcript.
-- [x] **LED driver**: LeLamp Python rpi_ws281x driver sở hữu toàn bộ LED control. Go SPI driver đã xóa khỏi Lumi — đèn này dùng LED driver của LeLamp.
+- [x] **Đầu vào audio**: LeLamp owns mic. Local VAD (RMS energy) + on-demand Deepgram STT. Wake word "Hey Lamp" detected trong transcript.
+- [x] **LED driver**: LeLamp Python rpi_ws281x driver sở hữu toàn bộ LED control. Go SPI driver đã xóa khỏi Lamp — đèn này dùng LED driver của LeLamp.
 - [x] **Generative body language**: Emotion presets với randomized parameters. 8 presets (curious, happy, sad, thinking, idle, excited, shy, shock). Mỗi lần gọi tạo biểu cảm unique nhờ randomization.
