@@ -94,7 +94,7 @@ type Server struct {
 	lastSetupCompleted *bool
 	// lastDeviceID is the last DeviceID value we acted on. When this changes (typically empty → assigned at first /device/setup), we restart claude-desktop-buddy so its BLE name picks up the new device_id.
 	lastDeviceID *string
-	// lastMQTTEndpoint is the last MQTTEndpoint value we acted on. When this changes (typically empty → assigned via status-reporter ping response), we restart the MQTT client so it picks up the new broker config without requiring a full lumi restart.
+	// lastMQTTEndpoint is the last MQTTEndpoint value we acted on. When this changes (typically empty → assigned via status-reporter ping response), we restart the MQTT client so it picks up the new broker config without requiring a full lamp restart.
 	lastMQTTEndpoint *string
 }
 
@@ -256,7 +256,7 @@ func goSameOrigin(header, host string) bool {
 
 // isAllowedOrigin returns true for same-host origins and approved external
 // domains (autonomous.ai subdomains for parent-app embedding, sibling
-// lumi-*.local devices on the same LAN). Same-host wins for any IP or
+// lamp-*.local devices on the same LAN). Same-host wins for any IP or
 // .local hostname the device itself is reached on.
 func isAllowedOrigin(origin, requestHost string) bool {
 	if origin == "" {
@@ -276,7 +276,7 @@ func isAllowedOrigin(origin, requestHost string) bool {
 		return true
 	}
 	// Autonomous parent app (www.autonomous.ai + any subdomain). Driven by
-	// product flows that embed Lumi screens or hit device APIs from the
+	// product flows that embed Lamp screens or hit device APIs from the
 	// cloud dashboard; mixed-content rules still apply at the browser layer
 	// (HTTPS parent → HTTP device fails before CORS) — this just stops the
 	// device from rejecting the request when the parent reaches it over the
@@ -473,7 +473,7 @@ func corsMiddleware() gin.HandlerFunc {
 			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With")
 			// Required for the patched fetch (credentials: "include") to receive
 			// the session cookie on cross-origin responses from autonomous.ai
-			// or sibling lumi-*.local devices.
+			// or sibling lamp-*.local devices.
 			c.Header("Access-Control-Allow-Credentials", "true")
 		}
 		if c.Request.Method == "OPTIONS" {
@@ -701,7 +701,7 @@ func (s *Server) Serve(closeFn func()) error {
 	s.statusLED.Clear(statusled.StateBooting)
 
 	// When the device is still in AP/provisioning mode, paint the strip solid
-	// white as a visual "ready for WiFi setup" signal. lumi typically reaches
+	// white as a visual "ready for WiFi setup" signal. lamp typically reaches
 	// this point before LeLamp's FastAPI is up on :5001 (Python boot is
 	// slower — loads rpi_ws281x, SPI, audio, camera), so we poll /health in
 	// the background and fire SetSolid only once LED hardware reports ready.
@@ -760,7 +760,7 @@ func (s *Server) runConfigChangeListener(ctx context.Context) {
 }
 
 // handleDeviceIDChange restarts claude-desktop-buddy when device_id changes. Buddy's
-// BLE name is now derived from the hardware MAC suffix (Claude-lumi-{MAC}) so the
+// BLE name is now derived from the hardware MAC suffix (Claude-lamp-{MAC}) so the
 // restart isn't needed for name resolution, but a device_id transition is
 // still a useful signal that the device has been re-provisioned — restarting
 // buddy clears any stale BLE pairing state from the previous identity.
@@ -804,7 +804,7 @@ func (s *Server) handleDeviceIDChange(deviceID string) {
 
 // handleMQTTEndpointChange restarts the MQTT client when MQTTEndpoint changes,
 // so a backend-pushed broker config (delivered via status-reporter ping response)
-// is picked up without requiring a full lumi restart.
+// is picked up without requiring a full lamp restart.
 //
 // On the first call (startup bootstrap) we just record the current value
 // without restarting — handleSetUpCompleteChange already brings MQTT up on
@@ -830,7 +830,7 @@ func (s *Server) handleMQTTEndpointChange(endpoint string) {
 // over the post-setup user/agent LED state. Best-effort — silent when LeLamp
 // never reports LED ready within budget (logs a warning).
 //
-// Why this is a poll loop and not a single SetSolid call: lumi-server binds
+// Why this is a poll loop and not a single SetSolid call: lamp-server binds
 // :5000 faster than LeLamp's FastAPI binds :5001 on cold boot, so a fire-
 // and-forget paint at L<see Serve> would silently drop on connection refused
 // and leave the strip dark — exactly when the user needs the "ready for AP"
@@ -1320,7 +1320,7 @@ func (s *Server) streamJournal(c *gin.Context, unit string) {
 
 // softwareUpdateLastFire tracks the last time each OTA target was triggered, so
 // a stuck/looping caller can't kick off back-to-back force-checks. Bootstrap's
-// downloader is idempotent but the resulting service restarts (lumi-server +
+// downloader is idempotent but the resulting service restarts (lamp-server +
 // systemd reload + journal noise) are not free; 30 s is enough to absorb a
 // double-click without hiding genuine retries.
 var (
@@ -1331,7 +1331,7 @@ var (
 const softwareUpdateMinInterval = 30 * time.Second
 
 // softwareUpdate triggers an OTA update for a single named component via the bootstrap worker.
-// POST /api/system/software-update/:target  (target: lumi | web | lelamp)
+// POST /api/system/software-update/:target  (target: lamp | web | lelamp)
 func (s *Server) softwareUpdate(c *gin.Context) {
 	target := c.Param("target")
 	allowed := map[string]bool{"lamp": true, "web": true, "lelamp": true}

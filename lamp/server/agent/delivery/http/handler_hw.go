@@ -121,7 +121,7 @@ func (h *AgentHandler) fireHWCall(c hwCall, flowRunID string, client *http.Clien
 	if c.path == "/broadcast" || c.path == "/speak" || c.path == "/dm" {
 		return true
 	}
-	// Lumi-bound HW markers (log writes that live on Lumi, not LeLamp):
+	// Lamp-bound HW markers (log writes that live on Lamp, not LeLamp):
 	//   /wellbeing/log         → POST :5000/api/wellbeing/log
 	//   /mood/log              → POST :5000/api/mood/log (signal + decision share endpoint, kind in body)
 	//   /music-suggestion/log  → POST :5000/api/music-suggestion/log
