@@ -1073,12 +1073,12 @@ class VoiceService:
             final_text, event_type = self._resolve_wake_word_split(combined)
             user = UNKNOWN_USER_LABEL
             
-            # 1. Speaker recognize and decorate the final text to send to Lumi.
+            # 1. Speaker recognize and decorate the final text to send to Lamp.
             if combined:
                 final_msg, se_user = self._identify_and_decorate(final_text, audio_buffer)
                 user = se_user if se_user else UNKNOWN_USER_LABEL
-                logger.info("Final message → Lumi (%s): %r", event_type, final_msg)
-                self._send_to_lumi(final_msg, event_type=event_type)
+                logger.info("Final message → Lamp (%s): %r", event_type, final_msg)
+                self._send_to_lamp(final_msg, event_type=event_type)
 
             # 2. Submit SER — uses the UNTRIMMED snapshot so laughter / sighs
             self._submit_speech_emotion_from_session(ser_audio_buffer, user=user)
@@ -1137,9 +1137,9 @@ class VoiceService:
             return True
         return False
 
-    def _send_to_lumi(self, message: str, event_type: str = "voice"):
+    def _send_to_lamp(self, message: str, event_type: str = "voice"):
         """Send the final decorated message (speaker prefix + optional audio
-        path) to Lumi as a sensing event.
+        path) to Lamp as a sensing event.
 
         ``message`` is already the output of ``_identify_and_decorate`` — it
         contains ``"<Name>: <text>"`` for a known speaker or
@@ -1162,20 +1162,20 @@ class VoiceService:
                     timeout=5,
                 )
                 if resp.status_code == 503 and attempt < max_retries:
-                    logger.warning("Lumi agent not ready (503), retrying in 2s... (attempt %d/%d)", attempt, max_retries)
+                    logger.warning("Lamp agent not ready (503), retrying in 2s... (attempt %d/%d)", attempt, max_retries)
                     time.sleep(2)
                     continue
                 elif resp.status_code != 200:
-                    logger.warning("Lumi returned %d: %s", resp.status_code, resp.text)
+                    logger.warning("Lamp returned %d: %s", resp.status_code, resp.text)
                 else:
-                    logger.info("Sent to Lumi: %r", message)
+                    logger.info("Sent to Lamp: %r", message)
                 return
             except requests.ConnectionError as e:
                 if attempt < max_retries:
-                    logger.warning("Lumi not reachable (attempt %d/%d), retrying in 2s...", attempt, max_retries)
+                    logger.warning("Lamp not reachable (attempt %d/%d), retrying in 2s...", attempt, max_retries)
                     time.sleep(2)
                 else:
-                    logger.warning("Failed to send voice event to Lumi after %d attempts: %s", max_retries, e)
+                    logger.warning("Failed to send voice event to Lamp after %d attempts: %s", max_retries, e)
             except requests.RequestException as e:
-                logger.warning("Failed to send voice event to Lumi: %s", e)
+                logger.warning("Failed to send voice event to Lamp: %s", e)
                 return

@@ -1627,7 +1627,7 @@ export function ChatSection({ events, isActive }: Props) {
               <div style={{ marginBottom: 10, display: "flex", justifyContent: "center", color: "var(--lm-amber)" }}>
                 <Sparkles size={28} />
               </div>
-              <div>Chat with Lumi</div>
+              <div>Chat with Lamp</div>
               <div style={{ fontSize: 11, marginTop: 4 }}>Type a message or press Shift+Enter for multi-line</div>
             </div>
           )}
@@ -1650,9 +1650,9 @@ export function ChatSection({ events, isActive }: Props) {
                 style={{ display: "flex", flexDirection: msg.role === "user" ? "row-reverse" : "row", alignItems: "flex-end" }}
               >
               <div style={{ maxWidth: msg.role === "user" ? "72%" : "85%", display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start", gap: 3 }}>
-                {/* Sender label for first Lumi message or after user message */}
+                {/* Sender label for first Lamp message or after user message */}
                 {msg.role === "lamp" && (i === 0 || messages[i - 1]?.role === "user") && (
-                  <span style={{ fontSize: 10, color: "var(--lm-amber)", fontWeight: 600, paddingLeft: 4 }}>Lumi</span>
+                  <span style={{ fontSize: 10, color: "var(--lm-amber)", fontWeight: 600, paddingLeft: 4 }}>Lamp</span>
                 )}
                 {/* Thinking indicator — shown only for the active pending message */}
                 {msg.pending && msg.role === "lamp" && msg.runId === pendingRunIdRef.current && thinkingText && (
@@ -1870,7 +1870,7 @@ export function ChatSection({ events, isActive }: Props) {
                 onKeyDown={onKeyDown}
                 onPaste={onPaste}
                 disabled={sending}
-                placeholder="Message Lumi…"
+                placeholder="Message Lamp…"
                 rows={1}
                 style={{
                   flex: 1, minWidth: 0,
@@ -1927,7 +1927,7 @@ function formatTokens(n: number): string {
   return k >= 100 ? `${k.toFixed(0)}k` : `${k.toFixed(1)}k`;
 }
 
-// Compact one-line usage strip under each Lumi message — mirrors the style
+// Compact one-line usage strip under each Lamp message — mirrors the style
 // of agent CLIs: ↑input  ↓output  R<cacheRead>  N% ctx  model.
 function UsageBadge({ usage, model }: { usage: NonNullable<ChatMessage["tokenUsage"]>; model?: string }) {
   const ctxPct = usage.total > 0 ? Math.min(100, (usage.total / CONTEXT_WINDOW) * 100) : 0;

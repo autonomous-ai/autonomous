@@ -151,7 +151,7 @@ def single_click_action(source: str = "button"):
         audio_stop()
     # Always announce the listening cue so the user hears confirmation
     # of the click — both for unmute (mic just opened) and for
-    # stop-speaker (Lumi was talking, user wants the floor). The cue
+    # stop-speaker (Lamp was talking, user wants the floor). The cue
     # itself preempts in-flight TTS via stop() + speak_cached retry,
     # so calling stop_tts() above is fine — _announce_listening handles
     # the lock handoff.
@@ -179,8 +179,8 @@ def triple_click_action(source: str = "button"):
 
 def head_pat_action(source: str = "touch"):
     """Speak a random pet response. Non-interrupting: if TTS is busy
-    (Lumi already talking), drop silently so petting mid-speech doesn't
-    truncate her sentence. After the phrase actually plays, ping Lumi Go
+    (Lamp already talking), drop silently so petting mid-speech doesn't
+    truncate her sentence. After the phrase actually plays, ping Lamp Go
     so the agent records the petting moment (silent — NO_REPLY)."""
     text = _random_head_pat_phrase()
     logger.info("%s head pat -- %r", source, text)
@@ -236,18 +236,18 @@ def _factory_reset_phrase() -> str:
 
 
 def factory_reset_action(source: str = "button"):
-    """Announce + POST /api/system/factory-reset on lumi-server. Lumi-server
+    """Announce + POST /api/system/factory-reset on lamp-server. Lamp-server
     wipes per-device state (config, API keys, enrollments, WiFi) and reboots
     into AP setup mode. Lelamp does NOT touch state itself — single source of
-    truth for what gets wiped lives in lumi-server's factoryResetWipePaths.
+    truth for what gets wiped lives in lamp-server's factoryResetWipePaths.
 
     Authoritative because of physical presence: 10s deliberate hold + the
     /api/system/factory-reset endpoint allows loopback origin without Bearer
-    (see lumi server.go adminOrLoopbackAuth)."""
+    (see lamp server.go adminOrLoopbackAuth)."""
     logger.info("%s factory-reset hold (10s+) -- triggering soft reset", source)
 
     # Step 1: TTS announce so the user knows the gesture registered. Brief —
-    # the reboot lands ~5s after lumi-server accepts the POST, we want the
+    # the reboot lands ~5s after lamp-server accepts the POST, we want the
     # announce + 3s settle window to fit inside that.
     if _tts_available():
         state.tts_service.speak_cached(_factory_reset_phrase())
@@ -263,7 +263,7 @@ def factory_reset_action(source: str = "button"):
         logger.warning(f"Servo release before factory-reset failed: {e}")
 
     # Step 3: trigger the Go-side wipe. Loopback bypasses admin auth (see
-    # lumi server.go adminOrLoopbackAuth) so this works even on devices that
+    # lamp server.go adminOrLoopbackAuth) so this works even on devices that
     # never completed setup (no llm_api_key in config).
     try:
         requests.post(
