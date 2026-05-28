@@ -194,7 +194,7 @@ func (h *gelfHandler) Handle(_ context.Context, r slog.Record) error {
 		"short_message": r.Message,
 		"timestamp":     float64(r.Time.UnixNano()) / 1e9,
 		"level":         slogLevelToGELF(r.Level),
-		"_service_name": "lumi-golang",
+		"_service_name": "lamp-golang",
 		"_level_name":   r.Level.String(),
 		"_pid":          os.Getpid(),
 	}
@@ -303,7 +303,7 @@ func Init(level slog.Level, logFilePath string) func() {
 
 	handlers := []slog.Handler{consoleHandler, fileHandler}
 	if gelfURL != "" {
-		gelf := newGELFHandler(slog.LevelInfo, "lumi")
+		gelf := newGELFHandler(slog.LevelInfo, "lamp")
 		activeGELF = gelf
 		handlers = append(handlers, gelf)
 	}
