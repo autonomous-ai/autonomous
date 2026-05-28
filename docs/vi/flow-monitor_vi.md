@@ -172,9 +172,9 @@ Dùng khi Lamp viện rule mà grep không thấy trong bất kỳ `lamp/resourc
 ## Issue đang mở
 
 ### OpenClaw built-in `tts` tool bypass speaker LeLamp (ĐÃ FIX)
-Agent gọi `tts` built-in tool của OpenClaw thay vì trả assistant text. OpenClaw generate audio phía server (`"Generated audio reply."`) nhưng không route tới speaker LeLamp (`/voice/speak`). Agent trả `NO_REPLY` → Lumi không có text → im lặng.
+Agent gọi `tts` built-in tool của OpenClaw thay vì trả assistant text. OpenClaw generate audio phía server (`"Generated audio reply."`) nhưng không route tới speaker LeLamp (`/voice/speak`). Agent trả `NO_REPLY` → Lamp không có text → im lặng.
 - **Nguyên nhân**: OpenClaw cung cấp `tts` tool khi `tools.profile = "full"`. Sensing SKILL.md hướng dẫn gọi `/voice/speak`, agent map nhầm sang built-in `tts` tool thay vì `curl` tới LeLamp.
-- **Fix**: (1) Deny `tts` tool qua `tools.deny: ["tts"]` trong config (`service.go`). `tools.disabled` KHÔNG hợp lệ — dùng `tools.deny` (deny thắng `tools.profile`). (2) Intercept fallback trong handler.go: nếu agent vẫn gọi `tts` tool, extract text và route sang `SendToLeLampTTS()`. (3) Cập nhật sensing SKILL.md và SOUL.md — agent trả text bình thường, Lumi pipeline tự TTS qua LeLamp.
+- **Fix**: (1) Deny `tts` tool qua `tools.deny: ["tts"]` trong config (`service.go`). `tools.disabled` KHÔNG hợp lệ — dùng `tools.deny` (deny thắng `tools.profile`). (2) Intercept fallback trong handler.go: nếu agent vẫn gọi `tts` tool, extract text và route sang `SendToLeLampTTS()`. (3) Cập nhật sensing SKILL.md và SOUL.md — agent trả text bình thường, Lamp pipeline tự TTS qua LeLamp.
 - **Trạng thái**: Đã fix v0.0.138.
 
 ### OpenClaw không thấy `tool_call` dù có action

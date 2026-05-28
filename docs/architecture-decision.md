@@ -9,13 +9,12 @@ This project controls an AI-powered desk lamp built on a Raspberry Pi 4 with art
 The architecture went through several pivots before reaching the final design:
 
 1. **Standalone Go + MCP** — Initially planned as a new Go project using MCP protocol for hardware control. Abandoned when we discovered OpenClaw uses its own native skill system (SKILL.md), not MCP.
-2. **Fork lobster** — Discovered that openclaw-lobster (the Go server for OpenClaw hardware products, now renamed to Lamp) shares ~70-80% of the architecture we need. Decision: fork lobster, one repo per hardware product.
-3. **LeLamp runtime already exists** — Discovered a Python runtime is ALREADY running on the Pi4 with working hardware drivers for servos (MotorsService), LEDs (RGBService), and audio (amixer). It was previously controlled via LiveKit @function_tool decorators.
-4. **Final decision** — Hybrid architecture. OpenClaw replaces LiveKit + OpenAI entirely. OpenClaw skills call the Lamp HTTP API, which bridges to the existing LeLamp Python services for hardware access.
+2. **LeLamp runtime already exists** — Discovered a Python runtime is ALREADY running on the Pi4 with working hardware drivers for servos (MotorsService), LEDs (RGBService), and audio (amixer). It was previously controlled via LiveKit @function_tool decorators.
+3. **Final decision** — Hybrid architecture. OpenClaw replaces LiveKit + OpenAI entirely. OpenClaw skills call the Lamp HTTP API, which bridges to the existing LeLamp Python services for hardware access.
 
 ## 2. Final Architecture Decision
 
-**Fork lobster + Hybrid two-layer architecture + LeLamp Python bridge + Hardware Plugin system.**
+**Hybrid two-layer architecture + LeLamp Python bridge + Hardware Plugin system.**
 
 - **Layer 1 (System)**: Lamp Server handles system-critical functions that work without OpenClaw.
 - **Layer 2 (Skills)**: OpenClaw's LLM reads SKILL.md files and calls Lamp HTTP endpoints, which bridge to LeLamp's Python hardware drivers.
@@ -71,7 +70,7 @@ All hardware exposed via FastAPI on `127.0.0.1:5001` (systemd service: `lumi-lel
 
 ### Lamp Server — System Layer + HTTP API Bridge (Go)
 
-Forked from openclaw-lobster. Provides:
+Provides:
 
 - All system-critical services (boot, network, OTA, reset, MQTT)
 - HTTP API on port 5000 that bridges requests to LeLamp Python services
@@ -109,7 +108,7 @@ Sensing Loop (Lamp Server, always running):
 **Rule-based actions** (no AI needed): auto-dim on leave, brightness adjust on darkness, idle animations.
 **AI-driven actions** (OpenClaw decides): greetings, mood response, empathetic reactions, schedule-aware suggestions.
 
-Inherited from lobster (now in `lamp/` subdirectory):
+Lamp Server modules (in `lamp/` subdirectory):
 
 - `server/server.go` — Gin HTTP server on port 5000
 - `server/config/` — JSON config with reload
@@ -124,8 +123,6 @@ Inherited from lobster (now in `lamp/` subdirectory):
 - `domain/` — Shared structs (device, network, OTA, OpenClaw)
 
 **MQTT commands** (received via fa_channel): `info`, `add_channel`, `ota`
-
-**Removed from lobster**: GWS (Google Workspace) handlers, internal/llm/ service (LLM model listing inlined into openclaw/service.go), onboarding flow, sendip scripts, release scripts.
 
 ## 5. Layer 2: OpenClaw Skills (SKILL.md + HTTP API)
 
@@ -283,7 +280,7 @@ Dashboard layout with 4 sections:
                                    │ HTTP (127.0.0.1:5000)
                                    ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                      Lamp Server (Go, forked from lobster)          │
+│                      Lamp Server (Go)                                │
 │                                                                     │
 │  ┌───────────────────────────┐  ┌─────────────────────────────────┐ │
 │  │  Layer 1: System          │  │  Layer 2: HTTP API Bridge       │ │
@@ -364,24 +361,7 @@ User speaks
                   → Servos move / LEDs change / Speaker outputs audio
 ```
 
-## 9. Inherited from Lobster
-
-| Component | Path | Notes |
-|---|---|---|
-| HTTP server | `server/server.go` | Gin framework, port 5000 |
-| Config management | `server/config/` | JSON config with reload |
-| LED skill | `resources/openclaw-skills/led-control/SKILL.md` | Adapted for 64-LED grid |
-| Reset button | `internal/resetbutton/` | GPIO 26 long-press |
-| Network service | `internal/network/` | WiFi AP/STA, scanning |
-| OpenClaw service | `internal/openclaw/` | Config generation, WebSocket |
-| Backend client | `internal/beclient/` | Status reporter |
-| Device service | `internal/device/` | Setup, MQTT command handling, status reporting |
-| MQTT client | `lib/mqtt/` | Auto-reconnect, dispatch |
-| OTA bootstrap | `bootstrap/` | Version check, install |
-| Domain models | `domain/` | Shared structs (device, network, OTA, OpenClaw) |
-| Build and deploy | `scripts/`, `Makefile` | Cross-compile for ARM, systemd |
-
-## 10. New to Build
+## 9. New to Build
 
 | Component | Path | Description |
 |---|---|---|
@@ -392,7 +372,7 @@ User speaks
 | OpenClaw skills | `resources/openclaw-skills/` | SKILL.md files for servo-control, camera, audio, emotion |
 | Python bridge layer | TBD | Communication layer between Go Lamp server and LeLamp Python services (HTTP, gRPC, or subprocess) |
 
-## 11. Open Questions
+## 10. Open Questions
 
 - [x] **Go-to-Python bridge**: HTTP proxy. LeLamp runs FastAPI on `127.0.0.1:5001`, Lamp Server proxies requests from port 5000. Simple, debuggable, no tight coupling.
 - [ ] **Camera processing**: Run vision on-device with OpenCV, or offload to OpenClaw's vision capabilities?

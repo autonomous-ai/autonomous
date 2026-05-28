@@ -2,7 +2,7 @@
 
 ## Tổng Quan
 
-Lumi sử dụng MQTT để giao tiếp với backend server (báo cáo trạng thái, nhận lệnh OTA, thêm channel).
+Lamp sử dụng MQTT để giao tiếp với backend server (báo cáo trạng thái, nhận lệnh OTA, thêm channel).
 
 - Client: Eclipse Paho autopaho (Go)
 - Auto-reconnect khi mất kết nối
@@ -110,14 +110,14 @@ Xử lý bởi bootstrap worker, không qua MQTT handler trực tiếp.
 
 | File | Vai trò |
 |------|---------|
-| `lumi/lib/mqtt/client.go` | MQTT client (connect, subscribe, publish) |
-| `lumi/lib/mqtt/config.go` | Config struct |
-| `lumi/lib/mqtt/options.go` | Connection options |
-| `lumi/lib/mqtt/factory.go` | Factory tạo client với unique ID |
-| `lumi/server/device/delivery/mqtt/handler.go` | Command dispatcher |
-| `lumi/server/device/delivery/mqtt/info_handler.go` | Handle `info` command |
-| `lumi/server/device/delivery/mqtt/add_channel_hander.go` | Handle `add_channel` command (stream pairing events cho WhatsApp) |
-| `lumi/server/device/delivery/mqtt/whatsapp_pair_handler.go` | Handle `whatsapp_pair` re-pair command |
-| `lumi/internal/openclaw/pairing.go` | WhatsApp Baileys QR pairing subprocess driver |
-| `lumi/domain/device.go` | MQTTMessage, command constants |
-| `lumi/domain/pairing.go` | PairingEvent + status enum |
+| `lamp/lib/mqtt/client.go` | MQTT client (connect, subscribe, publish) |
+| `lamp/lib/mqtt/config.go` | Config struct |
+| `lamp/lib/mqtt/options.go` | Connection options |
+| `lamp/lib/mqtt/factory.go` | Factory tạo client với unique ID |
+| `lamp/server/device/delivery/mqtt/handler.go` | Command dispatcher |
+| `lamp/server/device/delivery/mqtt/info_handler.go` | Handle `info` command |
+| `lamp/server/device/delivery/mqtt/add_channel_hander.go` | Handle `add_channel` command (stream pairing events cho WhatsApp) |
+| `lamp/server/device/delivery/mqtt/whatsapp_pair_handler.go` | Handle `whatsapp_pair` re-pair command |
+| `lamp/internal/openclaw/pairing.go` | WhatsApp Baileys QR pairing subprocess driver |
+| `lamp/domain/device.go` | MQTTMessage, command constants |
+| `lamp/domain/pairing.go` | PairingEvent + status enum |

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Lumi uses MQTT to communicate with the backend server (status reporting, OTA commands, channel management).
+Lamp uses MQTT to communicate with the backend server (status reporting, OTA commands, channel management).
 
 - Client: Eclipse Paho autopaho (Go)
 - Auto-reconnect on connection loss
@@ -111,14 +111,14 @@ Handled by bootstrap worker, not through MQTT handler directly.
 
 | File | Role |
 |------|------|
-| `lumi/lib/mqtt/client.go` | MQTT client (connect, subscribe, publish) |
-| `lumi/lib/mqtt/config.go` | Config struct |
-| `lumi/lib/mqtt/options.go` | Connection options |
-| `lumi/lib/mqtt/factory.go` | Factory to create client with unique ID |
-| `lumi/server/device/delivery/mqtt/handler.go` | Command dispatcher |
-| `lumi/server/device/delivery/mqtt/info_handler.go` | Handle `info` command |
-| `lumi/server/device/delivery/mqtt/add_channel_hander.go` | Handle `add_channel` command (streams pairing events for WhatsApp) |
-| `lumi/server/device/delivery/mqtt/whatsapp_pair_handler.go` | Handle `whatsapp_pair` re-pair command |
-| `lumi/internal/openclaw/pairing.go` | WhatsApp Baileys QR pairing subprocess driver |
-| `lumi/domain/device.go` | MQTTMessage, command constants |
-| `lumi/domain/pairing.go` | PairingEvent + status enum |
+| `lamp/lib/mqtt/client.go` | MQTT client (connect, subscribe, publish) |
+| `lamp/lib/mqtt/config.go` | Config struct |
+| `lamp/lib/mqtt/options.go` | Connection options |
+| `lamp/lib/mqtt/factory.go` | Factory to create client with unique ID |
+| `lamp/server/device/delivery/mqtt/handler.go` | Command dispatcher |
+| `lamp/server/device/delivery/mqtt/info_handler.go` | Handle `info` command |
+| `lamp/server/device/delivery/mqtt/add_channel_hander.go` | Handle `add_channel` command (streams pairing events for WhatsApp) |
+| `lamp/server/device/delivery/mqtt/whatsapp_pair_handler.go` | Handle `whatsapp_pair` re-pair command |
+| `lamp/internal/openclaw/pairing.go` | WhatsApp Baileys QR pairing subprocess driver |
+| `lamp/domain/device.go` | MQTTMessage, command constants |
+| `lamp/domain/pairing.go` | PairingEvent + status enum |
