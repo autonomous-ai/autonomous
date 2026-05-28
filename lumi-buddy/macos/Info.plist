@@ -11,7 +11,7 @@
     <key>CFBundleIconName</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>network.autonomous.ai.lumi-buddy</string>
+    <string>network.autonomous.ai.lamp-buddy</string>
     <key>CFBundleName</key>
     <string>Lamp Buddy</string>
     <key>CFBundleDisplayName</key>

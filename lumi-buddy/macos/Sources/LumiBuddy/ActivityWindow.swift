@@ -73,7 +73,7 @@ final class ActivityWindowController: NSWindowController {
         scrollView.documentView = textView
         contentView.addSubview(scrollView)
 
-        let footer = NSTextField(labelWithString: "Showing the last \(AppState.recentCommandsCap) commands · full audit log in ~/Library/Application Support/LumiBuddy/audit.log")
+        let footer = NSTextField(labelWithString: "Showing the last \(AppState.recentCommandsCap) commands · full audit log in ~/Library/Application Support/LampBuddy/audit.log")
         footer.translatesAutoresizingMaskIntoConstraints = false
         footer.textColor = .secondaryLabelColor
         footer.font = .systemFont(ofSize: 11)

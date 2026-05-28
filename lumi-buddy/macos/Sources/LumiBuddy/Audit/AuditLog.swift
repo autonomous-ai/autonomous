@@ -8,7 +8,7 @@ actor AuditLog {
     static var fileURL: URL {
         let fm = FileManager.default
         let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("LumiBuddy", isDirectory: true)
+            .appendingPathComponent("LampBuddy", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("audit.log")
     }

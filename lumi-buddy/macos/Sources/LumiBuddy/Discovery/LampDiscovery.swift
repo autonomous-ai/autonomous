@@ -3,7 +3,7 @@ import Network
 
 final class LampDiscovery {
     private var browser: NWBrowser?
-    private let queue = DispatchQueue(label: "network.autonomous.ai.lumi-buddy.discovery")
+    private let queue = DispatchQueue(label: "network.autonomous.ai.lamp-buddy.discovery")
 
     var onLampsChanged: (([LampInfo]) -> Void)?
 

@@ -131,7 +131,7 @@ struct ScreenshotExecutor: Executor {
     private func saveDefaultPath(data: Data) throws -> URL {
         let fm = FileManager.default
         let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("LumiBuddy", isDirectory: true)
+            .appendingPathComponent("LampBuddy", isDirectory: true)
             .appendingPathComponent("screenshots", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent("latest.jpg")

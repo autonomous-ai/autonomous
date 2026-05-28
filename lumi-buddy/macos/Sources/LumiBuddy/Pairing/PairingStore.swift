@@ -19,7 +19,7 @@ enum PairingStoreError: LocalizedError {
     }
 }
 
-// File-backed (~/Library/Application Support/LumiBuddy/pairing.json, mode 0600).
+// File-backed (~/Library/Application Support/LampBuddy/pairing.json, mode 0600).
 // Earlier Keychain-backed implementation triggered an unapprovable password
 // prompt on macOS Ventura for ad-hoc-signed builds; switch to file storage
 // until we ship a Developer ID signed build.
@@ -29,7 +29,7 @@ final class PairingStore {
     init() {
         let fm = FileManager.default
         let baseDir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("LumiBuddy", isDirectory: true)
+            .appendingPathComponent("LampBuddy", isDirectory: true)
         try? fm.createDirectory(at: baseDir, withIntermediateDirectories: true)
         self.fileURL = baseDir.appendingPathComponent("pairing.json")
     }
