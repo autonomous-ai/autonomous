@@ -39,10 +39,6 @@ type Config struct {
 	HTTPPort           int    `json:"http_port"`
 	LeLampURL          string `json:"lelamp_url"`
 	LampURL            string `json:"lamp_url"`
-	// LumiURLLegacy is the pre-rename JSON key. Devices provisioned before the
-	// rename still write this — fallback to it if LampURL is unset. Remove
-	// after all devices migrated.
-	LumiURLLegacy      string `json:"lumi_url,omitempty"`
 	ApprovalTimeoutSec int    `json:"approval_timeout_sec"`
 	// NarrationLang picks the language used by the Narrator (UC-9
 	// activity status announcements). Supported values live in
@@ -372,14 +368,6 @@ func loadConfig(path string) Config {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		log.Printf("[buddy] config parse error: %v, using defaults", err)
 		return cfg
-	}
-
-	// Back-compat: pre-rename devices wrote `lumi_url` instead of `lamp_url`.
-	// Promote the legacy value when the new key is absent so existing
-	// buddy.json files keep working without manual migration.
-	if cfg.LampURL == "" && cfg.LumiURLLegacy != "" {
-		log.Printf("[buddy] DEPRECATED: config %s uses legacy `lumi_url` — rename to `lamp_url`", path)
-		cfg.LampURL = cfg.LumiURLLegacy
 	}
 
 	log.Printf("[buddy] loaded config from %s", path)
