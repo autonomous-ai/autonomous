@@ -12,34 +12,34 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-const lumiWriteFlagName = ".lumi-model-write-flag"
+const lampWriteFlagName = ".lumi-model-write-flag"
 const primarySyncDebounce = 300 * time.Millisecond
-const lumiWriteFlagWindow = 3 * time.Second
+const lampWriteFlagWindow = 3 * time.Second
 const primaryWatchRetryInterval = 5 * time.Second
 
-// setLumiWriteFlag writes expectedPrimary (e.g. "autonomous/claude-opus-4-6")
+// setLampWriteFlag writes expectedPrimary (e.g. "autonomous/claude-opus-4-6")
 // into the flag file. The watcher reads this value back and only treats a write
 // as Lumi-initiated when the file's primary matches the flag content exactly —
 // preventing the race where an external write arrives within the 3 s mtime
 // window but carries a different primary value.
 //
 // Call this BEFORE writing openclaw.json so the watcher sees the flag on fire.
-func setLumiWriteFlag(configDir, expectedPrimary string) {
-	flagPath := filepath.Join(configDir, lumiWriteFlagName)
+func setLampWriteFlag(configDir, expectedPrimary string) {
+	flagPath := filepath.Join(configDir, lampWriteFlagName)
 	if err := os.WriteFile(flagPath, []byte(expectedPrimary), 0600); err != nil {
 		slog.Warn("[primarysync] write flag failed", "path", flagPath, "err", err)
 	}
 }
 
-// isLumiWrite returns true when the flag file exists, its mtime is within
-// lumiWriteFlagWindow, AND its content matches actualPrimary. Content matching
+// isLampWrite returns true when the flag file exists, its mtime is within
+// lampWriteFlagWindow, AND its content matches actualPrimary. Content matching
 // is the key guard: if an external write changes the primary to a different
 // value within the 3 s window, the mismatch correctly identifies it as
 // external even though the flag is still recent.
-func isLumiWrite(configDir, actualPrimary string) bool {
-	flagPath := filepath.Join(configDir, lumiWriteFlagName)
+func isLampWrite(configDir, actualPrimary string) bool {
+	flagPath := filepath.Join(configDir, lampWriteFlagName)
 	info, err := os.Stat(flagPath)
-	if err != nil || time.Since(info.ModTime()) >= lumiWriteFlagWindow {
+	if err != nil || time.Since(info.ModTime()) >= lampWriteFlagWindow {
 		return false
 	}
 	content, err := os.ReadFile(flagPath)
@@ -49,9 +49,9 @@ func isLumiWrite(configDir, actualPrimary string) bool {
 	return strings.TrimSpace(string(content)) == actualPrimary
 }
 
-// clearLumiWriteFlag removes the flag file after consuming it.
-func clearLumiWriteFlag(configDir string) {
-	_ = os.Remove(filepath.Join(configDir, lumiWriteFlagName))
+// clearLampWriteFlag removes the flag file after consuming it.
+func clearLampWriteFlag(configDir string) {
+	_ = os.Remove(filepath.Join(configDir, lampWriteFlagName))
 }
 
 // StartPrimaryModelWatch watches the openclaw config directory for changes to
@@ -163,8 +163,8 @@ func (s *Service) syncPrimaryFromFile() {
 	// Check both recency AND content: flag must carry the same primary value
 	// Lamp just wrote. If an external write arrives within the 3 s window with
 	// a different primary, the content mismatch correctly flags it as external.
-	if isLumiWrite(configDir, primary) {
-		clearLumiWriteFlag(configDir)
+	if isLampWrite(configDir, primary) {
+		clearLampWriteFlag(configDir)
 		slog.Debug("[primarysync] skipping Lumi-initiated write", "primary", primary)
 		return
 	}

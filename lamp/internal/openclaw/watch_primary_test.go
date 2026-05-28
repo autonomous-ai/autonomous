@@ -66,49 +66,49 @@ func TestExtractPrimaryModel_Missing(t *testing.T) {
 
 // ---- flag file helpers ----
 
-// TestLumiWriteFlag_ContentMatch: flag must match the primary written
-func TestLumiWriteFlag_ContentMatch(t *testing.T) {
+// TestLampWriteFlag_ContentMatch: flag must match the primary written
+func TestLampWriteFlag_ContentMatch(t *testing.T) {
 	dir := t.TempDir()
 
 	// No flag yet → not a Lumi write.
-	if isLumiWrite(dir, "autonomous/claude-opus-4-6") {
-		t.Fatal("expected no match before setLumiWriteFlag")
+	if isLampWrite(dir, "autonomous/claude-opus-4-6") {
+		t.Fatal("expected no match before setLampWriteFlag")
 	}
 
 	// Write flag with opus.
-	setLumiWriteFlag(dir, "autonomous/claude-opus-4-6")
+	setLampWriteFlag(dir, "autonomous/claude-opus-4-6")
 
 	// Same primary → Lumi write.
-	if !isLumiWrite(dir, "autonomous/claude-opus-4-6") {
-		t.Fatal("expected match after setLumiWriteFlag with same primary")
+	if !isLampWrite(dir, "autonomous/claude-opus-4-6") {
+		t.Fatal("expected match after setLampWriteFlag with same primary")
 	}
 
 	// Different primary within 3 s window → NOT a Lumi write (external race).
-	if isLumiWrite(dir, "autonomous/claude-haiku-4-5") {
+	if isLampWrite(dir, "autonomous/claude-haiku-4-5") {
 		t.Fatal("expected mismatch: flag carries opus but file now has haiku")
 	}
 
 	// After clear, gone.
-	clearLumiWriteFlag(dir)
-	if isLumiWrite(dir, "autonomous/claude-opus-4-6") {
-		t.Fatal("expected no match after clearLumiWriteFlag")
+	clearLampWriteFlag(dir)
+	if isLampWrite(dir, "autonomous/claude-opus-4-6") {
+		t.Fatal("expected no match after clearLampWriteFlag")
 	}
 }
 
-// TestLumiWriteFlag_Expired: expired flag is never a match regardless of content.
-func TestLumiWriteFlag_Expired(t *testing.T) {
+// TestLampWriteFlag_Expired: expired flag is never a match regardless of content.
+func TestLampWriteFlag_Expired(t *testing.T) {
 	dir := t.TempDir()
-	flagPath := filepath.Join(dir, lumiWriteFlagName)
+	flagPath := filepath.Join(dir, lampWriteFlagName)
 
-	setLumiWriteFlag(dir, "autonomous/claude-opus-4-6")
+	setLampWriteFlag(dir, "autonomous/claude-opus-4-6")
 
 	// Back-date mtime beyond the window.
-	past := time.Now().Add(-(lumiWriteFlagWindow + time.Second))
+	past := time.Now().Add(-(lampWriteFlagWindow + time.Second))
 	if err := os.Chtimes(flagPath, past, past); err != nil {
 		t.Fatalf("chtimes: %v", err)
 	}
 
-	if isLumiWrite(dir, "autonomous/claude-opus-4-6") {
+	if isLampWrite(dir, "autonomous/claude-opus-4-6") {
 		t.Fatal("expected flag to be expired after back-dating mtime")
 	}
 }

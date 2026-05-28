@@ -301,7 +301,7 @@ func (s *Service) SetupAgent(data domain.SetupRequest) error {
 	// with the watcher (syncPrimaryFromFile) or other openclaw.json writers.
 	expectedPrimary := customProviderName + "/" + defaultModel.Key
 	s.primarySyncMu.Lock()
-	setLumiWriteFlag(s.config.OpenclawConfigDir, expectedPrimary)
+	setLampWriteFlag(s.config.OpenclawConfigDir, expectedPrimary)
 	writeErr := os.WriteFile(configPath, written, 0600)
 	s.primarySyncMu.Unlock()
 	if writeErr != nil {
@@ -458,7 +458,7 @@ func (s *Service) AddChannel(ctx context.Context, data domain.AddChannelRequest)
 	// primarySyncMu is already held for the full RMW cycle (acquired at entry).
 	existingPrimary := extractPrimaryModel(configData)
 	if existingPrimary != "" {
-		setLumiWriteFlag(s.config.OpenclawConfigDir, existingPrimary)
+		setLampWriteFlag(s.config.OpenclawConfigDir, existingPrimary)
 	}
 	if err := os.WriteFile(configPath, written, 0600); err != nil {
 		return fmt.Errorf("write openclaw config: %w", err)
@@ -581,7 +581,7 @@ func (s *Service) RefreshModelsConfig() error {
 	}
 	// Write the flag BEFORE the file so the watcher can match by content and
 	// correctly skip this Lumi-initiated write regardless of the provider.
-	setLumiWriteFlag(s.config.OpenclawConfigDir, flagPrimary)
+	setLampWriteFlag(s.config.OpenclawConfigDir, flagPrimary)
 	if err := os.WriteFile(configPath, written, 0600); err != nil {
 		return fmt.Errorf("write openclaw config: %w", err)
 	}

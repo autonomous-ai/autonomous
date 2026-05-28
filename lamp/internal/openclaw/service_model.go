@@ -58,7 +58,7 @@ func (s *Service) UpdatePrimaryModel(modelKey string) error {
 
 	// Write the expected primary into the flag BEFORE the file write so the
 	// watcher can match content (not just mtime) to identify this as Lamp's.
-	setLumiWriteFlag(s.config.OpenclawConfigDir, newPrimary)
+	setLampWriteFlag(s.config.OpenclawConfigDir, newPrimary)
 
 	if err := atomicWriteFile(configPath, written, 0600); err != nil {
 		return fmt.Errorf("write openclaw config: %w", err)
