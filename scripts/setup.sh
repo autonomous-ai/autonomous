@@ -651,6 +651,14 @@ EOF
     journalctl -u openclaw -n 80 --no-pager || true
     exit 1
   fi
+
+  # Install official external plugins. Must run after openclaw service is up
+  # because `openclaw plugins install` talks to the local gateway to register
+  # the plugin. Non-fatal: missing plugin only disables that channel, it does
+  # not break the gateway or other channels.
+  echo "[stage] Installing openclaw external plugins"
+  export PATH="$(npm prefix -g)/bin:$PATH"
+  openclaw plugins install @openclaw/discord --force 2>&1 || echo "[stage] WARN: discord plugin install failed (non-fatal)"
 }
 
 # ----------------------------------------------------------
