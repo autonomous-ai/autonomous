@@ -525,10 +525,6 @@ EOF
 stage_openclaw() {
   echo "[stage] Install OpenClaw"
   OPENCLAW_VERSION="${OPENCLAW_VERSION:-2026.5.7}"
-  # Discord plugin ships on its own release cadence. 2026.5.26 fixes the
-  # outbound-delivery bug present in 2026.5.7 and is installed with --force
-  # to bypass the peerDependency version gate.
-  DISCORD_PLUGIN_VERSION="${DISCORD_PLUGIN_VERSION:-2026.5.26}"
   retry "npm install -g openclaw@${OPENCLAW_VERSION}" 5
   openclaw --version || true
 
@@ -662,7 +658,7 @@ EOF
   # not break the gateway or other channels.
   echo "[stage] Installing openclaw external plugins"
   export PATH="$(npm prefix -g)/bin:$PATH"
-  openclaw plugins install @openclaw/discord@${DISCORD_PLUGIN_VERSION} --force 2>&1 || echo "[stage] WARN: discord plugin install failed (non-fatal)"
+  openclaw plugins install @openclaw/discord@${OPENCLAW_VERSION} --force 2>&1 || echo "[stage] WARN: discord plugin install failed (non-fatal)"
 }
 
 # ----------------------------------------------------------
@@ -1287,8 +1283,7 @@ elif [ "$APP" = "bootstrap" ]; then
 elif [ "$APP" = "openclaw" ]; then
   VER="${VERSION:-latest}"
   npm install -g "openclaw@${VER}" || { echo "npm install openclaw failed"; exit 1; }
-  DISCORD_VER="${DISCORD_PLUGIN_VERSION:-2026.5.26}"
-  openclaw plugins install @openclaw/discord@${DISCORD_VER} --force 2>&1 || echo "[software-update] WARN: discord plugin install failed (non-fatal)"
+  openclaw plugins install @openclaw/discord@${VER} --force 2>&1 || echo "[software-update] WARN: discord plugin install failed (non-fatal)"
   systemctl restart openclaw
   echo "openclaw updated to $VER"
 elif [ "$APP" = "web" ]; then
