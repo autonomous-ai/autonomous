@@ -61,7 +61,7 @@ TRACKING_FACE_DETECTOR_ENABLED: bool = os.environ.get(
 
 # --- Data layout ---
 
-# --- Sensing: Lumi integration ---
+# --- Sensing: Lamp integration ---
 LUMI_SENSING_URL = "http://127.0.0.1:5000/api/sensing/event"
 LUMI_WELLBEING_LOG_URL = "http://127.0.0.1:5000/api/wellbeing/log"
 
@@ -92,7 +92,7 @@ FACE_AREA_RATIO_THRESHOLD = float(os.environ.get("LELAMP_FACE_AREA_RATIO_THRESHO
 LUMI_CONFIG_PATH = os.environ.get("LUMI_CONFIG_PATH", "/root/config/config.json")
 
 def _lumi_cfg_get(key: str, default: str = "") -> str:
-    """Read a value from Lumi's config.json (shared with Go server)."""
+    """Read a value from Lamp's config.json (shared with Go server)."""
     try:
         import json
         with open(LUMI_CONFIG_PATH) as f:

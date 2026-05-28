@@ -107,7 +107,7 @@ def _start_mock_lumi() -> http.server.HTTPServer:
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     logger.info(
-        "Mock Lumi listening on http://%s:%d  (override with --lumi-url)",
+        "Mock Lamp listening on http://%s:%d  (override with --lumi-url)",
         MOCK_LUMI_HOST, MOCK_LUMI_PORT,
     )
     return server
@@ -160,7 +160,7 @@ def main() -> int:
     )
     parser.add_argument(
         "--lumi-url", default="",
-        help="Override Lumi sensing URL. Default: spin up a local mock on "
+        help="Override Lamp sensing URL. Default: spin up a local mock on "
              f"http://{MOCK_LUMI_HOST}:{MOCK_LUMI_PORT}/api/sensing/event",
     )
     parser.add_argument("--user", default="alice",
@@ -201,7 +201,7 @@ def main() -> int:
     _cfg.SPEECH_EMOTION_API_KEY = args.api_key
     logger.info("Resolved SER URL: %s", _cfg.SPEECH_EMOTION_API_URL)
 
-    # Mock Lumi unless --lumi-url given.
+    # Mock Lamp unless --lumi-url given.
     server = None
     if not args.lumi_url:
         server = _start_mock_lumi()
@@ -244,7 +244,7 @@ def main() -> int:
     print()
     print("=" * 60)
     print(f"Submitted clips     : {args.reps}")
-    print(f"Lumi POSTs captured : {len(_MockLumiHandler.captured)}")
+    print(f"Lamp POSTs captured : {len(_MockLumiHandler.captured)}")
     for cap in _MockLumiHandler.captured:
         print(f"  - {cap.path}  type={cap.payload.get('type')}  "
               f"user={cap.payload.get('current_user')}")
