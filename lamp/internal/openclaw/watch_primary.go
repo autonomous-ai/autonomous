@@ -175,7 +175,7 @@ func (s *Service) syncPrimaryFromFile() {
 		// Lamp does not manage credentials for other providers — log state
 		// drift at WARN so operators are aware and skip silently.
 		slog.Warn("[primarysync] external primary switched to non-autonomous provider, Lamp config NOT updated (state drift)",
-			"primary", primary, "lumi_model", s.config.LLMModelKey())
+			"primary", primary, "lamp_model", s.config.LLMModelKey())
 		return
 	}
 

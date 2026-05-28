@@ -572,7 +572,7 @@ func (s *Service) RefreshModelsConfig() error {
 		// operators know why the Lumi-side model and OpenClaw diverge.
 		flagPrimary = currentPrimary
 		slog.Warn("[refresh] non-autonomous provider active, skipping primary patch (state drift)",
-			"current", currentPrimary, "lumi_model", s.config.LLMModel)
+			"current", currentPrimary, "lamp_model", s.config.LLMModel)
 	}
 
 	written, err := json.MarshalIndent(configData, "", "  ")
