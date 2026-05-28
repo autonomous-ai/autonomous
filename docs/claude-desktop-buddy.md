@@ -594,7 +594,7 @@ afterwards):
   "device_name": "Claude-{deviceid}",
   "http_port": 5002,
   "lelamp_url": "http://127.0.0.1:5001",
-  "lumi_url": "http://127.0.0.1:5000",
+  "lamp_url": "http://127.0.0.1:5000",
   "approval_timeout_sec": 30,
   "led_mapping": {
     "sleep":     { "action": "off" },

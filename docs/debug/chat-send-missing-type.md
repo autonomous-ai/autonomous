@@ -2,7 +2,7 @@
 
 **Status:** FIXED 2026-04-22 (Option A) — `flow.Log("chat_send", ...)` giờ có `"type": "user"|"system"`, 3 system callers (skill watcher / wake greeting / `/compact`) dùng `SendSystemChatMessage`. Xem `docs/flow-monitor.md` section "Event → node labels". Doc này giữ lại làm historical context.
 
-Observed 2026-04-22 qua run `lumi-chat-154-1776830220031` (skill watcher notify).
+Observed 2026-04-22 qua run `lamp-chat-154-1776830220031` (skill watcher notify).
 
 ## Vấn đề
 

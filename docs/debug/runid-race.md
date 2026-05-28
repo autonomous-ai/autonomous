@@ -1,6 +1,6 @@
 # DEV — RunId Mis-attribution: Lamp `pendingChatTrace` Single-Slot Overwrite
 
-Playbook for the bug where Lamp's `chat.send` idempotency key (e.g. `lumi-chat-201-1776763410829`) ends up wrapping an agent turn that actually processed a *different* input — a message Lamp sent earlier (`chat-200`, `chat-198`, …) or a Telegram inbound that slipped in on the same session lane.
+Playbook for the bug where Lamp's `chat.send` idempotency key (e.g. `lamp-chat-201-1776763410829`) ends up wrapping an agent turn that actually processed a *different* input — a message Lamp sent earlier (`chat-200`, `chat-198`, …) or a Telegram inbound that slipped in on the same session lane.
 
 First detected: 2026-04-21 on OpenClaw gateway `2026.5.7`, session `agent:main:main`.
 
@@ -16,10 +16,10 @@ Evidence cases on 2026-04-21 (session `agent:main:main`):
 
 | Lamp `chat.send` (intended) | Content actually delivered under that runId | Shift |
 |---|---|---|
-| `lumi-chat-26-1776759969005` · sensing `presence.enter stranger_75` | ~400-token answer to Leo's Telegram question *"why did it add node-host?"* | +1 (Telegram inbound interleaved) |
-| `lumi-chat-201-1776763410829` · sensing `emotion.detected Angry` | ambient-speech reply *"Back on that — yeah. [listening]"* (belongs to `chat-200`) | +1 (pure Lamp burst) |
-| `lumi-chat-203-1776763417607` · ambient `lily: right` | mood decision CoT about the Angry event (belongs to `chat-201`) | +2 |
-| `lumi-chat-339-1776764806327` · sensing `sound occurrence 1` | *"58k/200k (29%) — 7 compactions."* (answer to Telegram question *"size context đang bao nhiêu"* on `chat-337`) | +2 |
+| `lamp-chat-26-1776759969005` · sensing `presence.enter stranger_75` | ~400-token answer to Leo's Telegram question *"why did it add node-host?"* | +1 (Telegram inbound interleaved) |
+| `lamp-chat-201-1776763410829` · sensing `emotion.detected Angry` | ambient-speech reply *"Back on that — yeah. [listening]"* (belongs to `chat-200`) | +1 (pure Lamp burst) |
+| `lamp-chat-203-1776763417607` · ambient `lily: right` | mood decision CoT about the Angry event (belongs to `chat-201`) | +2 |
+| `lamp-chat-339-1776764806327` · sensing `sound occurrence 1` | *"58k/200k (29%) — 7 compactions."* (answer to Telegram question *"size context đang bao nhiêu"* on `chat-337`) | +2 |
 
 Downstream effects:
 
@@ -60,14 +60,14 @@ if payload.Stream == "lifecycle" && payload.Data.Phase == "start" && isLampSessi
 
 When sensing or channel traffic bursts (`chat.send` arriving faster than the agent turn loop processes them), every new send **overwrites** the prior idempotencyKey. By the time `lifecycle_start` fires for the earlier turn, the slot already holds the newer key — Lamp maps OpenClaw's UUID to the wrong device runId and every subsequent turn is shifted.
 
-Replay of `lumi-chat-201` swap:
+Replay of `lamp-chat-201` swap:
 
 ```
 T         Lamp gửi chat-200 "back on that"  → pendingChatTrace = "chat-200"
 T + 8 s   Lamp gửi chat-201 "Angry"         → pendingChatTrace = "chat-201"   ← overwrite
 T + 10 s  OpenClaw lifecycle_start (turn processing chat-200)
            → ConsumePendingChatTrace() returns "chat-201"
-           → map UUID → lumi-chat-201
+           → map UUID → lamp-chat-201
            → tts_send "Back on that — yeah" attributed to chat-201
 ```
 
@@ -114,7 +114,7 @@ Assuming Pi SSH is authorized (per `CLAUDE.md`, always ask first):
 PI=pi@<IP>
 PASS=12345
 SSH="sshpass -p $PASS ssh -o StrictHostKeyChecking=no $PI"
-RUN=lumi-chat-<N>-<ms>
+RUN=lamp-chat-<N>-<ms>
 ```
 
 ### 4.1 Confirm the mis-attribution
@@ -193,7 +193,7 @@ lifecycle_end
   └─ flush assistant text → TTS attributed to K_n ✓
 ```
 
-Alignment invariant: if OpenClaw pulls the session lane FIFO and Lamp appends FIFO in `chat.send` order, then N-th `lifecycle_start` pairs with N-th `chat.send`. Both halves verified — OpenClaw FIFO confirmed from session JSONL insertion order (`lumi-chat-200` inserted at `09:23:32.260Z`, `lumi-chat-201` at `09:23:39.273Z`, matching send order).
+Alignment invariant: if OpenClaw pulls the session lane FIFO and Lamp appends FIFO in `chat.send` order, then N-th `lifecycle_start` pairs with N-th `chat.send`. Both halves verified — OpenClaw FIFO confirmed from session JSONL insertion order (`lamp-chat-200` inserted at `09:23:32.260Z`, `lamp-chat-201` at `09:23:39.273Z`, matching send order).
 
 ### Design confidence — same pattern already in the handler
 
@@ -226,7 +226,7 @@ The fix mirrors this style for consistency with prior engineering choices in the
 
 ### Residual edge case: Telegram interleave
 
-If a Telegram user sends a message into the same session between Lamp's `chat.send` and the matching `lifecycle_start`, OpenClaw runs the Telegram turn first; Lamp's FIFO still pops the head (a stale Lamp key) and mis-attributes the Telegram response to Lamp's pending sensing. Observable as a +1 shift with Telegram content landing under a `lumi-chat-*` runId (case `lumi-chat-26` above).
+If a Telegram user sends a message into the same session between Lamp's `chat.send` and the matching `lifecycle_start`, OpenClaw runs the Telegram turn first; Lamp's FIFO still pops the head (a stale Lamp key) and mis-attributes the Telegram response to Lamp's pending sensing. Observable as a +1 shift with Telegram content landing under a `lamp-chat-*` runId (case `lamp-chat-26` above).
 
 Two ways to close this:
 
@@ -237,7 +237,7 @@ Two ways to close this:
 
 ## 6. Related memory / context
 
-- `project_runid_uuid_vs_lumi_chat.md` — documents the invariant "sensing always uses `lumi-chat-*`; UUIDs are Telegram/cron/OpenClaw-initiated". This bug violated the invariant silently: a `lumi-chat-*` runId could wrap any other input that happened to run ahead in the queue.
+- `project_runid_uuid_vs_lamp_chat.md` — documents the invariant "sensing always uses `lamp-chat-*`; UUIDs are Telegram/cron/OpenClaw-initiated". This bug violated the invariant silently: a `lamp-chat-*` runId could wrap any other input that happened to run ahead in the queue.
 - `project_guard_broadcast_evolution.md` — prior "Haiku ignores SKILL" instability. Some of the observed misbehaviour likely included runId drift on top of real skill compliance issues; now separable.
 - Thinking leak (`[Latest decision was sad…]` showing up in `tts_send`) is a separate class of bug — the model producing CoT as `text` instead of native thinking content. Orthogonal to this runId fix.
 
@@ -245,7 +245,7 @@ Two ways to close this:
 
 ## 7. Status
 
-- **Detected**: 2026-04-21 — `lumi-chat-26`, `lumi-chat-201`, `lumi-chat-203`, `lumi-chat-337/339` (session `agent:main:main`).
+- **Detected**: 2026-04-21 — `lamp-chat-26`, `lamp-chat-201`, `lamp-chat-203`, `lamp-chat-337/339` (session `agent:main:main`).
 - **Root cause**: Lamp `pendingChatTrace` single-slot overwrite, introduced by commit `64571f7b` on 2026-04-14. Precondition (low sensing burst rate) broke between 14/4 and 21/4 as sensing pipeline gained ambient voice, sound events, tool-calling emotion/motion skills.
 - **Fix landed**: FIFO queue + TTL head-drop in `lamp/internal/openclaw/service.go` + interface doc refresh in `lamp/domain/agent.go`. Public API unchanged. `GOOS=linux GOARCH=arm64 go build ./...` clean.
 - **Deploy**: not yet. `make build-lamp` → scp `lamp-server` to Pi → `sudo systemctl restart lamp`.

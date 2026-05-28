@@ -4,7 +4,7 @@ Distilled from daily memory logs. Only what is genuinely learned — no repetiti
 
 ## Hardware
 
-<!-- Lessons about Lumi's physical body: servos, LEDs, camera, mic, speaker — bugs encountered, quirks, known limits. -->
+<!-- Lessons about Lamp's physical body: servos, LEDs, camera, mic, speaker — bugs encountered, quirks, known limits. -->
 
 ## Users
 

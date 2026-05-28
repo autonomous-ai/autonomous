@@ -95,7 +95,7 @@ The backend accepts fake sensing events on `POST /api/sensing/event`. You don't 
 $SSH "curl -s -X POST http://127.0.0.1:5000/api/sensing/event \
   -H 'Content-Type: application/json' \
   -d '{\"type\":\"motion.activity\",\"message\":\"Activity detected: using computer.\"}'"
-# → {"status":1,"data":{"runId":"lumi-chat-<seq>-<ms>"},"message":null}
+# → {"status":1,"data":{"runId":"lamp-chat-<seq>-<ms>"},"message":null}
 ```
 
 Emotional cues (`laughing`, `crying`, `yawning`, `singing`) are filtered at LeLamp and never reach Lamp — there is no way to inject them via `motion.activity` anymore. A future `motion.emotional` event will carry them.

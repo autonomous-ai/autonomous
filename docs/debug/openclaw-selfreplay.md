@@ -6,14 +6,14 @@ Playbook for the "same sensing event gets processed twice" phenomenon observed o
 
 One `motion.activity` or `presence.enter` event from Lamp turns into **two agent lifecycles**:
 
-1. First turn with Lamp-assigned runId (`lumi-chat-NN-<ts>`) — ends with `no_reply`
+1. First turn with Lamp-assigned runId (`lamp-chat-NN-<ts>`) — ends with `no_reply`
 2. Second turn with a fresh OpenClaw UUID (`657eb6ee-...`), ~1 s later, identical input message
 
 Example observed 2026-04-21:
 
 | Run | When | Input | Outcome |
 |---|---|---|---|
-| `lumi-chat-105-1776757912265` | 14:51:52 | `[sensing:presence.enter] ... friend (chloe)` | `no_reply`, 3 spurious tool calls (mood log) |
+| `lamp-chat-105-1776757912265` | 14:51:52 | `[sensing:presence.enter] ... friend (chloe)` | `no_reply`, 3 spurious tool calls (mood log) |
 | `657eb6ee-af20-45e5-817c-e14872d32966` | 14:52:03 | Same message (snapshot suffix stripped) | `no_reply`, `tts_suppressed` |
 
 Flow UI shows them as two separate turns with different runIds but visually the same payload.
@@ -49,16 +49,16 @@ Replay-length scales with context size — longer sessions produce longer replay
 Fastest signal — grep `/root/local/flow_events_YYYY-MM-DD.jsonl`:
 
 ```bash
-# Find UUID runs whose input is byte-identical to a preceding lumi-chat-* run
+# Find UUID runs whose input is byte-identical to a preceding lamp-chat-* run
 jq -c 'select(.node=="chat_input") | {ts, trace_id, msg:.data.message}' \
   /root/local/flow_events_$(date +%F).jsonl \
   | awk '
-    /lumi-chat-/ { last_msg=$0; next }
+    /lamp-chat-/ { last_msg=$0; next }
     /trace_id":"[0-9a-f-]{36}"/ && index($0, substr(last_msg, index(last_msg,"msg"))) { print }
   '
 ```
 
-Or simpler: any run whose `trace_id` is a bare UUID (36 chars, 4 hyphens) with no `lumi-chat-` prefix is a candidate replay. Correlate by timestamp — if it fires <5 s after a `lumi-chat-*` lifecycle_end, it's almost certainly a self-replay.
+Or simpler: any run whose `trace_id` is a bare UUID (36 chars, 4 hyphens) with no `lamp-chat-` prefix is a candidate replay. Correlate by timestamp — if it fires <5 s after a `lamp-chat-*` lifecycle_end, it's almost certainly a self-replay.
 
 ## Workarounds
 

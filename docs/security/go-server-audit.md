@@ -1021,7 +1021,7 @@ system.POST("software-update/:target", s.softwareUpdate)
 Handler:
 
 ```go
-allowed := map[string]bool{"lumi": true, "web": true, "lelamp": true}
+allowed := map[string]bool{"lamp": true, "web": true, "lelamp": true}
 url := "http://127.0.0.1:8080/force-check/" + target
 http.DefaultClient.Do(req)
 ```
@@ -1054,7 +1054,7 @@ Also validate target as currently done; keep allowlist.
 From LAN without auth:
 
 ```sh
-curl -i -X POST http://<device-ip>/api/system/software-update/lumi
+curl -i -X POST http://<device-ip>/api/system/software-update/lamp
 ```
 
 Expected: `401`/`403`.
@@ -1279,7 +1279,7 @@ If external health check is required, expose only `/health` via nginx with no `/
 From LAN:
 
 ```sh
-curl -i -X POST http://<device-ip>:8080/force-check/lumi
+curl -i -X POST http://<device-ip>:8080/force-check/lamp
 ```
 
 Expected: connection refused/timeout.
@@ -1287,7 +1287,7 @@ Expected: connection refused/timeout.
 From local device:
 
 ```sh
-curl -i -X POST http://127.0.0.1:8080/force-check/lumi
+curl -i -X POST http://127.0.0.1:8080/force-check/lamp
 ```
 
 Expected: works.

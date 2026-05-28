@@ -30,7 +30,7 @@ Read batch chạy ~700-950ms cho 3-5 reads concurrent (với `& wait`). Write ba
 
 **Commit Phase 1:**
 - `b00ee869` parallel-batch (3 emotion skill + backend inject)
-- `45db216c` snapshot path fix (lelamp đổi `/tmp/lumi-snapshots` → `/root/.openclaw/media/lumi-snapshots`)
+- `45db216c` snapshot path fix (lelamp đổi `/tmp/lamp-snapshots` → `/root/.openclaw/media/lamp-snapshots`)
 - `249e63ee` patterns.json fold vào read batch
 - `f3b4b046` wellbeing batch + drop habit cache miss
 - `2fc1c515` drop `<say>` wrapper

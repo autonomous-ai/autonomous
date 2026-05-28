@@ -105,7 +105,7 @@ Two mics: a USB mic for voice capture, an onboard mic for ambient sensing.
 
 > ALSA aliases live in `/etc/asound.conf` on each device; not the same string across all units.
 
-> On Raspberry Pi the wm8960 capture gain has a watchdog that clamps it to 160 — see `project_lumi_pcm_watchdog.md`.
+> On Raspberry Pi the wm8960 capture gain has a watchdog that clamps it to 160 — see `project_lamp_pcm_watchdog.md`.
 
 ---
 

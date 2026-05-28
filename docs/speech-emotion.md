@@ -22,7 +22,7 @@ voice_service._stream_session(...) finally:                      ← every mic s
     │       → (final_msg, user_name | None)
     │  user = user_name or "unknown"
     │
-    ├─ if combined: _send_to_lumi(final_msg, event_type)         ← Lamp message path
+    ├─ if combined: _send_to_lamp(final_msg, event_type)         ← Lamp message path
     │
     └─ _submit_speech_emotion_from_session(audio_buffer, user)   ← ALWAYS — SER pipeline
             └─ _session_wav_for_ser(buffer) → (wav, duration_s)
@@ -265,7 +265,7 @@ Lazy init in `VoiceService.__init__` mirrors the speaker recognizer pattern: ins
 
 Speaker recognize fires **once** per mic session. The single `(final_msg, user_name)` result is reused by:
 
-1. The Lamp POST (`_send_to_lumi(final_msg, event_type)`) — when STT had a transcript.
+1. The Lamp POST (`_send_to_lamp(final_msg, event_type)`) — when STT had a transcript.
 2. The SER submit (`_submit_speech_emotion_from_session(..., user=...)`) — always.
 
 This is the reason the finally block ordering is: wake-word split → `_identify_and_decorate` once → Lamp POST → SER submit. `_submit_speech_emotion_from_session` accepts `user` as an argument now; it no longer issues its own `/embed` request.

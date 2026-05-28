@@ -773,7 +773,7 @@ localStorage.setItem(CONVOS_KEY, JSON.stringify(trimmed));
 `FlowSection` stores UI filters:
 
 ```ts
-localStorage.setItem("lumi-excluded-types-v1", JSON.stringify([...next]));
+localStorage.setItem("lamp-excluded-types-v1", JSON.stringify([...next]));
 ```
 
 `LogsSection` stores log UI state.
@@ -1029,7 +1029,7 @@ window.location.replace(`http://${s.lan_ip}${window.location.pathname}${window.l
 `Setup.tsx` mDNS link also preserves query params:
 
 ```tsx
-href={`http://${lumiMdnsHost}.local${window.location.pathname}${window.location.search}`}
+href={`http://${lampMdnsHost}.local${window.location.pathname}${window.location.search}`}
 ```
 
 ### Why it is risky
@@ -1079,7 +1079,7 @@ Replace every redirect/link preserving `window.location.search` with sanitized s
 Open:
 
 ```text
-/setup?llm_api_key=SECRET&device_id=lumi1
+/setup?llm_api_key=SECRET&device_id=lamp1
 ```
 
 After redirect, URL must not contain `llm_api_key`.

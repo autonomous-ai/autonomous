@@ -21,7 +21,7 @@ VoiceService._stream_session(...) finally   ← cuối MỌI phiên mic
     │  user = user_name hoặc "unknown"
     │
     ├─ if combined:
-    │       _send_to_lumi(final_msg, event_type)   ← POST Lamp voice / voice_command
+    │       _send_to_lamp(final_msg, event_type)   ← POST Lamp voice / voice_command
     │
     └─ _submit_speech_emotion_from_session(audio_buffer, user)   ← LUÔN
             │
