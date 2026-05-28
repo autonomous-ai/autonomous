@@ -213,7 +213,7 @@ Each phase is independently shippable and reviewable.
 - Update root `CLAUDE.md`: doc table row for lamp-buddy
 - Update top-level `Makefile`: `build-buddy` target
 - Add `VERSION_BUDDY` file at root → `0.0.1`
-- Bump `VERSION_LUMI`, `VERSION_WEB` as needed
+- Bump `VERSION_LAMP`, `VERSION_WEB` as needed
 
 **Acceptance:**
 - Fresh-checkout dev can `cd lamp-buddy/macos && swift run` and follow README to pair with lamp
@@ -346,7 +346,7 @@ lumi/web/src/
 - [ ] **Pairing model** — 1 lamp ↔ 1 buddy (MVP). Confirm? (Leo's reply implied yes, but worth confirming)
 - [ ] **"Join Google Meet" — fixed URL or remembered last?** — for MVP, suggest a configurable URL in buddy preferences (so user can set their team's recurring meeting room)
 - [ ] **OpenClaw skill directory location** — need to look up where existing skills live in this repo
-- [ ] **Versioning** — should `VERSION_BUDDY` follow same scheme as `VERSION_LUMI`?
+- [ ] **Versioning** — should `VERSION_BUDDY` follow same scheme as `VERSION_LAMP`?
 
 ---
 

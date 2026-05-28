@@ -1,6 +1,6 @@
-# AI Lamp — Lumi
+# AI Lamp
 
-Lumi is an AI-powered desk lamp built on a Raspberry Pi or OrangePi. It listens, sees, moves, and talks. The brain is a pluggable agentic gateway (OpenClaw, Hermes, or any other LLM + skills + memory runtime); the hands are LeLamp (servo, LED, mic, speaker, camera, display); Lumi Server (Go) glues them together with networking, sensing, OTA, and a web UI.
+Lamp is an AI-powered desk lamp built on a Raspberry Pi or OrangePi. It listens, sees, moves, and talks. The brain is a pluggable agentic gateway (OpenClaw, Hermes, or any other LLM + skills + memory runtime); the hands are LeLamp (servo, LED, mic, speaker, camera, display); Lamp Server (Go) glues them together with networking, sensing, OTA, and a web UI.
 
 Target hardware: Raspberry Pi 4/5 or OrangePi (any Linux ARM64 SBC with comparable I/O).
 
@@ -8,8 +8,8 @@ Target hardware: Raspberry Pi 4/5 or OrangePi (any Linux ARM64 SBC with comparab
 
 |   |   |
 |---|---|
-| ![Lumi on desk](hardware/images/img.jpg) | ![Lumi close-up](hardware/images/img_1.jpg) |
-| ![Lumi side view](hardware/images/img_2.jpg) | ![Lumi detail](hardware/images/img_3.jpg) |
+| ![Lamp on desk](hardware/images/img.jpg) | ![Lamp close-up](hardware/images/img_1.jpg) |
+| ![Lamp side view](hardware/images/img_2.jpg) | ![Lamp detail](hardware/images/img_3.jpg) |
 
 ## Architecture
 
@@ -19,7 +19,7 @@ Three layers, each independently replaceable:
 Agentic Gateway (LLM / skills / memory)        ← OpenClaw, Hermes, or any agentic runtime
         │  WebSocket
         ▼
-Lumi Server (Go, :5000)                        ← system, network, MQTT, OTA, sensing routing, local intent
+Lamp Server (Go, :5000)                        ← system, network, MQTT, OTA, sensing routing, local intent
         │  HTTP
         ▼
 LeLamp Runtime (Python, :5001)                 ← hardware drivers (servo, LED, audio, camera, display)
@@ -31,10 +31,10 @@ Hardware (plug-and-play; missing parts are skipped)
 Design principles:
 
 - **Hardware is a plugin.** If a device is missing, that subsystem is skipped — the rest still runs.
-- **The brain is swappable.** Lumi treats the agentic gateway as an abstract dependency — OpenClaw today, Hermes or another runtime tomorrow. The interface is a WebSocket plus a SKILL.md contract.
+- **The brain is swappable.** Lamp treats the agentic gateway as an abstract dependency — OpenClaw today, Hermes or another runtime tomorrow. The interface is a WebSocket plus a SKILL.md contract.
 - **System layer runs without the gateway.** Network, OTA, reset, LED feedback, local intents all work offline.
 - **LeLamp has no AI.** Drivers only. All reasoning lives in the agentic gateway.
-- **SKILL.md native.** The gateway reads skill files and calls `curl` against LeLamp/Lumi directly — no MCP layer.
+- **SKILL.md native.** The gateway reads skill files and calls `curl` against LeLamp/Lamp directly — no MCP layer.
 - **Code is the source of truth.** Docs reflect code, never the other way around.
 
 ## Repository Layout
