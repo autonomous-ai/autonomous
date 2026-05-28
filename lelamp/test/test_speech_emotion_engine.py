@@ -3,7 +3,7 @@ One-shot test of the speech-emotion engine against a hosted dlbackend.
 
 Records a fixed-length clip from the default mic, sends it to
 `/api/dl/ser/recognize`, prints `{label, confidence}`. No buffering,
-no Lumi POST — just verifies the engine + network path.
+no Lamp POST — just verifies the engine + network path.
 
 Usage (from repo root):
 

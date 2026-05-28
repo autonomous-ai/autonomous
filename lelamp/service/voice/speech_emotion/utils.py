@@ -40,7 +40,7 @@ def hedge_for(bucket: str) -> str:
 def format_message(label: SpeechEmotionLabel, confidence: float, bucket: str) -> str:
     """Hedged sensing message — symmetric with face emotion processor.
 
-    Skill parsers on Lumi extract the raw label via regex on the
+    Skill parsers on Lamp extract the raw label via regex on the
     "Speech emotion detected: <Label>." prefix; everything inside the
     parentheses is human-readable hint for the agent.
     """
