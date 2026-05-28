@@ -109,9 +109,9 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 		// before flowRunID is computed below — every subsequent event for this
 		// UUID resolves to the device id from the very first emit, eliminating
 		// the split-turn race the previous async version had.
-		lumiSession := h.agentGateway.GetSessionKey()
-		isLumiSession := lumiSession != "" && payload.SessionKey == lumiSession
-		if payload.Stream == "lifecycle" && payload.Data.Phase == "start" && payload.RunID != "" && isLumiSession {
+		lampSession := h.agentGateway.GetSessionKey()
+		isLampSession := lampSession != "" && payload.SessionKey == lampSession
+		if payload.Stream == "lifecycle" && payload.Data.Phase == "start" && payload.RunID != "" && isLampSession {
 			if isLumiOutboundChatRunID(payload.RunID) {
 				h.agentGateway.RemovePendingChatTraceByRunID(payload.RunID)
 			} else {
@@ -329,8 +329,8 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 			// (service_chat.go), so a missed lifecycle.start here is harmless.
 			// LED is managed by the agent via /emotion skill calls — do not override here.
 			if payload.Data.Phase == "start" {
-				lumiInitiated := isLumiOutboundChatRunID(payload.RunID) || isLumiOutboundChatRunID(flowRunID)
-				if lumiInitiated {
+				lampInitiated := isLumiOutboundChatRunID(payload.RunID) || isLumiOutboundChatRunID(flowRunID)
+				if lampInitiated {
 					h.agentGateway.SetBusy(true)
 				} else {
 					slog.Info("lifecycle.start skipped for busy gating",
@@ -1187,8 +1187,8 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 		// "merged" / "self-reply" — those are downstream interpretations
 		// the operator makes from the timeline (e.g. a UUID lifecycle
 		// arriving later with matching input).
-		isLumiOutboundFinal := payload.State == "final" && isLumiOutboundChatRunID(flowRunID)
-		isEmptyFinalNoLifecycle := isLumiOutboundFinal &&
+		isLampOutboundFinal := payload.State == "final" && isLumiOutboundChatRunID(flowRunID)
+		isEmptyFinalNoLifecycle := isLampOutboundFinal &&
 			strings.TrimSpace(payload.Message) == "" &&
 			h.agentGateway.RemovePendingChatTraceByRunID(flowRunID)
 		if isEmptyFinalNoLifecycle {
@@ -1227,7 +1227,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 		// The existing isEmptyFinalNoLifecycle check above already consumed the
 		// pending entry when it fires, so this Remove call is naturally false
 		// when both conditions could match — no double-emit possible.
-		isSlashFinalOk := isLumiOutboundFinal &&
+		isSlashFinalOk := isLampOutboundFinal &&
 			!isEmptyFinalNoLifecycle &&
 			strings.TrimSpace(payload.Message) != "" &&
 			h.agentGateway.RemovePendingChatTraceByRunID(flowRunID)
