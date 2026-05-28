@@ -9,7 +9,7 @@ export NOTARY_PROFILE=lamp-notary
 make dmg-signed
 ```
 
-The output `dist/LumiBuddy-<version>.dmg` is signed, notarized, and stapled — users mount it, drag the app to Applications, double-click, and macOS opens it without any Gatekeeper warning or right-click dance.
+The output `dist/LampBuddy-<version>.dmg` is signed, notarized, and stapled — users mount it, drag the app to Applications, double-click, and macOS opens it without any Gatekeeper warning or right-click dance.
 
 The ad-hoc `make dmg` path still works for local builds and informal sharing; this doc only covers the production path.
 
@@ -101,7 +101,7 @@ The make target does, in order:
 
 1. `swift build -c release` — production binary.
 2. Generate the app icon if missing (`make icon` chain — SF Symbol placeholder unless you replace it with a designed PNG).
-3. Bundle `dist/LumiBuddy.app` with the icon + Info.plist.
+3. Bundle `dist/LampBuddy.app` with the icon + Info.plist.
 4. `codesign` the app with Developer ID, hardened runtime, secure timestamp.
 5. `hdiutil create` the DMG (drag-to-Applications layout).
 6. `codesign` the DMG with Developer ID.
@@ -109,24 +109,24 @@ The make target does, in order:
 8. `xcrun stapler staple` — embeds the notarization ticket so Gatekeeper can verify offline.
 9. `spctl --assess` — local Gatekeeper dry-run, prints `accepted` on success.
 
-End result is `dist/LumiBuddy-<version>.dmg`. Ship that file.
+End result is `dist/LampBuddy-<version>.dmg`. Ship that file.
 
 ## Verifying a build before shipping
 
 ```bash
 # 1. App signature is well-formed.
-codesign --verify --deep --strict --verbose=2 dist/LumiBuddy.app
+codesign --verify --deep --strict --verbose=2 dist/LampBuddy.app
 
 # 2. Gatekeeper accepts the app.
-spctl --assess --type execute --verbose=4 dist/LumiBuddy.app
+spctl --assess --type execute --verbose=4 dist/LampBuddy.app
 #   expected: "accepted source=Developer ID notarized"
 
 # 3. DMG itself has a stapled ticket.
-xcrun stapler validate dist/LumiBuddy-<version>.dmg
+xcrun stapler validate dist/LampBuddy-<version>.dmg
 #   expected: "The validate action worked!"
 
 # 4. Real Gatekeeper dry-run on the DMG.
-spctl --assess --type open --context context:primary-signature --verbose=4 dist/LumiBuddy-<version>.dmg
+spctl --assess --type open --context context:primary-signature --verbose=4 dist/LampBuddy-<version>.dmg
 #   expected: "accepted source=Notarized Developer ID"
 ```
 
@@ -150,7 +150,7 @@ xcrun notarytool log <submission-id> --keychain-profile lamp-notary
 
 **Notarization status `Accepted` but Gatekeeper still warns on the user's Mac.** The DMG wasn't stapled. Either re-run `make notarize` against the existing DMG (re-staples) or rebuild with `make dmg-signed`.
 
-**User reports "app is damaged".** Usually means the quarantine xattr is set and the staple ticket is missing or invalid. Have the user run `xattr -d com.apple.quarantine /Applications/LumiBuddy.app` as a one-off; permanent fix is to ship a stapled DMG.
+**User reports "app is damaged".** Usually means the quarantine xattr is set and the staple ticket is missing or invalid. Have the user run `xattr -d com.apple.quarantine /Applications/LampBuddy.app` as a one-off; permanent fix is to ship a stapled DMG.
 
 ## When to re-notarize
 

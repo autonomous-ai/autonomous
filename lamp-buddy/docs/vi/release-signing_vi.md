@@ -9,7 +9,7 @@ export NOTARY_PROFILE=lamp-notary
 make dmg-signed
 ```
 
-Output `dist/LumiBuddy-<version>.dmg` được sign + notarize + staple — user mount, drag app vào Applications, double-click, macOS mở luôn không có cảnh báo Gatekeeper hay phải right-click → Open.
+Output `dist/LampBuddy-<version>.dmg` được sign + notarize + staple — user mount, drag app vào Applications, double-click, macOS mở luôn không có cảnh báo Gatekeeper hay phải right-click → Open.
 
 Đường ad-hoc `make dmg` cũ vẫn dùng được cho local build và share nội bộ; doc này chỉ cover đường production.
 
@@ -101,7 +101,7 @@ Make target chạy theo thứ tự:
 
 1. `swift build -c release` — binary production.
 2. Gen app icon nếu chưa có (`make icon` chain — SF Symbol placeholder trừ khi thay bằng PNG design thật).
-3. Bundle `dist/LumiBuddy.app` với icon + Info.plist.
+3. Bundle `dist/LampBuddy.app` với icon + Info.plist.
 4. `codesign` app với Developer ID, hardened runtime, secure timestamp.
 5. `hdiutil create` DMG (layout drag-to-Applications).
 6. `codesign` DMG với Developer ID.
@@ -109,24 +109,24 @@ Make target chạy theo thứ tự:
 8. `xcrun stapler staple` — embed ticket notarize vào DMG để Gatekeeper verify offline.
 9. `spctl --assess` — Gatekeeper dry-run local, in `accepted` nếu pass.
 
-Kết quả là `dist/LumiBuddy-<version>.dmg`. Gửi file này.
+Kết quả là `dist/LampBuddy-<version>.dmg`. Gửi file này.
 
 ## Verify build trước khi ship
 
 ```bash
 # 1. Chữ ký app hợp lệ.
-codesign --verify --deep --strict --verbose=2 dist/LumiBuddy.app
+codesign --verify --deep --strict --verbose=2 dist/LampBuddy.app
 
 # 2. Gatekeeper accept app.
-spctl --assess --type execute --verbose=4 dist/LumiBuddy.app
+spctl --assess --type execute --verbose=4 dist/LampBuddy.app
 #   expected: "accepted source=Developer ID notarized"
 
 # 3. DMG có ticket được staple.
-xcrun stapler validate dist/LumiBuddy-<version>.dmg
+xcrun stapler validate dist/LampBuddy-<version>.dmg
 #   expected: "The validate action worked!"
 
 # 4. Gatekeeper dry-run thật trên DMG.
-spctl --assess --type open --context context:primary-signature --verbose=4 dist/LumiBuddy-<version>.dmg
+spctl --assess --type open --context context:primary-signature --verbose=4 dist/LampBuddy-<version>.dmg
 #   expected: "accepted source=Notarized Developer ID"
 ```
 
@@ -150,7 +150,7 @@ xcrun notarytool log <submission-id> --keychain-profile lamp-notary
 
 **Notarize status `Accepted` nhưng Gatekeeper vẫn cảnh báo trên máy user.** DMG chưa staple. Hoặc chạy lại `make notarize` trên DMG hiện có (re-staple), hoặc build lại với `make dmg-signed`.
 
-**User báo "app is damaged".** Thường là quarantine xattr đã set mà staple ticket thiếu/invalid. Bảo user chạy `xattr -d com.apple.quarantine /Applications/LumiBuddy.app` 1 lần; fix triệt để là ship DMG đã staple.
+**User báo "app is damaged".** Thường là quarantine xattr đã set mà staple ticket thiếu/invalid. Bảo user chạy `xattr -d com.apple.quarantine /Applications/LampBuddy.app` 1 lần; fix triệt để là ship DMG đã staple.
 
 ## Khi nào cần re-notarize
 

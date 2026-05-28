@@ -24,7 +24,7 @@ Intent-based (no vision needed):
   key_combo <keys>                  e.g. key_combo cmd space (Accessibility)
 
 Vision / click / mouse:
-  screenshot [scale]                e.g. "screenshot 0.5" — saves to ~/Library/Application Support/LumiBuddy/screenshots/latest.png
+  screenshot [scale]                e.g. "screenshot 0.5" — saves to ~/Library/Application Support/LampBuddy/screenshots/latest.png
   click_at <x> <y> [button] [n]     e.g. "click_at 540 320" or "click_at 540 320 right"
   click <x> <y>                     alias for click_at left
   double_click <x> <y>              two clicks at coord

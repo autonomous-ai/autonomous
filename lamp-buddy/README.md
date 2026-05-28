@@ -25,16 +25,16 @@ The MVP targets macOS only. Each platform lives in its own subfolder so toolchai
 
 Requirements: macOS 13 (Ventura)+, Swift 5.9+ (Xcode 15 or Command Line Tools).
 
-The `Makefile` at this directory wraps everything. From `lumi-buddy/`:
+The `Makefile` at this directory wraps everything. From `lamp-buddy/`:
 
 ```bash
 make help       # list all targets
 make run        # dev — runs in foreground (Ctrl-C to stop)
-make app        # build dist/LumiBuddy.app
+make app        # build dist/LampBuddy.app
 make open       # launch the bundled .app
 make install    # copy bundled .app to /Applications
 make audit      # tail the audit log
-make kill       # stop any running LumiBuddy
+make kill       # stop any running LampBuddy
 make clean      # remove all build artifacts
 make mock       # run mock-lamp (Go) — test buddy without real Lamp side
 ```
@@ -45,7 +45,7 @@ Behind the scenes `make run` calls `swift run` inside `macos/`. Use it if you do
 
 No code signing yet. First time launching the bundled `.app` Gatekeeper will block it:
 
-1. `make app` to build `dist/LumiBuddy.app`
+1. `make app` to build `dist/LampBuddy.app`
 2. Finder → right-click the `.app` → **Open** → confirm in the dialog
 3. Subsequent launches work normally (`make open` or double-click)
 
@@ -70,7 +70,7 @@ Then in buddy's menu → **Pair with Lamp…** → host `localhost:8765` + the 6
 ## Folder layout
 
 ```
-lumi-buddy/
+lamp-buddy/
 ├── README.md           # this file
 ├── .gitignore
 ├── docs/               # design + MVP plan (EN + VI)
@@ -79,7 +79,7 @@ lumi-buddy/
 │   └── vi/
 └── macos/              # macOS native (Swift) — current MVP target
     ├── Package.swift
-    └── Sources/LumiBuddy/
+    └── Sources/LampBuddy/
         ├── main.swift
         ├── AppDelegate.swift
         ├── MenuBarController.swift

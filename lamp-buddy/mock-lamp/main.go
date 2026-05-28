@@ -31,7 +31,7 @@ func main() {
 	}
 
 	fmt.Printf("[mock-lamp] listening on http://%s\n", listenAddr)
-	fmt.Println("[hint] In Lumi Buddy: menu → 'Pair with Lumi…' → host: localhost:8765 + code below")
+	fmt.Println("[hint] In Lamp Buddy: menu → 'Pair with Lamp…' → host: localhost:8765 + code below")
 	state.IssueCode()
 
 	go func() {
