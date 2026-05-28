@@ -529,7 +529,7 @@ stage_openclaw() {
   openclaw --version || true
 
   # OpenClaw state root for root-run service (under root's home).
-  # Must match the dot-prefixed path used everywhere else (lumi config default,
+  # Must match the dot-prefixed path used everywhere else (lamp config default,
   # migrate-openclaw-path.sh, stage_backend migration). Mismatch causes
   # OpenClaw WS to close 1008 / token_mismatch.
   OPENCLAW_HOME="${OPENCLAW_HOME:-/root/.openclaw}"
@@ -707,7 +707,7 @@ server {
   add_header Referrer-Policy "no-referrer" always;
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
   # Strict CSP. LeLamp self-hosts Swagger UI assets under /static/ (served
-  # via the Lumi /api/hardware/* proxy) so no CDN whitelist or
+  # via the Lamp /api/hardware/* proxy) so no CDN whitelist or
   # `'unsafe-inline'` is needed for the in-iframe docs to render. React app
   # 'unsafe-inline' stays only on style-src for its inline style props.
   add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' ws: wss:; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'" always;
@@ -755,9 +755,9 @@ server {
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
   }
 
-  # Top-level openapi.json proxied to Lumi backend so the in-iframe Swagger
+  # Top-level openapi.json proxied to Lamp backend so the in-iframe Swagger
   # UI (loaded via /api/hardware/docs) can fetch its spec at the absolute
-  # path FastAPI hardcodes. Lumi adminAuthMiddleware gates the cookie/Bearer.
+  # path FastAPI hardcodes. Lamp adminAuthMiddleware gates the cookie/Bearer.
   location = /openapi.json {
     proxy_pass http://backend;
     proxy_set_header Host \$host;
