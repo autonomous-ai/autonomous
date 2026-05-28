@@ -369,9 +369,9 @@ func readLeLampVersion() string {
 	return v
 }
 
-// readLeLampUptime returns uptime in seconds of the lumi-lelamp systemd service.
+// readLeLampUptime returns uptime in seconds of the lamp-lelamp systemd service.
 func readLeLampUptime() int64 {
-	out, err := exec.Command("systemctl", "show", "lumi-lelamp",
+	out, err := exec.Command("systemctl", "show", "lamp-lelamp",
 		"--property=ActiveEnterTimestamp", "--value").Output()
 	if err != nil {
 		return 0

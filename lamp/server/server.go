@@ -902,10 +902,10 @@ func (s *Server) handleSetUpCompleteChange(setupCompleted bool) {
 			} else {
 				slog.Warn("agent gateway ready timeout", "component", "server")
 			}
-			// Restart lumi-lelamp so it picks up the fresh config written during setup.
-			exec.Command("systemctl", "restart", "lumi-lelamp").Run()
+			// Restart lamp-lelamp so it picks up the fresh config written during setup.
+			exec.Command("systemctl", "restart", "lamp-lelamp").Run()
 			// Start voice pipeline on LeLamp (if Deepgram key configured)
-			// Retry because lumi-lelamp may not be running yet at setup time.
+			// Retry because lamp-lelamp may not be running yet at setup time.
 			if s.config.DeepgramAPIKey != "" {
 				for attempt := 1; attempt <= 10; attempt++ {
 					err := s.agentGateway.StartLeLampVoice(s.config.DeepgramAPIKey, s.config.LLMAPIKey, s.config.GetSTTAPIKey(), s.config.GetTTSAPIKey(), s.config.LLMBaseURL, s.config.GetSTTBaseURL(), s.config.GetTTSBaseURL(), s.config.TTSVoice, s.config.TTSInstructions, s.config.TTSProvider)

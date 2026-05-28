@@ -42,7 +42,7 @@ func (h *DeviceMQTTHandler) handleTTSSet(cmd domain.MQTTMessage) error {
 			h.publishTTSSetAck("failure", err.Error(), &req)
 			return
 		}
-		// UpdateVoiceConfig saves config + kicks systemctl restart lumi-lelamp async.
+		// UpdateVoiceConfig saves config + kicks systemctl restart lamp-lelamp async.
 		// ACK success immediately — BFF doesn't need to wait for lelamp to come back.
 		slog.Info("tts.set: applied", "component", "mqtt", "provider", req.Provider, "voice", req.Voice, "language", req.Language)
 		h.publishTTSSetAck("success", "", &req)
