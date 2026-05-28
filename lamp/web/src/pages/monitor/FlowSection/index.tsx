@@ -303,7 +303,7 @@ export function FlowSection({
     // avoid coincidental short-string matches.
     const normalizeForMatch = (s: string) =>
       s.replace(/^\[[^\]]+\]\s*/, "").replace(/…\s*$/, "").trim();
-    const isLamp = (id: string) => id.startsWith("lumi-");
+    const isLamp = (id: string) => id.startsWith("lamp-");
     for (let i = 0; i < filteredTurns.length - 1; i++) {
       const a = filteredTurns[i];
       const b = filteredTurns[i + 1];
