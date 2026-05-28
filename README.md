@@ -116,10 +116,10 @@ All Lamp HTTP endpoints return:
 
 ```
 Mic (always on) → Local VAD (RMS, free)
-    → Speech → Deepgram STT
+    → Speech → Autonomous STT
         → "hey lamp, …"  → voice_command → local intent → execute (~50ms)
         → other speech   → voice         → agentic gateway
-    → 3s silence → disconnect Deepgram
+    → 3s silence → close STT stream
 ```
 
 ## Sensing Pipeline (brief)
