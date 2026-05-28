@@ -256,7 +256,7 @@ func (b *Bootstrap) detectVersion(ctx context.Context, key string) string {
 
 	switch key {
 	case domain.OTAKeyLamp:
-		out, err := system.Run(runCtx, "lumi-server", "--version")
+		out, err := system.Run(runCtx, "lamp-server", "--version")
 		if err != nil {
 			return ""
 		}
@@ -339,7 +339,7 @@ func openclawNormalizeVersion(raw string) string {
 	return ""
 }
 
-// normalizeVersion extracts a semver-like version from command output (e.g. "1.0.83" or "lumi-server 1.0.83" -> "1.0.83").
+// normalizeVersion extracts a semver-like version from command output (e.g. "1.0.83" or "lamp-server 1.0.83" -> "1.0.83").
 // Used for OTAKeyLamp and bootstrap-style version output (lamp-server --version, bootstrap-server --version).
 func normalizeVersion(raw string) string {
 	line := strings.TrimSpace(strings.TrimRight(raw, "\r\n"))

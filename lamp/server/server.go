@@ -284,8 +284,8 @@ func isAllowedOrigin(origin, requestHost string) bool {
 	if h == "autonomous.ai" || strings.HasSuffix(h, ".autonomous.ai") {
 		return true
 	}
-	// Sibling Lumi devices on the same LAN (mDNS hostname `lumi-XXXX.local`).
-	if strings.HasPrefix(h, "lumi-") && strings.HasSuffix(h, ".local") {
+	// Sibling Lamp devices on the same LAN (mDNS hostname `lamp-XXXX.local`).
+	if strings.HasPrefix(h, "lamp-") && strings.HasSuffix(h, ".local") {
 		return true
 	}
 	return false
