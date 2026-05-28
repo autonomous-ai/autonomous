@@ -41,9 +41,10 @@ Design principles:
 
 | Path | Language | Description |
 |------|----------|-------------|
-| `lumi/` | Go 1.24 | HTTP API, MQTT, OTA bootstrap, agentic-gateway WS client, sensing event routing, local intent, ambient behaviors |
-| `lumi/web/` | TypeScript / React 19 / Vite / Tailwind 4 | On-device web UI (setup, monitor, configuration) |
+| `lamp/` | Go 1.24 | HTTP API, MQTT, OTA bootstrap, agentic-gateway WS client, sensing event routing, local intent, ambient behaviors |
+| `lamp/web/` | TypeScript / React 19 / Vite / Tailwind 4 | On-device web UI (setup, monitor, configuration) |
 | `lelamp/` | Python 3.12 / FastAPI | Hardware drivers — servo, LED, audio (TTS/STT/VAD), camera, vision, GC9A01 display |
+| `lamp-buddy/` | Swift / macOS | Mac companion app for remote computer use (open apps, type, click via voice) |
 | `dlbackend/` | — | Supporting backend service |
 | `claude-desktop-buddy/` | Go | Companion BLE pairing app for Claude Desktop |
 | `hardware/` | — | Schematics, BOM, mechanical and electrical notes |
@@ -56,11 +57,11 @@ Design principles:
 ### Build the Go backend (cross-compiled to linux/arm64 — Pi or OrangePi)
 
 ```bash
-make lumi-build            # builds lumi/lumi-server (linux/arm64)
-make lumi-build-bootstrap  # builds lumi/bootstrap-server (OTA worker)
-make lumi-generate         # regenerate Wire DI after provider changes
-make lumi-lint             # golangci-lint
-make lumi-test             # go test ./...
+make lamp-build            # builds lamp/lamp-server (linux/arm64)
+make lamp-build-bootstrap  # builds lamp/bootstrap-server (OTA worker)
+make lamp-generate         # regenerate Wire DI after provider changes
+make lamp-lint             # golangci-lint
+make lamp-test             # go test ./...
 ```
 
 Version is injected at build time via `ldflags` (`VERSION` from `git describe`).
@@ -70,7 +71,7 @@ Version is injected at build time via `ldflags` (`VERSION` from `git describe`).
 ```bash
 make web-install
 make web-dev               # Vite dev server
-make web-build             # production bundle to lumi/web/dist
+make web-build             # production bundle to lamp/web/dist
 ```
 
 ### LeLamp (runs on the Pi or OrangePi)
@@ -91,7 +92,7 @@ make buddy-build           # builds claude-desktop-buddy/buddy-plugin (linux/arm
 ### OTA upload (artifact → GCS)
 
 ```bash
-make upload-lumi           # push lumi-server
+make upload-lamp           # push lamp-server
 make upload-bootstrap      # push bootstrap-server
 make upload-lelamp         # push Python runtime
 make upload-web            # push web/dist
@@ -102,7 +103,7 @@ make upload-openclaw 2026.5.2  # explicit gateway version bump (not in upload-al
 
 ## API Response Convention
 
-All Lumi HTTP endpoints return:
+All Lamp HTTP endpoints return:
 
 ```jsonc
 // success
@@ -116,19 +117,19 @@ All Lumi HTTP endpoints return:
 ```
 Mic (always on) → Local VAD (RMS, free)
     → Speech → Deepgram STT
-        → "hey lumi, …"  → voice_command → local intent → execute (~50ms)
+        → "hey lamp, …"  → voice_command → local intent → execute (~50ms)
         → other speech   → voice         → agentic gateway
     → 3s silence → disconnect Deepgram
 ```
 
 ## Sensing Pipeline (brief)
 
-LeLamp ticks every 2s and runs pluggable detectors on one frame: motion (frame diff), face recognition (InsightFace), ambient light, sound RMS. Events with images (motion, face enter) are JPEG-encoded; face-enter frames are annotated with bounding boxes (green = friend, red = stranger). Events are POSTed to Lumi, which either matches a local intent or forwards to the agentic gateway with vision. Cooldowns protect LLM cost: motion/sound 60s, presence 10s, light 30s.
+LeLamp ticks every 2s and runs pluggable detectors on one frame: motion (frame diff), face recognition (InsightFace), ambient light, sound RMS. Events with images (motion, face enter) are JPEG-encoded; face-enter frames are annotated with bounding boxes (green = friend, red = stranger). Events are POSTed to Lamp Server, which either matches a local intent or forwards to the agentic gateway with vision. Cooldowns protect LLM cost: motion/sound 60s, presence 10s, light 30s.
 
 ## Documentation
 
 - `docs/overview.md` — architecture deep dive
-- `docs/lamp-server.md` — Lumi Server HTTP API and startup
+- `docs/lamp-server.md` — Lamp Server HTTP API and startup
 - `docs/led-control.md` — LED states, effects, animations
 - `docs/setup-flow.md` — first-boot provisioning
 - `docs/flow-monitor.md` — turn pipeline, JSONL logs, SSE
