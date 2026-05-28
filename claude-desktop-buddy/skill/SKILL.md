@@ -5,8 +5,8 @@ description: Coordinate with Claude Desktop Buddy plugin for approval prompts an
 
 # Claude Desktop Buddy
 
-Lumi is connected to Claude Desktop on the user's Mac via Bluetooth.
-A buddy-plugin runs on this device and syncs Desktop state to Lumi's LED/display.
+Lamp is connected to Claude Desktop on the user's Mac via Bluetooth.
+A buddy-plugin runs on this device and syncs Desktop state to Lamp's LED/display.
 
 ## When you receive a `[sensing:buddy_approval]` event
 
