@@ -92,7 +92,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 		// sessions have independent runs that must NOT be merged into sensing traces.
 		//
 		// Two paths depending on payload.RunID format:
-		//   • Lumi-format (lumi-chat-*): OpenClaw 5.4+ echoes the idempotencyKey as
+		//   • Lumi-format (lamp-chat-*): OpenClaw 5.4+ echoes the idempotencyKey as
 		//     the runId — already IS the device trace. Just remove from pending.
 		//   • UUID: produced when OpenClaw drains its followup queue (the
 		//     FollowupRun type does not carry idempotencyKey, so
@@ -196,7 +196,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 			}
 
 			// Detect external channel-initiated turns: lifecycle_start arrives from OpenClaw
-			// with a UUID run_id (not lumi-chat-* prefix). This covers:
+			// with a UUID run_id (not lamp-chat-* prefix). This covers:
 			// 1. No active trace (original case)
 			// 2. Active trace from a different turn (sensing trace still active when Telegram arrives)
 			//
@@ -252,7 +252,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 					userMsg, senderLabel := extractLastUserMessageFromHistory(historyPayload)
 					// Mark as confirmed channel run if a real sender is present.
 					// Guards against race: Telegram UUID mapped to sensing trace
-					// makes flowRunID = lumi-sensing-* → isChannelRun wrongly false.
+					// makes flowRunID = lamp-sensing-* → isChannelRun wrongly false.
 					if senderLabel != "" {
 						h.channelRunsMu.Lock()
 						h.channelRuns[capturedRunID] = true
@@ -911,7 +911,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 				} else {
 					// Channel detection: positive-evidence only. tg- runIDs are
 					// synthesised by Lamp from session.message events (real Telegram
-					// users); anything else (lumi-chat-*, UUID from steer/cron/
+					// users); anything else (lamp-chat-*, UUID from steer/cron/
 					// heartbeat) is NOT a channel run unless explicitly marked
 					// via channelRuns below.
 					//
@@ -942,7 +942,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 						isChannelRun = true
 					}
 					// Override: confirmed channel turn via senderLabel always suppresses TTS.
-					// Covers race where Telegram UUID mapped to sensing trace (lumi-sensing-*).
+					// Covers race where Telegram UUID mapped to sensing trace (lamp-sensing-*).
 					h.channelRunsMu.Lock()
 					if h.channelRuns[payload.RunID] || h.channelRuns[flowRunID] {
 						isChannelRun = true
@@ -1136,7 +1136,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 		flowRunID := h.resolveRunID(payload.RunID)
 		// Debug alignment: OpenClaw "chat" stream may or may not include user messages for outbound chat.send.
 		// When flowRunID belongs to Lamp, log role/state/message so we can confirm whether chat_input can be emitted.
-		if strings.HasPrefix(flowRunID, "lumi-") {
+		if strings.HasPrefix(flowRunID, "lamp-") {
 			msgPreview := payload.Message
 			msgPreview = strings.ReplaceAll(msgPreview, "\n", " ")
 			if len(msgPreview) > 120 {
@@ -1343,7 +1343,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 			// Queue-mode interleave: a Telegram user message can arrive WHILE a
 			// Lamp-issued run (sensing/voice chat.send) is being processed.
 			// OpenClaw injects it into the running turn and the agent's reply
-			// goes back on the Lamp run's stream — its runID is "lumi-chat-*"
+			// goes back on the Lamp run's stream — its runID is "lamp-chat-*"
 			// so isLampOutboundChatRunID() is true → isChannelRun=false →
 			// reply ends up on TTS instead of Telegram. Capture the chat_id
 			// here (before the skip) and mark the active run so lifecycle.end

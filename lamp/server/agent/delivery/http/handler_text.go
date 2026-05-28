@@ -85,13 +85,13 @@ func extractSayTag(text string) string {
 }
 
 // isLampOutboundChatRunID is true when runID matches Lamp's chat.send idempotency key
-// (lumi-chat-* current; lumi-sensing-* legacy). Used so traceless lifecycle_start is not
+// (lamp-chat-* current; lamp-sensing-* legacy). Used so traceless lifecycle_start is not
 // mis-tagged as Telegram-only when the turn was initiated from Lamp.
 func isLampOutboundChatRunID(runID string) bool {
 	if runID == "" {
 		return false
 	}
-	return strings.HasPrefix(runID, "lumi-chat-") || strings.HasPrefix(runID, "lumi-sensing-")
+	return strings.HasPrefix(runID, "lamp-chat-") || strings.HasPrefix(runID, "lamp-sensing-")
 }
 
 // labelForLampInternal returns the UI label that best describes a Lamp-
@@ -132,7 +132,7 @@ func labelForLampInternal(text string) string {
 // a Telegram user turn (see handler_events.go ~line 1157).
 //
 // This is the positive-evidence signal for "real channel user", replacing the
-// older "anything NOT lumi-chat-*" default which mis-classified UUID runs
+// older "anything NOT lamp-chat-*" default which mis-classified UUID runs
 // from OpenClaw steer-mode self-fire / cron / heartbeat as Telegram and
 // suppressed their TTS even when no real user was on the other end.
 //
