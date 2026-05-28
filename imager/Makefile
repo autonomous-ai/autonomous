@@ -97,10 +97,10 @@ upload: $(RELEASE_NOTE)
 	if gcloud storage cp gs://$(GCS_BUCKET)/$(GCS_LEDGER) $$TMP 2>/dev/null; then \
 		echo "    (existing ledger fetched, prepending new entry)"; \
 	else \
-		printf "# Lumi Imager Releases\n\nAppend-only history of built images. Newest first.\n\n" > $$TMP; \
+		printf "# Lamp Imager Releases\n\nAppend-only history of built images. Newest first.\n\n" > $$TMP; \
 	fi; \
 	NEW=$$(mktemp); \
-	{ awk '/^# Lumi Imager Releases/,/^$$/' $$TMP; cat $(RELEASE_NOTE); echo ""; echo "---"; echo ""; awk 'BEGIN{p=0} /^## /{p=1} p' $$TMP; } > $$NEW; \
+	{ awk '/^# Lamp Imager Releases/,/^$$/' $$TMP; cat $(RELEASE_NOTE); echo ""; echo "---"; echo ""; awk 'BEGIN{p=0} /^## /{p=1} p' $$TMP; } > $$NEW; \
 	gcloud storage cp $$NEW gs://$(GCS_BUCKET)/$(GCS_LEDGER); \
 	rm -f $$TMP $$NEW
 	@echo ""

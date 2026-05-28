@@ -6,7 +6,7 @@ Lamp sử dụng MQTT để giao tiếp với backend server (báo cáo trạng 
 
 - Client: Eclipse Paho autopaho (Go)
 - Auto-reconnect khi mất kết nối
-- Client ID format: `lumi-device-{DeviceID}`
+- Client ID format: `lamp-device-{DeviceID}`
 
 ## Cấu Hình
 
