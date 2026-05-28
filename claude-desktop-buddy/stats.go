@@ -12,7 +12,7 @@ import (
 // /opt/claude-desktop-buddy/, and stays separate from the runtime
 // config in /root/config/buddy.json so a config reset doesn't reset
 // the lifetime stats.
-const statsPath = "/var/lib/lumi-buddy/stats.json"
+const statsPath = "/var/lib/claude-desktop-buddy/stats.json"
 
 // PersistedStats is the on-disk shape — keep the JSON keys short
 // because Claude Desktop's status ack uses the same `appr` / `deny`

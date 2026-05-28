@@ -691,7 +691,7 @@ WantedBy=multi-user.target
 | `/opt/claude-desktop-buddy/VERSION_BUDDY` | Version stamp matching OTA metadata |
 | `/opt/claude-desktop-buddy/chars/<name>/` | Character packs from folder pushes |
 | `/root/config/buddy.json` | Runtime config (preserved across OTA) |
-| `/var/lib/lumi-buddy/stats.json` | Lifetime approval / denial counters (preserved across OTA + config reset) |
+| `/var/lib/claude-desktop-buddy/stats.json` | Lifetime approval / denial counters (preserved across OTA + config reset) |
 | `/var/log/claude-desktop-buddy.log` | Rotated log (2 MB × 10 backups) |
 
 ### Update commands
@@ -728,7 +728,7 @@ WantedBy=multi-user.target
 - [x] Chat turns (user / assistant / tool blocks) stream into Lamp monitor bus
 - [x] Character pack folder push lands under `chars/<name>/`
 - [x] UC-9 activity TTS narration (vi/en/zh) routes through LeLamp cache + emotion on done
-- [x] Approval / denial counters persist across restart (`/var/lib/lumi-buddy/stats.json`)
+- [x] Approval / denial counters persist across restart (`/var/lib/claude-desktop-buddy/stats.json`)
 - [ ] UC-8 voice readout of assistant reply — next
 - [ ] Encrypted bonded GATT link (`sec: true`) — deferred
 - [ ] Presence feedback Lamp → Desktop — future protocol extension

@@ -678,7 +678,7 @@ WantedBy=multi-user.target
 | `/opt/claude-desktop-buddy/VERSION_BUDDY` | Version stamp match OTA metadata |
 | `/opt/claude-desktop-buddy/chars/<name>/` | Character pack nhận về từ folder push |
 | `/root/config/buddy.json` | Runtime config (giữ qua OTA) |
-| `/var/lib/lumi-buddy/stats.json` | Counter approve/deny lifetime (giữ qua OTA + reset config) |
+| `/var/lib/claude-desktop-buddy/stats.json` | Counter approve/deny lifetime (giữ qua OTA + reset config) |
 | `/var/log/claude-desktop-buddy.log` | Log rotate (2 MB × 10 backup) |
 
 ### Lệnh update
@@ -715,7 +715,7 @@ WantedBy=multi-user.target
 - [x] Chat turn (user / assistant / tool blocks) stream vào Lamp monitor bus
 - [x] Folder push character pack lưu vào `chars/<name>/`
 - [x] UC-9 TTS narration trạng thái (vi/en/zh) qua cache LeLamp + emotion khi done
-- [x] Counter approve/deny giữ được qua restart (`/var/lib/lumi-buddy/stats.json`)
+- [x] Counter approve/deny giữ được qua restart (`/var/lib/claude-desktop-buddy/stats.json`)
 - [ ] UC-8 đọc reply assistant qua TTS — kế tiếp
 - [ ] GATT link bonded encrypted (`sec: true`) — defer
 - [ ] Presence feedback Lamp → Desktop — mở rộng protocol tương lai
