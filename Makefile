@@ -1,14 +1,14 @@
-# AI Lamp (Lumi) — Makefile
-# 4 components: Go (lumi + bootstrap + buddy), Python (lelamp), TypeScript (web)
+# AI Lamp — Makefile
+# 4 components: Go (lamp + bootstrap + buddy), Python (lelamp), TypeScript (web)
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 # Directories
-LUMI_DIR       := lumi
+LAMP_DIR       := lamp
 LELAMP_DIR     := lelamp
 BUDDY_DIR      := claude-desktop-buddy
 TWITCH_DIR     := twitch-chat-hook
-WEB_DIR        := $(LUMI_DIR)/web
+WEB_DIR        := $(LAMP_DIR)/web
 
 # Go build
 MODULE         := go-lamp.autonomous.ai
@@ -20,27 +20,27 @@ LDFLAGS_IRC    := -X main.Version=$(VERSION)
 LELAMP_PORT    := 5001
 
 # ============================================================================
-# Lumi (Go) — build | generate | lint | test
+# Lamp (Go) — build | generate | lint | test
 # ============================================================================
 
-.PHONY: lumi-build lumi-build-bootstrap lumi-generate lumi-lint lumi-test
+.PHONY: lamp-build lamp-build-bootstrap lamp-generate lamp-lint lamp-test
 
-lumi-build:
-	cd $(LUMI_DIR) && GOOS=linux GOARCH=arm64 go build -ldflags "-s -w $(LDFLAGS_LAMP)" -o lumi-server ./cmd/lamp
-
-
-lumi-build-bootstrap:
-	cd $(LUMI_DIR) && GOOS=linux GOARCH=arm64 go build -ldflags "-s -w $(LDFLAGS_BOOT)" -o bootstrap-server ./cmd/bootstrap
+lamp-build:
+	cd $(LAMP_DIR) && GOOS=linux GOARCH=arm64 go build -ldflags "-s -w $(LDFLAGS_LAMP)" -o lamp-server ./cmd/lamp
 
 
-lumi-generate:
-	cd $(LUMI_DIR) && GOFLAGS=-mod=mod go generate ./...
+lamp-build-bootstrap:
+	cd $(LAMP_DIR) && GOOS=linux GOARCH=arm64 go build -ldflags "-s -w $(LDFLAGS_BOOT)" -o bootstrap-server ./cmd/bootstrap
 
-lumi-lint:
-	cd $(LUMI_DIR) && golangci-lint run
 
-lumi-test:
-	cd $(LUMI_DIR) && go test ./...
+lamp-generate:
+	cd $(LAMP_DIR) && GOFLAGS=-mod=mod go generate ./...
+
+lamp-lint:
+	cd $(LAMP_DIR) && golangci-lint run
+
+lamp-test:
+	cd $(LAMP_DIR) && go test ./...
 
 # ============================================================================
 # LeLamp (Python) — dev | run | test
@@ -101,10 +101,10 @@ twitch-build-irc:
 # Upload (OTA to GCS) — unified format: make upload-<component>
 # ============================================================================
 
-.PHONY: upload-lumi upload-bootstrap upload-lelamp upload-claude-desktop-buddy upload-lamp-buddy upload-web upload-skills upload-hooks upload-setup upload-setup-ap upload-openclaw upload-twitch-irc upload-all
+.PHONY: upload-lamp upload-bootstrap upload-lelamp upload-claude-desktop-buddy upload-lamp-buddy upload-web upload-skills upload-hooks upload-setup upload-setup-ap upload-openclaw upload-twitch-irc upload-all
 
-upload-lumi:
-	bash scripts/upload-lumi.sh
+upload-lamp:
+	bash scripts/upload-lamp.sh
 
 upload-bootstrap:
 	bash scripts/upload-bootstrap.sh
@@ -154,13 +154,13 @@ upload-openclaw:
 
 # upload-openclaw is intentionally NOT in upload-all — bumping the OpenClaw
 # version is an explicit decision, not a side effect of pushing other artifacts.
-upload-all: upload-lumi upload-bootstrap upload-lelamp upload-claude-desktop-buddy upload-web upload-skills upload-hooks
+upload-all: upload-lamp upload-bootstrap upload-lelamp upload-claude-desktop-buddy upload-web upload-skills upload-hooks
 
 # ============================================================================
 # Release tagging — GPL v3 §6 compliance
 # ============================================================================
 # Annotated git tag with current OTA metadata.json embedded as message, then
-# pushed. Lets buyers map "lumi-server --version" on the board back to a
+# pushed. Lets buyers map "lamp-server --version" on the board back to a
 # specific commit + component version set in the public repo.
 #
 # Usage: make tag-release v0.0.8       # after all upload-* targets succeed
@@ -184,7 +184,7 @@ tag-release:
 .PHONY: clean
 
 clean:
-	rm -f $(LUMI_DIR)/lumi-server $(LUMI_DIR)/bootstrap-server
+	rm -f $(LAMP_DIR)/lamp-server $(LAMP_DIR)/bootstrap-server
 	rm -f $(BUDDY_DIR)/buddy-plugin
 	rm -f $(TWITCH_DIR)/twitch-irc
 	rm -rf $(LELAMP_DIR)/.venv $(LELAMP_DIR)/__pycache__

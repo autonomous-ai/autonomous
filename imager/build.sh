@@ -40,7 +40,7 @@
 #         - Generate locale
 #         - stage_rpi5_wifi_stability: disable IPv6, power-save service
 #         - stage_enable_spi: dtparam=spi=on in config.txt
-#         - stage_backend_units: systemd services (bootstrap, lumi, lumi-lelamp) + software-update
+#         - stage_backend_units: systemd services (bootstrap, lamp, lumi-lelamp) + software-update
 #         - stage_pulseaudio: PulseAudio echo cancellation (WebRTC AEC for mic/speaker)
 #         - stage_lelamp_uv: install uv (Python package manager for LeLamp)
 #         - stage_nginx: write nginx config with lumi/lelamp/openclaw upstreams
@@ -53,7 +53,7 @@
 # PHASE 2 — OVERLAY (always runs — fast)
 #   Copy base.img → golden.img, mount, chroot:
 #         - stage_ota_metadata: fetch build versions from GCS
-#         - stage_backend: download bootstrap-server + lumi-server binaries
+#         - stage_backend: download bootstrap-server + lamp-server binaries
 #         - stage_lelamp: download LeLamp Python app + uv sync
 #         - stage_web: download web UI zip
 #   Take initial @factory snapshot (baked into image at build time)
@@ -65,7 +65,7 @@
 #   3. btrfs-resize-once.service: resizes partition + Btrfs to full SD (runs once, self-destructs)
 #      @factory is the build-time white board — never overwritten
 #   4. User runs 'sudo device-ap-mode' to start AP hotspot "Lumi-XXXX" at 192.168.100.1
-#   5. nginx serves setup web UI, bootstrap/lumi/lelamp backends running
+#   5. nginx serves setup web UI, bootstrap/lamp/lelamp backends running
 #
 # BTRFS SUBVOLUME LAYOUT
 #   @               — initial live root
@@ -730,7 +730,7 @@ retry() {
 
 # install_binary_from_zip(url, dest, name)
 # Downloads a zip, finds the executable inside, installs to dest.
-# Used for bootstrap-server and lumi-server OTA binaries.
+# Used for bootstrap-server and lamp-server OTA binaries.
 install_binary_from_zip() {
   local url="\$1" dest="\$2" name="\$3"
   local ztmp="/tmp/\${name}-zip.$$" dtmp="/tmp/\${name}-dir.$$"
@@ -832,20 +832,20 @@ SyslogIdentifier=bootstrap
 WantedBy=multi-user.target
 EOF
 
-cat > /etc/systemd/system/lumi.service <<'EOF'
+cat > /etc/systemd/system/lamp.service <<'EOF'
 [Unit]
-Description=Lumi Backend
+Description=Lamp Backend
 After=network.target
 
 [Service]
 User=root
 WorkingDirectory=/root
-ExecStart=/usr/local/bin/lumi-server
+ExecStart=/usr/local/bin/lamp-server
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=lumi
+SyslogIdentifier=lamp
 
 [Install]
 WantedBy=multi-user.target
@@ -871,7 +871,7 @@ SyslogIdentifier=lumi-lelamp
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable bootstrap lumi lumi-lelamp
+systemctl enable bootstrap lamp lumi-lelamp
 
 # software-update: OTA updater for bootstrap, lumi, lelamp, openclaw, and web UI.
 # Usage: software-update <bootstrap|lumi|lelamp|openclaw|web>
@@ -914,8 +914,8 @@ elif [ "\$KIND" = "lumi" ]; then
   curl -fsSL -o "\$Z" "\$URL"; unzip -o -q "\$Z" -d "\$D"; rm -f "\$Z"
   b=\$(find "\$D" -type f -executable 2>/dev/null | head -1)
   [ -z "\$b" ] && b=\$(find "\$D" -type f 2>/dev/null | head -1)
-  cp -f "\$b" /usr/local/bin/lumi-server; chmod +x /usr/local/bin/lumi-server; rm -rf "\$D"
-  systemctl restart lumi 2>/dev/null || true
+  cp -f "\$b" /usr/local/bin/lamp-server; chmod +x /usr/local/bin/lamp-server; rm -rf "\$D"
+  systemctl restart lamp 2>/dev/null || true
 elif [ "\$KIND" = "bootstrap" ]; then
   Z="\$(mktemp)"; D="\$(mktemp -d)"
   curl -fsSL -o "\$Z" "\$URL"; unzip -o -q "\$Z" -d "\$D"; rm -f "\$Z"
@@ -946,7 +946,7 @@ chmod +x /usr/local/bin/software-update
 # ── stage: nginx ──────────────────────────────────────────────────────────────
 # nginx serves two things:
 #   1. Static web UI at / (setup wizard — downloaded from OTA)
-#   2. API proxy at /api/ → localhost:5000 (lumi-server), /hw/ → :5001 (lelamp), /gw/ → :18789 (openclaw)
+#   2. API proxy at /api/ → localhost:5000 (lamp-server), /hw/ → :5001 (lelamp), /gw/ → :18789 (openclaw)
 # Captive portal detection endpoints return 204 (no content) to prevent
 # the OS from auto-opening a browser when connecting to the AP.
 echo "[stage] Setup nginx"
@@ -1172,7 +1172,7 @@ nohook wpa_supplicant
 EOF
 
 # device-ap-mode: switches wlan0 to Access Point mode
-# Called by btrfs-resize-once on first boot and by lumi-server on demand
+# Called by btrfs-resize-once on first boot and by lamp-server on demand
 cat > /usr/local/bin/device-ap-mode <<'EOF'
 #!/bin/bash
 set -e
@@ -1280,7 +1280,7 @@ chmod +x /usr/local/bin/device-sta-mode
 
 # connect-wifi: writes wpa_supplicant config then switches to STA mode
 # Usage: connect-wifi SSID PASSWORD  (or  connect-wifi SSID  for open networks)
-# Called by lumi-server API endpoint /api/network/setup
+# Called by lamp-server API endpoint /api/network/setup
 cat > /usr/local/bin/connect-wifi <<'EOF'
 #!/bin/bash
 set -e
@@ -1832,7 +1832,7 @@ echo "[overlay] web=\$WEB_VER lumi=\$LUMI_VER bootstrap=\$BOOTSTRAP_VER lelamp=\
 # ── stage: backend binaries ──────────────────────────────────────────────────
 echo "[overlay] Install backend binaries"
 install_binary_from_zip "\$BOOTSTRAP_URL" /usr/local/bin/bootstrap-server "bootstrap"
-install_binary_from_zip "\$LUMI_URL"      /usr/local/bin/lumi-server      "lumi"
+install_binary_from_zip "\$LUMI_URL"      /usr/local/bin/lamp-server      "lumi"
 
 # ── stage: LeLamp (Python hardware runtime) ──────────────────────────────────
 echo "[overlay] Install LeLamp"
@@ -1961,7 +1961,7 @@ if [ -n "\$BUDDY_URL" ]; then
   cat > /etc/systemd/system/lumi-buddy.service <<UNIT
 [Unit]
 Description=Lumi Claude Desktop Buddy (BLE)
-After=bluetooth.target lumi.service
+After=bluetooth.target lamp.service
 Wants=bluetooth.target
 
 [Service]
@@ -2043,7 +2043,7 @@ mount ${OUT_LOOP_BOOT} ${MNT}/boot/firmware
 
 # Check critical binaries
 for BIN in /sbin/init \
-           /usr/local/bin/lumi-server /usr/local/bin/bootstrap-server \
+           /usr/local/bin/lamp-server /usr/local/bin/bootstrap-server \
            /usr/local/bin/fr-snapshot /usr/local/bin/fr-rollback \
            /usr/local/bin/device-ap-mode /usr/local/bin/device-sta-mode \
            /usr/local/bin/connect-wifi /usr/local/bin/software-update \
@@ -2066,7 +2066,7 @@ for CFG in /etc/fstab /etc/hostapd/hostapd.conf /etc/nginx/conf.d/lumi.conf \
 done
 
 # Check systemd services are enabled
-for SVC in bootstrap lumi lumi-lelamp nginx openclaw btrfs-resize-once firstrun-wifi; do
+for SVC in bootstrap lamp lumi-lelamp nginx openclaw btrfs-resize-once firstrun-wifi; do
   if [ -L "${MNT}/etc/systemd/system/multi-user.target.wants/${SVC}.service" ] || \
      [ -L "${MNT}/etc/systemd/system/sysinit.target.wants/${SVC}.service" ]; then
     echo "  [OK] ${SVC}.service enabled"

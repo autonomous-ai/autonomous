@@ -18,7 +18,7 @@ stage_prerequisites() {
 
 stage_openclaw() {
   # OpenClaw is installed from npm registry; OTA upgrades go through
-  # `npm install -g openclaw@<version>` driven by the lumi watcher
+  # `npm install -g openclaw@<version>` driven by the lamp watcher
   # against metadata.openclaw.version. Override OPENCLAW_VERSION here
   # to pin a specific version on first install (otherwise pulls latest;
   # the watcher will reconcile to the OTA target on its next tick).
@@ -27,7 +27,7 @@ stage_openclaw() {
   npm install -g "openclaw@${OPENCLAW_VERSION}"
   openclaw --version || true
 
-  # OpenClaw shares its state dir with Lumi at /root/.openclaw — Lumi
+  # OpenClaw shares its state dir with Lamp at /root/.openclaw — Lamp
   # writes openclaw.json + the gateway auth token there, OpenClaw reads
   # it from the same path. They MUST agree or every WS connect fails
   # with "token_mismatch" / WS close 1008.

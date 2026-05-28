@@ -6,7 +6,7 @@ AI Lamp chạy **5 thành phần phần mềm** trên Raspberry Pi 4. Tất cả
 
 | Thành phần | Loại | Cách cài | Service | Đường dẫn |
 |---|---|---|---|---|
-| **Lumi Server** | Go binary (ARM64) | Tải zip từ OTA | `lumi.service` | `/usr/local/bin/lumi-server` |
+| **Lamp Server** | Go binary (ARM64) | Tải zip từ OTA | `lamp.service` | `/usr/local/bin/lamp-server` |
 | **Bootstrap Server** | Go binary (ARM64) | Tải zip từ OTA | `bootstrap.service` | `/usr/local/bin/bootstrap-server` |
 | **Web (Setup SPA)** | React/Vite | Tải zip từ OTA | nginx serve static | `/usr/share/nginx/html/setup/` |
 | **OpenClaw** | Node.js package | `npm install -g` | `openclaw.service` | Global npm |
@@ -112,7 +112,7 @@ curl -fsSL https://cdn.autonomous.ai/lumi/install.sh | sudo bash
 | 0a | WiFi stability | Tắt IPv6, WiFi power saving (RPi5) |
 | 0b | Enable SPI | Cho WS2812 LED driver + GC9A01 display |
 | 1 | Fetch OTA metadata | Tải metadata.json, trích xuất versions và URLs |
-| 1b | Install binaries | Tải + cài lumi-server, bootstrap-server, tạo systemd services |
+| 1b | Install binaries | Tải + cài lamp-server, bootstrap-server, tạo systemd services |
 | 2 | Install OpenClaw | `npm install -g openclaw`, tạo config, systemd service |
 | **2b** | **Install LeLamp** | **Tải + cài LeLamp Python runtime, tạo systemd service** (MỚI) |
 | 3 | Setup nginx | Tải web bundle, cấu hình reverse proxy + captive portal |
@@ -174,7 +174,7 @@ UNIT
 
 | Service | Lệnh chạy | Port | Ghi chú |
 |---|---|---|---|
-| `lumi.service` | `/usr/local/bin/lumi-server` | 5000 | HTTP API chính, luôn chạy |
+| `lamp.service` | `/usr/local/bin/lamp-server` | 5000 | HTTP API chính, luôn chạy |
 | `bootstrap.service` | `/usr/local/bin/bootstrap-server` | 8080 | OTA worker, poll cập nhật. Expose `POST /force-check` để kích hoạt kiểm tra OTA ngay lập tức |
 | `openclaw.service` | `xvfb-run ... openclaw gateway run` | — | AI brain, memory limit 1500M |
 | `lumi-lelamp.service` | `uvicorn lelamp.server:app --host 127.0.0.1 --port 5001` | 5001 | Hardware drivers (servo, LED, camera, audio) |
@@ -184,10 +184,10 @@ UNIT
 
 ```
 boot
-  → lumi.service      (tầng hệ thống, LED boot animation)
+  → lamp.service      (tầng hệ thống, LED boot animation)
   → bootstrap.service   (bắt đầu poll cập nhật)
   → lumi-lelamp.service      (hardware drivers sẵn sàng)
-  → openclaw.service    (AI brain, kết nối lumi qua HTTP)
+  → openclaw.service    (AI brain, kết nối lamp qua HTTP)
   → nginx               (web UI cho setup)
 ```
 
@@ -263,7 +263,7 @@ Bootstrap dùng `lib/lelamp` để báo trạng thái update qua LED. Xem chi ti
 
 | Thành phần | Cách phát hiện |
 |---|---|
-| `lumi` | Chạy `lumi-server --version`, parse output |
+| `lumi` | Chạy `lamp-server --version`, parse output |
 | `bootstrap` | Hằng số compile-time `config.BootstrapVersion` (ldflags) |
 | `web` | Đọc file `/usr/share/nginx/html/setup/VERSION` |
 | `openclaw` | Chạy `openclaw --version`, trích xuất semver bằng regex |
@@ -354,13 +354,13 @@ LeLamp nằm trong repo này dưới dạng subfolder Python, cùng với Go và
 
 ```
 ai-lamp-openclaw/
-├── lumi/                 # Go code (fork từ lobster)
+├── lamp/                 # Go code (fork từ lobster)
 │   ├── cmd/              # Go entrypoints
 │   ├── server/           # Go HTTP layer
 │   ├── internal/         # Go business logic
 │   ├── bootstrap/        # Go OTA worker
 │   └── domain/           # Struct dùng chung
-├── web/                  # TypeScript/React SPA (copy từ lobster, đổi intern→lumi)
+├── web/                  # TypeScript/React SPA (copy từ lobster, đổi intern→lamp)
 ├── lelamp/               # Python hardware drivers (MỚI)
 │   ├── __init__.py       # Package init, expose __version__
 │   ├── server.py         # HTTP API server (FastAPI) — MỚI, không từ upstream
@@ -474,7 +474,7 @@ echo "LeLamp $NEW_VERSION published."
 
 | Script | Thành phần | Pattern |
 |---|---|---|
-| `scripts/upload-lumi.sh` | Lumi Server binary | Build → zip → GCS → update metadata |
+| `scripts/upload-lamp.sh` | Lamp Server binary | Build → zip → GCS → update metadata |
 | `scripts/upload-bootstrap.sh` | Bootstrap Server binary | Build → zip → GCS → update metadata |
 | `scripts/upload-web.sh` | Web SPA bundle | Build → zip → GCS → update metadata |
 | `scripts/upload-lelamp.sh` | LeLamp Python runtime (MỚI) | Package → zip → GCS → update metadata |
@@ -486,7 +486,7 @@ echo "LeLamp $NEW_VERSION published."
 
 ### `scripts/tag-release.sh` — Truy nguồn theo GPL v3 §6
 
-Sau khi các upload component xong (`make upload-lumi upload-lelamp upload-web ...`), script này neo OTA metadata snapshot vào một git tag duy nhất:
+Sau khi các upload component xong (`make upload-lamp upload-lelamp upload-web ...`), script này neo OTA metadata snapshot vào một git tag duy nhất:
 
 ```bash
 make tag-release v0.0.8
@@ -495,7 +495,7 @@ make tag-release v0.0.8
 # → git push origin v0.0.8
 ```
 
-Người mua chạy `lumi-server --version` trên thiết bị — giá trị lấy từ `git describe --tags --always --dirty` lúc build (`Makefile:VERSION`), nên resolve về tag gần nhất. Họ mở repo public (`github.com/autonomous-ai/ai-lamp-lumi`), tìm tag đúng, đọc annotation để xem chính xác version `lumi`/`lelamp`/`web`/`bootstrap` đã bake vào release đó, rồi checkout commit tương ứng để có source.
+Người mua chạy `lamp-server --version` trên thiết bị — giá trị lấy từ `git describe --tags --always --dirty` lúc build (`Makefile:VERSION`), nên resolve về tag gần nhất. Họ mở repo public (`github.com/autonomous-ai/ai-lamp-lumi`), tìm tag đúng, đọc annotation để xem chính xác version `lumi`/`lelamp`/`web`/`bootstrap` đã bake vào release đó, rồi checkout commit tương ứng để có source.
 
 Guards trong script: từ chối nếu tag đã tồn tại local hoặc trên remote, từ chối nếu fetch metadata fail hoặc JSON invalid (`set -euo pipefail` + `jq .`). Override qua env: `OTA_METADATA_URL` (mặc định: `https://cdn.autonomous.ai/lumi/ota/metadata.json`), `TAG_REMOTE` (mặc định: `origin`).
 
@@ -515,7 +515,7 @@ build-bootstrap:
 	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_BOOTSTRAP)" -o bootstrap-server ./cmd/bootstrap
 
 build-lamp:
-	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_LAMP)" -o lumi-server ./cmd/lamp
+	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_LAMP)" -o lamp-server ./cmd/lamp
 ```
 
 ### LeLamp (VERSION file)

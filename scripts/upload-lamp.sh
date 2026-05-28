@@ -3,10 +3,11 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LUMI_BIN="${ROOT_DIR}/lumi/lumi-server"
-VERSION_FILE="${ROOT_DIR}/lumi/${VERSION_FILE:-VERSION_LUMI}"
+LAMP_BIN="${ROOT_DIR}/lamp/lamp-server"
+VERSION_FILE="${ROOT_DIR}/lamp/${VERSION_FILE:-VERSION_LAMP}"
 
-# Bucket and path: lumi/ota/lumi/[semver].zip
+# Bucket and path: lumi/ota/lumi/[semver].zip (GCS layout kept under
+# the historical `lumi/` prefix for cross-system OTA contract compat).
 GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
 
 # Auto-increment semver (patch) before build
@@ -23,21 +24,21 @@ else
   echo "========== Version initialized: ${new_version} =========="
 fi
 
-ZIP_NAME="lumi-${new_version}.zip"
+ZIP_NAME="lamp-${new_version}.zip"
 ZIP_PATH="${ROOT_DIR}/${ZIP_NAME}"
 GCS_PATH="${GCS_PATH:-lumi/ota/lumi/${new_version}.zip}"
 
-echo "========== Build lumi binary (VERSION=${new_version}) =========="
-(cd "$ROOT_DIR" && make lumi-build VERSION="$new_version")
+echo "========== Build lamp binary (VERSION=${new_version}) =========="
+(cd "$ROOT_DIR" && make lamp-build VERSION="$new_version")
 
-if [[ ! -f "$LUMI_BIN" ]]; then
-  echo "Error: lumi binary not found at $LUMI_BIN after make lumi-build"
+if [[ ! -f "$LAMP_BIN" ]]; then
+  echo "Error: lamp binary not found at $LAMP_BIN after make lamp-build"
   exit 1
 fi
 
-echo "========== Zipping lumi binary to ${ZIP_NAME} =========="
+echo "========== Zipping lamp binary to ${ZIP_NAME} =========="
 rm -f "$ZIP_PATH"
-(cd "$ROOT_DIR" && zip "$ZIP_PATH" "$LUMI_BIN")
+(cd "$ROOT_DIR" && zip "$ZIP_PATH" "$LAMP_BIN")
 
 echo "========== Upload ${ZIP_NAME} to Google Cloud Storage (no-cache) =========="
 gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$ZIP_PATH" "gs://${GCS_BUCKET}/${GCS_PATH}"
@@ -74,5 +75,5 @@ echo "========== Upload metadata (backend: v${new_version}) =========="
 gsutil -h "Content-Type:application/json" -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$METADATA_TMP" "gs://${GCS_BUCKET}/${METADATA_PATH}"
 rm -f "$METADATA_TMP"
 
-rm -f "$ZIP_PATH" "$LUMI_BIN"
+rm -f "$ZIP_PATH" "$LAMP_BIN"
 echo "Done: gs://${GCS_BUCKET}/${GCS_PATH} (v${new_version})"

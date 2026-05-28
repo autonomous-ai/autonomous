@@ -3,7 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SKILLS_DIR="${ROOT_DIR}/lumi/resources/openclaw-skills"
+SKILLS_DIR="${ROOT_DIR}/lamp/resources/openclaw-skills"
 
 GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
 GCS_PREFIX="${GCS_PREFIX:-lumi/skills}"

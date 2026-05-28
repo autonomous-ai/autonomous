@@ -3,8 +3,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BOOTSTRAP_BIN="${ROOT_DIR}/lumi/bootstrap-server"
-VERSION_FILE="${ROOT_DIR}/lumi/${VERSION_FILE:-VERSION_BOOTSTRAP}"
+BOOTSTRAP_BIN="${ROOT_DIR}/lamp/bootstrap-server"
+VERSION_FILE="${ROOT_DIR}/lamp/${VERSION_FILE:-VERSION_BOOTSTRAP}"
 
 # Bucket and path: lumi/ota/bootstrap/[semver].zip
 GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
@@ -28,7 +28,7 @@ ZIP_PATH="${ROOT_DIR}/${ZIP_NAME}"
 GCS_PATH="${GCS_PATH:-lumi/ota/bootstrap/${new_version}.zip}"
 
 echo "========== Build bootstrap binary (VERSION=${new_version}) =========="
-(cd "$ROOT_DIR" && make lumi-build-bootstrap VERSION="$new_version")
+(cd "$ROOT_DIR" && make lamp-build-bootstrap VERSION="$new_version")
 
 if [[ ! -f "$BOOTSTRAP_BIN" ]]; then
   echo "Error: bootstrap binary not found at $BOOTSTRAP_BIN after make build-bootstrap"

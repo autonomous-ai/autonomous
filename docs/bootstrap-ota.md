@@ -6,7 +6,7 @@ The AI Lamp device runs **5 software components** on a Raspberry Pi 4. All compo
 
 | Component | Type | Install Method | Service Name | Install Path |
 |---|---|---|---|---|
-| **Lumi Server** | Go binary (ARM64) | Download zip from OTA | `lumi.service` | `/usr/local/bin/lumi-server` |
+| **Lamp Server** | Go binary (ARM64) | Download zip from OTA | `lamp.service` | `/usr/local/bin/lamp-server` |
 | **Bootstrap Server** | Go binary (ARM64) | Download zip from OTA | `bootstrap.service` | `/usr/local/bin/bootstrap-server` |
 | **Web (Setup SPA)** | React/Vite bundle | Download zip from OTA | nginx serves static | `/usr/share/nginx/html/setup/` |
 | **OpenClaw** | Node.js package | `npm install -g` | `openclaw.service` | Global npm |
@@ -112,7 +112,7 @@ curl -fsSL https://cdn.autonomous.ai/lumi/install.sh | sudo bash
 | 0a | WiFi stability | Disable IPv6, WiFi power saving (RPi5) |
 | 0b | Enable SPI | For WS2812 LED driver |
 | 1 | Fetch OTA metadata | Download metadata.json, extract versions and URLs |
-| 1b | Install binaries | Download + install lumi-server, bootstrap-server, create systemd services |
+| 1b | Install binaries | Download + install lamp-server, bootstrap-server, create systemd services |
 | 2 | Install OpenClaw | `npm install -g openclaw`, create config, create systemd service |
 | **2b** | **Install LeLamp** | **Download + install LeLamp Python runtime, create systemd service** (NEW) |
 | 3 | Setup nginx | Download web bundle, configure reverse proxy + captive portal |
@@ -176,7 +176,7 @@ UNIT
 
 | Service | ExecStart | Port | Notes |
 |---|---|---|---|
-| `lumi.service` | `/usr/local/bin/lumi-server` | 5000 | Main HTTP API, always running |
+| `lamp.service` | `/usr/local/bin/lamp-server` | 5000 | Main HTTP API, always running |
 | `bootstrap.service` | `/usr/local/bin/bootstrap-server` | 8080 | OTA worker, polls for updates. Exposes `POST /force-check` to trigger immediate OTA check |
 | `openclaw.service` | `xvfb-run ... openclaw gateway run` | — | AI brain, memory limit 1500M |
 | `lumi-lelamp.service` | `uvicorn lelamp.server:app --host 127.0.0.1 --port 5001` | 5001 | Hardware drivers (servo, LED, camera, audio) |
@@ -186,10 +186,10 @@ UNIT
 
 ```
 boot
-  → lumi.service      (system layer, LED boot animation)
+  → lamp.service      (system layer, LED boot animation)
   → bootstrap.service   (starts polling for updates)
   → lumi-lelamp.service      (hardware drivers ready)
-  → openclaw.service    (AI brain, connects to lumi via HTTP)
+  → openclaw.service    (AI brain, connects to lamp via HTTP)
   → nginx               (web UI for setup)
 ```
 
@@ -265,7 +265,7 @@ Bootstrap uses `lib/lelamp` to show update status on LEDs. See [status-led.md](s
 
 | Component | How to Detect Current Version |
 |---|---|
-| `lumi` | Run `lumi-server --version`, parse output |
+| `lumi` | Run `lamp-server --version`, parse output |
 | `bootstrap` | Compiled-in constant `config.BootstrapVersion` (ldflags) |
 | `web` | Read file `/usr/share/nginx/html/setup/VERSION` |
 | `openclaw` | Run `openclaw --version`, extract semver with regex |
@@ -356,13 +356,13 @@ LeLamp lives inside this repo as a Python subfolder alongside Go and TypeScript:
 
 ```
 ai-lamp-openclaw/
-├── lumi/                 # Go code (forked from lobster)
+├── lamp/                 # Go code (forked from lobster)
 │   ├── cmd/              # Go entrypoints
 │   ├── server/           # Go HTTP layer
 │   ├── internal/         # Go business logic
 │   ├── bootstrap/        # Go OTA worker
 │   └── domain/           # Shared structs
-├── web/                  # TypeScript/React SPA (copied from lobster, renamed intern→lumi)
+├── web/                  # TypeScript/React SPA (copied from lobster, renamed intern→lamp)
 ├── lelamp/               # Python hardware drivers (NEW)
 │   ├── __init__.py       # Package init, exposes __version__
 │   ├── server.py         # HTTP API server (FastAPI) — NEW, not from upstream
@@ -476,7 +476,7 @@ echo "LeLamp $NEW_VERSION published."
 
 | Script | Component | Pattern |
 |---|---|---|
-| `scripts/upload-lumi.sh` | Lumi Server binary | Build → zip → GCS → update metadata |
+| `scripts/upload-lamp.sh` | Lamp Server binary | Build → zip → GCS → update metadata |
 | `scripts/upload-bootstrap.sh` | Bootstrap Server binary | Build → zip → GCS → update metadata |
 | `scripts/upload-web.sh` | Web SPA bundle | Build → zip → GCS → update metadata |
 | `scripts/upload-lelamp.sh` | LeLamp Python runtime (NEW) | Package → zip → GCS → update metadata |
@@ -488,7 +488,7 @@ echo "LeLamp $NEW_VERSION published."
 
 ### `scripts/tag-release.sh` — GPL v3 §6 traceability
 
-After component uploads succeed (`make upload-lumi upload-lelamp upload-web ...`), this script anchors the resulting OTA metadata snapshot to a single git tag:
+After component uploads succeed (`make upload-lamp upload-lelamp upload-web ...`), this script anchors the resulting OTA metadata snapshot to a single git tag:
 
 ```bash
 make tag-release v0.0.8
@@ -497,7 +497,7 @@ make tag-release v0.0.8
 # → git push origin v0.0.8
 ```
 
-Buyers run `lumi-server --version` on the device — value comes from `git describe --tags --always --dirty` at build time (`Makefile:VERSION`), so it resolves to the closest tag. They then open the public repo (`github.com/autonomous-ai/ai-lamp-lumi`), find the matching tag, read the annotation for the exact `lumi`/`lelamp`/`web`/`bootstrap` versions baked at release time, and checkout that commit for corresponding source.
+Buyers run `lamp-server --version` on the device — value comes from `git describe --tags --always --dirty` at build time (`Makefile:VERSION`), so it resolves to the closest tag. They then open the public repo (`github.com/autonomous-ai/ai-lamp-lumi`), find the matching tag, read the annotation for the exact `lumi`/`lelamp`/`web`/`bootstrap` versions baked at release time, and checkout that commit for corresponding source.
 
 Guards in the script: refuses if tag already exists locally or on remote, refuses if metadata fetch fails or JSON is invalid (`set -euo pipefail` + `jq .`). Overrides via env vars: `OTA_METADATA_URL` (default: `https://cdn.autonomous.ai/lumi/ota/metadata.json`), `TAG_REMOTE` (default: `origin`).
 
@@ -517,7 +517,7 @@ build-bootstrap:
 	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_BOOTSTRAP)" -o bootstrap-server ./cmd/bootstrap
 
 build-lamp:
-	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_LAMP)" -o lumi-server ./cmd/lamp
+	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_LAMP)" -o lamp-server ./cmd/lamp
 ```
 
 ### LeLamp (VERSION file)

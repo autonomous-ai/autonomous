@@ -42,7 +42,7 @@ $SSH "sudo journalctl -u lumi.service --since '20 min ago' --no-pager | grep 'li
 $SSH "sudo journalctl -u lumi.service --since '20 min ago' --no-pager | grep '/api/openclaw/busy' | tail -3"
 
 # 3. OpenClaw heartbeat / memoryFlush near #2's timestamp:
-$SSH "sudo grep -E 'isHeartbeat=true|before_agent_reply' /var/log/openclaw/lumi.log | tail -10"
+$SSH "sudo grep -E 'isHeartbeat=true|before_agent_reply' /var/log/openclaw/lamp.log | tail -10"
 ```
 
 Wedged when:

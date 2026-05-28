@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# patch-security.sh — one-shot security patch for existing Lumi devices.
+# patch-security.sh — one-shot security patch for existing Lamp devices.
 #
 # Paste this entire script into the browser CLI (/monitor#cli) and press Enter.
 # Safe to run multiple times.
 #
 # PREREQUISITE: run OTA first so the device has the latest code:
 #   sudo software-update lelamp   ← same-origin middleware (server.py)
-#   sudo software-update lumi     ← sameOriginOrLAN guard (/api/sensing/event)
+#   sudo software-update lamp     ← sameOriginOrLAN guard (/api/sensing/event)
 
 set -euo pipefail
 
@@ -338,18 +338,28 @@ else
   echo "[patch] lumi-lelamp.service: EnvironmentFile already present, skipping"
 fi
 
-# 6. Bind lumi-server to 127.0.0.1 (defense-in-depth: port 5000 unreachable from LAN
+# 6. Bind lamp-server to 127.0.0.1 (defense-in-depth: port 5000 unreachable from LAN
 #    even if nginx config is wrong). Only needed on devices deployed before 2026-05-19.
-LUMI_SVC="/etc/systemd/system/lumi.service"
-LUMI_BIN="/usr/local/bin/lumi-server"
+# Prefer the renamed lamp.service / lamp-server paths; fall back to the legacy
+# lumi.service / lumi-server names on devices still on the pre-rename layout.
+if [ -f "/etc/systemd/system/lamp.service" ]; then
+  LAMP_SVC="/etc/systemd/system/lamp.service"
+else
+  LAMP_SVC="/etc/systemd/system/lumi.service"
+fi
+if [ -x "/usr/local/bin/lamp-server" ]; then
+  LAMP_BIN="/usr/local/bin/lamp-server"
+else
+  LAMP_BIN="/usr/local/bin/lumi-server"
+fi
 
 # Detect if the installed binary still binds 0.0.0.0 by checking its help/version
 # output — there is no config knob for this; it is baked into the binary.
 # New binaries (post-2026-05-19 OTA) bind 127.0.0.1 by default; old ones bind :5000.
-# The reliable signal is the OTA version. If lumi OTA is up-to-date, skip.
-LUMI_VERSION=$(lumi-server --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
-echo "[patch] lumi-server version: ${LUMI_VERSION:-unknown}"
-echo "[patch] To close port 5000 on LAN: run 'sudo software-update lumi' to get the latest binary."
+# The reliable signal is the OTA version. If lamp OTA is up-to-date, skip.
+LAMP_VERSION=$("$LAMP_BIN" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+echo "[patch] lamp-server version: ${LAMP_VERSION:-unknown}"
+echo "[patch] To close port 5000 on LAN: run 'sudo software-update lamp' to get the latest binary."
 
 # 7. Apply — only reload/restart when files actually changed. Avoids the
 # unnecessary 502 window on idempotent re-runs.
@@ -364,8 +374,11 @@ else
 fi
 
 if [ "$LELAMP_HASH_BEFORE" != "$LELAMP_HASH_AFTER" ]; then
-  echo "[patch] lumi-lelamp.service changed → restarting lumi-lelamp + lumi"
-  systemctl restart lumi-lelamp lumi
+  # Restart the renamed `lamp` service; fall back to legacy `lumi` on older devices.
+  LAMP_UNIT="lamp"
+  systemctl list-unit-files lamp.service >/dev/null 2>&1 || LAMP_UNIT="lumi"
+  echo "[patch] lumi-lelamp.service changed → restarting lumi-lelamp + ${LAMP_UNIT}"
+  systemctl restart lumi-lelamp "$LAMP_UNIT"
 else
   echo "[patch] lumi-lelamp.service unchanged, skipping service restart"
 fi

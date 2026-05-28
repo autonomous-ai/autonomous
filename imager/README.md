@@ -49,7 +49,7 @@ Phase 2  chroot qemu-arm64:
          - Node.js 22 from NodeSource + `openclaw@$OPENCLAW_VERSION` npm global
          - openclaw onboard --skip-health (creates /root/.openclaw scaffolding)
          - uv (Python pkg mgr for LeLamp)
-         - systemd units: lumi, bootstrap, lumi-lelamp, lumi-wifi-power-save, openclaw
+         - systemd units: lamp, bootstrap, lumi-lelamp, lumi-wifi-power-save, openclaw
          - helper scripts /usr/local/bin/{device-ap-mode, device-sta-mode, connect-wifi, software-update}
            (verbatim copy from production OPi @ 100.111.149.69)
          - configs: hostapd, dnsmasq, dhcpcd, full prod nginx (CSP + WS + captive-portal),
@@ -57,7 +57,7 @@ Phase 2  chroot qemu-arm64:
            /etc/asound.conf (lamp_speaker / lamp_micro1 for ES8389 sndi2s4)
          - mask orangepi-firstrun-config.service (vendor wizard would conflict)
 Phase 3  OTA bake from metadata.json:
-         - bootstrap-server + lumi-server binaries
+         - bootstrap-server + lamp-server binaries
          - LeLamp Python app + `uv sync --python 3.12 --extra hardware`
            (with webrtcvad pkg_resources shim for Py 3.12+ where the symbol was removed)
          - Web UI to /usr/share/nginx/html/setup
@@ -105,7 +105,7 @@ All env vars; override at the `make` call.
 | `OUT_IMG_SIZE` | `14G` | Partition size after expansion. ext4 fills this; xz compresses unused space away. SD card must be ≥ this (lumi-resize-once will expand further on first boot if SD is larger). |
 | `OPI_FILE_ID` | `1CYfOaY6f5DozJBNvPJ0Gx1jBIFlGe8fn` | Google Drive file ID for `Orangepi4pro_1.0.6_debian_bookworm_server_*.7z`. Bump when the dev team uploads a new vendor release. |
 | `OPENCLAW_VERSION` | `2026.5.7` | npm package version pin. Bump as OpenClaw releases. |
-| `OTA_METADATA_URL` | `https://storage.googleapis.com/s3-autonomous-upgrade-3/lumi/ota/metadata.json` | Backend binaries source. Used by Phase 3 to download `lumi-server`, `bootstrap-server`, `lelamp`, `web`, optional `claude-desktop-buddy`. |
+| `OTA_METADATA_URL` | `https://storage.googleapis.com/s3-autonomous-upgrade-3/lumi/ota/metadata.json` | Backend binaries source. Used by Phase 3 to download `lamp-server`, `bootstrap-server`, `lelamp`, `web`, optional `claude-desktop-buddy`. |
 | `AP_BAND` | `2.4` | `2.4` or `5` — hostapd hw_mode. 5 GHz needs chip + regulatory support. |
 | `AP_CHANNEL` | `6` (2.4 GHz) / `36` (5 GHz) | hostapd channel |
 | `COUNTRY_CODE` | `US` | Regulatory domain for wpa_supplicant + hostapd |
@@ -215,8 +215,8 @@ SSH in (`ssh system@lumi-xxxx.local`, password `12345` until rotated by the
 setup wizard) and verify:
 
 ```bash
-systemctl is-enabled lumi lumi-lelamp lumi-wifi-power-save openclaw avahi-daemon
-ls /usr/local/bin/{lumi-server,bootstrap-server,device-ap-mode,connect-wifi,software-update}
+systemctl is-enabled lamp lumi-lelamp lumi-wifi-power-save openclaw avahi-daemon
+ls /usr/local/bin/{lamp-server,bootstrap-server,device-ap-mode,connect-wifi,software-update}
 ls /opt/lelamp/.venv/bin/uvicorn       # LeLamp uv sync succeeded
 openclaw --version                       # OpenClaw npm global installed
 ls /etc/asound.conf /etc/udev/rules.d/91-pulseaudio-lelamp-ignore.rules

@@ -1,13 +1,13 @@
-# Security Audit: Lumi Web Frontend
+# Security Audit: Lamp Web Frontend
 
 Date: 2026-05-16  
 Repo: `ai-lamp-lumi`  
-Scope: Lumi frontend only (`lumi/web/src`, `lumi/web/package.json`, browser-facing behavior).  
+Scope: Lamp frontend only (`lamp/web/src`, `lamp/web/package.json`, browser-facing behavior).  
 Instruction: report issues and remediation guidance only; do **not** patch runtime code in this document.
 
 ## Executive summary
 
-The Lumi web app is a privileged device-control UI, not a normal public website. It can:
+The Lamp web app is a privileged device-control UI, not a normal public website. It can:
 
 - Read and write device config, including API keys, bot tokens, WiFi password, MQTT password.
 - Call raw LeLamp hardware endpoints under `/hw/*` for camera, mic/speaker, servo, face, bluetooth, display, voice, LED.
@@ -34,7 +34,7 @@ Important note: frontend changes are not sufficient alone. Security must be enfo
 
 ### API base
 
-`lumi/web/src/lib/api.ts` uses relative API paths by default:
+`lamp/web/src/lib/api.ts` uses relative API paths by default:
 
 ```ts
 const API_BASE =
@@ -46,7 +46,7 @@ const API_BASE =
 
 Most calls go to:
 
-- `/api/*` for Lumi Go server
+- `/api/*` for Lamp Go server
 - `/hw/*` for LeLamp hardware server via nginx
 - `/gw/*` for OpenClaw gateway via nginx
 
@@ -74,7 +74,7 @@ This means any future backend auth must be wired into `apiRequest`, hardware fet
 
 ### Evidence
 
-`lumi/web/src/lib/api.ts` defines `DeviceConfig` with raw secrets:
+`lamp/web/src/lib/api.ts` defines `DeviceConfig` with raw secrets:
 
 ```ts
 export interface DeviceConfig {
@@ -100,7 +100,7 @@ export async function getDeviceConfig(): Promise<DeviceConfig> {
 }
 ```
 
-`lumi/web/src/pages/EditConfig.tsx` loads secrets directly into React state:
+`lamp/web/src/pages/EditConfig.tsx` loads secrets directly into React state:
 
 ```ts
 setPassword(cfg.network_password ?? "");
@@ -115,7 +115,7 @@ setDiscordBotToken(cfg.discord_bot_token ?? "");
 setMqttPassword(cfg.mqtt_password ?? "");
 ```
 
-`lumi/web/src/hooks/setup/useConfigPrefill.ts` also pre-fills secrets from config.
+`lamp/web/src/hooks/setup/useConfigPrefill.ts` also pre-fills secrets from config.
 
 ### Why it is risky
 
@@ -164,7 +164,7 @@ export interface DeviceConfigPublic {
 }
 ```
 
-#### Frontend file: `lumi/web/src/lib/api.ts`
+#### Frontend file: `lamp/web/src/lib/api.ts`
 
 Replace raw `DeviceConfig` for GET with a sanitized type. Keep a separate write type:
 
@@ -203,7 +203,7 @@ To:
 export async function updateDeviceConfig(body: DeviceConfigUpdate)
 ```
 
-#### Frontend file: `lumi/web/src/pages/EditConfig.tsx`
+#### Frontend file: `lamp/web/src/pages/EditConfig.tsx`
 
 Do not set secret state from GET response. Instead:
 
@@ -261,7 +261,7 @@ Expected: no raw secrets.
 
 ### Evidence
 
-`lumi/web/src/components/edit/ChannelSection.tsx` comment:
+`lamp/web/src/components/edit/ChannelSection.tsx` comment:
 
 ```ts
 // Edit-mode channel credentials use LockedField for tokens (not LockedPasswordField
@@ -298,7 +298,7 @@ Use write-only secret UX:
   - “Clear token” explicit destructive action.
   - Optional “Test connection” without revealing token.
 
-#### File: `lumi/web/src/components/edit/ChannelSection.tsx`
+#### File: `lamp/web/src/components/edit/ChannelSection.tsx`
 
 Replace `LockedField` for token fields with a component like:
 
@@ -336,7 +336,7 @@ After loading Edit Config page:
 
 ### Evidence
 
-`lumi/web/src/hooks/setup/useSetupUrlParams.ts` reads secrets from query string:
+`lamp/web/src/hooks/setup/useSetupUrlParams.ts` reads secrets from query string:
 
 ```ts
 teleToken: searchParams.get("tele_token") ?? "",
@@ -412,7 +412,7 @@ If query params must be supported temporarily:
 3. Immediately scrub URL using `history.replaceState`.
 4. Do not preserve query params during redirects.
 
-File: `lumi/web/src/hooks/setup/useSetupUrlParams.ts` or `Setup.tsx`:
+File: `lamp/web/src/hooks/setup/useSetupUrlParams.ts` or `Setup.tsx`:
 
 ```ts
 useEffect(() => {
@@ -479,7 +479,7 @@ Expected after load:
 
 ### Evidence
 
-`lumi/web/src/pages/monitor/index.tsx`:
+`lamp/web/src/pages/monitor/index.tsx`:
 
 ```ts
 fetch("/api/openclaw/config-json")
@@ -496,7 +496,7 @@ Then constructs gateway link:
 const gwHref = `/gw/chat?session=agent:main:main${gwToken ? `#token=${gwToken}` : ""}`;
 ```
 
-`lumi/web/src/pages/GwConfig.tsx` fetches the same raw config and renders it:
+`lamp/web/src/pages/GwConfig.tsx` fetches the same raw config and renders it:
 
 ```ts
 fetch(`${API}/openclaw/config-json`)
@@ -506,7 +506,7 @@ setRaw(JSON.stringify(res.data, null, 2));
 <pre>{raw}</pre>
 ```
 
-`lumi/web/src/pages/monitor/ChatSection.tsx` also fetches `config-json`.
+`lamp/web/src/pages/monitor/ChatSection.tsx` also fetches `config-json`.
 
 ### Why it is risky
 
@@ -541,16 +541,16 @@ Options:
 
 #### Frontend changes
 
-- `lumi/web/src/pages/monitor/index.tsx`: remove fetch of `/api/openclaw/config-json` and do not build `#token=` with raw token.
-- `lumi/web/src/pages/GwConfig.tsx`: call `config-summary` or delete page from production.
-- `lumi/web/src/pages/monitor/ChatSection.tsx`: stop fetching raw config; use sanitized status/model endpoint.
+- `lamp/web/src/pages/monitor/index.tsx`: remove fetch of `/api/openclaw/config-json` and do not build `#token=` with raw token.
+- `lamp/web/src/pages/GwConfig.tsx`: call `config-summary` or delete page from production.
+- `lamp/web/src/pages/monitor/ChatSection.tsx`: stop fetching raw config; use sanitized status/model endpoint.
 
 ### Acceptance checks
 
 Search built assets/source:
 
 ```sh
-grep -R "config-json\|#token=" lumi/web/src
+grep -R "config-json\|#token=" lamp/web/src
 ```
 
 Expected after fix:
@@ -570,7 +570,7 @@ Expected after fix:
 
 Many files call `/hw/*` directly:
 
-- `lumi/web/src/pages/monitor/OverviewSection.tsx`
+- `lamp/web/src/pages/monitor/OverviewSection.tsx`
   - `/hw/audio/volume`
   - `/hw/voice/mute` / `/hw/voice/unmute`
   - `/hw/speaker/mute` / `/hw/speaker/unmute`
@@ -578,28 +578,28 @@ Many files call `/hw/*` directly:
   - `/hw/servo/play`
   - `/hw/servo/release`
 
-- `lumi/web/src/pages/monitor/CameraSection.tsx`
+- `lamp/web/src/pages/monitor/CameraSection.tsx`
   - `/hw/camera/*`
   - `/hw/servo/track*`
 
-- `lumi/web/src/pages/monitor/ServoSection.tsx`
+- `lamp/web/src/pages/monitor/ServoSection.tsx`
   - `/hw/servo/*`
 
-- `lumi/web/src/pages/monitor/BluetoothSection.tsx`
+- `lamp/web/src/pages/monitor/BluetoothSection.tsx`
   - `/hw/bluetooth/*`
 
-- `lumi/web/src/pages/monitor/FaceOwnersSection.tsx`
+- `lamp/web/src/pages/monitor/FaceOwnersSection.tsx`
   - `/hw/face/*`
   - `/hw/voice/strangers/*`
 
-- `lumi/web/src/components/edit/FaceSection.tsx`
+- `lamp/web/src/components/edit/FaceSection.tsx`
   - `/hw/face/*`
 
-- `lumi/web/src/components/edit/VoiceSection.tsx`
+- `lamp/web/src/components/edit/VoiceSection.tsx`
   - `/hw/speaker/*`
   - `/hw/face/file/*`
 
-- `lumi/web/src/lib/api.ts`
+- `lamp/web/src/lib/api.ts`
   - `/hw/voice/speak`
 
 - Monitor embeds:
@@ -643,7 +643,7 @@ Example replacements:
 Create a hardware API wrapper:
 
 ```ts
-// lumi/web/src/lib/hardwareApi.ts
+// lamp/web/src/lib/hardwareApi.ts
 import { apiRequest } from "./api";
 
 export function getHardwareHealth() {
@@ -666,7 +666,7 @@ Then replace all direct `/hw/*` fetches.
 After refactor:
 
 ```sh
-grep -R "fetch(.*\/hw\|src=\"/hw\|href=\"/hw" lumi/web/src
+grep -R "fetch(.*\/hw\|src=\"/hw\|href=\"/hw" lamp/web/src
 ```
 
 Expected:
@@ -684,7 +684,7 @@ Expected:
 
 ### Evidence
 
-`lumi/web/src/pages/monitor/CliSection.tsx` opens a WebSocket:
+`lamp/web/src/pages/monitor/CliSection.tsx` opens a WebSocket:
 
 ```ts
 const proto = location.protocol === "https:" ? "wss:" : "ws:";
@@ -715,7 +715,7 @@ Even with auth, exposing shell in the web UI increases accidental misuse risk.
 
 Remove CLI from production UI by default.
 
-#### File: `lumi/web/src/pages/monitor/index.tsx`
+#### File: `lamp/web/src/pages/monitor/index.tsx`
 
 Gate CLI nav and render by build flag:
 
@@ -731,7 +731,7 @@ Only include CLI when enabled:
 
 Also remove/hide CLI nav item where `NAV` is defined.
 
-#### File: `lumi/web/src/pages/monitor/CliSection.tsx`
+#### File: `lamp/web/src/pages/monitor/CliSection.tsx`
 
 If retained:
 
@@ -745,7 +745,7 @@ If retained:
 Production build:
 
 ```sh
-grep -R "api/system/shell\|CliSection" lumi/web/dist
+grep -R "api/system/shell\|CliSection" lamp/web/dist
 ```
 
 Expected:
@@ -762,7 +762,7 @@ Expected:
 
 ### Evidence
 
-`lumi/web/src/pages/monitor/ChatSection.tsx` stores conversation data:
+`lamp/web/src/pages/monitor/ChatSection.tsx` stores conversation data:
 
 ```ts
 const raw = localStorage.getItem(CONVOS_KEY);
@@ -792,7 +792,7 @@ Current code strips large image data URLs, which is good, but text content still
 4. If persistence is needed, use IndexedDB/sessionStorage with TTL and clear-on-logout.
 5. Never store API keys/tokens in localStorage.
 
-#### File: `lumi/web/src/pages/monitor/ChatSection.tsx`
+#### File: `lamp/web/src/pages/monitor/ChatSection.tsx`
 
 Add TTL wrapper:
 
@@ -878,13 +878,13 @@ const url = `/hw/face/photo/${encodeURIComponent(p.label)}/${encodeURIComponent(
 ### Acceptance checks
 
 ```sh
-grep -R "target=\"_blank\"" lumi/web/src
+grep -R "target=\"_blank\"" lamp/web/src
 ```
 
 Every result should include `rel="noopener noreferrer"` or equivalent.
 
 ```sh
-grep -R "window.open" lumi/web/src
+grep -R "window.open" lamp/web/src
 ```
 
 Every result should use `noopener,noreferrer` and encoded path segments.
@@ -925,7 +925,7 @@ Notes:
 
 - `style-src 'unsafe-inline'` may be needed because the React app uses inline styles. Avoid `script-src 'unsafe-inline'`.
 - If charts/assets require blob/data, keep the minimal needed directives.
-- If `/gw-config` iframe remains same-origin, `frame-src 'self'` allows it. `frame-ancestors 'none'` prevents external sites from framing Lumi.
+- If `/gw-config` iframe remains same-origin, `frame-src 'self'` allows it. `frame-ancestors 'none'` prevents external sites from framing Lamp.
 
 Mirror in `imager/build.sh`.
 
@@ -973,7 +973,7 @@ Centralize browser API access.
 Create:
 
 ```ts
-// lumi/web/src/lib/http.ts
+// lamp/web/src/lib/http.ts
 export async function apiFetch(input: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers);
   headers.set("Accept", "application/json");
@@ -1000,7 +1000,7 @@ For WebSocket:
 ### Acceptance checks
 
 ```sh
-grep -R "fetch(" lumi/web/src
+grep -R "fetch(" lamp/web/src
 ```
 
 Expected after refactor:
@@ -1018,13 +1018,13 @@ Expected after refactor:
 
 ### Evidence
 
-`lumi/web/src/App.tsx`:
+`lamp/web/src/App.tsx`:
 
 ```ts
 window.location.replace(`http://${s.lan_ip}${window.location.pathname}${window.location.search}`);
 ```
 
-`lumi/web/src/hooks/setup/useSetupStatusPolling.ts` has similar redirect construction preserving `window.location.search`.
+`lamp/web/src/hooks/setup/useSetupStatusPolling.ts` has similar redirect construction preserving `window.location.search`.
 
 `Setup.tsx` mDNS link also preserves query params:
 
@@ -1068,9 +1068,9 @@ export function safeSearch(search: string): string {
 
 Use it in:
 
-- `lumi/web/src/App.tsx`
-- `lumi/web/src/hooks/setup/useSetupStatusPolling.ts`
-- `lumi/web/src/pages/Setup.tsx`
+- `lamp/web/src/App.tsx`
+- `lamp/web/src/hooks/setup/useSetupStatusPolling.ts`
+- `lamp/web/src/pages/Setup.tsx`
 
 Replace every redirect/link preserving `window.location.search` with sanitized search.
 
@@ -1094,7 +1094,7 @@ After redirect, URL must not contain `llm_api_key`.
 
 ### Evidence
 
-`lumi/web/src/pages/monitor/index.tsx`:
+`lamp/web/src/pages/monitor/index.tsx`:
 
 ```tsx
 {section === "api-docs" && (
@@ -1137,7 +1137,7 @@ Hardware API docs are local-only. SSH to device and open http://127.0.0.1:5001/d
 Production build should not contain `/hw/docs` iframe:
 
 ```sh
-grep -R 'src="/hw/docs"\|/hw/docs' lumi/web/dist
+grep -R 'src="/hw/docs"\|/hw/docs' lamp/web/dist
 ```
 
 Expected: no production references.
@@ -1152,7 +1152,7 @@ Expected: no production references.
 
 ### Evidence
 
-`lumi/web/src/lib/api.ts`:
+`lamp/web/src/lib/api.ts`:
 
 ```ts
 export async function testTTSVoice(voice: string, opts: TestTTSOptions = {}): Promise<void> {
@@ -1196,7 +1196,7 @@ Frontend should not call `/hw/voice/speak` directly.
 ### Acceptance checks
 
 ```sh
-grep -R "tts_api_key\|/hw/voice/speak" lumi/web/src
+grep -R "tts_api_key\|/hw/voice/speak" lamp/web/src
 ```
 
 Expected:
@@ -1246,7 +1246,7 @@ const url = `/api/media/face-photo/${encodeURIComponent(ownerId)}/${encodeURICom
 ### Acceptance checks
 
 ```sh
-grep -R "/hw/face/photo\|/hw/face/file" lumi/web/src
+grep -R "/hw/face/photo\|/hw/face/file" lamp/web/src
 ```
 
 Expected: no production raw `/hw` media URLs.
@@ -1259,14 +1259,14 @@ Expected: no production raw `/hw` media URLs.
 
 Files:
 
-- `lumi/web/src/lib/api.ts`
-- `lumi/web/src/pages/EditConfig.tsx`
-- `lumi/web/src/hooks/setup/useConfigPrefill.ts`
-- `lumi/web/src/components/edit/ChannelSection.tsx`
-- `lumi/web/src/components/edit/STTSection.tsx`
-- `lumi/web/src/components/edit/TTSSection.tsx`
-- `lumi/web/src/components/edit/WifiSection.tsx`
-- `lumi/web/src/components/edit/MqttSection.tsx`
+- `lamp/web/src/lib/api.ts`
+- `lamp/web/src/pages/EditConfig.tsx`
+- `lamp/web/src/hooks/setup/useConfigPrefill.ts`
+- `lamp/web/src/components/edit/ChannelSection.tsx`
+- `lamp/web/src/components/edit/STTSection.tsx`
+- `lamp/web/src/components/edit/TTSSection.tsx`
+- `lamp/web/src/components/edit/WifiSection.tsx`
+- `lamp/web/src/components/edit/MqttSection.tsx`
 
 Actions:
 
@@ -1280,9 +1280,9 @@ Actions:
 
 Files:
 
-- `lumi/web/src/pages/monitor/index.tsx`
-- `lumi/web/src/pages/GwConfig.tsx`
-- `lumi/web/src/pages/monitor/ChatSection.tsx`
+- `lamp/web/src/pages/monitor/index.tsx`
+- `lamp/web/src/pages/GwConfig.tsx`
+- `lamp/web/src/pages/monitor/ChatSection.tsx`
 
 Actions:
 
@@ -1294,10 +1294,10 @@ Actions:
 
 Files:
 
-- `lumi/web/src/lib/api.ts`
-- `lumi/web/src/pages/monitor/*`
-- `lumi/web/src/components/edit/*`
-- `lumi/web/src/components/setup/*`
+- `lamp/web/src/lib/api.ts`
+- `lamp/web/src/pages/monitor/*`
+- `lamp/web/src/components/edit/*`
+- `lamp/web/src/components/setup/*`
 
 Actions:
 
@@ -1310,10 +1310,10 @@ Actions:
 
 Files:
 
-- `lumi/web/src/lib/api.ts`
-- new `lumi/web/src/lib/http.ts`
-- `lumi/web/src/hooks/useEventSource.ts`
-- `lumi/web/src/pages/monitor/CliSection.tsx`
+- `lamp/web/src/lib/api.ts`
+- new `lamp/web/src/lib/http.ts`
+- `lamp/web/src/hooks/useEventSource.ts`
+- `lamp/web/src/pages/monitor/CliSection.tsx`
 
 Actions:
 
@@ -1330,7 +1330,7 @@ Files:
 
 - `scripts/setup.sh`
 - `imager/build.sh`
-- possibly `lumi/web/index.html`
+- possibly `lamp/web/index.html`
 
 Actions:
 
@@ -1371,7 +1371,7 @@ Expected: no raw secrets.
 ### 2. No production frontend references to raw hardware API
 
 ```sh
-grep -R '"/hw/\|`/hw/\|/hw/docs' lumi/web/src
+grep -R '"/hw/\|`/hw/\|/hw/docs' lamp/web/src
 ```
 
 Expected: no production direct calls, except documented dev-only gates.
@@ -1379,7 +1379,7 @@ Expected: no production direct calls, except documented dev-only gates.
 ### 3. No raw OpenClaw config/token path
 
 ```sh
-grep -R 'config-json\|#token=' lumi/web/src
+grep -R 'config-json\|#token=' lamp/web/src
 ```
 
 Expected: no production usage.
@@ -1387,7 +1387,7 @@ Expected: no production usage.
 ### 4. No shell in production build
 
 ```sh
-cd lumi/web
+cd lamp/web
 npm run build
 grep -R 'api/system/shell\|CliSection' dist || true
 ```
@@ -1426,78 +1426,78 @@ Expected:
 
 ### API contracts and fetch layer
 
-- `lumi/web/src/lib/api.ts`
+- `lamp/web/src/lib/api.ts`
   - Split public config GET type from update/write type.
   - Export central `apiRequest` or move to `http.ts`.
   - Stop direct `/hw/voice/speak` TTS preview.
 
-- New file: `lumi/web/src/lib/http.ts`
+- New file: `lamp/web/src/lib/http.ts`
   - Central authenticated fetch wrapper.
   - Shared error/401 handling.
 
-- New file: `lumi/web/src/lib/safeSearch.ts`
+- New file: `lamp/web/src/lib/safeSearch.ts`
   - Strip secret query params before redirects/links.
 
 ### Config UI
 
-- `lumi/web/src/pages/EditConfig.tsx`
+- `lamp/web/src/pages/EditConfig.tsx`
   - Do not prefill raw secrets.
   - Use configured booleans and write-only fields.
 
-- `lumi/web/src/hooks/setup/useConfigPrefill.ts`
+- `lamp/web/src/hooks/setup/useConfigPrefill.ts`
   - Stop pre-filling secrets from server config.
 
-- `lumi/web/src/components/edit/ChannelSection.tsx`
+- `lamp/web/src/components/edit/ChannelSection.tsx`
   - Replace visible token fields with write-only secret update UX.
 
-- `lumi/web/src/components/edit/STTSection.tsx`
+- `lamp/web/src/components/edit/STTSection.tsx`
   - Write-only API key fields.
 
-- `lumi/web/src/components/edit/TTSSection.tsx`
+- `lamp/web/src/components/edit/TTSSection.tsx`
   - Write-only API key fields.
 
-- `lumi/web/src/components/edit/WifiSection.tsx`
+- `lamp/web/src/components/edit/WifiSection.tsx`
   - Do not display saved WiFi password.
 
-- `lumi/web/src/components/edit/MqttSection.tsx`
+- `lamp/web/src/components/edit/MqttSection.tsx`
   - Do not display saved MQTT password.
 
 ### Setup flow
 
-- `lumi/web/src/hooks/setup/useSetupUrlParams.ts`
+- `lamp/web/src/hooks/setup/useSetupUrlParams.ts`
   - Remove support for secret query params or scrub immediately.
 
-- `lumi/web/src/hooks/setup/useSetupStatusPolling.ts`
+- `lamp/web/src/hooks/setup/useSetupStatusPolling.ts`
   - Do not preserve secret query params during redirects.
 
-- `lumi/web/src/App.tsx`
+- `lamp/web/src/App.tsx`
   - Do not preserve secret query params during LAN-IP redirect.
 
-- `lumi/web/src/pages/Setup.tsx`
+- `lamp/web/src/pages/Setup.tsx`
   - Do not build mDNS links with raw `window.location.search`.
 
 ### Gateway/OpenClaw
 
-- `lumi/web/src/pages/monitor/index.tsx`
+- `lamp/web/src/pages/monitor/index.tsx`
   - Remove raw config fetch and `#token=` URL construction.
   - Remove/dev-gate `/hw/docs` iframe.
 
-- `lumi/web/src/pages/GwConfig.tsx`
+- `lamp/web/src/pages/GwConfig.tsx`
   - Use redacted config summary or remove from production.
 
-- `lumi/web/src/pages/monitor/ChatSection.tsx`
+- `lamp/web/src/pages/monitor/ChatSection.tsx`
   - Remove raw config-json usage.
 
 ### Hardware UI
 
-- `lumi/web/src/pages/monitor/OverviewSection.tsx`
-- `lumi/web/src/pages/monitor/CameraSection.tsx`
-- `lumi/web/src/pages/monitor/ServoSection.tsx`
-- `lumi/web/src/pages/monitor/BluetoothSection.tsx`
-- `lumi/web/src/pages/monitor/FaceOwnersSection.tsx`
-- `lumi/web/src/components/edit/FaceSection.tsx`
-- `lumi/web/src/components/edit/VoiceSection.tsx`
-- `lumi/web/src/components/setup/VoiceSection.tsx`
+- `lamp/web/src/pages/monitor/OverviewSection.tsx`
+- `lamp/web/src/pages/monitor/CameraSection.tsx`
+- `lamp/web/src/pages/monitor/ServoSection.tsx`
+- `lamp/web/src/pages/monitor/BluetoothSection.tsx`
+- `lamp/web/src/pages/monitor/FaceOwnersSection.tsx`
+- `lamp/web/src/components/edit/FaceSection.tsx`
+- `lamp/web/src/components/edit/VoiceSection.tsx`
+- `lamp/web/src/components/setup/VoiceSection.tsx`
 
 Actions:
 
@@ -1507,14 +1507,14 @@ Actions:
 
 ### CLI/logs/local storage
 
-- `lumi/web/src/pages/monitor/CliSection.tsx`
+- `lamp/web/src/pages/monitor/CliSection.tsx`
   - Remove from production or gate behind explicit dev flag.
 
-- `lumi/web/src/pages/monitor/LogsSection.tsx`
+- `lamp/web/src/pages/monitor/LogsSection.tsx`
   - Use authenticated fetch/SSE.
   - Expect redacted logs.
 
-- `lumi/web/src/pages/monitor/ChatSection.tsx`
+- `lamp/web/src/pages/monitor/ChatSection.tsx`
   - Add TTL/clear local history.
 
 ### Deployment headers

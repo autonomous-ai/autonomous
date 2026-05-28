@@ -1,13 +1,13 @@
-# Security Audit: Lumi Go Server
+# Security Audit: Lamp Go Server
 
 Date: 2026-05-16  
 Repo: `ai-lamp-lumi`  
-Scope: Lumi Go server only (`lumi/server`, `lumi/internal`, `lumi/domain`, nginx `/api/` wiring).  
+Scope: Lamp Go server only (`lamp/server`, `lamp/internal`, `lamp/domain`, nginx `/api/` wiring).  
 Instruction: report issues and exact remediation guidance only; do **not** patch runtime code in this document.
 
 ## Executive summary
 
-The Lumi Go server is currently acting as both:
+The Lamp Go server is currently acting as both:
 
 1. A product/setup API exposed through nginx `/api/`.
 2. A privileged local admin/control plane that can run shell commands, update config, read logs, expose OpenClaw config, trigger OTA, reconnect WiFi, restart services, and proxy agent state.
@@ -40,9 +40,9 @@ Recommended direction:
 
 ## Current exposed routing model
 
-### Nginx exposes Lumi Go server under `/api/`
+### Nginx exposes Lamp Go server under `/api/`
 
-In `scripts/setup.sh`, nginx forwards external `/api/` to Lumi Go server:
+In `scripts/setup.sh`, nginx forwards external `/api/` to Lamp Go server:
 
 ```nginx
 location /api/ {
@@ -61,9 +61,9 @@ upstream backend { server 127.0.0.1:5000; }
 
 Equivalent config exists in `imager/build.sh`.
 
-### Lumi Go server listens on all interfaces
+### Lamp Go server listens on all interfaces
 
-In `lumi/server/server.go`:
+In `lamp/server/server.go`:
 
 ```go
 srv := &http.Server{
@@ -76,7 +76,7 @@ This binds to all interfaces. If port `5000` is reachable directly, nginx is not
 
 ### Routes are registered without auth middleware
 
-In `lumi/server/server.go`, the router uses:
+In `lamp/server/server.go`, the router uses:
 
 ```go
 r := gin.Default()
@@ -99,7 +99,7 @@ No authentication middleware is applied to `api` or sensitive subgroups.
 
 ### Evidence
 
-`lumi/server/server.go` creates `api := r.Group("api")` and then registers sensitive routes directly. Examples:
+`lamp/server/server.go` creates `api := r.Group("api")` and then registers sensitive routes directly. Examples:
 
 ```go
 system.POST("software-update/:target", s.softwareUpdate)
@@ -125,7 +125,7 @@ Any LAN/AP client that can reach the device can call these endpoints unless anot
 
 Possible impacts:
 
-- Run arbitrary commands as the Lumi service user/root, depending on service config.
+- Run arbitrary commands as the Lamp service user/root, depending on service config.
 - Read or modify device config and secrets.
 - Hijack Telegram/Slack/Discord bot tokens/user IDs.
 - Change LLM/STT/TTS API keys/base URLs to attacker-controlled endpoints.
@@ -145,7 +145,7 @@ Introduce explicit API zones:
 
 ### Suggested implementation pattern
 
-#### File: `lumi/server/server.go`
+#### File: `lamp/server/server.go`
 
 Create middleware helpers:
 
@@ -206,7 +206,7 @@ Expected after fix:
 
 ### Evidence
 
-`lumi/server/server.go`:
+`lamp/server/server.go`:
 
 ```go
 func corsMiddleware() gin.HandlerFunc {
@@ -242,7 +242,7 @@ Best option: **remove CORS entirely** if web UI and `/api/` are same-origin thro
 
 If CORS is needed for dev, make it opt-in and restricted.
 
-#### File: `lumi/server/server.go`
+#### File: `lamp/server/server.go`
 
 Replace wildcard CORS with same-origin/explicit allowlist:
 
@@ -310,7 +310,7 @@ Expected: `403 Forbidden`.
 
 ### Evidence
 
-Route registration in `lumi/server/server.go`:
+Route registration in `lamp/server/server.go`:
 
 ```go
 system.POST("exec", s.execCommand)
@@ -340,7 +340,7 @@ curl -X POST http://<device-ip>/api/system/exec \
   -d '{"cmd":"id; uname -a; cat config/config.json"}'
 ```
 
-If the Lumi service runs as root, this is full root RCE. Even if non-root, it can read local secrets, call local privileged services, or trigger destructive behavior.
+If the Lamp service runs as root, this is full root RCE. Even if non-root, it can read local secrets, call local privileged services, or trigger destructive behavior.
 
 ### Required remediation
 
@@ -350,7 +350,7 @@ Options:
 
 #### Option A — Delete route from production
 
-In `lumi/server/server.go`, remove:
+In `lamp/server/server.go`, remove:
 
 ```go
 system.POST("exec", s.execCommand)
@@ -380,7 +380,7 @@ Do not use `sh -c`. Expose specific operations with fixed command/args only:
 
 ```go
 allowed := map[string][]string{
-    "status": {"systemctl", "status", "lumi", "--no-pager"},
+    "status": {"systemctl", "status", "lamp", "--no-pager"},
 }
 ```
 
@@ -573,9 +573,9 @@ func redactJSON(v any) any {
 
 Files currently fetching config-json:
 
-- `lumi/web/src/pages/GwConfig.tsx`
-- `lumi/web/src/pages/monitor/index.tsx`
-- `lumi/web/src/pages/monitor/ChatSection.tsx`
+- `lamp/web/src/pages/GwConfig.tsx`
+- `lamp/web/src/pages/monitor/index.tsx`
+- `lamp/web/src/pages/monitor/ChatSection.tsx`
 
 Change them to call sanitized endpoint or require local-only dev mode.
 
@@ -617,7 +617,7 @@ func (h *DeviceHandler) GetConfig(c *gin.Context) {
 }
 ```
 
-Response struct includes secrets in `lumi/domain/device.go`:
+Response struct includes secrets in `lamp/domain/device.go`:
 
 ```go
 type ConfigResponse struct {
@@ -653,7 +653,7 @@ Split config into two APIs:
 1. **Public/sanitized config view**: no secrets, only booleans or masked values.
 2. **Secret update endpoint**: write-only; never returns stored secret values.
 
-#### File: `lumi/domain/device.go`
+#### File: `lamp/domain/device.go`
 
 Create sanitized response:
 
@@ -688,11 +688,11 @@ func maskSecret(v string) string {
 }
 ```
 
-#### File: `lumi/internal/device/service.go`
+#### File: `lamp/internal/device/service.go`
 
 Change `GetConfig()` to return sanitized response for remote UI. If a full config is needed internally, expose a separate internal method not bound to HTTP.
 
-#### File: `lumi/server/device/delivery/http/handler.go`
+#### File: `lamp/server/device/delivery/http/handler.go`
 
 Protect config endpoint:
 
@@ -1028,7 +1028,7 @@ http.DefaultClient.Do(req)
 
 Frontend exposes buttons:
 
-- `lumi/web/src/pages/monitor/components.tsx`
+- `lamp/web/src/pages/monitor/components.tsx`
 
 ### Why it is risky
 
@@ -1069,7 +1069,7 @@ Expected: `401`/`403`.
 
 ### Evidence
 
-Routes in `lumi/server/server.go`:
+Routes in `lamp/server/server.go`:
 
 ```go
 sensing.POST("event", s.sensingHandler.PostEvent)
@@ -1144,13 +1144,13 @@ Expected: `401`/`403`.
 
 ### Evidence
 
-`lumi/server/server.go`:
+`lamp/server/server.go`:
 
 ```go
 Addr: fmt.Sprintf(":%d", s.config.HttpPort)
 ```
 
-`lumi/server/config/config.go` has only:
+`lamp/server/config/config.go` has only:
 
 ```go
 HttpPort int `json:"httpPort" yaml:"httpPort" validate:"required"`
@@ -1199,7 +1199,7 @@ If the product requires direct LAN access to Go server, set `HttpHost: "0.0.0.0"
 
 ### Important compatibility note
 
-Current nginx points to `127.0.0.1:5000`, so setting Lumi Go to `127.0.0.1` should not break nginx-based UI access.
+Current nginx points to `127.0.0.1:5000`, so setting Lamp Go to `127.0.0.1` should not break nginx-based UI access.
 
 ### Acceptance checks
 
@@ -1239,7 +1239,7 @@ Expected: still works.
 
 ### Evidence
 
-`lumi/bootstrap/bootstrap.go`:
+`lamp/bootstrap/bootstrap.go`:
 
 ```go
 srv := &http.Server{Addr: fmt.Sprintf(":%d", port), Handler: r}
@@ -1252,7 +1252,7 @@ r.POST("/force-check", ...)
 r.POST("/force-check/:target", ...)
 ```
 
-Lumi Go calls it via:
+Lamp Go calls it via:
 
 ```go
 http://127.0.0.1:8080/force-check/<target>
@@ -1260,7 +1260,7 @@ http://127.0.0.1:8080/force-check/<target>
 
 ### Why it is risky
 
-If bootstrap port is reachable from LAN, external clients can trigger update checks directly, bypassing Lumi Go protections.
+If bootstrap port is reachable from LAN, external clients can trigger update checks directly, bypassing Lamp Go protections.
 
 ### Required remediation
 
@@ -1298,7 +1298,7 @@ Expected: works.
 
 ### Local-only middleware
 
-File: `lumi/server/server.go` or new file `lumi/server/security.go`.
+File: `lamp/server/server.go` or new file `lamp/server/security.go`.
 
 ```go
 func isLoopbackHost(host string) bool {
@@ -1538,7 +1538,7 @@ Expected: `401`/`403` without auth; redacted with auth.
 
 ### Core server security
 
-- `lumi/server/server.go`
+- `lamp/server/server.go`
   - Replace wildcard CORS.
   - Add `localOnlyMiddleware`.
   - Add/admin wire auth middleware.
@@ -1546,49 +1546,49 @@ Expected: `401`/`403` without auth; redacted with auth.
   - Protect logs and OTA routes.
   - Optionally bind `Addr` using explicit `HttpHost`.
 
-- `lumi/server/config/config.go`
+- `lamp/server/config/config.go`
   - Add `HttpHost` if direct bind control is desired.
   - Add admin token path/config if implementing token auth.
   - Avoid exposing admin token via `ConfigResponse`.
 
 ### Device config/secret handling
 
-- `lumi/domain/device.go`
+- `lamp/domain/device.go`
   - Replace `ConfigResponse` for HTTP with redacted/sanitized response.
   - Keep internal config struct separate from API response.
 
-- `lumi/internal/device/service.go`
+- `lamp/internal/device/service.go`
   - Update `GetConfig()` to return sanitized data for HTTP.
   - Add validation to `UpdateConfig()` for base URLs and high-risk fields.
   - Debounce/rate-limit service restarts triggered by config updates.
 
-- `lumi/server/device/delivery/http/handler.go`
+- `lamp/server/device/delivery/http/handler.go`
   - Require auth for `GetConfig`, `UpdateConfig`, `ChangeChannel`.
   - Restrict `Setup` to setup mode only.
 
 ### OpenClaw config exposure
 
-- `lumi/internal/openclaw/service_chat.go`
+- `lamp/internal/openclaw/service_chat.go`
   - Avoid returning raw `openclaw.json` to remote handlers.
   - Add redacted config summary method.
 
-- `lumi/server/openclaw/delivery/sse/handler_api_monitor.go`
+- `lamp/server/openclaw/delivery/sse/handler_api_monitor.go`
   - Replace raw `ConfigJSON` response or local-only guard it.
 
 - Frontend callers to update if endpoint changes:
-  - `lumi/web/src/pages/GwConfig.tsx`
-  - `lumi/web/src/pages/monitor/index.tsx`
-  - `lumi/web/src/pages/monitor/ChatSection.tsx`
+  - `lamp/web/src/pages/GwConfig.tsx`
+  - `lamp/web/src/pages/monitor/index.tsx`
+  - `lamp/web/src/pages/monitor/ChatSection.tsx`
 
 ### Logs
 
-- `lumi/server/server.go`
+- `lamp/server/server.go`
   - Protect `logs.GET("tail")` and `logs.GET("stream")`.
   - Redact secret-like patterns in log output.
 
 ### Bootstrap
 
-- `lumi/bootstrap/bootstrap.go`
+- `lamp/bootstrap/bootstrap.go`
   - Bind health/update server to `127.0.0.1` or protect `/force-check`.
 
 ### Nginx integration
@@ -1604,7 +1604,7 @@ Expected: `401`/`403` without auth; redacted with auth.
 
 ## Open decisions
 
-1. Should the Lumi web UI be remotely accessible on LAN after setup, or only during setup/AP mode?
+1. Should the Lamp web UI be remotely accessible on LAN after setup, or only during setup/AP mode?
 2. If remotely accessible, what admin authentication model should be used?
    - Static bearer token?
    - Pairing code shown physically/on display?
@@ -1622,7 +1622,7 @@ Expected: `401`/`403` without auth; redacted with auth.
 
 ## Bottom line
 
-The Lumi Go server should not treat LAN as trusted. Today it exposes privileged control-plane routes under the same `/api/` surface as normal UI/setup routes. The highest-priority fixes are:
+The Lamp Go server should not treat LAN as trusted. Today it exposes privileged control-plane routes under the same `/api/` surface as normal UI/setup routes. The highest-priority fixes are:
 
 1. Remove/local-only guard `exec` and `shell`.
 2. Stop exposing raw `device/config` and `openclaw/config-json` secrets.

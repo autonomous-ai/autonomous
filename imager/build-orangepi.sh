@@ -269,20 +269,20 @@ mkdir -p /opt/lelamp
 # ── systemd units ────────────────────────────────────────────────────────────
 echo "[stage] systemd units"
 
-cat > /etc/systemd/system/lumi.service <<'UNIT'
+cat > /etc/systemd/system/lamp.service <<'UNIT'
 [Unit]
-Description=Lumi Backend
+Description=Lamp Backend
 After=network-online.target
 
 [Service]
 User=root
 WorkingDirectory=/root
-ExecStart=/usr/local/bin/lumi-server
+ExecStart=/usr/local/bin/lamp-server
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=lumi
+SyslogIdentifier=lamp
 
 [Install]
 WantedBy=multi-user.target
@@ -601,7 +601,7 @@ URL=\$(jq -r --arg a "\$KEY" '.[\$a].url // empty' "\$META")
 curl -fsSL -o "\$ZIP" "\$URL"
 unzip -o -q "\$ZIP" -d "\$DIR"
 case "\$APP" in
-  lumi)      cp -f "\$(find \$DIR -type f -executable | head -1 || find \$DIR -type f | head -1)" /usr/local/bin/lumi-server      && chmod +x /usr/local/bin/lumi-server      && systemctl restart lumi ;;
+  lumi)      cp -f "\$(find \$DIR -type f -executable | head -1 || find \$DIR -type f | head -1)" /usr/local/bin/lamp-server      && chmod +x /usr/local/bin/lamp-server      && systemctl restart lamp ;;
   bootstrap) cp -f "\$(find \$DIR -type f -executable | head -1 || find \$DIR -type f | head -1)" /usr/local/bin/bootstrap-server && chmod +x /usr/local/bin/bootstrap-server && systemctl restart bootstrap ;;
   web)       rm -rf /usr/share/nginx/html/setup/* && cp -a "\$DIR"/* /usr/share/nginx/html/setup/ ;;
   *)         echo "manual update for \$APP not implemented in this stub" ;;
@@ -823,7 +823,7 @@ systemctl mask orangepi-firstrun-config.service 2>/dev/null || true
 
 # ── enable Lumi services (symlink, since chroot has no running systemd) ──────
 echo "[stage] enable Lumi services"
-for unit in lumi bootstrap lumi-lelamp lumi-wifi-power-save openclaw avahi-daemon bluetooth ssh; do
+for unit in lamp bootstrap lumi-lelamp lumi-wifi-power-save openclaw avahi-daemon bluetooth ssh; do
   systemctl enable "\$unit" 2>/dev/null || true
 done
 
@@ -886,7 +886,7 @@ echo "[overlay] web=\$WEB_VER lumi=\$LUMI_VER bootstrap=\$BOOTSTRAP_VER lelamp=\
 
 echo "[overlay] backend binaries"
 install_binary_from_zip "\$BOOTSTRAP_URL" /usr/local/bin/bootstrap-server "bootstrap"
-install_binary_from_zip "\$LUMI_URL"      /usr/local/bin/lumi-server      "lumi"
+install_binary_from_zip "\$LUMI_URL"      /usr/local/bin/lamp-server      "lumi"
 
 echo "[overlay] LeLamp"
 LELAMP_DIR="/opt/lelamp"
@@ -963,7 +963,7 @@ if [ -n "\$BUDDY_URL" ]; then
   cat > /etc/systemd/system/lumi-buddy.service <<'UNIT'
 [Unit]
 Description=Lumi Claude Desktop Buddy (BLE)
-After=bluetooth.target lumi.service
+After=bluetooth.target lamp.service
 Wants=bluetooth.target
 
 [Service]
