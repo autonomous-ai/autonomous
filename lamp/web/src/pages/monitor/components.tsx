@@ -18,7 +18,7 @@ export function StatusDot({ ok }: { ok: boolean }) {
   );
 }
 
-export function SoftwareUpdateButton({ target, label }: { target: "lumi" | "web" | "lelamp"; label: string }) {
+export function SoftwareUpdateButton({ target, label }: { target: "lamp" | "web" | "lelamp"; label: string }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const trigger = async () => {
@@ -63,7 +63,7 @@ export function SoftwareUpdateButtons() {
   return (
     <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
       <SoftwareUpdateButton target="web" label="software-update web" />
-      <SoftwareUpdateButton target="lumi" label="software-update lumi" />
+      <SoftwareUpdateButton target="lamp" label="software-update lamp" />
       <SoftwareUpdateButton target="lelamp" label="software-update lelamp" />
     </div>
   );
@@ -304,7 +304,7 @@ export function StatPill({ label, value, color, bullet }: {
   value: string | number;
   color?: string;
   // bullet draws a small colored disc before the label so visually-related rows
-  // (e.g. Lumi vs LeLamp uptimes) can be scanned apart at a glance.
+  // (e.g. Lamp vs LeLamp uptimes) can be scanned apart at a glance.
   bullet?: string;
 }) {
   return (

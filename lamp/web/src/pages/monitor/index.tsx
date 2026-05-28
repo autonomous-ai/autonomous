@@ -220,7 +220,7 @@ export default function Monitor() {
   }, []);
 
   // LeLamp version comes from /api/system/info (sys.lelampVersion), populated
-  // by lumi via a cached loopback call to :5001/version. Avoids a direct
+  // by lamp via a cached loopback call to :5001/version. Avoids a direct
   // browser fetch to /hw/version which nginx gates to loopback only.
 
   // One-shot fetch for system info on mount — populates sidebar version /

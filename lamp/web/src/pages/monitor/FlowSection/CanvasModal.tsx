@@ -31,7 +31,7 @@ export function CanvasModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--lm-text)" }}>Lumi Turn Workflow</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "var(--lm-text)" }}>Lamp Turn Workflow</span>
           <button onClick={onClose} style={{
             background: "none", border: "none", color: "var(--lm-text-muted)",
             cursor: "pointer", fontSize: 16, lineHeight: 1,

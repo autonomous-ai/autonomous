@@ -133,7 +133,7 @@ export function FlowSection({
     const turnsSnapshot = groupIntoTurns(events);
     const payload = {
       exportedAt: new Date().toISOString(),
-      format: "lumi-monitor-ui-snapshot-v1",
+      format: "lamp-monitor-ui-snapshot-v1",
       flowEventsWindow: FLOW_EVENTS_MAX,
       eventCount: events.length,
       turnCount: turnsSnapshot.length,
@@ -154,7 +154,7 @@ export function FlowSection({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `lumi_flow_ui_snapshot_${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    a.download = `lamp_flow_ui_snapshot_${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
     a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
@@ -171,7 +171,7 @@ export function FlowSection({
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `lumi_flow_${day}_last${FLOW_EVENTS_MAX}.jsonl`;
+      a.download = `lamp_flow_${day}_last${FLOW_EVENTS_MAX}.jsonl`;
       a.rel = "noopener";
       document.body.appendChild(a);
       a.click();
@@ -269,7 +269,7 @@ export function FlowSection({
     // "newest" = default order from groupIntoTurns (newest first)
     return filtered;
   }, [turns, excludedTypes, fromTime, toTime, searchText, sortBy]);
-  // Detect adjacent turn pairs where one is a Lumi-id turn that closed with
+  // Detect adjacent turn pairs where one is a Lamp-id turn that closed with
   // chat_final_empty (OpenClaw closed stream · no message · no lifecycle) and
   // the adjacent turn is an OpenClaw-assigned UUID with matching input text.
   // Each pair gets a stable color (hashed from the lumi runId) so distinct
@@ -292,23 +292,23 @@ export function FlowSection({
       for (let i = 0; i < key.length; i++) h = ((h << 5) - h + key.charCodeAt(i)) | 0;
       return PAIR_BGS[Math.abs(h) % PAIR_BGS.length];
     };
-    // Inputs of the same logical message may differ between Lumi-side and
+    // Inputs of the same logical message may differ between Lamp-side and
     // OpenClaw-side because:
-    //   • Lumi log truncates chat_input message at 500 chars + "…" (see
+    //   • Lamp log truncates chat_input message at 500 chars + "…" (see
     //     service_chat.go:147) — UUID-side carries the full text.
-    //   • Lumi log keeps `[snapshot: /var/...]` paths in presence events
+    //   • Lamp log keeps `[snapshot: /var/...]` paths in presence events
     //     while OpenClaw refires with the snapshot stripped.
     // So check substring containment either way (after stripping the
     // sender prefix and trailing "…"). Guard with min length ≥32 to
     // avoid coincidental short-string matches.
     const normalizeForMatch = (s: string) =>
       s.replace(/^\[[^\]]+\]\s*/, "").replace(/…\s*$/, "").trim();
-    const isLumi = (id: string) => id.startsWith("lumi-");
+    const isLamp = (id: string) => id.startsWith("lumi-");
     for (let i = 0; i < filteredTurns.length - 1; i++) {
       const a = filteredTurns[i];
       const b = filteredTurns[i + 1];
       const tryPair = (lumiTurn: typeof a, uuidTurn: typeof b) => {
-        if (!isLumi(lumiTurn.id) || isLumi(uuidTurn.id)) return false;
+        if (!isLamp(lumiTurn.id) || isLamp(uuidTurn.id)) return false;
         const closedEmpty = lumiTurn.events.some((ev) =>
           ev.type === "flow_event" && (
             (ev.detail as Record<string, any>)?.node === "chat_final_empty" ||
@@ -514,8 +514,8 @@ export function FlowSection({
               title={
                 "Xem 'bộ nhớ tóm tắt' mà OpenClaw tự sinh và chèn vào đầu prompt của MỖI turn agent.\n\n" +
                 "• Vì sao cần: khi context vượt ~80k tokens, OpenClaw auto-compact — gộp history cũ thành 1 đoạn summary, rồi dùng summary này thay cho history đến lần compact tiếp theo.\n" +
-                "• Rủi ro: nếu summary vô tình copy/méo rule từ SKILL.md, KNOWLEDGE.md, SOUL.md → agent sẽ theo summary (đứng đầu prompt) thay vì SKILL.md → Lumi trả lời sai lý do không giải thích nổi.\n\n" +
-                "Click để xem: timestamp, summary chars, session file, và TOÀN VĂN summary đang điều khiển Lumi."
+                "• Rủi ro: nếu summary vô tình copy/méo rule từ SKILL.md, KNOWLEDGE.md, SOUL.md → agent sẽ theo summary (đứng đầu prompt) thay vì SKILL.md → Lamp trả lời sai lý do không giải thích nổi.\n\n" +
+                "Click để xem: timestamp, summary chars, session file, và TOÀN VĂN summary đang điều khiển Lamp."
               }
               style={flowGhostBtn}
             >📋 Summary</button>

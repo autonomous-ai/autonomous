@@ -6,7 +6,7 @@ import { API } from "./types";
 type LogSource = "lelamp" | "lumi" | "openclaw" | "openclaw-service" | "buddy";
 const LOG_SOURCES: { id: LogSource; label: string; color: string }[] = [
   { id: "lelamp",           label: "LeLamp",     color: "var(--lm-green)" },
-  { id: "lumi",             label: "Lumi",       color: "var(--lm-amber)" },
+  { id: "lumi",             label: "Lamp",       color: "var(--lm-amber)" },
   { id: "openclaw",         label: "OpenClaw",   color: "var(--lm-blue)" },
   { id: "openclaw-service", label: "OC Service", color: "var(--lm-purple)" },
   { id: "buddy",            label: "Buddy",      color: "var(--lm-cyan)" },
@@ -177,7 +177,7 @@ function LogPanel({ source, label, color, initialFilter, initialLevel, onFilterC
   const formatLine = (line: string) => {
     // LeLamp: 2026-04-13 17:47:52,944 INFO lelamp.voice: message
     const pyMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,.\d]*)\s+(DEBUG|INFO|WARN(?:ING)?|ERROR|ERR|DBG|INF)\s+([\s\S]*)$/i);
-    // Lumi: [0be]2026-04-13 17:55:13 [0beDEBUG] message %key=value
+    // Lamp: [0be]2026-04-13 17:55:13 [0beDEBUG] message %key=value
     const goMatch = line.match(/^(\[\w+\]\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+(\[\w+(?:DEBUG|INFO|WARN|ERROR)\])\s+([\s\S]*)$/i);
 
     if (!pyMatch && !goMatch) return line;

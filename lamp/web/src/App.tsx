@@ -140,7 +140,7 @@ function useScrubSecrets() {
 // on the current origin so refresh / new tab keeps the user authed without
 // needing the URL params again. Used by the post-setup AP→.local redirect:
 // HTTP cookies are per-origin so the lumi_session set on 192.168.100.1
-// doesn't carry to lumi-xxxx.local; useScrubSecrets() runs AFTER this
+// doesn't carry to lamp-xxxx.local; useScrubSecrets() runs AFTER this
 // to wipe the secret out of the address bar / browser history.
 function useBearerFromQuery() {
   useEffect(() => {

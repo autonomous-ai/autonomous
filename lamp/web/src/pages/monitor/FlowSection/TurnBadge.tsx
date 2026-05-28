@@ -144,7 +144,7 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
       }}>
         {formatTurnTime(turn.startTime)}
       </div>
-      {/* Turn ID for tracing — label by ID origin (Lumi-emitted vs OpenClaw-assigned UUID) */}
+      {/* Turn ID for tracing — label by ID origin (Lamp-emitted vs OpenClaw-assigned UUID) */}
       <div style={{ fontSize: 8, color: "var(--lm-text)", fontFamily: "monospace", marginBottom: 3, opacity: 0.7 }}>
         {turn.id.startsWith("lumi-") ? "lumi id" : "openclaw uuid"}: {turn.id}
       </div>
@@ -261,7 +261,7 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
       ) : hasEmptyFinalNoLifecycle ? (
         <div
           title={
-            "OpenClaw sent state:final with empty message for this Lumi run_id, and never opened a lifecycle for it.\n\n" +
+            "OpenClaw sent state:final with empty message for this Lamp run_id, and never opened a lifecycle for it.\n\n" +
             "To find the likely paired turn:\n" +
             "  • Scan ±10s in the list for an 'openclaw uuid' turn with matching input text.\n" +
             "  • If found → OpenClaw likely re-fired this message under its own UUID (source:\"channel\"), or merged it into that concurrent turn. The actual reply lives there.\n" +

@@ -175,7 +175,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // what stage_ap sets via `hostnamectl set-hostname lamp-${SUFFIX_LC}` — both
   // sides derive the suffix from the device's hardware ID (Pi device-tree
   // serial / cpuinfo Serial / eth0 MAC, in that order) via the same logic in
-  // lumi/internal/device/hardware.go.
+  // lamp/internal/device/hardware.go.
   //
   // The backend returns `cfg.mac` already formatted as "Lamp-XXXX" (see
   // GetDeviceMac() — it prefixes "Lamp-" before the 4-char hex suffix), so

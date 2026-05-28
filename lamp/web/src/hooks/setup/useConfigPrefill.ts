@@ -131,7 +131,7 @@ export function useConfigPrefill(args: {
       setHasAdminPassword(false);
       setHasNetworkPassword(false);
       // Pull the hardware-derived MAC from the open setup-status endpoint
-      // so the canonical-URL upgrade (192.168.100.1 → lumi-xxxx.local) and
+      // so the canonical-URL upgrade (192.168.100.1 → lamp-xxxx.local) and
       // the post-setup mDNS auto-redirect still work for fresh devices
       // that can't read /api/device/config without an admin session.
       getSetupStatus().then((s) => {

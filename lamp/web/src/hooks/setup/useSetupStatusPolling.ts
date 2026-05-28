@@ -82,7 +82,7 @@ export function useSetupStatusPolling({
 
   // mDNS probe — the primary auto-redirect channel since the LAN-IP one
   // rarely fires in real AP→STA transitions. Carries the current pathname +
-  // search across, so any URL params from Lumi (llm_api_key, device_id, …)
+  // search across, so any URL params from Lamp (llm_api_key, device_id, …)
   // remain in scope on the new host even though the lamp already persisted
   // them via the form submit. Manual button in Setup.tsx renders unconditionally
   // as the safety net if mDNS is blocked on the network.

@@ -251,7 +251,7 @@ export function CameraSection({
                 <div style={{ display: "flex", gap: 3 }}>
                   <a
                     href={cameraDisabled ? undefined : hwUrl(`/camera/snapshot?t=${snapTs}`)}
-                    download={`lumi-snapshot-${new Date(snapTs).toISOString().replace(/[:.]/g, "-")}.jpg`}
+                    download={`lamp-snapshot-${new Date(snapTs).toISOString().replace(/[:.]/g, "-")}.jpg`}
                     title="Download snapshot"
                     aria-disabled={cameraDisabled}
                     onClick={(e) => { if (cameraDisabled) e.preventDefault(); }}

@@ -207,7 +207,7 @@ export function BluetoothSection() {
 
         <p style={{ fontSize: 12, color: "var(--lm-text-muted)", marginTop: 0, marginBottom: 12 }}>
           When on, TTS and STT route through the BT headset instead of the lamp speaker/mic.
-          Background sensing mic stays on the lamp so Lumi keeps listening to the room.
+          Background sensing mic stays on the lamp so Lamp keeps listening to the room.
         </p>
 
         {statusError && (

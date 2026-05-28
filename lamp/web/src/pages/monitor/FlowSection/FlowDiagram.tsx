@@ -102,7 +102,7 @@ export function FlowDiagram({
   };
 
   const positions: Record<FlowStage, { x: number; y: number }> = {
-    // Lumi — top row
+    // Lamp — top row
     intent_check:      { x: 80, y: 50 },
     local_match:       { x: 200, y: 50 },
     lumi_gate:         { x: 467, y: 795 },
@@ -118,8 +118,8 @@ export function FlowDiagram({
     hw_led:            { x: 200, y: 525 },
     hw_servo:          { x: 200, y: 660 },
     hw_audio:          { x: 200, y: 795 },
-    // Lumi-side log writes — stack BELOW the BCAST node (tg_alert at y=930)
-    // so HOOK / BCAST stay grouped at the top of the Lumi column and the
+    // Lamp-side log writes — stack BELOW the BCAST node (tg_alert at y=930)
+    // so HOOK / BCAST stay grouped at the top of the Lamp column and the
     // three async-POST logs hang off the bottom in their own block.
     // x=467 same column. Edges from lumi_gate use elbow routing
     // (right → down → left) to avoid running through tg_alert.
@@ -274,7 +274,7 @@ export function FlowDiagram({
             fill="var(--lm-teal)" fontSize={11} fontWeight={700}
             fontFamily="monospace" opacity={0.6}
             style={{ letterSpacing: "0.08em" }}>
-            Lumi Server
+            Lamp Server
           </text>
         </g>
         <g>
@@ -493,7 +493,7 @@ export function FlowDiagram({
               const next = pipelineRows[i + 1];
               const gapMs = next ? next.startMs - r.endMs : 0;
               if (gapMs > 200) {
-                lines.push(`    ⋯ + ${fmtDur(gapMs)} lumi waiting next event`);
+                lines.push(`    ⋯ + ${fmtDur(gapMs)} lamp waiting next event`);
               }
             }
             return lines.join("\n");
@@ -524,15 +524,15 @@ export function FlowDiagram({
             { stream: "assistant",           desc: "LLM reply text delta. The string that becomes the assistant message / TTS.", common: true },
             { stream: "agent:first_token",   desc: "Marker — first text delta of the assistant reply (not first tool call). Persisted to JSONL so reloaded turns show when text streaming began. Tool-only turns (NO_REPLY) won't fire this.", common: true },
             { stream: "tool · start",    desc: "Tool function call started. Carries the tool name + args.", common: true },
-            { stream: "tool · result",   desc: "Tool returned. Lumi attaches duration to the tool row.", common: true },
-            { stream: "lifecycle:end",   desc: "Turn complete. Includes optional usage tokens. Lumi flushes TTS here.", common: true },
+            { stream: "tool · result",   desc: "Tool returned. Lamp attaches duration to the tool row.", common: true },
+            { stream: "lifecycle:end",   desc: "Turn complete. Includes optional usage tokens. Lamp flushes TTS here.", common: true },
             { stream: "error",           desc: "Turn errored mid-run (network, model, quota). Rare — investigate.", common: false },
             { stream: "compaction",      desc: "Auto-compact in progress. Session history is being summarized.", common: false },
             { stream: "item",            desc: "Codex CLI internal: each reasoning / tool / message wrapped as an item.", common: false },
-            { stream: "plan",            desc: "Codex CLI planning step. Not used by Lumi.", common: false },
-            { stream: "approval",        desc: "Codex CLI approval prompt. Not used by Lumi.", common: false },
+            { stream: "plan",            desc: "Codex CLI planning step. Not used by Lamp.", common: false },
+            { stream: "approval",        desc: "Codex CLI approval prompt. Not used by Lamp.", common: false },
             { stream: "command_output",  desc: "Bash tool stdout streaming. Fires for shell commands.", common: false },
-            { stream: "patch",           desc: "Codex CLI file patch. Not used by Lumi.", common: false },
+            { stream: "patch",           desc: "Codex CLI file patch. Not used by Lamp.", common: false },
           ];
           return (
             <g>
@@ -676,7 +676,7 @@ export function FlowDiagram({
                               ⋯ + {fmtDur(gapMs)}
                             </span>
                             <span style={{ color: "var(--lm-text)", opacity: 0.75 }}>
-                              {" "}lumi waiting next event
+                              {" "}lamp waiting next event
                             </span>
                           </div>
                         )}

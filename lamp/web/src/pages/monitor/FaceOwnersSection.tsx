@@ -92,7 +92,7 @@ export function FaceOwnersSection() {
   const [resetting, setResetting] = useState(false);
 
   // Current user (effective user LeLamp sees right now). Polled separately
-  // from /face/current-user — this is the source used by Lumi handler,
+  // from /face/current-user — this is the source used by Lamp handler,
   // activity logging, and the "Here now" UI.
   const [currentUser, setCurrentUser] = useState<string>("");
 
@@ -454,7 +454,7 @@ export function FaceOwnersSection() {
 
   // Voice sample delete — only audio files. JSON/NPY (metadata, embedding
   // cache) are protected because deleting them silently corrupts the
-  // speaker_recognizer profile. Backend Lumi /api/voice/file/remove
+  // speaker_recognizer profile. Backend Lamp /api/voice/file/remove
   // re-enrolls from remaining samples to refresh the embedding.
   const handleRemoveVoiceFile = async (label: string, filename: string) => {
     if (!confirm(`Remove voice sample "${filename}" from ${label}?`)) return;
