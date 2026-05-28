@@ -1,4 +1,4 @@
-// Package ambient provides idle "living creature" behaviors for Lumi.
+// Package ambient provides idle "living creature" behaviors for Lamp.
 // When no interaction is happening, it drives breathing LED, color drift,
 // micro-movements, eye expression changes, and occasional self-talk via TTS.
 // All hardware control goes through LeLamp HTTP API (port 5001).
@@ -227,7 +227,7 @@ func (s *Service) microMovementLoop(ctx context.Context) {
 	}
 }
 
-// mumbleLoop occasionally makes Lumi "talk to itself" via TTS.
+// mumbleLoop occasionally makes Lamp "talk to itself" via TTS.
 // Phrase pool lives in lib/i18n (PhraseMumble) so all hardcoded TTS
 // templates stay in one place.
 func (s *Service) mumbleLoop(ctx context.Context) {

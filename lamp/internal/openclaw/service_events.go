@@ -31,7 +31,7 @@ const busyTTL = 5 * time.Minute
 
 // IsBusy returns true while the agent is processing a turn (between lifecycle
 // start and end) OR has at least one chat.send still waiting for its
-// lifecycle_start. The pending-send check closes the gap between Lumi's WS
+// lifecycle_start. The pending-send check closes the gap between Lamp's WS
 // write and the agent echoing lifecycle_start back: during that gap
 // activeTurn can briefly read false (if a previous turn's lifecycle_end just
 // fired), letting new sensing slip through to OpenClaw direct and stack up

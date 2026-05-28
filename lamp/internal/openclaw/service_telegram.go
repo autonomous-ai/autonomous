@@ -14,7 +14,7 @@ import (
 // --- Channel abstraction (backend-agnostic) ---
 
 // GetTelegramBotToken returns the Telegram bot token from the agent runtime config.
-// Prefers the runtime config (OpenClaw) over Lumi config, since the runtime owns the sessions.
+// Prefers the runtime config (OpenClaw) over Lamp config, since the runtime owns the sessions.
 func (s *Service) GetTelegramBotToken() string {
 	if token := s.readOpenClawTelegramToken(); token != "" {
 		return token

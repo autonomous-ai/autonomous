@@ -259,7 +259,7 @@ func (s *Service) sendChat(message string, imageBase64 string, fixedReqID string
 		"image_bytes": len(imageBase64),
 		"message":     message,
 	}, idempotencyKey)
-	slog.Info("flow correlation", "op", "ws_chat_send", "section", "lumi_to_openclaw_ws",
+	slog.Info("flow correlation", "op", "ws_chat_send", "section", "lamp_to_openclaw_ws",
 		"device_run_id", idempotencyKey, "req_id", reqID, "has_image", hasImage)
 
 	s.monitorBus.Push(domain.MonitorEvent{

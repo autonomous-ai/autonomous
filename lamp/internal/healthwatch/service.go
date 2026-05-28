@@ -62,7 +62,7 @@ func (s *Service) Start(ctx context.Context) {
 	// voiceWasRunning is true once we confirm voice:true from LeLamp.
 	// Recovery is only triggered after voice was running — this prevents
 	// false positives when LeLamp just restarted (systemd or cold boot)
-	// and voice hasn't been started yet by Lumi.
+	// and voice hasn't been started yet by Lamp.
 	voiceWasRunning := false
 	// wasUnreachable tracks LeLamp downtime so we can announce recovery via TTS.
 	wasUnreachable := false
@@ -147,7 +147,7 @@ func (s *Service) Start(ctx context.Context) {
 
 			// sensing: false — but only act if voice was running before.
 			// If voice was never running (e.g. LeLamp just restarted and
-			// Lumi hasn't called /voice/start yet), sensing=false is expected
+			// Lamp hasn't called /voice/start yet), sensing=false is expected
 			// and we should not interfere.
 			if !voiceWasRunning {
 				slog.Debug("sensing false but voice never ran — skipping (LeLamp startup?)", "component", "healthwatch")

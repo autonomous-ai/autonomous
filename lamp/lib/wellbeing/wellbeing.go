@@ -113,12 +113,12 @@ func NormalizeUser(name string) string {
 // dedup that specific case (lelamp only dedups motion.activity — presence
 // events bypass it). Without the dedup, stranger_74 → stranger_75 produces
 // two "enter" entries in the unknown timeline and resets the wellbeing
-// delta twice even though, from Lumi's perspective, the "user" (unknown)
+// delta twice even though, from Lamp's perspective, the "user" (unknown)
 // never changed.
 //
 // Friends do NOT need this guard: lelamp's per-friend session tracking
 // (_owners_last_seen + FACE_OWNER_FORGET_S) at facerecognizer.py already
-// fires enter only on a genuinely new session, so Lumi should trust each
+// fires enter only on a genuinely new session, so Lamp should trust each
 // friend's enter/leave and just record it. Deduping friends here causes
 // the opposite failure: if lelamp restarts between a friend's last
 // detection and the forget-timeout, leave is never fired, the file gets

@@ -55,7 +55,7 @@ type Event struct {
 	// Nudge-row fields (Action == ActionNudge).
 	NudgeLevel int    `json:"nudge_level,omitempty"` // 2..5
 
-	// Free-text — for nudge/praise, this is the line Lumi spoke.
+	// Free-text — for nudge/praise, this is the line Lamp spoke.
 	Notes string `json:"notes,omitempty"`
 }
 
@@ -96,7 +96,7 @@ func Init() {
 	go cleanOldLogs()
 }
 
-// AlertExtras carries the lelamp event payload Lumi persists when an event
+// AlertExtras carries the lelamp event payload Lamp persists when an event
 // arrives. The skill is the caller — typically right when the event reaches
 // it (before any nudge decision), so the timeline anchors each episode.
 type AlertExtras struct {

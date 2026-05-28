@@ -12,7 +12,7 @@ import (
 // to "autonomous/{modelKey}" and restarts the gateway so the change takes
 // effect immediately. Writes the expected primary into the write flag before
 // the file write so the primary-model watcher recognises this as a
-// Lumi-initiated write and does not sync it back.
+// Lamp-initiated write and does not sync it back.
 //
 // No-op when modelKey is empty or when openclaw.json does not yet exist.
 func (s *Service) UpdatePrimaryModel(modelKey string) error {

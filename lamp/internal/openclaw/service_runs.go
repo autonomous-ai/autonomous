@@ -230,7 +230,7 @@ func (s *Service) RemovePendingChatTraceByRunID(target string) bool {
 }
 
 // MatchPendingByMessage finds and removes the pending entry whose message
-// matches needle (after trim). Used when a UUID lifecycle arrives: Lumi
+// matches needle (after trim). Used when a UUID lifecycle arrives: Lamp
 // fetches chat.history, extracts the last user message text, and calls this
 // to recover the original idempotencyKey — replacing the brittle FIFO
 // send-order mapping. Returns "" if no match.

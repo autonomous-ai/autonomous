@@ -70,7 +70,7 @@ func TestExtractPrimaryModel_Missing(t *testing.T) {
 func TestLampWriteFlag_ContentMatch(t *testing.T) {
 	dir := t.TempDir()
 
-	// No flag yet → not a Lumi write.
+	// No flag yet → not a Lamp write.
 	if isLampWrite(dir, "autonomous/claude-opus-4-6") {
 		t.Fatal("expected no match before setLampWriteFlag")
 	}
@@ -78,12 +78,12 @@ func TestLampWriteFlag_ContentMatch(t *testing.T) {
 	// Write flag with opus.
 	setLampWriteFlag(dir, "autonomous/claude-opus-4-6")
 
-	// Same primary → Lumi write.
+	// Same primary → Lamp write.
 	if !isLampWrite(dir, "autonomous/claude-opus-4-6") {
 		t.Fatal("expected match after setLampWriteFlag with same primary")
 	}
 
-	// Different primary within 3 s window → NOT a Lumi write (external race).
+	// Different primary within 3 s window → NOT a Lamp write (external race).
 	if isLampWrite(dir, "autonomous/claude-haiku-4-5") {
 		t.Fatal("expected mismatch: flag carries opus but file now has haiku")
 	}

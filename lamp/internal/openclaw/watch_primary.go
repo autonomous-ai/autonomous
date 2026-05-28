@@ -19,7 +19,7 @@ const primaryWatchRetryInterval = 5 * time.Second
 
 // setLampWriteFlag writes expectedPrimary (e.g. "autonomous/claude-opus-4-6")
 // into the flag file. The watcher reads this value back and only treats a write
-// as Lumi-initiated when the file's primary matches the flag content exactly —
+// as Lamp-initiated when the file's primary matches the flag content exactly —
 // preventing the race where an external write arrives within the 3 s mtime
 // window but carries a different primary value.
 //
@@ -133,7 +133,7 @@ func (s *Service) StartPrimaryModelWatch(ctx context.Context) {
 }
 
 // syncPrimaryFromFile is the debounced handler that fires after openclaw.json
-// changes. It reads the new primary, skips Lumi-initiated writes (flag content
+// changes. It reads the new primary, skips Lamp-initiated writes (flag content
 // matches), and syncs autonomous-provider changes back into config.LLMModel.
 func (s *Service) syncPrimaryFromFile() {
 	// Serialize concurrent invocations (debounce timer fires in its own
@@ -165,7 +165,7 @@ func (s *Service) syncPrimaryFromFile() {
 	// a different primary, the content mismatch correctly flags it as external.
 	if isLampWrite(configDir, primary) {
 		clearLampWriteFlag(configDir)
-		slog.Debug("[primarysync] skipping Lumi-initiated write", "primary", primary)
+		slog.Debug("[primarysync] skipping Lamp-initiated write", "primary", primary)
 		return
 	}
 

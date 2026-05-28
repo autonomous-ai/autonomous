@@ -1,4 +1,4 @@
-// Package statusled manages LED feedback states so users can see what Lumi is doing.
+// Package statusled manages LED feedback states so users can see what Lamp is doing.
 // States have priority: connectivity > error > ota > booting > lelamp_down > agent_down > hardware.
 // All effect writes are transient (don't clobber user's saved LED state).
 // When a state clears, the strip is restored to user state — ambient resumes if no user state.
