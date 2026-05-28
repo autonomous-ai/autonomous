@@ -124,12 +124,12 @@ stage_rpi5_wifi_stability() {
   echo "[stage] Disable IPv6"
 
   mkdir -p /etc/sysctl.d
-  cat >/etc/sysctl.d/99-lumi-wifi.conf <<'EOF'
+  cat >/etc/sysctl.d/99-lamp-wifi.conf <<'EOF'
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
-  sysctl -p /etc/sysctl.d/99-lumi-wifi.conf 2>/dev/null || true
+  sysctl -p /etc/sysctl.d/99-lamp-wifi.conf 2>/dev/null || true
 }
 
 # ----------------------------------------------------------
@@ -939,7 +939,7 @@ EOF
 
   # dnsmasq: use .d drop-in so we don't break system config; bind range to wlan0 explicitly
   mkdir -p /etc/dnsmasq.d
-  cat >/etc/dnsmasq.d/99-lumi.conf <<EOF
+  cat >/etc/dnsmasq.d/99-lamp.conf <<EOF
 interface=wlan0
 bind-interfaces
 dhcp-range=wlan0,192.168.100.50,192.168.100.150,255.255.255.0,24h
@@ -950,7 +950,7 @@ no-resolv
 EOF
   # Remove any conflicting global interface in main config (leave rest intact)
   if [ -f /etc/dnsmasq.conf ]; then
-    sed -i 's/^interface=wlan0/#interface=wlan0  # use dnsmasq.d/99-lumi.conf/' /etc/dnsmasq.conf 2>/dev/null || true
+    sed -i 's/^interface=wlan0/#interface=wlan0  # use dnsmasq.d/99-lamp.conf/' /etc/dnsmasq.conf 2>/dev/null || true
   fi
 
   # dhcpcd: remove wlan0 block (including when it's at end-of-file with no trailing blank line)
@@ -1322,6 +1322,9 @@ systemctl daemon-reload 2>/dev/null || true
 # nginx conf renamed to lamp.conf 2026-05-28. Remove old lumi.conf so we don't
 # end up with two configs defining the same upstreams (nginx fails to start).
 rm -f /etc/nginx/conf.d/lumi.conf
+# sysctl + dnsmasq config files renamed 2026-05-28. Remove old lumi-prefixed
+# files so dnsmasq doesn't see duplicate `interface=wlan0` directives.
+rm -f /etc/sysctl.d/99-lumi-wifi.conf /etc/dnsmasq.d/99-lumi.conf
 
 run_stage stage_locale
 run_stage stage_prerequisites

@@ -559,7 +559,7 @@ keyboard-configuration keyboard-configuration/xkb-keymap select us
 keyboard-configuration keyboard-configuration/variant select English (US)
 keyboard-configuration keyboard-configuration/model select Generic 105-key PC (intl.)
 DBCONF
-cat > ${MNT}/etc/apt/apt.conf.d/99-lumi-silent <<'APT'
+cat > ${MNT}/etc/apt/apt.conf.d/99-lamp-silent <<'APT'
 Dpkg::Use-Pty "false";
 APT
 
@@ -766,12 +766,12 @@ date -u '+%Y-%m-%d %H:%M:%S' > /etc/fake-hwclock.data
 # OrangePi so the unit was a verified no-op on current hardware.
 echo "[stage] WiFi stability (IPv6 off)"
 mkdir -p /etc/sysctl.d
-cat > /etc/sysctl.d/99-lumi-wifi.conf <<'EOF'
+cat > /etc/sysctl.d/99-lamp-wifi.conf <<'EOF'
 net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
-sysctl -p /etc/sysctl.d/99-lumi-wifi.conf 2>/dev/null || true
+sysctl -p /etc/sysctl.d/99-lamp-wifi.conf 2>/dev/null || true
 
 # ── stage: SPI ────────────────────────────────────────────────────────────────
 # Enable the SPI bus in firmware config for hardware peripherals.
@@ -1132,7 +1132,7 @@ echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' > /etc/default/hostapd
 # dnsmasq config — DHCP range 192.168.100.50-150 on wlan0
 # address=/#/192.168.100.1 redirects ALL DNS queries to the Pi (captive portal)
 mkdir -p /etc/dnsmasq.d
-cat > /etc/dnsmasq.d/99-lumi.conf <<'EOF'
+cat > /etc/dnsmasq.d/99-lamp.conf <<'EOF'
 interface=wlan0
 bind-interfaces
 dhcp-range=wlan0,192.168.100.50,192.168.100.150,255.255.255.0,24h

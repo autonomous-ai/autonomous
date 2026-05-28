@@ -175,7 +175,7 @@ chroot "${MNT}" debconf-set-selections <<'DBCONF' || true
 debconf debconf/frontend select Noninteractive
 keyboard-configuration keyboard-configuration/layoutcode string us
 DBCONF
-cat > "${MNT}/etc/apt/apt.conf.d/99-lumi-silent" <<'APT'
+cat > "${MNT}/etc/apt/apt.conf.d/99-lamp-silent" <<'APT'
 Dpkg::Use-Pty "false";
 APT
 
@@ -636,7 +636,7 @@ fi
 echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' > /etc/default/hostapd
 
 mkdir -p /etc/dnsmasq.d
-cat > /etc/dnsmasq.d/99-lumi.conf <<'EOF'
+cat > /etc/dnsmasq.d/99-lamp.conf <<'EOF'
 interface=wlan0
 bind-interfaces
 dhcp-range=wlan0,192.168.100.50,192.168.100.150,255.255.255.0,24h

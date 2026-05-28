@@ -107,7 +107,7 @@ EOF
 
   # dnsmasq: use .d drop-in so we don't break system config; bind range to wlan0 explicitly
   mkdir -p /etc/dnsmasq.d
-  cat >/etc/dnsmasq.d/99-lumi.conf <<EOF
+  cat >/etc/dnsmasq.d/99-lamp.conf <<EOF
 interface=wlan0
 bind-interfaces
 dhcp-range=wlan0,192.168.100.50,192.168.100.150,255.255.255.0,24h
@@ -118,7 +118,7 @@ no-resolv
 EOF
   # Remove any conflicting global interface in main config (leave rest intact)
   if [ -f /etc/dnsmasq.conf ]; then
-    sed -i 's/^interface=wlan0/#interface=wlan0  # use dnsmasq.d/99-lumi.conf/' /etc/dnsmasq.conf 2>/dev/null || true
+    sed -i 's/^interface=wlan0/#interface=wlan0  # use dnsmasq.d/99-lamp.conf/' /etc/dnsmasq.conf 2>/dev/null || true
   fi
 
   # dhcpcd: remove only the wlan0 block so eth0/other blocks are preserved
