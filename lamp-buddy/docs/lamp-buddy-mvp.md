@@ -21,7 +21,7 @@ This is the actionable plan for **MVP of Lamp Buddy** — the macOS companion ap
 - Command executors: `open_app`, `close_app`, `open_url`, `type_text`, `key_combo`, `notification`, `ping`
 - Lamp Go: `internal/buddy/` package + 7 HTTP routes + WS gateway
 - OpenClaw skill `computer-use` (basic intent → command mapping)
-- Web UI: "Paired Computers" page in `lumi/web/`
+- Web UI: "Paired Computers" page in `lamp/web/`
 - Audit log (backend file only — no UI in MVP)
 
 **Out of scope (defer to post-MVP):**
@@ -59,16 +59,16 @@ Each phase is independently shippable and reviewable.
 
 ### Phase 1B — Lamp discovery (mDNS)
 
-**Status:** ✓ Done — Bonjour browse for `_lumi._tcp` works; manual hostname fallback also wired.
+**Status:** ✓ Done — Bonjour browse for `_lamp._tcp` works; manual hostname fallback also wired.
 
 **Files:**
 - `lamp-buddy/macos/Sources/LampBuddy/Discovery/LampDiscovery.swift`
 - `lamp-buddy/macos/Sources/LampBuddy/Discovery/LampInfo.swift`
 - Update `MenuBarController.swift` to show discovered lamps
 
-**Acceptance:** When a lamp is running on LAN (advertises `_lumi._tcp.local`), buddy menu shows e.g. `lamp-a1b2.local — 192.168.1.50` as a clickable item. Also: manual hostname entry option.
+**Acceptance:** When a lamp is running on LAN (advertises `_lamp._tcp.local`), buddy menu shows e.g. `lamp-a1b2.local — 192.168.1.50` as a clickable item. Also: manual hostname entry option.
 
-> Note: confirm lamp's existing mDNS service name. Currently it publishes `lamp-<last4hex>.local`; may need to also advertise a `_lumi._tcp.local` service for browsability. May require a small lelamp/lumi tweak (see lamp-side §1 below).
+> Note: confirm lamp's existing mDNS service name. Currently it publishes `lamp-<last4hex>.local`; may need to also advertise a `_lamp._tcp.local` service for browsability. May require a small lelamp/lumi tweak (see lamp-side §1 below).
 
 ### Phase 1C — Pairing flow
 
@@ -80,21 +80,21 @@ Each phase is independently shippable and reviewable.
 - `lamp-buddy/macos/Sources/LampBuddy/Pairing/PairingWindow.swift` (code entry UI)
 
 **Lamp Go files:**
-- `lumi/internal/buddy/types.go`
-- `lumi/internal/buddy/store.go`
-- `lumi/internal/buddy/pairing.go`
-- `lumi/internal/buddy/service.go`
-- `lumi/server/buddy/delivery/http/handler.go`
-- `lumi/server/buddy/delivery/http/handler_pair.go`
-- `lumi/internal/buddy/wire.go`
-- Modify: `lumi/server/server.go` (register routes)
-- Modify: `lumi/server/wire.go` (provider)
+- `lamp/internal/buddy/types.go`
+- `lamp/internal/buddy/store.go`
+- `lamp/internal/buddy/pairing.go`
+- `lamp/internal/buddy/service.go`
+- `lamp/server/buddy/delivery/http/handler.go`
+- `lamp/server/buddy/delivery/http/handler_pair.go`
+- `lamp/internal/buddy/wire.go`
+- Modify: `lamp/server/server.go` (register routes)
+- Modify: `lamp/server/wire.go` (provider)
 - Run: `make generate`
 
 **Lamp web files:**
-- `lumi/web/src/pages/PairedComputers.tsx` (initial — just code display)
-- Update `lumi/web/src/App.tsx` (route)
-- Update `lumi/web/src/lib/api.ts` (pair endpoints)
+- `lamp/web/src/pages/PairedComputers.tsx` (initial — just code display)
+- Update `lamp/web/src/App.tsx` (route)
+- Update `lamp/web/src/lib/api.ts` (pair endpoints)
 
 **Routes added:**
 - `POST /api/buddy/pair/start`
@@ -119,10 +119,10 @@ Each phase is independently shippable and reviewable.
 - `lamp-buddy/macos/Sources/LampBuddy/Connection/Reconnect.swift`
 
 **Lamp Go files:**
-- `lumi/internal/buddy/registry.go`
-- `lumi/internal/buddy/ws.go`
-- `lumi/server/buddy/delivery/http/handler_ws.go`
-- Update: `lumi/server/server.go` (register WS route)
+- `lamp/internal/buddy/registry.go`
+- `lamp/internal/buddy/ws.go`
+- `lamp/server/buddy/delivery/http/handler_ws.go`
+- Update: `lamp/server/server.go` (register WS route)
 
 **Routes added:**
 - `GET /api/buddy/ws` (WS upgrade)
@@ -161,8 +161,8 @@ Each phase is independently shippable and reviewable.
 **Status:** ✓ Done — sync `/api/buddy/command` (localOnly) + marker-friendly `/api/buddy/exec/:action`. Cross-compile `GOOS=linux GOARCH=arm64 go build ./...` clean. Debug log instrumentation across the chain (handler_hw → exec/command handler → dispatcher → ws read loop) so a failed turn is traceable to the exact stage.
 
 **Files:**
-- `lumi/internal/buddy/dispatcher.go`
-- `lumi/server/buddy/delivery/http/handler_command.go`
+- `lamp/internal/buddy/dispatcher.go`
+- `lamp/server/buddy/delivery/http/handler_command.go`
 - Update: wire providers, run `make generate`
 
 **Routes added:**
@@ -193,8 +193,8 @@ Each phase is independently shippable and reviewable.
 **Status:** ✓ Done — `BuddyCard` in the Monitor Overview shows pair/status/revoke. The buddy app side also got a native menu-bar Activity submenu plus a separate "Activity" window (terminal-tail style) so the user can audit recent commands without opening the audit log file. Audit log path: `~/Library/Application Support/LampBuddy/audit.log`.
 
 **Files:**
-- Update `lumi/web/src/pages/PairedComputers.tsx`
-- Update `lumi/web/src/components/` as needed
+- Update `lamp/web/src/pages/PairedComputers.tsx`
+- Update `lamp/web/src/components/` as needed
 
 **Acceptance:**
 - Page lists paired buddies with name, OS, last seen, online/offline
@@ -224,7 +224,7 @@ Each phase is independently shippable and reviewable.
 
 ## Lamp-side prerequisites (verify before Phase 1B)
 
-1. **mDNS browsability** — confirm lamp publishes `_lumi._tcp.local` for `NWBrowser`. If only `lamp-xxxx.local` host record exists, add service publishing (likely in `lumi` startup or avahi config).
+1. **mDNS browsability** — confirm lamp publishes `_lamp._tcp.local` for `NWBrowser`. If only `lamp-xxxx.local` host record exists, add service publishing (likely in `lumi` startup or avahi config).
 2. **Admin auth header convention** — confirm whether new buddy endpoints should use `Authorization: Bearer <token>` (cookie or bearer); reuse `project_security_login_ui_batch.md` patterns.
 3. **OpenClaw skill location** — find where existing skills live, naming convention, how lamp registers them. (Possibly in lamp's filesystem `~/.openclaw/skills/<name>/SKILL.md`.)
 
@@ -273,7 +273,7 @@ Subfolders `lamp-buddy/windows/` and `lamp-buddy/linux/` will host future ports 
 
 ### Go (`lumi/`)
 ```
-lumi/internal/buddy/
+lamp/internal/buddy/
 ├── types.go
 ├── store.go
 ├── pairing.go
@@ -283,7 +283,7 @@ lumi/internal/buddy/
 ├── service.go
 └── wire.go
 
-lumi/server/buddy/delivery/http/
+lamp/server/buddy/delivery/http/
 ├── handler.go
 ├── handler_pair.go
 ├── handler_ws.go
@@ -291,13 +291,13 @@ lumi/server/buddy/delivery/http/
 ```
 
 Modified:
-- `lumi/server/server.go` (route registration)
-- `lumi/server/wire.go` (provider set)
-- `lumi/server/wire_gen.go` (regenerated)
+- `lamp/server/server.go` (route registration)
+- `lamp/server/wire.go` (provider set)
+- `lamp/server/wire_gen.go` (regenerated)
 
-### Web (`lumi/web/`)
+### Web (`lamp/web/`)
 ```
-lumi/web/src/
+lamp/web/src/
 ├── pages/PairedComputers.tsx (new)
 ├── App.tsx (modified — add route)
 └── lib/api.ts (modified — add buddy endpoints)
@@ -352,7 +352,7 @@ lumi/web/src/
 
 ## Risks specific to MVP
 
-1. **mDNS service publishing** — if lamp doesn't currently publish `_lumi._tcp.local` (only host record), buddy can't browse without a small lamp-side change.
+1. **mDNS service publishing** — if lamp doesn't currently publish `_lamp._tcp.local` (only host record), buddy can't browse without a small lamp-side change.
 2. **OpenClaw skill conventions** — unknown until inspected. May affect phase 1G design.
 3. **Permission UX on first launch** — Accessibility prompt is one-shot; if user denies and we don't re-prompt cleanly, keyboard actions silently fail. Need fallback UX.
 4. **WS keepalive across Mac sleep** — Mac sleep kills WS. Reconnect must handle gracefully.
