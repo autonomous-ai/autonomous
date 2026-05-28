@@ -1,6 +1,6 @@
 # Mic Lifecycle — Mute/Unmute
 
-Mic mute for privacy — meetings, calls, or just don't want Lumi listening.
+Mic mute for privacy — meetings, calls, or just don't want Lamp listening.
 
 ## Current State
 
@@ -25,7 +25,7 @@ When muted, mic is **completely off** — no STT, no wake word, no sound percept
 
 User says "đừng nghe" / "stop listening" / "I'm in a meeting" → STT processes this last command → agent calls `[HW:/voice/mute:{}]` → TTS says "OK, I'll stop listening. Press the button when you need me." → mic off.
 
-This is the **last thing Lumi says** until button press.
+This is the **last thing Lamp says** until button press.
 
 ### Unmute: Physical button (one-way out)
 
@@ -57,7 +57,7 @@ User: "đừng nghe" ──→ [HW:/voice/mute:{}] ──→ mic OFF (deaf)
 | Sound perception | **OFF** | No sound events |
 | Speaker recognition | **OFF** | No STT session → no audio buffer to identify |
 | Speech emotion | **OFF** | Submission path is downstream of STT — nothing arrives |
-| TTS | **ON** | Lumi can still speak (Telegram, cron triggers) |
+| TTS | **ON** | Lamp can still speak (Telegram, cron triggers) |
 | Camera/sensing | **Unaffected** | Separate from mic |
 | Music | **ON** | Can still play/stop via Telegram or web |
 
@@ -105,7 +105,7 @@ Manual override respected — if user explicitly muted via voice command, auto t
 
 6. ✅ **Overview section**: Mute/Unmute toggle + MUTED badge on Mic line.
 
-### Lumi (Go)
+### Lamp (Go)
 
 7. ✅ **HW marker dispatch**: `[HW:/voice/mute:{}]` and `[HW:/voice/unmute:{}]` — already handled by generic parser.
 
@@ -113,7 +113,7 @@ Manual override respected — if user explicitly muted via voice command, auto t
 
 - **Muted + Telegram message**: Works — Telegram doesn't use mic. Agent responds normally.
 - **Muted + TTS triggered**: TTS plays — speaker is output, independent of mic.
-- **Muted + presence.enter** (camera on): Camera fires presence event, agent responds via TTS. User hears Lumi but Lumi can't hear back. Acceptable — user can click button if they want to talk.
+- **Muted + presence.enter** (camera on): Camera fires presence event, agent responds via TTS. User hears Lamp but Lamp can't hear back. Acceptable — user can click button if they want to talk.
 - **Muted + timer unmute**: Agent sets cron "unmute in 1h" before muting → cron fires → `POST /voice/unmute` → mic back on.
 - **Double mute**: `POST /voice/mute` when already muted → no-op, return `already_muted`.
 - **Button press during TTS + muted**: Unlikely (how did TTS start if muted? → Telegram trigger). If happens: unmute takes priority over stop-TTS.

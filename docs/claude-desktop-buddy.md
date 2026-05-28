@@ -1,8 +1,8 @@
 # Claude Desktop Buddy — Integration Spec
 
-> Turns the Lumi lamp into a Hardware Buddy for Claude Desktop. Runs as a
+> Turns the Lamp lamp into a Hardware Buddy for Claude Desktop. Runs as a
 > standalone Go plugin on the Pi and bridges Claude's BLE state into the
-> existing LeLamp (LED/audio) and Lumi (OpenClaw/sensing) stacks.
+> existing LeLamp (LED/audio) and Lamp (OpenClaw/sensing) stacks.
 
 **Source**: [anthropics/claude-desktop-buddy](https://github.com/anthropics/claude-desktop-buddy) (ESP32 reference firmware + protocol REFERENCE.md)
 **Status**: Implementation — Phase 1, 2, 3 shipped (2026-05-11)
@@ -15,11 +15,11 @@
 Claude Desktop ("Claude for macOS/Windows") exposes a BLE API under
 Developer Mode that lets a hardware companion connect over Nordic UART
 Service. The Anthropic reference is an ESP32 desk pet — small LCD, two
-buttons, no brain. Lumi implements the same wire protocol but as a
+buttons, no brain. Lamp implements the same wire protocol but as a
 **smart buddy**: full lamp with camera, mic, speaker, LED ring, servo,
 and the OpenClaw agentic brain. (No LCD/display peripheral today.)
 
-Lumi can reflect Claude's state visually, voice-approve tool calls
+Lamp can reflect Claude's state visually, voice-approve tool calls
 hands-free, stream chat turns to its display/TTS, and feed presence
 context back.
 
@@ -27,14 +27,14 @@ context back.
 
 | # | Use case | Status | Description |
 |---|----------|--------|-------------|
-| UC-1 | **Ambient state** | [x] shipped | LED ring reflects Claude state (sleep/idle/busy/attention/heart/celebrate). The current Lumi lamp has no LCD/display, so only the LED is driven. |
-| UC-2 | **Voice approval** | [x] shipped | Tool-call prompt → Lumi speaks it via OpenClaw skill → user says approve/deny hands-free. |
+| UC-1 | **Ambient state** | [x] shipped | LED ring reflects Claude state (sleep/idle/busy/attention/heart/celebrate). The current Lamp lamp has no LCD/display, so only the LED is driven. |
+| UC-2 | **Voice approval** | [x] shipped | Tool-call prompt → Lamp speaks it via OpenClaw skill → user says approve/deny hands-free. |
 | UC-3 | **Activity stats over HTTP** | [x] shipped | Buddy tracks token count, sessions running, and approval stats; exposed via `GET /status` for any local consumer. (No on-lamp display today.) |
-| UC-4 | **Chat-turn fan-out** | [x] shipped | Every `evt:"turn"` (user / assistant / tool blocks) is forwarded to Lumi monitor bus as `buddy_event` — ready for TTS, transcript memory, dashboard. |
+| UC-4 | **Chat-turn fan-out** | [x] shipped | Every `evt:"turn"` (user / assistant / tool blocks) is forwarded to Lamp monitor bus as `buddy_event` — ready for TTS, transcript memory, dashboard. |
 | UC-5 | **Character pack receive** | [x] shipped | Desktop can drag a GIF folder onto its panel → streams over BLE → saved to `/opt/claude-desktop-buddy/chars/<name>/`. |
 | UC-9 | **Activity TTS narration** | [x] shipped | Short status announcements on state transitions ("Claude connected" / "Claude is starting" / "Claude is done" / "Claude disconnected") and per `tool_use` / `thinking` block ("Claude is editing a file", "Claude is searching the web", …). Multi-language (`vi` / `en` / `zh`) via `i18n.go`, throttled once-per-turn-per-category. Sent to LeLamp `/voice/speak` with `cached: true` so the bounded phrase set hits the on-disk TTS cache after first play; `Narrator.Warmup` fires every phrase through `prerender: true` 8s after startup so the very first announcement also plays from cache. The busy→idle "done" transition additionally calls `/emotion {happy,0.7}` so LeLamp coordinates a quick LED + servo "exhale" between turns. Unknown tool names fall back to a name-less generic phrase — Claude Code's CamelCase / `mcp__*` names don't sound like words through TTS. |
-| UC-8 | **Voice readout of Claude reply** | [ ] next | Lumi subscribes to `buddy_event`, filters `role=assistant` + text blocks, strips markdown, and pipes the text to LeLamp TTS so the user can listen instead of looking at the Mac. Respects presence (skip when user is away), voice-pipeline busy state, and agent emotion priority. |
-| UC-6 | **Presence feedback** | [ ] future | Lumi presence (camera/PIR) → Desktop. Requires protocol extension. |
+| UC-8 | **Voice readout of Claude reply** | [ ] next | Lamp subscribes to `buddy_event`, filters `role=assistant` + text blocks, strips markdown, and pipes the text to LeLamp TTS so the user can listen instead of looking at the Mac. Respects presence (skip when user is away), voice-pipeline busy state, and agent emotion priority. |
+| UC-6 | **Presence feedback** | [ ] future | Lamp presence (camera/PIR) → Desktop. Requires protocol extension. |
 | UC-7 | **Transcript-aware OpenClaw** | [ ] future | OpenClaw reads buffered chat history when user asks via voice. |
 
 ---
@@ -43,7 +43,7 @@ context back.
 
 ```
 ┌──────────────────┐       BLE (Nordic UART)        ┌──────────────────────────────┐
-│  Claude Desktop  │ ◄───────────────────────────►  │          Lumi (Pi)           │
+│  Claude Desktop  │ ◄───────────────────────────►  │          Lamp (Pi)           │
 │  (Mac / Windows) │                                │                              │
 │  Developer →     │   Heartbeat (msg/running/      │  ┌────────────────────────┐  │
 │  Hardware Buddy  │   tokens/prompt), Event        │  │   buddy-plugin         │  │
@@ -59,7 +59,7 @@ context back.
 │                  │                                │     │ HTTP     │ HTTP        │
 │                  │                                │     ▼          ▼             │
 │                  │                                │  ┌─────────┐ ┌──────────┐    │
-│                  │                                │  │  Lumi   │ │ LeLamp   │    │
+│                  │                                │  │  Lamp   │ │ LeLamp   │    │
 │                  │                                │  │ :5000   │ │ :5001    │    │
 │                  │                                │  │ OpenClaw│ │ LED ring │    │
 │                  │                                │  │ sensing │ │ + TTS    │    │
@@ -77,7 +77,7 @@ claude-desktop-buddy/
 ├── agent.go             BlueZ DisplayOnly pairing agent (registered but unused — see §5)
 ├── protocol.go          Wire types: Heartbeat, TimeSync, Event, Command, Ack, PermissionDecision
 ├── state.go             6-state machine (sleep/idle/busy/attention/heart/celebrate)
-├── bridge.go            HTTP outbound to LeLamp (:5001) + Lumi (:5000)
+├── bridge.go            HTTP outbound to LeLamp (:5001) + Lamp (:5000)
 ├── httpserver.go        HTTP API :5002 — /status /health /approve /deny
 ├── transfer.go          Character-pack folder push receiver (saves under chars/)
 ├── skill/SKILL.md       OpenClaw skill descriptor for voice approval flow
@@ -90,8 +90,8 @@ claude-desktop-buddy/
 ### Process model
 
 `buddy-plugin` is a **standalone systemd service** (`lumi-buddy.service`)
-separate from the main Lumi binary. Restarts independently; never linked
-into the Lumi process. Talks to Lumi and LeLamp purely over local HTTP.
+separate from the main Lamp binary. Restarts independently; never linked
+into the Lamp process. Talks to Lamp and LeLamp purely over local HTTP.
 
 ```
 Pi runtime layout:
@@ -136,10 +136,10 @@ can see it.
 2. buddy-plugin starts → reads `/root/config/buddy.json` → resolves device
    name via `resolveDeviceName()`:
    - Reads `device_name` from config (default `Claude-{deviceid}`).
-   - If it contains `{deviceid}`, fetch `device_id` from Lumi
+   - If it contains `{deviceid}`, fetch `device_id` from Lamp
      `GET http://127.0.0.1:5000/api/system/info` (retries up to 15 × 2s).
    - `shortDeviceID()` keeps only the trailing dash-segment, truncated to
-     4 chars (`lumi-004` → `004`) so name + Nordic UART UUID both fit in
+     4 chars (`lamp-004` → `004`) so name + Nordic UART UUID both fit in
      the 31-byte primary advertisement payload.
    - Falls back to `Claude-unknown` if the device hasn't been
      provisioned yet via `/api/device/setup`.
@@ -262,7 +262,7 @@ tool flows).
 
 `formatContentBlock()` renders each block into a single-line log tag:
 `[thinking: …]`, `[tool_use <name>(<input>)]`, `[tool_result <id>: …]`,
-`[tool_ref: <name>]`. Each event is fanned out to Lumi via
+`[tool_ref: <name>]`. Each event is fanned out to Lamp via
 `bridge.OnEvent` as `type=buddy_event` on the monitor bus.
 
 #### `Command` — control + folder push
@@ -420,12 +420,12 @@ heartbeat once the lock elapses.
 
 ---
 
-## 7. State → LeLamp + Lumi bridge
+## 7. State → LeLamp + Lamp bridge
 
 `Bridge.OnStateChange` is wired as the state machine's transition
 callback. Each transition fires:
 
-| State | LeLamp LED call | Lumi monitor event |
+| State | LeLamp LED call | Lamp monitor event |
 |---|---|---|
 | `sleep` | `POST /led/off` | `buddy_state` |
 | `idle` | (none — ambient owns LED) | `buddy_state` |
@@ -434,7 +434,7 @@ callback. Each transition fires:
 | `heart` | `/led/solid {[255,200,100]}` | `buddy_state` |
 | `celebrate` | `/led/effect {rainbow,*,2.0,3000ms}` | `buddy_state` |
 
-> The current Lumi lamp has no LCD/eye display; the `bridge.go` code
+> The current Lamp lamp has no LCD/eye display; the `bridge.go` code
 > still attempts `/display/info`, `/display/eyes`, and `/display/eyes-mode`
 > calls on LeLamp, but they're no-ops on hardware without a screen.
 > Either remove those branches when the no-display constraint is
@@ -451,7 +451,7 @@ POST http://127.0.0.1:5000/api/monitor/event
 }
 ```
 
-Downstream Lumi consumers can subscribe to `buddy_event` for TTS,
+Downstream Lamp consumers can subscribe to `buddy_event` for TTS,
 transcript memory, dashboard, etc. — none of those are wired yet.
 
 ### LED priority placement
@@ -484,7 +484,7 @@ Agent emotion still wins over buddy; user voice intents win over both.
 1. Heartbeat arrives with prompt != null
 2. state → attention; bridge fires
      LeLamp: blink orange + display "Approve <tool>?"
-     Lumi:   POST /api/sensing/event { type:"buddy_approval", message:"Claude Desktop needs approval: …" }
+     Lamp:   POST /api/sensing/event { type:"buddy_approval", message:"Claude Desktop needs approval: …" }
 3. OpenClaw routes the sensing event to skill `claude-desktop-buddy`
 4. Skill (SKILL.md in claude-desktop-buddy/skill/) does:
      - Express emotion: curious 0.8
@@ -514,7 +514,7 @@ claude-desktop-buddy/skill/SKILL.md
 ```
 
 The skill ships with the buddy binary and is **not** copied into
-`lumi/resources/openclaw-skills/`. OpenClaw picks it up from the buddy
+`lamp/resources/openclaw-skills/`. OpenClaw picks it up from the buddy
 install dir at runtime (see SKILL.md for the exact discovery rule).
 
 ---
@@ -553,11 +553,11 @@ skill from acting on stale prompts.
 
 ## 10. Lumi-side coordination
 
-### Config-change watcher (lumi/server/server.go)
+### Config-change watcher (lamp/server/server.go)
 
-When the user provisions the device via `POST /api/device/setup`, Lumi
+When the user provisions the device via `POST /api/device/setup`, Lamp
 saves `device_id` to `config/config.json` and notifies the in-process
-config bus. The Lumi server listens on that bus and, when the
+config bus. The Lamp server listens on that bus and, when the
 `device_id` value transitions, runs:
 
 ```
@@ -569,16 +569,16 @@ That gives buddy a chance to re-resolve `Claude-{deviceid}` to the
 freshly assigned id without manual intervention. Lamps that don't ship
 the buddy plugin are no-op'd by the `systemctl cat` pre-check.
 
-### Lumi system info endpoint
+### Lamp system info endpoint
 
 Buddy reads `device_id` over HTTP rather than the config file directly:
 
 ```
 GET http://127.0.0.1:5000/api/system/info
-→ { "data": { "deviceId": "lumi-004", … } }
+→ { "data": { "deviceId": "lamp-004", … } }
 ```
 
-This keeps buddy oblivious to Lumi's config schema.
+This keeps buddy oblivious to Lamp's config schema.
 
 ---
 
@@ -669,8 +669,8 @@ factory MAC, but the rest of the integration is identical.
 
 ```ini
 [Unit]
-Description=Lumi Claude Desktop Buddy
-After=bluetooth.target lumi.service
+Description=Lamp Claude Desktop Buddy
+After=bluetooth.target lamp.service
 Wants=bluetooth.target
 
 [Service]
@@ -723,13 +723,13 @@ WantedBy=multi-user.target
 - [x] LED reflects state without overwriting agent emotion or ambient
 - [x] Voice approve / deny routes through OpenClaw and completes end-to-end
 - [x] Token count + running sessions tracked + exposed via `/status` (no on-lamp display yet)
-- [x] Buddy crash does not affect main Lumi server
+- [x] Buddy crash does not affect main Lamp server
 - [x] OpenClaw reduces proactive behaviour when Desktop is busy
-- [x] Chat turns (user / assistant / tool blocks) stream into Lumi monitor bus
+- [x] Chat turns (user / assistant / tool blocks) stream into Lamp monitor bus
 - [x] Character pack folder push lands under `chars/<name>/`
 - [x] UC-9 activity TTS narration (vi/en/zh) routes through LeLamp cache + emotion on done
 - [x] Approval / denial counters persist across restart (`/var/lib/lumi-buddy/stats.json`)
 - [ ] UC-8 voice readout of assistant reply — next
 - [ ] Encrypted bonded GATT link (`sec: true`) — deferred
-- [ ] Presence feedback Lumi → Desktop — future protocol extension
+- [ ] Presence feedback Lamp → Desktop — future protocol extension
 - [ ] Transcript context injection into OpenClaw — future

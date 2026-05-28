@@ -34,7 +34,7 @@ Status: **Partially implemented** (2026-04-22). Bugs A+B fixed, Bug C still pend
 - POST **before** firing `motion.activity` so skill's history read is consistent.
 - Still fire `motion.activity` to agent (it may nudge/comment — just not log).
 
-### Lumi handler — `server/sensing/delivery/http/handler.go`
+### Lamp handler — `server/sensing/delivery/http/handler.go`
 
 - Drop enter/leave log writes at `handler.go:124-137`. LeLamp events are clean; handler just forwards.
 - Keep `mood.SetCurrentUser` / `ClearCurrentUser` for `[context: current_user=X]` tag.
@@ -61,7 +61,7 @@ No logic changes. Benefits indirectly from stable `current_user`.
 
 1. Event shape: reuse `presence.enter/leave` vs new `presence.effective_change`. Lean **reuse** — minimal downstream churn.
 2. Existing logs have duplicates from today — no cleanup migration; skills tolerate noise in tail.
-3. Direct LeLamp POST failure (Lumi down): log-and-forget, same semantics as current agent behaviour.
+3. Direct LeLamp POST failure (Lamp down): log-and-forget, same semantics as current agent behaviour.
 4. **POST-before-fire for `motion.activity`?** Recommend **yes** — LeLamp POSTs `/api/wellbeing/log` first, then fires `motion.activity` to the agent. Guarantees history read by the skill already sees the new row, avoids agent-side race if the skill queries in parallel.
 5. **Trim the `motion.activity` payload now that agent doesn't log?** The raw label is still useful to the agent for grounding nudge phrasing (see the SKILL.md table mapping labels → nudge examples). Keep the current format; revisit only if we see token pressure. No action needed for this PR.
 

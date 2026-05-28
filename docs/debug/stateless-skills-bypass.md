@@ -6,8 +6,8 @@
 
 ## Hiện trạng
 
-- `motion.activity` (wellbeing) và `emotion.detected` (music-suggestion) fire từ LeLamp → Lumi `/sensing` POST → `SendChatMessageWithRun` (`lumi/internal/openclaw/service_chat.go:88`) → OpenClaw `chat.send` RPC.
-- `chat.send` luôn route vào `sessionKey` hiện tại của Lumi (`service_chat.go:125-128`) → dùng chung session với voice.
+- `motion.activity` (wellbeing) và `emotion.detected` (music-suggestion) fire từ LeLamp → Lamp `/sensing` POST → `SendChatMessageWithRun` (`lamp/internal/openclaw/service_chat.go:88`) → OpenClaw `chat.send` RPC.
+- `chat.send` luôn route vào `sessionKey` hiện tại của Lamp (`service_chat.go:125-128`) → dùng chung session với voice.
 - Wellbeing và music-suggestion **không phải cron**; là event-driven, fire trong cùng session voice.
 
 ## Phương án "tạo session mới" — issue gì?
@@ -35,7 +35,7 @@ Session = persistent context store. Skill stateless gửi vào session nào cũn
 
 **Bypass OpenClaw hoàn toàn cho skill stateless:**
 
-- Lumi gọi LLM one-shot trực tiếp (GPT 5.5 — model đang dùng; hoặc Haiku/Sonnet tùy chọn).
+- Lamp gọi LLM one-shot trực tiếp (GPT 5.5 — model đang dùng; hoặc Haiku/Sonnet tùy chọn).
 - System prompt = SKILL.md content + event context.
 - Output = `<say>...</say>` → đẩy thẳng speak-queue ở lelamp.
 
@@ -49,7 +49,7 @@ Speak-queue ở lelamp: voice ưu tiên cao, nudge thấp. Voice đang nói → 
 - Không bị compaction nuốt SKILL rules (vấn đề `project_openclaw_compaction_summary_risk`).
 - Không cần per-session-busy flag, không cần Flow Monitor multi-lane.
 
-OpenClaw chỉ lo voice/chat — đúng việc của nó. Lumi + Haiku xử lý reactive.
+OpenClaw chỉ lo voice/chat — đúng việc của nó. Lamp + Haiku xử lý reactive.
 
 ## Skill ứng viên di chuyển
 

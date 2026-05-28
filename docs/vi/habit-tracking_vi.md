@@ -1,6 +1,6 @@
 # Theo dõi thói quen (Habit Tracking)
 
-Habit tracking thêm **hành vi dự đoán** cho hệ thống wellbeing và music của Lumi. Thay vì chỉ phản ứng khi có sự kiện (nhắc theo threshold, nhạc theo mood), Lumi học thói quen cá nhân theo thời gian và hành động chủ động.
+Habit tracking thêm **hành vi dự đoán** cho hệ thống wellbeing và music của Lamp. Thay vì chỉ phản ứng khi có sự kiện (nhắc theo threshold, nhạc theo mood), Lamp học thói quen cá nhân theo thời gian và hành động chủ động.
 
 ## Cách hoạt động
 
@@ -35,7 +35,7 @@ Camera phát hiện hành động → LeLamp tự ghi vào wellbeing JSONL.
 | `enter` / `leave` | Phát hiện hiện diện (backend) |
 
 ### 2. Intent từ hội thoại (qua SOUL)
-User nhắc đến hoạt động hàng ngày → Lumi âm thầm ghi vào wellbeing JSONL.
+User nhắc đến hoạt động hàng ngày → Lamp âm thầm ghi vào wellbeing JSONL.
 
 | User nói | Action ghi |
 |----------|------------|
@@ -44,7 +44,7 @@ User nhắc đến hoạt động hàng ngày → Lumi âm thầm ghi vào wellb
 | "good night", "going to sleep" | `sleep` |
 | "gym", "workout", "going for a run" | `exercise` |
 
-**Quy tắc:** Chỉ ghi khi user nói intent NGAY BÂY GIỜ — không ghi quá khứ hay nói chung chung. Ghi âm thầm, Lumi trả lời tự nhiên.
+**Quy tắc:** Chỉ ghi khi user nói intent NGAY BÂY GIỜ — không ghi quá khứ hay nói chung chung. Ghi âm thầm, Lamp trả lời tự nhiên.
 
 ## Xây dựng Pattern (Flow A)
 
@@ -89,7 +89,7 @@ Khi Step 3 threshold check fire một nudge (uống nước > 45 min? nghỉ > 3
 
 Không có nudge habit-only riêng — habit chỉ enrich phrasing cho threshold nudge, không phải trigger thứ hai. Tránh double-nudge và giữ chi phí bootstrap của Flow A trên hot path nudge (rare), không phải trên mỗi `motion.activity` tick.
 
-**Ví dụ:** Hydration timer của Leo vượt threshold lúc 9h15. Flow A trả `drink @ hour=9 typical_minute=10 strength=moderate`. Lumi nói *"bạn thường uống nước giờ này — làm 1 ly nhé?"* thay vì câu generic *"lâu rồi chưa uống nước — làm 1 ly nha?"*.
+**Ví dụ:** Hydration timer của Leo vượt threshold lúc 9h15. Flow A trả `drink @ hour=9 typical_minute=10 strength=moderate`. Lamp nói *"bạn thường uống nước giờ này — làm 1 ly nhé?"* thay vì câu generic *"lâu rồi chưa uống nước — làm 1 ly nha?"*.
 
 ### Music-suggestion — genre ưa thích (Flow C)
 
@@ -104,13 +104,13 @@ Trước khi chọn genre từ bảng mood mặc định, music-suggestion đọ
 
 Khi user hỏi thẳng về thói quen của ai đó (*"What are Leo's habits?"*, *"bạn biết thói quen của Chloe không?"*, *"Notice anything about my patterns?"*), habit skill chạy Flow A trước rồi chọn 1 trong 3 chế độ trả lời theo kết quả Flow A:
 
-| Flow A trả về | Reply mode | Lumi nói gì |
+| Flow A trả về | Reply mode | Lamp nói gì |
 |---|---|---|
 | `days_observed ≥ 3` VÀ ≥1 pattern moderate/strong | **Pattern** | Kể tên 2–3 pattern mạnh nhất kèm giờ + tần suất |
 | `insufficient_data` HOẶC tất cả pattern weak HOẶC <2 pattern | **Narrative** | Đọc raw `wellbeing/*.jsonl` 7 ngày gần nhất, mô tả hoạt động cụ thể (ngày/giờ/action) — kết bằng câu thành thật là chưa đủ ngày để gọi là habit |
 | `insufficient_data` VÀ `patterns.json` cũ > 3 ngày | **Honest-gap** | Thừa nhận thiếu data, không đọc lại pattern stale như là sự thật hiện tại |
 
-Honest-gap mode tồn tại vì freshness guard của Flow A giữ lại `patterns.json` cũ ngay cả khi data hiện tại không đủ. Không có rule này, Lumi sẽ vô tư đọc patterns 2 tuần cũ như là pattern hôm nay.
+Honest-gap mode tồn tại vì freshness guard của Flow A giữ lại `patterns.json` cũ ngay cả khi data hiện tại không đủ. Không có rule này, Lamp sẽ vô tư đọc patterns 2 tuần cũ như là pattern hôm nay.
 
 Flow E **override** OUTPUT RULE 1-câu (chỉ áp dụng cho nudge enrichment): cho phép 2–4 câu, được nói ngày/giờ/tần suất xấp xỉ trong câu thoại. Raw timestamp, JSON, pattern math thô vẫn ở trong `thinking`.
 
@@ -120,7 +120,7 @@ Validate: Step 1 (đọc history) → Step 2 (tính delta) → Step 3 (fire nudg
 
 ### Điều kiện
 - User có ≥3 ngày wellbeing JSONL files (Flow A cần ≥3 ngày).
-- Lumi + OpenClaw chạy trên Pi.
+- Lamp + OpenClaw chạy trên Pi.
 - **Reset agent session trước** (file edit không tự propagate vào session đang chạy). Cách: dùng nút "Reset session" trong OpenClaw web monitor cho `agent:main:main`.
 
 ### Seed data hôm nay
@@ -128,7 +128,7 @@ Validate: Step 1 (đọc history) → Step 2 (tính delta) → Step 3 (fire nudg
 Append trực tiếp vào file ngày hôm nay (cùng path lelamp ghi). `enter` sáng + `drink` sáng + `using computer` gần đây — tạo hydration delta vượt threshold 5 phút test.
 
 ```bash
-ssh pi@<lumi-ip> 'sudo bash' <<'EOF'
+ssh pi@<lamp-ip> 'sudo bash' <<'EOF'
 F=/root/local/users/<user>/wellbeing/$(date +%F).jsonl
 > "$F"
 ENTER_TS=$(date -d "today 09:00" +%s)
@@ -143,12 +143,12 @@ EOF
 ### Fire activity event (cùng path lelamp pipeline)
 
 ```bash
-curl -s -X POST 'http://<lumi-ip>/api/sensing/event' \
+curl -s -X POST 'http://<lamp-ip>/api/sensing/event' \
   -H 'Content-Type: application/json' \
   -d '{"type":"motion.activity","message":"Activity detected: using computer.","current_user":"<user>"}'
 ```
 
-### Hành vi agent kỳ vọng (verified 2026-04-28 trên `lumi-002`)
+### Hành vi agent kỳ vọng (verified 2026-04-28 trên `lamp-002`)
 
 | Stage | Observed |
 |---|---|
@@ -166,7 +166,7 @@ curl -s -X POST 'http://<lumi-ip>/api/sensing/event' \
 ### Verify
 
 ```bash
-ssh pi@<lumi-ip> 'sudo bash -c "
+ssh pi@<lamp-ip> 'sudo bash -c "
   cat /root/local/users/<user>/habit/patterns.json | jq .updated_at,.days_observed
   tail -1 /root/local/users/<user>/wellbeing/$(date +%F).jsonl | jq .action
 "'
@@ -188,10 +188,10 @@ Tab Users hiện badge **habit** cho mỗi user khi `patterns.json` tồn tại.
 
 | File | Mục đích |
 |------|----------|
-| `lumi/resources/openclaw-skills/habit/SKILL.md` | Skill definition — Flow A–D, algorithm, storage |
-| `lumi/internal/openclaw/resources/SOUL.md` | Section "Observing Habits" — ghi intent từ hội thoại |
-| `lumi/resources/openclaw-skills/wellbeing/SKILL.md` | Step 3b — invoke Flow A khi có nudge; dùng patterns.json để enrich phrasing nudge |
-| `lumi/internal/openclaw/onboarding.go` | Đăng ký habit vào danh sách skills |
+| `lamp/resources/openclaw-skills/habit/SKILL.md` | Skill definition — Flow A–D, algorithm, storage |
+| `lamp/internal/openclaw/resources/SOUL.md` | Section "Observing Habits" — ghi intent từ hội thoại |
+| `lamp/resources/openclaw-skills/wellbeing/SKILL.md` | Step 3b — invoke Flow A khi có nudge; dùng patterns.json để enrich phrasing nudge |
+| `lamp/internal/openclaw/onboarding.go` | Đăng ký habit vào danh sách skills |
 | `lelamp/models.py` | Field `habit_patterns` trong FacePersonDetail |
 | `lelamp/routes/sensing.py` | Check habit/patterns.json trong face/owners API |
-| `lumi/web/src/pages/monitor/FaceOwnersSection.tsx` | Habit badge + folder trong tab Users |
+| `lamp/web/src/pages/monitor/FaceOwnersSection.tsx` | Habit badge + folder trong tab Users |

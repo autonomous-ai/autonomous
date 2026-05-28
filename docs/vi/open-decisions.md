@@ -1,4 +1,4 @@
-# Quyết Định — AI Lamp (Lumi)
+# Quyết Định — AI Lamp (Lamp)
 
 > Tất cả blocking decisions đã chốt. Document này track lại toàn bộ quyết định.
 
@@ -6,7 +6,7 @@
 
 | Quyết định | Bối cảnh | Phương án | Đề xuất |
 |---|---|---|---|
-| Channel abstraction layer | UC-15 multi-channel (Telegram/Slack/Discord) hiện "miễn phí" nhờ OpenClaw built-in. Nhưng nếu đổi gateway khác (không phải OpenClaw), multi-channel sẽ mất. | (1) Không làm gì — chấp nhận lock-in OpenClaw cho channels. (2) Build channel abstraction ở Lumi level để messaging hoạt động bất kể gateway. (3) Defer cho đến khi thực sự cần đổi gateway. | Option 3 (YAGNI), nhưng thiết kế UC-15 với ý thức rằng channel support phụ thuộc gateway. Ghi rõ dependency. |
+| Channel abstraction layer | UC-15 multi-channel (Telegram/Slack/Discord) hiện "miễn phí" nhờ OpenClaw built-in. Nhưng nếu đổi gateway khác (không phải OpenClaw), multi-channel sẽ mất. | (1) Không làm gì — chấp nhận lock-in OpenClaw cho channels. (2) Build channel abstraction ở Lamp level để messaging hoạt động bất kể gateway. (3) Defer cho đến khi thực sự cần đổi gateway. | Option 3 (YAGNI), nhưng thiết kế UC-15 với ý thức rằng channel support phụ thuộc gateway. Ghi rõ dependency. |
 
 ---
 
@@ -14,12 +14,12 @@
 
 | Quyết định | Kết quả | Docs |
 |---|---|---|
-| Bridge Go ↔ Python | HTTP proxy. LeLamp FastAPI `127.0.0.1:5001`, Lumi proxy từ port 5000. | `architecture-decision.md` §11, `bootstrap-ota.md` §6 |
+| Bridge Go ↔ Python | HTTP proxy. LeLamp FastAPI `127.0.0.1:5001`, Lamp proxy từ port 5000. | `architecture-decision.md` §11, `bootstrap-ota.md` §6 |
 | LeLamp source | Mono-repo. Copy drivers từ `humancomputerlab/lelamp_runtime` vào `lelamp/`. Track upstream qua `UPSTREAM.md`. | `bootstrap-ota.md` §6 |
-| Tên project/character | **Lumi** (from "luminous"). Binary: `lumi-server`. Service: `lumi.service`. Wake word: "Hey Lumi". | Tất cả docs |
+| Tên project/character | **Lamp** (from "luminous"). Binary: `lamp-server`. Service: `lamp.service`. Wake word: "Hey Lamp". | Tất cả docs |
 | Display concept | Dual-mode: pixel-art eyes (default) + info display (giờ, thời tiết, timer, notifications). | `architecture-decision.md` §3, `product-vision.md` §4 |
-| Autonomous sensing | Hybrid. Lumi chạy edge detection nhẹ. Đẩy event cho OpenClaw khi cần AI quyết định. | `product-vision.md` §2 Pillar 4 |
-| OTA components | 5 thành phần: lumi, bootstrap, web, openclaw, lelamp. | `bootstrap-ota.md` §1-§3 |
+| Autonomous sensing | Hybrid. Lamp chạy edge detection nhẹ. Đẩy event cho OpenClaw khi cần AI quyết định. | `product-vision.md` §2 Pillar 4 |
+| OTA components | 5 thành phần: lamp, bootstrap, web, openclaw, lelamp. | `bootstrap-ota.md` §1-§3 |
 | Product pillars | 4 Trụ cột: "Hiểu tôi", "Sống thật", "Hữu ích thật", "Tự hành". | `product-vision.md` §2 |
 
 ## Đã chốt (2026-03-25)
@@ -30,16 +30,16 @@
 | Inline LLM service | Xóa `internal/llm/`. `ListModelsFromAPI` inline vào `openclaw/service.go`. |
 | Loại bỏ onboarding | Xóa `onboarding.go`. Setup flow đơn giản hóa. |
 | Dọn dẹp scripts | Xóa `release-*.sh`, GWS scripts. Thêm `upload-lelamp.sh`. |
-| Đổi tên thư mục | Toàn bộ code vào `lumi/`. |
+| Đổi tên thư mục | Toàn bộ code vào `lamp/`. |
 | LED driver ownership | LeLamp Python rpi_ws281x own toàn bộ LED. Go SPI driver đã xóa. |
 | SKILL.md (#1) | 9 skills: led-control, servo-control, camera, audio, emotion, sensing, scene, display, scheduling. Tất cả mô tả HTTP API tại `127.0.0.1:5001`. |
-| Event push (#2) | WebSocket RPC `chat.send` với `operator.write` scope. LeLamp POST → Lumi Go `/api/sensing/event` → OpenClaw WS. |
+| Event push (#2) | WebSocket RPC `chat.send` với `operator.write` scope. LeLamp POST → Lamp Go `/api/sensing/event` → OpenClaw WS. |
 | Camera processing (#3) | On-device OpenCV trong LeLamp Python. Frame diff cho motion, Haar cascade cho face detection, mean brightness cho light level. Auto-snapshot (full-resolution JPEG q85) khi event đáng kể → forward OpenClaw vision. |
 | AI Vision | Bật (`SupportsVision: true`, `Input: ["text", "image"]`). Sensing event có ảnh gửi qua `SendChatMessageWithImage` → AI nhìn được camera snapshot. |
 | Face detection vs recognition | **Cả hai done.** Face detection (P1) qua Haar cascade. Face **recognition** (P2) qua InsightFace embeddings — `facerecognizer.py` phân loại owner vs stranger, fire `presence.enter` kèm tên hoặc `stranger_N`. Enrollment qua `/face/enroll` API + `face-enroll/SKILL.md`. Stranger visit tracking có persistence. |
 | Voice/speaker identification | **Done (2026-04).** LeLamp `speaker_recognizer.py` nhận diện người nói bằng voice embedding. Transcript có prefix `Name:` (đã enroll) hoặc `Unknown:` (chưa enroll). Tự enroll qua voice intro hoặc Telegram voice note. |
 | Enrolled gating strategy | **Done (2026-04).** Dual-gate: face recognition (InsightFace) + voice recognition (`speaker_recognizer.py`). Cả hai chạy on-device. Người lạ phân loại `Unknown`/`stranger`. Per-user data gated bằng identity. Self-enrollment cho cả face (`/face/enroll`) và voice (qua skill). |
-| Audio/Voice (#4) | LeLamp own mic/speaker. Local VAD (RMS energy) + on-demand Deepgram STT. Wake word "Hey Lumi" trong transcript → `voice_command` (ưu tiên). Không có wake word → `voice` (ambient sensing). |
+| Audio/Voice (#4) | LeLamp own mic/speaker. Local VAD (RMS energy) + on-demand Deepgram STT. Wake word "Hey Lamp" trong transcript → `voice_command` (ưu tiên). Không có wake word → `voice` (ambient sensing). |
 | Emotion presets (#6) | 8 presets (curious, happy, sad, thinking, idle, excited, shy, shock) + 11 eye expressions trên display. |
 | Display rendering (#7) | `gc9a01-python` + PIL/Pillow. 240x240 round LCD. Dual-mode eyes/info. Auto-blink. Plugin — skip nếu không có. |
 | Lighting scenes | 6 presets: reading, focus, relax, movie, night, energize. Simulated color temp qua RGB mixing. |

@@ -1,6 +1,6 @@
 # Sensing Threshold Tuning Guide
 
-How to tune Lumi's sensing thresholds on real hardware.
+How to tune Lamp's sensing thresholds on real hardware.
 All constants live in `lelamp/config.py` and `lelamp/service/voice/voice_service.py`.
 
 ## View Logs
@@ -11,8 +11,8 @@ SSH into the Pi, then:
 # LeLamp log (motion, sound, light events all here)
 tail -f /var/log/lelamp/server.log
 
-# Lumi log (confirms event received + forwarded to OpenClaw)
-journalctl -fu lumi -f
+# Lamp log (confirms event received + forwarded to OpenClaw)
+journalctl -fu lamp -f
 ```
 
 When an event fires you will see two lines — one in each log:
@@ -21,7 +21,7 @@ When an event fires you will see two lines — one in each log:
 # lelamp log
 INFO lelamp.service.sensing.sensing_service: [sensing] motion: Small movement detected...
 
-# lumi log
+# lamp log
 [sensing] received motion event → forwarding to OpenClaw
 ```
 
@@ -110,10 +110,10 @@ LELAMP_SILERO_ENABLED = false      # tertiary gate (ONNX); webrtcvad usually eno
 |---------|-----|
 | First syllable clipped (STT hears "ật đèn" instead of "bật đèn") | Increase `LELAMP_PRE_ROLL_FRAMES` (8 → 12) or decrease `LELAMP_VAD_THRESHOLD` (3500 → 1500) |
 | Wake word not picked up reliably | Decrease `LELAMP_VAD_THRESHOLD` (3500 → 1500) + enable `LELAMP_WEBRTCVAD_ENABLED=true` as safety net |
-| Lumi starts listening from ambient noise | Increase `LELAMP_VAD_THRESHOLD` and/or enable `LELAMP_WEBRTCVAD_ENABLED=true` |
-| Lumi cuts off before you finish speaking | Increase `LELAMP_SILENCE_TIMEOUT` |
+| Lamp starts listening from ambient noise | Increase `LELAMP_VAD_THRESHOLD` and/or enable `LELAMP_WEBRTCVAD_ENABLED=true` |
+| Lamp cuts off before you finish speaking | Increase `LELAMP_SILENCE_TIMEOUT` |
 | Stale audio from previous turn bleeds into next session | Already mitigated: `lookback.clear()` fires after each session closes |
-| Lumi repeats its own TTS back to OpenClaw (echo loop) | Decrease `ECHO_SIMILARITY_THRESHOLD` (0.55 → 0.45) |
+| Lamp repeats its own TTS back to OpenClaw (echo loop) | Decrease `ECHO_SIMILARITY_THRESHOLD` (0.55 → 0.45) |
 
 ---
 
@@ -162,7 +162,7 @@ The area ratio threshold filters out faces that are **too small** relative to th
 | Distant people not recognized | Decrease `FACE_AREA_RATIO_THRESHOLD` (0.05 → 0.02) |
 | False detections from tiny face-like patches | Increase `FACE_AREA_RATIO_THRESHOLD` (0.05 → 0.1) |
 | Presence events fire too often | Increase `FACE_COOLDOWN_S` (10 → 30) |
-| Lumi forgets owner too quickly after leaving | Increase `FACE_OWNER_FORGET_S` |
+| Lamp forgets owner too quickly after leaving | Increase `FACE_OWNER_FORGET_S` |
 
 ---
 
@@ -194,7 +194,7 @@ Per-face motion opens a separate WS session per detected face and runs action re
 
 **Files:** `lelamp/config.py`, `lelamp/service/voice/voice_service.py` (`_submit_speech_emotion_from_session`, `_identify_and_decorate`, `_session_wav_for_ser`) — see also [Speech Emotion Recognition](speech-emotion.md) for the full architecture. **Vietnamese:** [docs/vi/sensing-tuning_vi.md](vi/sensing-tuning_vi.md) (SER section), [speech-emotion_vi.md](vi/speech-emotion_vi.md).
 
-**Voice integration (session end, transcript-independent):** in the `finally` block of every mic session (VAD trigger → ~2.5 s silence), `_stream_session` runs `_identify_and_decorate(final_text, audio_buffer)` **once** to resolve both `final_msg` (for the Lumi POST when STT had text) and `user_name` (for the SER submit). The result is passed to `_submit_speech_emotion_from_session(audio_buffer, user=...)`, which builds the WAV and calls `SpeechEmotionService.submit`. Unknown / no-match speakers still enqueue SER under the shared `unknown` dedup key when audio is long enough.
+**Voice integration (session end, transcript-independent):** in the `finally` block of every mic session (VAD trigger → ~2.5 s silence), `_stream_session` runs `_identify_and_decorate(final_text, audio_buffer)` **once** to resolve both `final_msg` (for the Lamp POST when STT had text) and `user_name` (for the SER submit). The result is passed to `_submit_speech_emotion_from_session(audio_buffer, user=...)`, which builds the WAV and calls `SpeechEmotionService.submit`. Unknown / no-match speakers still enqueue SER under the shared `unknown` dedup key when audio is long enough.
 
 ```python
 SPEECH_EMOTION_ENABLED = True
@@ -229,7 +229,7 @@ The service tags every line `[speech_emotion]`:
 ```
 INFO lelamp.voice.speech_emotion: [speech_emotion] buffered: alice -> sad (0.72, 2.40s)
 INFO lelamp.voice.speech_emotion: [speech_emotion] flushing alice: Speech emotion detected: Sad. (weak voice cue; confidence=0.72; bucket=negative; ...) (mode of sad, fearful, sad)
-INFO lelamp.voice.speech_emotion: [speech_emotion] sent to Lumi: Speech emotion detected: Sad. ...
+INFO lelamp.voice.speech_emotion: [speech_emotion] sent to Lamp: Speech emotion detected: Sad. ...
 INFO lelamp.voice.speech_emotion: [speech_emotion] dedup drop: angry bucket=negative (key seen 87.4s ago)
 ```
 
@@ -242,9 +242,9 @@ The `flushing` line shows the raw label list — that's the mode-over-samples th
 | Same-bucket events fire too often | Increase `SPEECH_EMOTION_DEDUP_WINDOW_S` (300 → 600) |
 | Single-utterance noisy reads slip through | Raise the offending label's entry in `CONFIDENCE_THRESHOLD_BY_LABEL` (`constants.py`) — e.g. nudge `"sad": 0.6 → 0.7`. Bump `DEFAULT_CONFIDENCE_THRESHOLD` only if the noise is across the board |
 | Short "yeah" / "ok" utterances flagged | Increase `SPEECH_EMOTION_MIN_AUDIO_S` (3.0 → 4.0) |
-| Mood lag — Lumi too slow to react after a real shift | Decrease `SPEECH_EMOTION_FLUSH_S` (10 → 5) |
+| Mood lag — Lamp too slow to react after a real shift | Decrease `SPEECH_EMOTION_FLUSH_S` (10 → 5) |
 | Worker queue full warnings in log | Investigate dlbackend latency; raising queue size is not enough — backlog means something downstream is wedged |
-| Too many `speech_emotion.detected` for strangers | Expected: unknown speakers use `user="unknown"`; tighten the per-label entry in `CONFIDENCE_THRESHOLD_BY_LABEL` (`constants.py`) or dedup window — do not disable SER solely because Lumi transcript says `Unknown Speaker:` |
+| Too many `speech_emotion.detected` for strangers | Expected: unknown speakers use `user="unknown"`; tighten the per-label entry in `CONFIDENCE_THRESHOLD_BY_LABEL` (`constants.py`) or dedup window — do not disable SER solely because Lamp transcript says `Unknown Speaker:` |
 
 ---
 

@@ -94,7 +94,7 @@ When servo is in hold mode (reading/focus), **emotion animations are suppressed*
 - `happy`, `thinking`, `curious`, `sad`, etc. → servo + LED skipped
 - `greeting`, `sleepy`, `stretching` → **allowed** (these signal state changes: wake, sleep, scene transition)
 
-This means during focus, sensing events (face emotion, motion) still reach OpenClaw but Lumi stays physically still and visually stable.
+This means during focus, sensing events (face emotion, motion) still reach OpenClaw but Lamp stays physically still and visually stable.
 
 ### Color temperature rationale
 
@@ -123,11 +123,11 @@ Managed by `internal/statusled/Service` (lumi) and `lib/lelamp` directly (bootst
 
 ### Setup-needed solid (lumi)
 
-When lumi starts and `config.SetUpCompleted == false` (device in AP/provisioning mode), `server/server.go` spawns a background goroutine that polls LeLamp `GET /health` once per second up to 30s, and once `health.led == true` fires `lelamp.SetSolid(255, 255, 255)` — paints the strip solid white as a "device ready, connect to my hotspot" cue. Polling (not a single call) handles the cold-boot race where lumi-server's :5000 is up before LeLamp's :5001. No status LED state is used. Booting blue-breathing still shows during init. See [setup-flow.md](setup-flow.md#ap-mode).
+When lamp starts and `config.SetUpCompleted == false` (device in AP/provisioning mode), `server/server.go` spawns a background goroutine that polls LeLamp `GET /health` once per second up to 30s, and once `health.led == true` fires `lelamp.SetSolid(255, 255, 255)` — paints the strip solid white as a "device ready, connect to my hotspot" cue. Polling (not a single call) handles the cold-boot race where lamp-server's :5000 is up before LeLamp's :5001. No status LED state is used. Booting blue-breathing still shows during init. See [setup-flow.md](setup-flow.md#ap-mode).
 
 ## Ambient Idle Behaviors
 
-When Lumi is idle (no interaction):
+When Lamp is idle (no interaction):
 - **Breathing LED** — sine-wave brightness, warm palette
 
 Auto-pauses on interaction, resumes after 60s of silence.

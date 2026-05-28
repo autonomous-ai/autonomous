@@ -180,7 +180,7 @@ UNIT
 | `bootstrap.service` | `/usr/local/bin/bootstrap-server` | 8080 | OTA worker, polls for updates. Exposes `POST /force-check` to trigger immediate OTA check |
 | `openclaw.service` | `xvfb-run ... openclaw gateway run` | — | AI brain, memory limit 1500M |
 | `lumi-lelamp.service` | `uvicorn lelamp.server:app --host 127.0.0.1 --port 5001` | 5001 | Hardware drivers (servo, LED, camera, audio) |
-| nginx | `nginx` | 80 | Setup SPA + reverse proxy (`/api/` → Lumi 5000, `/hw/` → LeLamp 5001) |
+| nginx | `nginx` | 80 | Setup SPA + reverse proxy (`/api/` → Lamp 5000, `/hw/` → LeLamp 5001) |
 
 ### Service Dependency Order
 
@@ -329,7 +329,7 @@ LeLamp runtime code is **copied** from the upstream open-source project into thi
 
 **Why copy, not submodule/subtree:**
 - We need to **remove** LiveKit/OpenAI integration (replaced by OpenClaw)
-- We need to **add** HTTP API server (Flask/FastAPI) for Lumi Server to bridge to
+- We need to **add** HTTP API server (Flask/FastAPI) for Lamp Server to bridge to
 - We need to **add** DisplayService (GC9A01 eyes + info, not in original)
 - We need to **modify** services to work with our architecture
 - The overlap is drivers only (~30-40% of their code), the rest is rewritten
@@ -400,10 +400,10 @@ lelamp-{version}.zip
 
 ### LeLamp HTTP API (FastAPI on port 5001)
 
-The LeLamp Python runtime exposes its own HTTP API on `127.0.0.1:5001`. Lumi Server (Go, port 5000) bridges OpenClaw skill requests to this API. Nginx proxies `/hw/*` for same-machine callers only — external clients receive 403. Swagger UI at `/hw/docs` is not accessible from LAN.
+The LeLamp Python runtime exposes its own HTTP API on `127.0.0.1:5001`. Lamp Server (Go, port 5000) bridges OpenClaw skill requests to this API. Nginx proxies `/hw/*` for same-machine callers only — external clients receive 403. Swagger UI at `/hw/docs` is not accessible from LAN.
 
 ```
-OpenClaw LLM → curl 127.0.0.1:5000/api/servo → Lumi Server → http://127.0.0.1:5001/servo → LeLamp Python → Hardware
+OpenClaw LLM → curl 127.0.0.1:5000/api/servo → Lamp Server → http://127.0.0.1:5001/servo → LeLamp Python → Hardware
 External     → http://<device-ip>/hw/docs    → nginx → 403 Forbidden
 ```
 
@@ -511,7 +511,7 @@ Guards in the script: refuses if tag already exists locally or on remote, refuse
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 LDFLAGS_BOOTSTRAP := -X go-lamp.autonomous.ai/bootstrap/config.BootstrapVersion=$(VERSION)
-LDFLAGS_LAMP    := -X go-lamp.autonomous.ai/server/config.LumiVersion=$(VERSION)
+LDFLAGS_LAMP    := -X go-lamp.autonomous.ai/server/config.LampVersion=$(VERSION)
 
 build-bootstrap:
 	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_BOOTSTRAP)" -o bootstrap-server ./cmd/bootstrap
@@ -535,7 +535,7 @@ LeLamp version is a plain text `VERSION` file in the package root. Read by boots
 | Setup stages | 7 (stages -1 to 4) | **8** (+ stage 2b: LeLamp) |
 | Systemd services | 4 | **5** (+ lumi-lelamp.service) |
 | Python runtime | None | **LeLamp** at /opt/lelamp/ with venv |
-| Hardware bridge | N/A | Lumi HTTP → LeLamp HTTP (localhost proxy) |
+| Hardware bridge | N/A | Lamp HTTP → LeLamp HTTP (localhost proxy) |
 | SPI usage | LED only | LED + **Display (GC9A01)** |
 
 ---
@@ -543,8 +543,8 @@ LeLamp version is a plain text `VERSION` file in the package root. Read by boots
 ## 10. Open Questions
 
 - [x] **LeLamp source**: Mono-repo. Driver code copied from `humancomputerlab/lelamp_runtime` into `lelamp/`, with LiveKit/OpenAI removed and HTTP API + DisplayService added. Upstream tracked manually via `lelamp/UPSTREAM.md`.
-- [x] **LeLamp HTTP port**: `5001` (Lumi Server is `5000`).
-- [x] **Bridge protocol**: Simple HTTP proxy. LeLamp runs FastAPI on `127.0.0.1:5001`, Lumi Server proxies from port 5000.
+- [x] **LeLamp HTTP port**: `5001` (Lamp Server is `5000`).
+- [x] **Bridge protocol**: Simple HTTP proxy. LeLamp runs FastAPI on `127.0.0.1:5001`, Lamp Server proxies from port 5000.
 - [x] **Python version**: Pinned to Python 3.12+ (`pyproject.toml`, `.python-version`, `setup.sh` uses `uv sync --python 3.12`).
 - [x] **LeLamp packaging**: On-device venv via `uv sync --python 3.12 --extra hardware` at `/opt/lelamp/.venv`. OTA preserves venv, reinstalls only on requirements change.
 - [x] **Display driver**: DisplayService (GC9A01) is part of LeLamp Python at `lelamp/service/display/display_service.py`.

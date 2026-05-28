@@ -2,11 +2,11 @@
 
 > **Short version:** OpenClaw auto-compacts the agent session when conversation tokens approach ~80k. The compaction result (a text `summary`) is then injected at the top of every subsequent turn's prompt until the next compact. If rules are accidentally copied or generalized into that summary, they can override the loaded `SKILL.md` — because the summary sits earlier in the prompt and is framed as "established context."
 >
-> This doc is the reference linked from the **📋 Summary** button in Flow Monitor (modal: `lumi/web/src/pages/monitor/FlowSection/CompactionModal.tsx`).
+> This doc is the reference linked from the **📋 Summary** button in Flow Monitor (modal: `lamp/web/src/pages/monitor/FlowSection/CompactionModal.tsx`).
 
 ## Why compaction exists
 
-The OpenClaw agent keeps a long conversation history. Each turn is the union of `user event`, `thinking`, `tool_call`, `tool_result`, and `assistant reply` entries — all stored in the session `.jsonl`. Over hours of activity, the tokens balloon. Once total context approaches **~80k tokens**, the LLM cannot fit any more input, so OpenClaw (or Lumi — see triggers below) performs a compaction: condense older entries into a single summary text, drop the originals, keep working.
+The OpenClaw agent keeps a long conversation history. Each turn is the union of `user event`, `thinking`, `tool_call`, `tool_result`, and `assistant reply` entries — all stored in the session `.jsonl`. Over hours of activity, the tokens balloon. Once total context approaches **~80k tokens**, the LLM cannot fit any more input, so OpenClaw (or Lamp — see triggers below) performs a compaction: condense older entries into a single summary text, drop the originals, keep working.
 
 ## Compaction record
 
@@ -78,12 +78,12 @@ There are at least three ways a compaction can fire:
 | Source | Trigger | Side-effects | Observed `fromHook` |
 |---|---|---|---|
 | **OpenClaw internal hook** | tokens ≥ 80k, server-side detection | — | `true` |
-| **Lumi RPC** (`lumi/server/openclaw/delivery/sse/handler_events.go:380-406`) | Lumi sees `u.TotalTokens > 80_000` on a lifecycle event, calls `agentGateway.CompactSession(sessionKey)` | TTS speaks *"Hold on, tidying up a bit."*; 2-minute cooldown via `h.compacting` atomic | unknown — needs verification against OpenClaw source |
+| **Lamp RPC** (`lamp/server/openclaw/delivery/sse/handler_events.go:380-406`) | Lamp sees `u.TotalTokens > 80_000` on a lifecycle event, calls `agentGateway.CompactSession(sessionKey)` | TTS speaks *"Hold on, tidying up a bit."*; 2-minute cooldown via `h.compacting` atomic | unknown — needs verification against OpenClaw source |
 | **Manual / debug** | Someone invokes `sessions.compact` RPC directly (e.g. from a client tool) | — | likely `false` |
 
-**Heuristic to distinguish on UI today:** if a record's `timestamp` is within a few seconds after a `"sessions.compact sent"` log line in Lumi's journal for the same `sessionKey`, it was Lumi-initiated. Otherwise OpenClaw's internal hook.
+**Heuristic to distinguish on UI today:** if a record's `timestamp` is within a few seconds after a `"sessions.compact sent"` log line in Lamp's journal for the same `sessionKey`, it was Lumi-initiated. Otherwise OpenClaw's internal hook.
 
-A future enhancement: the compaction modal could correlate the latest compact's timestamp against Lumi's log to label the trigger.
+A future enhancement: the compaction modal could correlate the latest compact's timestamp against Lamp's log to label the trigger.
 
 ## Observed frequency (48h sample, main session)
 
@@ -103,7 +103,7 @@ The abnormal burst pattern is unexplained — possibly a session restart / check
 4. **Generational loss.** Each compaction reads the *previous* summary as input. Rule distortions get re-summarized → drift compounds, JPEG-save-JPEG style.
 5. **Hard cap.** The summary is capped around 16000 characters (observed: three distinct records hit exactly that value). Content is dropped non-deterministically when the cap is reached.
 
-When Flow Monitor shows Lumi citing rules that `grep` cannot find in any `lumi/resources/openclaw-skills/**/SKILL.md`, the compaction summary is almost always the real source — not the loaded skill.
+When Flow Monitor shows Lamp citing rules that `grep` cannot find in any `lamp/resources/openclaw-skills/**/SKILL.md`, the compaction summary is almost always the real source — not the loaded skill.
 
 ## Inspecting the active summary
 
@@ -146,11 +146,11 @@ for l in sys.stdin:
 
 | File | Role |
 |---|---|
-| `lumi/server/openclaw/delivery/sse/handler_api_compaction.go` | HTTP handler: reads `sessions.json`, scans session `.jsonl` for newest `type:"compaction"`. |
-| `lumi/server/openclaw/delivery/sse/handler_events.go` | Lumi-side RPC trigger (auto-compact when `TotalTokens > 80_000`, TTS notice, 2-min cooldown). |
-| `lumi/internal/openclaw/service_chat.go` | `CompactSession(sessionKey)` — the `sessions.compact` RPC sender. |
-| `lumi/domain/agent.go` | `AgentGateway.CompactSession` interface. |
-| `lumi/web/src/pages/monitor/FlowSection/CompactionModal.tsx` | UI modal — shows timestamp, summary chars, session file, full summary text; links back to this doc. |
+| `lamp/server/openclaw/delivery/sse/handler_api_compaction.go` | HTTP handler: reads `sessions.json`, scans session `.jsonl` for newest `type:"compaction"`. |
+| `lamp/server/openclaw/delivery/sse/handler_events.go` | Lumi-side RPC trigger (auto-compact when `TotalTokens > 80_000`, TTS notice, 2-min cooldown). |
+| `lamp/internal/openclaw/service_chat.go` | `CompactSession(sessionKey)` — the `sessions.compact` RPC sender. |
+| `lamp/domain/agent.go` | `AgentGateway.CompactSession` interface. |
+| `lamp/web/src/pages/monitor/FlowSection/CompactionModal.tsx` | UI modal — shows timestamp, summary chars, session file, full summary text; links back to this doc. |
 | `docs/flow-monitor.md` | Parent doc — cross-references this one. |
 
 Vietnamese summary: [`docs/vi/openclaw-compaction_vi.md`](vi/openclaw-compaction_vi.md).

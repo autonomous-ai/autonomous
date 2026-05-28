@@ -1,7 +1,7 @@
 # Status LED — Specification
 
-Status LEDs give users visual feedback about what Lumi is doing internally.
-Without them, users cannot tell whether Lumi is booting, updating, disconnected from its AI brain, or otherwise impaired.
+Status LEDs give users visual feedback about what Lamp is doing internally.
+Without them, users cannot tell whether Lamp is booting, updating, disconnected from its AI brain, or otherwise impaired.
 
 ## Design Principles
 
@@ -18,7 +18,7 @@ All states use the `breathing` effect at speed 3.0 unless noted. RGB values come
 | `StateConnectivity` | Orange | `(255, 80, 0)` | **No Internet** — Wi-Fi connected but no internet | Network monitor: 5 consecutive ping failures (~25s) | Yes — when ping succeeds |
 | `StateError` | Red | `(255, 0, 0)` | **Error** — System error (reserved) | Critical failure | Yes — when error resolves |
 | `StateOTA` | Green | `(0, 255, 0)` | **Updating** — OTA firmware update in progress (reserved enum; bootstrap drives OTA LED directly via `lib/lelamp` — see "Bootstrap (OTA)" below) | Bootstrap reconcile detects update | Reboots after update completes |
-| `StateBooting` | Blue | `(0, 80, 255)` | **Booting** — Lumi is starting up | `server.go` on startup | Yes — when OpenClaw agent connects and is ready |
+| `StateBooting` | Blue | `(0, 80, 255)` | **Booting** — Lamp is starting up | `server.go` on startup | Yes — when OpenClaw agent connects and is ready |
 | `StateLeLampDown` | Purple | `(180, 0, 255)` | **LeLamp Down** — Hardware server unreachable. While LeLamp is down the LED is **dark** because the LED driver itself is down; the purple breathing only shows for ~3s on recovery | `healthwatch` poll fails to reach LeLamp `/health` | Auto-clears 3s after recovery |
 | `StateAgentDown` | Cyan | `(0, 200, 200)` | **Agent Down** — AI brain disconnected | OpenClaw WebSocket drops (`internal/openclaw/service_ws.go`) | Yes — when WebSocket reconnects |
 | `StateHardware` | Yellow | `(255, 255, 0)` | **Hardware Failure** — servo/LED/audio/voice component reports unhealthy via LeLamp `/health` | `healthwatch` poll (every 5s); camera and sensing excluded | Yes — when all monitored components report healthy |
@@ -59,9 +59,9 @@ Priority numbers (from `priority` map in `service.go`):
 | `StateAgentDown` | 2 |
 | `StateHardware` | 1 (lowest) |
 
-Example: if Lumi has no internet AND the agent is down, **No Internet** (orange) wins because it has higher priority.
+Example: if Lamp has no internet AND the agent is down, **No Internet** (orange) wins because it has higher priority.
 
-Bootstrap's OTA LED writes bypass this priority queue — they run while bootstrap owns the strip, typically when lumi is being restarted.
+Bootstrap's OTA LED writes bypass this priority queue — they run while bootstrap owns the strip, typically when lamp is being restarted.
 
 ## Behavior Details
 
@@ -74,7 +74,7 @@ Bootstrap's OTA LED writes bypass this priority queue — they run while bootstr
 - Network service pings every 5 seconds
 - After 5 consecutive failures (~25 seconds), `StateConnectivity` is set
 - Cleared immediately when a ping succeeds
-- Lumi continues to function locally but cloud features are unavailable
+- Lamp continues to function locally but cloud features are unavailable
 
 ### Agent Down (Cyan)
 - Activated when the OpenClaw WebSocket connection drops
@@ -102,12 +102,12 @@ Bootstrap's OTA LED writes bypass this priority queue — they run while bootstr
 - Device reboots after a successful update — LED transitions to Booting (blue) on the new boot
 
 ### Error (Red — reserved)
-- `StateError` enum is defined in `statusled.Service` but is not currently set by any caller in lumi
+- `StateError` enum is defined in `statusled.Service` but is not currently set by any caller in lamp
 - Bootstrap uses red `pulse` directly to indicate OTA failure (not via `statusled.Service`)
 
 ## Architecture
 
-### Lumi (lamp-server)
+### Lamp (lamp-server)
 
 `internal/statusled/Service` manages active states with a priority map. Callers `Set` and `Clear` named states; the service applies the LED effect for the highest-priority active state.
 
@@ -166,14 +166,14 @@ A status state **overrides** all of the above when active. Once it clears, norma
 
 | User sees | What's happening |
 |---|---|
-| Blue breathing | Lumi is booting |
-| Brief white flash | Lumi is ready to listen |
-| Cyan breathing | AI brain is disconnected (Lumi can still control lights/servo locally) |
+| Blue breathing | Lamp is booting |
+| Brief white flash | Lamp is ready to listen |
+| Cyan breathing | AI brain is disconnected (Lamp can still control lights/servo locally) |
 | Purple breathing (after dark) | LeLamp recovered from a crash |
 | Dark / no LED | LeLamp crashed (LED driver is down) |
-| Orange breathing | No internet (Lumi is offline) |
+| Orange breathing | No internet (Lamp is offline) |
 | Yellow breathing | A hardware component is unhealthy |
 | Green breathing | OTA firmware update in progress |
 | Green flash | OTA update completed successfully |
 | Red pulse | OTA update failed |
-| Warm breathing (normal) | Lumi is idle, just vibing |
+| Warm breathing (normal) | Lamp is idle, just vibing |

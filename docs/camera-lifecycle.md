@@ -48,7 +48,7 @@ When presence state transitions to `away` (no motion for away_timeout seconds) �
 
 ### 4. Voice command: "don't look" / "stop watching"
 
-User says "Lumi, đừng nhìn" / "don't watch me" / "privacy mode" → agent calls `[HW:/camera/disable:{}]`.
+User says "Lamp, đừng nhìn" / "don't watch me" / "privacy mode" → agent calls `[HW:/camera/disable:{}]`.
 - Explicit user request for privacy
 - Only voice command or web toggle can re-enable
 
@@ -92,7 +92,7 @@ Cron job at configured wake time (e.g. 6:00 AM) → turn camera on.
 
 ### 6. Voice command: "look" / "nhìn xem"
 
-User says "Lumi, nhìn xem" / "look at me" / "camera on" → agent calls `[HW:/camera/enable:{}]`.
+User says "Lamp, nhìn xem" / "look at me" / "camera on" → agent calls `[HW:/camera/enable:{}]`.
 - Explicit user request
 
 ### 7. Telegram/web chat with visual context needed
@@ -129,7 +129,7 @@ Manual override does NOT get auto-overridden by scene/emotion/presence triggers.
 
 7. **`_tick()` in sensing_service**: ✅ Already works — `frame = None` when camera stopped, vision perceptions skip. No change needed.
 
-### Lumi (Go)
+### Lamp (Go)
 
 8. **Voice service / wake word**: ❌ Skipped — wake word → agent → emotion preset `"camera": "on"` already re-enables camera automatically. No need for early enable.
 
@@ -141,7 +141,7 @@ Manual override does NOT get auto-overridden by scene/emotion/presence triggers.
 
 11. **Scene / Emotion SKILL.md**: ❌ Skipped — camera toggle is automatic in server.py via preset `"camera"` field. Agent doesn't need to know.
 
-### Lumi Go (intent.go, lib/lelamp)
+### Lamp Go (intent.go, lib/lelamp)
 
 12. **intent.go + lib/lelamp/client.go**: ❌ Skipped — local intents call `/scene` endpoint which already handles camera via preset. No Go-side camera helpers needed.
 
@@ -169,7 +169,7 @@ Manual override does NOT get auto-overridden by scene/emotion/presence triggers.
 
 ## Digital Zoom
 
-Software zoom for focusing on small subjects (e.g. a laptop screen during a video call so Lumi can read it).
+Software zoom for focusing on small subjects (e.g. a laptop screen during a video call so Lamp can read it).
 
 ### API
 

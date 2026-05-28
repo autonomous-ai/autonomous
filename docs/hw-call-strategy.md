@@ -3,7 +3,7 @@
 ## Current: Inline Markers (SKILL.md dạy LLM viết `[HW:...]`)
 
 ```
-LLM nghĩ 1 lần → output: [HW:/emotion:...][HW:/servo:...] Reply text → lifecycle end → Lumi parse → fire HW
+LLM nghĩ 1 lần → output: [HW:/emotion:...][HW:/servo:...] Reply text → lifecycle end → Lamp parse → fire HW
 ```
 
 - **1 inference round**
@@ -23,7 +23,7 @@ LLM nghĩ → tool_call(exec, curl /emotion) → đợi result → nghĩ → too
 - Tốn token, chậm tổng thời gian turn
 - LLM thấy được result (nhưng HW calls không cần)
 
-## Proposed: Batch API trên Lumi
+## Proposed: Batch API trên Lamp
 
 ### Concept
 
@@ -47,12 +47,12 @@ Tạo 1 endpoint duy nhất, LLM chỉ truyền key nào cần call:
 POST http://127.0.0.1:5001/hw/batch
 ```
 
-Lumi nhận → check key nào có → chỉ dispatch những cái đó, song song → return 1 response.
+Lamp nhận → check key nào có → chỉ dispatch những cái đó, song song → return 1 response.
 
 ### Flow
 
 ```
-LLM nghĩ → 1 tool_call(exec, curl /hw/batch) → Lumi fire ALL song song → result "ok" → LLM nghĩ → text reply
+LLM nghĩ → 1 tool_call(exec, curl /hw/batch) → Lamp fire ALL song song → result "ok" → LLM nghĩ → text reply
 ```
 
 ### So sánh
@@ -92,4 +92,4 @@ OpenClaw hỗ trợ param `parallel_tool_calls` nhưng:
 
 1. **LeLamp Python**: Tạo `POST /hw/batch` endpoint, nhận JSON, dispatch song song tới các service
 2. **SKILL.md**: Viết 1 skill mới `hw-batch` thay thế emotion/servo/led/scene skills
-3. **Lumi Go handler**: Có thể giữ nguyên (exec tool path đã hoạt động), hoặc thêm detect `/hw/batch` trong tool args để log chi tiết hơn
+3. **Lamp Go handler**: Có thể giữ nguyên (exec tool path đã hoạt động), hoặc thêm detect `/hw/batch` trong tool args để log chi tiết hơn

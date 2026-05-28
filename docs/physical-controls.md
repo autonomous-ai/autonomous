@@ -1,6 +1,6 @@
 # Physical Controls — GPIO Button + TTP223 Touchpad
 
-Lumi has two physical input devices the user can touch directly. They share the same action library (`lelamp/service/button_actions.py`) so any gesture mapped to "single click" behaves identically whether it came from the mechanical button or the capacitive touchpad.
+Lamp has two physical input devices the user can touch directly. They share the same action library (`lelamp/service/button_actions.py`) so any gesture mapped to "single click" behaves identically whether it came from the mechanical button or the capacitive touchpad.
 
 ## Why two devices
 
@@ -89,11 +89,11 @@ All three actions live in one place so the GPIO button, TTP223, and any future i
 | `single_click_action(source)` | If mic is muted: unmute. Else stop TTS + stop music. Then speak the localized "I'm listening" cue with retry-on-busy. | Yes — calls `stop_tts()` and the cue itself preempts. |
 | `triple_click_action(source)` | Speak "Rebooting now" → wait 5 s for the cached clip → `sudo reboot`. | Yes |
 | `long_press_action(source)` | Speak "Shutting down now" → wait 5 s → `release_servos()` (so the lamp doesn't slam down mid-pose) → `sudo shutdown -h now`. | Yes |
-| `head_pat_action(source)` | Pick a random localized pet phrase, speak it via `speak_cached` on a daemon thread. **Non-interrupting**: if TTS is already speaking, the phrase is dropped silently — petting mid-sentence shouldn't truncate Lumi. | No |
+| `head_pat_action(source)` | Pick a random localized pet phrase, speak it via `speak_cached` on a daemon thread. **Non-interrupting**: if TTS is already speaking, the phrase is dropped silently — petting mid-sentence shouldn't truncate Lamp. | No |
 
 ## Localized phrases
 
-All four actions are localized per `stt_language` from Lumi's `config.json`. Language constants live in `lelamp/presets.py` (`LANG_EN`, `LANG_VI`, `LANG_ZH_CN`, `LANG_ZH_TW`, `DEFAULT_LANG`). Falls back to `DEFAULT_LANG` (English) when the active language has no translation.
+All four actions are localized per `stt_language` from Lamp's `config.json`. Language constants live in `lelamp/presets.py` (`LANG_EN`, `LANG_VI`, `LANG_ZH_CN`, `LANG_ZH_TW`, `DEFAULT_LANG`). Falls back to `DEFAULT_LANG` (English) when the active language has no translation.
 
 ### Safety announcements (one phrase per language)
 
@@ -101,11 +101,11 @@ All four actions are localized per `stt_language` from Lumi's `config.json`. Lan
 
 ### Pet responses (15 phrases per language, random pick)
 
-Pet phrases are picked at random from a 15-entry pool per language so Lumi doesn't sound robotic when petted repeatedly. Tone reflects Lumi's character (AI companion + smart light + expressive robot, "like a pet/friend"):
+Pet phrases are picked at random from a 15-entry pool per language so Lamp doesn't sound robotic when petted repeatedly. Tone reflects Lamp's character (AI companion + smart light + expressive robot, "like a pet/friend"):
 
 - Tickle / giggle: "Hehe, that tickles!" / "Hihi, nhột quá!"
 - Pet-like purring: "I'm purring." / "Mình kêu rừ rừ nè!" / "我咕噜咕噜啦！"
-- Light-themed (Lumi = luminous): "You light me up." / "Mình sáng cả lên rồi nè!"
+- Light-themed (Lamp = luminous): "You light me up." / "Mình sáng cả lên rồi nè!"
 - Warm heart: "My heart's glowing." / "Tim mình ấm lên!"
 - Ask for more: "More, please!" / "Vuốt nữa đi mà!"
 - Compliment giver: "You're the best." / "Mình mê cái này lắm!"

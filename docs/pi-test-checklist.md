@@ -11,14 +11,14 @@ Track which features have been manually tested on the Raspberry Pi 4.
 | # | Component | How to test | Status | Notes |
 |---|---|---|---|--|
 | INF-01 | LeLamp startup | SSH vào Pi, chạy `sudo systemctl status lelamp` hoặc `python server.py` trực tiếp. Expect: không có exception, log "Application startup complete" | ✅ | |
-| INF-02 | Lumi startup | `sudo systemctl status lumi` hoặc chạy binary trực tiếp. Expect: log "connected to OpenClaw WebSocket" | ✅ | |
+| INF-02 | Lamp startup | `sudo systemctl status lamp` hoặc chạy binary trực tiếp. Expect: log "connected to OpenClaw WebSocket" | ✅ | |
 | INF-03 | LED driver | `curl -X POST http://pi:5001/led/solid -d '{"r":255,"g":100,"b":0,"brightness":80}'` → LED sáng màu cam | ✅ | |
 | INF-04 | Servo driver | `curl -X POST http://pi:5001/servo/move -d '{"positions":{"tilt":90}}'` → servo tilt di chuyển | ✅ | |
 | INF-05 | Audio playback | `curl -X POST http://pi:5001/voice/speak -d '{"text":"hello","language":"en"}'` → nghe thấy giọng nói qua speaker | ✅ | |
 | INF-06 | Mic capture | `curl -X POST http://pi:5001/voice/start` → nói thử → `curl http://pi:5001/voice/status` xem có transcript không | ✅ | |
 | INF-07 | Camera | `curl http://pi:5001/camera` → `{"available":true}`. Rồi `curl http://pi:5001/camera/snapshot -o test.jpg` → mở file xem ảnh có rõ không | ✅ | |
-| INF-08 | Sensing loop | Đứng trước camera → xem log Lumi có nhận `POST /api/sensing/event` với `type:"presence.enter"` không | ✅ | |
-| INF-09 | OpenClaw WS | Xem log Lumi khi start. Expect: `[openclaw] websocket connected`. Gửi thử 1 message từ Telegram/Web UI → có response không | ✅ | |
+| INF-08 | Sensing loop | Đứng trước camera → xem log Lamp có nhận `POST /api/sensing/event` với `type:"presence.enter"` không | ✅ | |
+| INF-09 | OpenClaw WS | Xem log Lamp khi start. Expect: `[openclaw] websocket connected`. Gửi thử 1 message từ Telegram/Web UI → có response không | ✅ | |
 
 ---
 
@@ -28,7 +28,7 @@ Track which features have been manually tested on the Raspberry Pi 4.
 |---|---|---|---|---|
 | UC-01 | Voice control | Nói: **"bật đèn"** → LED bật. Nói: **"tắt đèn"** → LED tắt. Nói: **"sáng hơn"** → LED tăng brightness | ✅ | |
 | UC-02 | LED color via voice | Nói: **"đèn màu xanh"** → LED xanh. Nói: **"đèn vàng ấm"** → LED vàng. Nói: **"màu hoàng hôn"** → LED gradient cam-hồng | ✅ | |
-| UC-14 | Voice reply (TTS + body language) | Hỏi: **"hôm nay thời tiết thế nào?"** → Lumi trả lời bằng giọng + servo cử động + LED đổi theo cảm xúc khi nói | ✅ | |
+| UC-14 | Voice reply (TTS + body language) | Hỏi: **"hôm nay thời tiết thế nào?"** → Lamp trả lời bằng giọng + servo cử động + LED đổi theo cảm xúc khi nói | ✅ | |
 
 ---
 
@@ -40,7 +40,7 @@ Track which features have been manually tested on the Raspberry Pi 4.
 | UC-04 | Scheduling | Nói: **"30 giây nữa tắt đèn"** → đợi 30s → LED tắt. Nói: **"hủy timer"** → timer bị cancel | ✅ | |
 | UC-06 | AI assistant | Nói: **"dịch hello sang tiếng Việt"** → trả lời đúng. Nói: **"thời tiết Hà Nội hôm nay"** → có thông tin thời tiết | ✅ | |
 | UC-08 | Servo via voice | Nói: **"nghiêng sang trái"** → servo tilt trái. Nói: **"hướng xuống bàn"** → servo cúi xuống. Nói: **"thẳng lên"** → servo về thẳng | ✅ | |
-| UC-11 | Presence detection | **Enter:** Rời xa rồi bước vào khung hình camera → Lumi tự chào (không cần nói gì). **Leave:** Rời khỏi tầm nhìn camera > 15 phút → đèn tự dim/tắt. **Noise check:** Ngồi yên gõ phím bình thường → Lumi không bị trigger bởi micro-movement (motion threshold tuning) | ⚠️ | `presence_service.py` + SOUL.md greet rule có đủ, chưa test thực tế trên Pi |
+| UC-11 | Presence detection | **Enter:** Rời xa rồi bước vào khung hình camera → Lamp tự chào (không cần nói gì). **Leave:** Rời khỏi tầm nhìn camera > 15 phút → đèn tự dim/tắt. **Noise check:** Ngồi yên gõ phím bình thường → Lamp không bị trigger bởi micro-movement (motion threshold tuning) | ⚠️ | `presence_service.py` + SOUL.md greet rule có đủ, chưa test thực tế trên Pi |
 | UC-13 | System status LED | **Boot:** Tắt/bật Pi → quan sát LED sequence (booting → connecting → ready). **Listening:** Nói wake word → LED đổi màu báo hiệu đang nghe | ✅ | Listening state (cyan breathing) implemented + tested |
 
 ---
@@ -64,7 +64,7 @@ Track which features have been manually tested on the Raspberry Pi 4.
 
 | # | Use Case | How to test | Status | Notes |
 |---|---|---|---|---|
-| EX-09 | Speaker recognition | Nói gì đó → xem transcript có prefix `Name:` (recognized) hoặc `Unknown:` (chưa enroll) | ✅ | LeLamp `speaker_recognizer.py` + Lumi `speaker-recognizer` skill |
+| EX-09 | Speaker recognition | Nói gì đó → xem transcript có prefix `Name:` (recognized) hoặc `Unknown:` (chưa enroll) | ✅ | LeLamp `speaker_recognizer.py` + Lamp `speaker-recognizer` skill |
 | EX-10 | Voice self-enrollment | Nói **"I'm Leo"** hoặc **"tôi là Leo"** khi chưa enroll → agent tự enroll voice profile từ audio path | ✅ | Skill triggers on `Unknown Speaker:... (audio save at <path>)` + self-intro |
 | EX-11 | Telegram voice enrollment | Gửi voice note trên Telegram kèm giới thiệu tên → agent enroll voice + link Telegram identity | ✅ | Skill handles `[mediaPaths: ...]` + intro detection |
 
@@ -76,8 +76,8 @@ Track which features have been manually tested on the Raspberry Pi 4.
 |---|---|---|---|---|
 | EX-12 | Facial emotion detection | Ngồi trước camera, thể hiện cảm xúc → xem log có `emotion.detected` event | ✅ | LeLamp `emotion.py` via dlbackend WS, 7 emotions (Angry/Disgust/Fear/Happy/Sad/Surprise/Neutral) |
 | EX-13 | Mood logging from emotion | `emotion.detected` → agent tự POST `/api/mood/log` → `curl http://pi:5000/api/openclaw/mood-history` có entry | ✅ | `user-emotion-detection` skill → `mood` skill pipeline |
-| EX-14 | Proactive wellness nudge | Ngồi làm việc lâu (sedentary activity detected) → Lumi nhắc uống nước / đứng dậy | ✅ | `wellbeing` skill, event-driven from `motion.activity` sedentary labels |
-| EX-15 | Proactive music suggestion | Mood decision logged (stressed/tired/etc.) → Lumi gợi ý nhạc phù hợp | ✅ | `music-suggestion` skill, triggers on mood decisions + sedentary activity |
+| EX-14 | Proactive wellness nudge | Ngồi làm việc lâu (sedentary activity detected) → Lamp nhắc uống nước / đứng dậy | ✅ | `wellbeing` skill, event-driven from `motion.activity` sedentary labels |
+| EX-15 | Proactive music suggestion | Mood decision logged (stressed/tired/etc.) → Lamp gợi ý nhạc phù hợp | ✅ | `music-suggestion` skill, triggers on mood decisions + sedentary activity |
 
 ---
 

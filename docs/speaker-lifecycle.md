@@ -1,12 +1,12 @@
 # Speaker Lifecycle — Mute/Unmute Audio Output
 
-Suppress all audio output (TTS, music, backchannel) khi user không muốn Lumi phát âm thanh.
+Suppress all audio output (TTS, music, backchannel) khi user không muốn Lamp phát âm thanh.
 
 ## Design
 
 Software flag `_speaker_muted`. TTS/music/backchannel check flag trước khi play → skip. Volume hardware giữ nguyên, unmute → hoạt động lại ngay.
 
-Khác mic mute: mic mute = Lumi không nghe (deaf). Speaker mute = Lumi không nói. Mic vẫn on → user vẫn ra lệnh voice để unmute.
+Khác mic mute: mic mute = Lamp không nghe (deaf). Speaker mute = Lamp không nói. Mic vẫn on → user vẫn ra lệnh voice để unmute.
 
 ## Mute
 

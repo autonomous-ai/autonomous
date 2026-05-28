@@ -4,7 +4,7 @@
 
 ## Overview
 
-Lumi identifies who is speaking via **WeSpeaker ResNet34** (256-dim embedding, ONNX Runtime). When a speaker is not recognized, LeLamp saves the audio and optionally nudges the AI agent to enroll the voice. Enrollment is **self-service only** — each person enrolls their own voice.
+Lamp identifies who is speaking via **WeSpeaker ResNet34** (256-dim embedding, ONNX Runtime). When a speaker is not recognized, LeLamp saves the audio and optionally nudges the AI agent to enroll the voice. Enrollment is **self-service only** — each person enrolls their own voice.
 
 ## Architecture
 
@@ -27,12 +27,12 @@ Lumi identifies who is speaking via **WeSpeaker ResNet34** (256-dim embedding, O
 │    │       ├─ PASS → "Unknown Speaker: ... (audio save at <path>,   │
 │    │       │          auto enroll ...)"                              │
 │    │       └─ FAIL → "Unknown Speaker: ..." (no enroll instruction) │
-│    └─ POST /api/sensing/event → Lumi (Go)                          │
+│    └─ POST /api/sensing/event → Lamp (Go)                          │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Lumi (Go, port 5000)                                               │
+│  Lamp (Go, port 5000)                                               │
 │                                                                     │
 │  Two paths (both call domain.AppendEnrollNudge):                    │
 │                                                                     │
@@ -69,7 +69,7 @@ Four layers prevent the agent from repeatedly asking "who are you?":
 |-------|-------|------|---------|
 | **Audio duration** | LeLamp `voice_service.py` | `duration_s < SPEAKER_MIN_AUDIO_S` (0.8s) | Skip recognition entirely for very short audio |
 | **Enroll instruction** | LeLamp `_should_request_enroll()` | `≥ 15 words AND ≥ 2s audio` | Don't append full enroll instruction for short utterances (short variant with multi-turn combine hint is still sent) |
-| **Lumi-side nudge cooldown** | Lumi `domain/voice.go` | `5 min since last nudge` | Don't inject SKILL.md instruction more than once per 5 min |
+| **Lumi-side nudge cooldown** | Lamp `domain/voice.go` | `5 min since last nudge` | Don't inject SKILL.md instruction more than once per 5 min |
 | **Per-voiceprint nudge cooldown** | LeLamp `voice_service.py` | `30 min per voiceprint_hash` (`LELAMP_ENROLL_NUDGE_COOLDOWN_S`) | Don't repeat "ask user's name" for the same unknown voice cluster; plain `Unknown Speaker:` message sent instead |
 
 ## Model & Embedding
@@ -125,7 +125,7 @@ Every unknown voice is locally clustered so the server can say "this is the same
 | Min audio for recognition | 0.8s | `LELAMP_SPEAKER_MIN_AUDIO_S` | Skip recognition below this |
 | Min words for enroll nudge | 15 | Hardcoded in `_should_request_enroll()` | Transcript word count gate |
 | Min duration for enroll nudge | 2.0s | Hardcoded in `_should_request_enroll()` | Audio duration gate |
-| Lumi nudge cooldown | 5 min | Hardcoded in `domain/voice.go` | Don't re-inject SKILL instruction globally |
+| Lamp nudge cooldown | 5 min | Hardcoded in `domain/voice.go` | Don't re-inject SKILL instruction globally |
 | Per-voiceprint nudge cooldown | 30 min | `LELAMP_ENROLL_NUDGE_COOLDOWN_S` | Don't re-ask name for same voiceprint cluster |
 | Voice stranger match threshold | 0.65 | `LELAMP_VOICE_STRANGER_MATCH_THRESHOLD` | Cosine similarity to cluster unknown voice into existing `voice_N` |
 | Max voice strangers | 50 | `LELAMP_MAX_VOICE_STRANGERS` | Cluster cap; oldest evicted when exceeded |
@@ -183,10 +183,10 @@ Every unknown voice is locally clustered so the server can say "this is the same
 | Enroll gate | `lelamp/service/voice/voice_service.py` | `_should_request_enroll()` |
 | Message formatting | `lelamp/service/voice/voice_service.py` | `_format_unknown_speaker()` |
 | Speaker recognizer | `lelamp/service/voice/speaker_recognizer/speaker_recognizer.py` | `SpeakerRecognizer` |
-| Nudge injection + cooldown | `lumi/domain/voice.go` | `AppendEnrollNudge()` |
-| Direct event path | `lumi/server/sensing/delivery/http/handler.go` | `PostEvent()` |
-| Drain/replay path | `lumi/internal/openclaw/service.go` | `drainPendingEvents()` |
-| Agent skill | `lumi/resources/openclaw-skills/speaker-recognizer/SKILL.md` | — |
+| Nudge injection + cooldown | `lamp/domain/voice.go` | `AppendEnrollNudge()` |
+| Direct event path | `lamp/server/sensing/delivery/http/handler.go` | `PostEvent()` |
+| Drain/replay path | `lamp/internal/openclaw/service.go` | `drainPendingEvents()` |
+| Agent skill | `lamp/resources/openclaw-skills/speaker-recognizer/SKILL.md` | — |
 | Embedding model | `dlbackend/src/core/audio_recognition/audio_recognizer.py` | `ResNet34Recognizer` (default), `EcapaTdnn1024Recognizer`, `CamPPlusRecognizer` — chọn qua env `AUDIO_RECOGNIZER_ENGINE` |
 | Embedding endpoint | `dlbackend/src/protocols/htpp/audio_recognizer.py` | `embed_audio()` |
 | Config | `lelamp/config.py` | `SPEAKER_*` constants |
@@ -205,7 +205,7 @@ User says: "hey" (2 words, 0.9s audio)
 User says: "turn on the lights please" (5 words, 3s audio)
 → LeLamp: recognize → unknown, _should_request_enroll(5 words, 3s) = false
 → Message: "Unknown Speaker: turn on the lights please"
-→ Lumi: no "audio save at" in message → AppendEnrollNudge returns unchanged
+→ Lamp: no "audio save at" in message → AppendEnrollNudge returns unchanged
 → Agent: responds normally, doesn't ask who user is
 ```
 
@@ -231,7 +231,7 @@ User turn 2: "I'm Alex." (2 words)
 User says: "Hi my name is Leo and I just got home from work..." (30 words, 8s audio)
 → LeLamp: recognize → unknown, _should_request_enroll(30 words, 8s) = true
 → Message: "Unknown Speaker: Hi my name is Leo... (audio save at /tmp/lumi-unknown-voice/incoming_xxx.wav, auto enroll...)"
-→ Lumi: AppendEnrollNudge → cooldown OK → append "[REQUIRED: Follow speaker-recognizer/SKILL.md...]"
+→ Lamp: AppendEnrollNudge → cooldown OK → append "[REQUIRED: Follow speaker-recognizer/SKILL.md...]"
 → Agent: detects "my name is Leo" → POST /speaker/enroll → "Nice to meet you, Leo!"
 ```
 
@@ -240,6 +240,6 @@ User says: "Hi my name is Leo and I just got home from work..." (30 words, 8s au
 Same unknown speaker, 2 minutes later:
 → LeLamp: _should_request_enroll = true (long enough)
 → Message has "audio save at"
-→ Lumi: AppendEnrollNudge → cooldown NOT elapsed (< 5 min) → skip instruction
+→ Lamp: AppendEnrollNudge → cooldown NOT elapsed (< 5 min) → skip instruction
 → Agent: sees "Unknown Speaker: ..." without SKILL instruction → responds normally
 ```

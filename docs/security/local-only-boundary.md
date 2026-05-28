@@ -1,4 +1,4 @@
-# Security Audit: Local-only API Boundary for Lumi / LeLamp / OpenClaw
+# Security Audit: Local-only API Boundary for Lamp / LeLamp / OpenClaw
 
 Date: 2026-05-16  
 Repo: `ai-lamp-lumi`  
@@ -10,15 +10,15 @@ The current project exposes several high-risk local-control surfaces too broadly
 
 1. **LeLamp Python hardware API** is started on `0.0.0.0:5001` in multiple places. This means any device on the same LAN/AP can call endpoints that control camera, mic, speaker, LED, servo, voice, bluetooth, system actions, etc.
 2. **Nginx proxies `/hw/` to LeLamp** without access control. Even if LeLamp is later changed to bind only `127.0.0.1`, nginx can still expose it externally unless `/hw/` is blocked.
-3. **Lumi Go API has wildcard CORS (`*`)** and exposes powerful endpoints including `system exec`, web shell, and OpenClaw config JSON through `/api/`.
+3. **Lamp Go API has wildcard CORS (`*`)** and exposes powerful endpoints including `system exec`, web shell, and OpenClaw config JSON through `/api/`.
 4. **OpenClaw gateway `/gw/` is proxied by nginx** with no nginx-level LAN block. Depending on gateway auth/config and browser context, this can expose agent control surfaces.
 5. **DL backend defaults to `0.0.0.0` and treats missing `DL_API_KEY` as auth disabled.** This is acceptable only for local dev, dangerous if reachable from LAN/Internet.
 
 Recommended target posture:
 
-- **LeLamp (`:5001`)**: callable only from same machine by Lumi Go server and OpenClaw.
+- **LeLamp (`:5001`)**: callable only from same machine by Lamp Go server and OpenClaw.
 - **DL backend (`:8001`)**: bind loopback by default; require `DL_API_KEY` for any non-loopback exposure.
-- **Lumi Go server (`:5000` behind nginx `/api/`)**: keep externally reachable only for intended setup/UI APIs; block or authenticate dangerous admin endpoints.
+- **Lamp Go server (`:5000` behind nginx `/api/`)**: keep externally reachable only for intended setup/UI APIs; block or authenticate dangerous admin endpoints.
 - **Nginx**: deny external access to `/hw/` and `/gw/` unless an explicit authenticated remote-admin mode is designed.
 
 ---
@@ -262,10 +262,10 @@ Apply the same `allow/deny` block in its `location /hw/`.
 If the web UI needs specific hardware status externally, do **not** expose raw `/hw/*`. Instead:
 
 1. Keep `/hw/*` denied externally.
-2. Add narrow, authenticated, sanitized endpoints in Lumi Go server, e.g.:
+2. Add narrow, authenticated, sanitized endpoints in Lamp Go server, e.g.:
    - `/api/hardware/status`
    - `/api/hardware/snapshot` only if user is authenticated and explicitly allowed
-3. Lumi Go calls LeLamp locally and returns a controlled response.
+3. Lamp Go calls LeLamp locally and returns a controlled response.
 
 ### Acceptance checks
 
@@ -451,7 +451,7 @@ HTTP/1.1 200 OK
 
 ---
 
-## Finding 4 — Lumi Go server uses wildcard CORS
+## Finding 4 — Lamp Go server uses wildcard CORS
 
 ### Severity
 
@@ -459,7 +459,7 @@ HTTP/1.1 200 OK
 
 ### Evidence
 
-`lumi/server/server.go:196-205`:
+`lamp/server/server.go:196-205`:
 
 ```go
 func corsMiddleware() gin.HandlerFunc {
@@ -478,7 +478,7 @@ func corsMiddleware() gin.HandlerFunc {
 
 ### Why it is risky
 
-Wildcard CORS allows any website loaded in a browser to issue cross-origin requests to the Lumi API and read responses if the browser can reach the device.
+Wildcard CORS allows any website loaded in a browser to issue cross-origin requests to the Lamp API and read responses if the browser can reach the device.
 
 This is especially risky because the same server exposes setup/config/control endpoints under `/api/`.
 
@@ -583,7 +583,7 @@ Expected: works normally.
 
 ---
 
-## Finding 5 — Dangerous Lumi endpoints are externally reachable through `/api/`
+## Finding 5 — Dangerous Lamp endpoints are externally reachable through `/api/`
 
 ### Severity
 
@@ -591,7 +591,7 @@ Expected: works normally.
 
 ### Evidence
 
-`lumi/server/server.go` routes:
+`lamp/server/server.go` routes:
 
 ```go
 system.POST("exec", s.execCommand)
@@ -640,7 +640,7 @@ Use build tags or config flag, e.g. `LUMI_ENABLE_DEV_ADMIN=false` default.
 
 #### Recommended strategy B — Local-only middleware
 
-Add a local-only middleware in `lumi/server/server.go`:
+Add a local-only middleware in `lamp/server/server.go`:
 
 ```go
 func localOnlyMiddleware() gin.HandlerFunc {
@@ -1047,7 +1047,7 @@ Preferred:
 If the web UI truly needs to access gateway through the device origin, use the exact origin(s), not `*`, e.g.:
 
 ```json
-"allowedOrigins": ["http://lumi.local", "http://192.168.4.1"]
+"allowedOrigins": ["http://lamp.local", "http://192.168.4.1"]
 ```
 
 But do this only with proper token/session auth.
@@ -1083,7 +1083,7 @@ Even if code is fixed, docs telling engineers that external `/hw/docs` is expect
 Update docs to say:
 
 ```md
-LeLamp Python runtime exposes HTTP API on `127.0.0.1:5001` only. Lumi Server (Go) and OpenClaw on the same device may call this API. LAN/Internet clients must not reach hardware endpoints directly. Nginx denies external `/hw/*` access.
+LeLamp Python runtime exposes HTTP API on `127.0.0.1:5001` only. Lamp Server (Go) and OpenClaw on the same device may call this API. LAN/Internet clients must not reach hardware endpoints directly. Nginx denies external `/hw/*` access.
 ```
 
 Replace diagrams like:
@@ -1139,7 +1139,7 @@ Document baseline status codes.
 ### Phase 2 — Close agent/admin control plane
 
 1. Block `/gw` and `/gw/` externally in nginx.
-2. Restrict dangerous Lumi endpoints:
+2. Restrict dangerous Lamp endpoints:
    - `/api/system/exec`
    - `/api/system/shell`
    - `/api/openclaw/config-json`
@@ -1191,7 +1191,7 @@ check_ok_local() {
 }
 
 check_ok_local "LeLamp health direct local" "http://127.0.0.1:5001/health"
-check_ok_local "Lumi health local" "http://127.0.0.1:5000/api/health/live"
+check_ok_local "Lamp health local" "http://127.0.0.1:5000/api/health/live"
 
 if [ "$DEVICE_HOST" != "127.0.0.1" ] && [ "$DEVICE_HOST" != "localhost" ]; then
   check_forbidden "LeLamp direct external" "http://$DEVICE_HOST:5001/health"
@@ -1223,7 +1223,7 @@ After remediation, this should be true:
 | `/api/system/shell` | Local-only or disabled | Denied 403 | Prefer disabled in production |
 | `/api/openclaw/config-json` | Local-only | Denied 403 | Can leak tokens/config |
 | DL backend `:8001` | Allowed | Requires `DL_API_KEY` or not reachable | Default bind loopback |
-| Lumi regular UI `/api/*` | Allowed | Allowed only for intended UI/setup APIs | No wildcard CORS |
+| Lamp regular UI `/api/*` | Allowed | Allowed only for intended UI/setup APIs | No wildcard CORS |
 
 ---
 
@@ -1260,7 +1260,7 @@ Files to edit:
 - `scripts/patch-nginx-gw.sh`
   - Ensure any generated `/gw/` block includes local-only deny rules.
 
-- `lumi/server/server.go`
+- `lamp/server/server.go`
   - Replace wildcard CORS.
   - Add local-only middleware.
   - Protect or remove `system exec`, `system shell`, `openclaw config-json`.
@@ -1291,5 +1291,5 @@ Files to edit:
 
 1. Decide whether the web monitor genuinely needs raw camera stream via `/hw/camera/stream` from browser. If yes, do not expose raw `/hw/*`; create a narrow authenticated Go proxy endpoint.
 2. Decide whether remote shell/exec should exist at all in production. Recommendation: remove/disable by default.
-3. Decide whether `/gw/` must be reachable from browser UI. Recommendation: keep gateway local-only and route required status through sanitized Lumi endpoints.
+3. Decide whether `/gw/` must be reachable from browser UI. Recommendation: keep gateway local-only and route required status through sanitized Lamp endpoints.
 4. If any external admin mode is required, design it explicitly with authentication, authorization, audit logging, and CSRF/CORS rules. Do not rely on LAN trust.

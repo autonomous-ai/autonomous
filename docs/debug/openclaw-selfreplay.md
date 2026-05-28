@@ -4,9 +4,9 @@ Playbook for the "same sensing event gets processed twice" phenomenon observed o
 
 ## Symptom
 
-One `motion.activity` or `presence.enter` event from Lumi turns into **two agent lifecycles**:
+One `motion.activity` or `presence.enter` event from Lamp turns into **two agent lifecycles**:
 
-1. First turn with Lumi-assigned runId (`lumi-chat-NN-<ts>`) — ends with `no_reply`
+1. First turn with Lamp-assigned runId (`lumi-chat-NN-<ts>`) — ends with `no_reply`
 2. Second turn with a fresh OpenClaw UUID (`657eb6ee-...`), ~1 s later, identical input message
 
 Example observed 2026-04-21:
@@ -28,7 +28,7 @@ Key quote from the issue:
 
 Concretely for our pipeline:
 
-1. Lumi sends `[sensing:presence.enter] ...` as `chat-105`.
+1. Lamp sends `[sensing:presence.enter] ...` as `chat-105`.
 2. Agent follows SKILL, emits `[HW:/emotion:...]` markers + `NO_REPLY`.
 3. OpenClaw strips the silent token, leaving **no assistant text**.
 4. Termination logic mistakes this for "final response missing" → scans the session chain → finds the same user message still "unanswered" → re-invokes the model.
@@ -42,7 +42,7 @@ Replay-length scales with context size — longer sessions produce longer replay
 - **Triggers hallucinated side-effects** on the replay turn. In the 2026-04-21 case the replay ran `POST /api/mood/log {kind:"signal",mood:"sad",user:"unknown"}` even though:
   - the event was a `presence.enter`, which `sensing/SKILL.md` explicitly forbids from calling tools, and
   - the mood "sad" was fabricated with no `emotion.detected` trigger in that turn.
-- **Confuses flow correlation** — monitor UI shows two turns for one real event; runId tracking races between Lumi idempotency key and OpenClaw UUID.
+- **Confuses flow correlation** — monitor UI shows two turns for one real event; runId tracking races between Lamp idempotency key and OpenClaw UUID.
 
 ## How to spot it in logs
 
@@ -69,7 +69,7 @@ Or simpler: any run whose `trace_id` is a bare UUID (36 chars, 4 hyphens) with n
 
 ### Medium-term (Lumi-side filter)
 
-Detect the UUID replay and drop it before it reaches the agent runtime. Implemented in the Lumi SSE handler:
+Detect the UUID replay and drop it before it reaches the agent runtime. Implemented in the Lamp SSE handler:
 
 1. Track `lastLifecycleEnd` per session — `{runId, endedAt, inputHash}`.
 2. On incoming `lifecycle_start` with a new UUID runId, compute input hash.

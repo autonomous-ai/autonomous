@@ -3,7 +3,7 @@
 **Status: IMPLEMENTED** (2026-04)
 
 ## Context
-Lumi's FaceRecognizer (`facerecognizer.py`) has `train()` and `reset_enrolled()` but they're never called — all faces are classified as strangers. We need a way for users to send a selfie via Telegram + tag someone → enroll that face for recognition.
+Lamp's FaceRecognizer (`facerecognizer.py`) has `train()` and `reset_enrolled()` but they're never called — all faces are classified as strangers. We need a way for users to send a selfie via Telegram + tag someone → enroll that face for recognition.
 
 Inspired by doggi-sdk's approach: save original JPEG photos per person, re-train from photos on startup.
 
@@ -48,7 +48,7 @@ User sends photo + @mention via Telegram
 - `GET /face/status` — return enrolled_count + enrolled_names
 - All endpoints guard on `sensing_service` and `sensing_service._face_recognizer`
 
-### 4. `lumi/resources/openclaw-skills/face-enroll/SKILL.md`
+### 4. `lamp/resources/openclaw-skills/face-enroll/SKILL.md`
 - New skill file instructing OpenClaw AI:
   - Trigger: user sends photo + "add friend" / @mention / "remember this face"
   - Extract name from @mention or ask user
@@ -58,15 +58,15 @@ User sends photo + @mention via Telegram
   - Also handle: "who do you recognize?" → GET /face/status
   - Also handle: "forget face" / "reset faces" → POST /face/remove or /face/reset
 
-### 5. `lumi/internal/openclaw/onboarding.go`
+### 5. `lamp/internal/openclaw/onboarding.go`
 - Add `"face-enroll"` to the skills download list (~line 38-50)
 
 ## File list
 - `lelamp/service/sensing/perceptions/facerecognizer.py` — persistence + photo storage
 - `lelamp/service/sensing/sensing_service.py` — named reference + load on init
 - `lelamp/server.py` — HTTP endpoints
-- `lumi/resources/openclaw-skills/face-enroll/SKILL.md` — new skill (new file)
-- `lumi/internal/openclaw/onboarding.go` — register skill
+- `lamp/resources/openclaw-skills/face-enroll/SKILL.md` — new skill (new file)
+- `lamp/internal/openclaw/onboarding.go` — register skill
 
 ## Storage
 ```

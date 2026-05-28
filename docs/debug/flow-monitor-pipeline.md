@@ -7,7 +7,7 @@ replaced with a single **Event Pipeline** rect that lists OpenClaw stream
 events in chronological order, with consecutive same-type deltas merged
 into one summary row.
 
-The custom `llm_first_token` flow event (Lumi-generated marker for the
+The custom `llm_first_token` flow event (Lamp-generated marker for the
 first thinking/assistant delta) was also removed — the pipeline aggregator
 and timing strip now observe the first stream delta directly from
 `type === "thinking"` / `"assistant_delta"` SSE events, so the marker
@@ -44,7 +44,7 @@ of `PipelineRow`:
   set so the UI can color them distinctly.
 - Other flow events (`chat_send`, `hw_*`, `tts_send`, `token_usage`)
   are NOT shown in the pipeline — they belong to the surrounding
-  flow nodes (Agent Call, Lumi Hook, etc.) and would clutter the list.
+  flow nodes (Agent Call, Lamp Hook, etc.) and would clutter the list.
 
 ## JSONL footprint
 
@@ -71,9 +71,9 @@ to be re-added.
 
 ## Files changed
 
-- `lumi/web/src/pages/monitor/FlowSection/helpers.ts` — `aggregateEvents()`
+- `lamp/web/src/pages/monitor/FlowSection/helpers.ts` — `aggregateEvents()`
   + `PipelineRow` type
-- `lumi/web/src/pages/monitor/FlowSection/FlowDiagram.tsx` — new
+- `lamp/web/src/pages/monitor/FlowSection/FlowDiagram.tsx` — new
   pipeline rect + foreignObject row list; `agent_thinking` and
   `tool_exec` node circles skipped (FlowStage entries kept for edge
   anchors and visited tracking; `llm_first_token` FlowStage was

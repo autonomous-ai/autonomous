@@ -1,8 +1,8 @@
-# DEV — Lumi Busy-Flag Wedge (Sensing Pipeline Stuck)
+# DEV — Lamp Busy-Flag Wedge (Sensing Pipeline Stuck)
 
-Lumi's sensing pipeline goes silent for several minutes: no `[chat.send] >>>`, no new `lifecycle event`, just a stream of `sensing event queued — agent busy ... runId=` (empty runId). OpenClaw side is idle (`active=0 queued=0`). Self-heals after ~5 min via `busyTTL`.
+Lamp's sensing pipeline goes silent for several minutes: no `[chat.send] >>>`, no new `lifecycle event`, just a stream of `sensing event queued — agent busy ... runId=` (empty runId). OpenClaw side is idle (`active=0 queued=0`). Self-heals after ~5 min via `busyTTL`.
 
-This is **not** a sensing-layer bug — sensing keeps producing events. Lumi is gating them because its `activeTurn` / `IsBusy()` thinks an agent run is still in flight.
+This is **not** a sensing-layer bug — sensing keeps producing events. Lamp is gating them because its `activeTurn` / `IsBusy()` thinks an agent run is still in flight.
 
 ## Self-heal signature
 
@@ -11,23 +11,23 @@ WARN  busy flag expired — auto-clearing (lifecycle.end likely missed) componen
 INFO  draining pending sensing events component=sensing count=N
 ```
 
-`busyTTL` is `5 * time.Minute` in `lumi/internal/openclaw/service_events.go:29`. After that the flag forcibly clears and queued sensing events drain (with high-frequency events coalesced + 60s expiry per `drainPendingEvents`).
+`busyTTL` is `5 * time.Minute` in `lamp/internal/openclaw/service_events.go:29`. After that the flag forcibly clears and queued sensing events drain (with high-frequency events coalesced + 60s expiry per `drainPendingEvents`).
 
 ## Root cause
 
-OpenClaw heartbeat / memory-flush turns run with **`target=none`** and never emit `lifecycle.end` SSE to Lumi. But the `before_agent_reply` turn-gate hook still fires unconditionally and POSTs `/api/openclaw/busy` → `SetBusy(true)`. With no SSE clear and no early hook signal, Lumi waits the full TTL.
+OpenClaw heartbeat / memory-flush turns run with **`target=none`** and never emit `lifecycle.end` SSE to Lamp. But the `before_agent_reply` turn-gate hook still fires unconditionally and POSTs `/api/openclaw/busy` → `SetBusy(true)`. With no SSE clear and no early hook signal, Lamp waits the full TTL.
 
 ```
-hook (turn-gate) ─POST /busy─▶ Lumi.SetBusy(true)            ┐
+hook (turn-gate) ─POST /busy─▶ Lamp.SetBusy(true)            ┐
 OpenClaw heartbeat turn (target=none) ─────────────────────▶ │ no lifecycle.end SSE
                                                              ▼
-                              Lumi busy=true for up to 5 min, drops every sensing chat.send
+                              Lamp busy=true for up to 5 min, drops every sensing chat.send
 ```
 
 Files:
-- Hook source: `lumi/resources/openclaw-hooks/turn-gate/handler.ts`
-- Lumi handler: `lumi/server/openclaw/delivery/sse/handler_api_monitor.go` (`SetBusy`)
-- Auto-clear: `lumi/internal/openclaw/service_events.go` (`busyTTL`, `IsBusy`, `drainPendingEvents`)
+- Hook source: `lamp/resources/openclaw-hooks/turn-gate/handler.ts`
+- Lamp handler: `lamp/server/openclaw/delivery/sse/handler_api_monitor.go` (`SetBusy`)
+- Auto-clear: `lamp/internal/openclaw/service_events.go` (`busyTTL`, `IsBusy`, `drainPendingEvents`)
 
 ## Confirm (3 commands)
 
@@ -35,11 +35,11 @@ Files:
 PI=orangepi@<IP>; PASS=<pass>
 SSH="sshpass -p $PASS ssh -o StrictHostKeyChecking=no $PI"
 
-# 1. Last lifecycle event Lumi saw (should be old):
-$SSH "sudo journalctl -u lumi.service --since '20 min ago' --no-pager | grep 'lifecycle event' | tail -3"
+# 1. Last lifecycle event Lamp saw (should be old):
+$SSH "sudo journalctl -u lamp.service --since '20 min ago' --no-pager | grep 'lifecycle event' | tail -3"
 
 # 2. Last /api/openclaw/busy POST (should be after #1):
-$SSH "sudo journalctl -u lumi.service --since '20 min ago' --no-pager | grep '/api/openclaw/busy' | tail -3"
+$SSH "sudo journalctl -u lamp.service --since '20 min ago' --no-pager | grep '/api/openclaw/busy' | tail -3"
 
 # 3. OpenClaw heartbeat / memoryFlush near #2's timestamp:
 $SSH "sudo grep -E 'isHeartbeat=true|before_agent_reply' /var/log/openclaw/lamp.log | tail -10"
@@ -48,17 +48,17 @@ $SSH "sudo grep -E 'isHeartbeat=true|before_agent_reply' /var/log/openclaw/lamp.
 Wedged when:
 - (2) more recent than (1)
 - (3) shows a heartbeat fire close to (2)
-- Lumi journal has many `sensing event queued — agent busy` lines after (2) with no chat.send
+- Lamp journal has many `sensing event queued — agent busy` lines after (2) with no chat.send
 
 ## Workarounds
 
 - **Wait ≤5 min** — auto-clear fires (`stuck_for_s` in the WARN line tells you how long).
-- **Restart Lumi** if urgent: `sudo systemctl restart lumi`. There is no idle endpoint — POSTing `/api/openclaw/busy` only sets `busy=true` again.
+- **Restart Lamp** if urgent: `sudo systemctl restart lamp`. There is no idle endpoint — POSTing `/api/openclaw/busy` only sets `busy=true` again.
 
 ## Real fix paths
 
-1. **Hook side (preferred)** — turn-gate skips `/api/openclaw/busy` when OpenClaw turn metadata says `target=none` or `isHeartbeat=true`. Edit `lumi/resources/openclaw-hooks/turn-gate/handler.ts`. This is cheapest and removes the trigger entirely.
-2. **Lumi side** — propagate heartbeat marker into `lifecycle.start` payload and have the SSE handler skip `SetBusy(true)` for those. Or shorten `busyTTL` to 60-90s (heartbeat turns finish in ~20s, no point waiting 5 min).
+1. **Hook side (preferred)** — turn-gate skips `/api/openclaw/busy` when OpenClaw turn metadata says `target=none` or `isHeartbeat=true`. Edit `lamp/resources/openclaw-hooks/turn-gate/handler.ts`. This is cheapest and removes the trigger entirely.
+2. **Lamp side** — propagate heartbeat marker into `lifecycle.start` payload and have the SSE handler skip `SetBusy(true)` for those. Or shorten `busyTTL` to 60-90s (heartbeat turns finish in ~20s, no point waiting 5 min).
 
 ## Risk profile
 

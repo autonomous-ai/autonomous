@@ -460,7 +460,7 @@ Where `buildSafeSearch` removes all secret keys.
 Open setup with:
 
 ```text
-http://lumi.local/setup?llm_api_key=SECRET&tele_token=SECRET
+http://lamp.local/setup?llm_api_key=SECRET&tele_token=SECRET
 ```
 
 Expected after load:

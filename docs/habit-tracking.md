@@ -1,6 +1,6 @@
 # Habit Tracking
 
-Habit tracking adds **predictive behavior** to Lumi's wellbeing and music systems. Instead of only reacting to events (threshold nudges, mood-based music), Lumi learns personal patterns over time and acts proactively.
+Habit tracking adds **predictive behavior** to Lamp's wellbeing and music systems. Instead of only reacting to events (threshold nudges, mood-based music), Lamp learns personal patterns over time and acts proactively.
 
 ## How It Works
 
@@ -35,7 +35,7 @@ Camera detects physical actions → LeLamp logs to wellbeing JSONL automatically
 | `enter` / `leave` | Presence detection (backend) |
 
 ### 2. Conversation intent (via SOUL)
-User mentions daily activity in conversation → Lumi silently logs to wellbeing JSONL.
+User mentions daily activity in conversation → Lamp silently logs to wellbeing JSONL.
 
 | User says | Action logged |
 |-----------|---------------|
@@ -44,7 +44,7 @@ User mentions daily activity in conversation → Lumi silently logs to wellbeing
 | "good night", "going to sleep" | `sleep` |
 | "gym", "workout", "going for a run" | `exercise` |
 
-**Rule:** Only logs when user states intent NOW — not past tense or general discussion. Logging is silent; Lumi responds naturally without mentioning it.
+**Rule:** Only logs when user states intent NOW — not past tense or general discussion. Logging is silent; Lamp responds naturally without mentioning it.
 
 ## Pattern Building (Flow A)
 
@@ -126,7 +126,7 @@ When Step 3's threshold check fires a nudge (drink > 45 min? break > 30 min?), w
 
 There is no separate habit-only nudge — habit acts as a phrasing enricher on the threshold nudge, not a second trigger. This avoids double-nudging and keeps Flow A's bootstrap cost on the rare nudge path, not on every `motion.activity` tick.
 
-**Example:** Leo's hydration timer crosses threshold at 9:15. Flow A returns `drink @ hour=9 typical_minute=10 strength=moderate`. Lumi speaks *"you usually have water around now — grab a glass?"* instead of the generic *"been a while — grab some water?"*.
+**Example:** Leo's hydration timer crosses threshold at 9:15. Flow A returns `drink @ hour=9 typical_minute=10 strength=moderate`. Lamp speaks *"you usually have water around now — grab a glass?"* instead of the generic *"been a while — grab some water?"*.
 
 ### Music-suggestion — personal genre preference (Flow C)
 
@@ -141,13 +141,13 @@ Before picking a genre from the default mood table, music-suggestion reads `patt
 
 When the user explicitly asks about a person's routines (*"What are Leo's habits?"*, *"Notice anything about my patterns?"*), the habit skill runs Flow A first, then picks one of three reply modes based on what Flow A returned:
 
-| Flow A returned | Reply mode | What Lumi says |
+| Flow A returned | Reply mode | What Lamp says |
 |---|---|---|
 | `days_observed ≥ 3` AND ≥1 moderate/strong pattern | **Pattern** | Names 2–3 strongest patterns with hour + frequency phrasing |
 | `insufficient_data` OR all weak OR <2 patterns | **Narrative** | Reads raw `wellbeing/*.jsonl` last 7 days and describes concrete activity (dates/hours/actions) — ends with an honest line that it's not enough to call a habit yet |
 | `insufficient_data` AND existing `patterns.json` mtime > 3 days old | **Honest-gap** | Acknowledges the data gap, refuses to recite stale patterns as current |
 
-The honest-gap mode exists because Flow A's freshness guard preserves stale `patterns.json` even when current data is insufficient. Without this rule, Lumi would happily recite a 2-week-old pattern file as if it described today.
+The honest-gap mode exists because Flow A's freshness guard preserves stale `patterns.json` even when current data is insufficient. Without this rule, Lamp would happily recite a 2-week-old pattern file as if it described today.
 
 Flow E **overrides** the one-sentence OUTPUT RULE that governs nudge enrichment: 2–4 sentences are allowed, and concrete dates/hours/approximate counts are permitted in the spoken reply. Raw timestamps, JSON, and internal pattern math still stay in `thinking`.
 
@@ -170,7 +170,7 @@ Validates: Step 1 (read history) → Step 2 (compute delta) → Step 3 (fire nud
 
 ### Prerequisites
 - User has ≥3 days of wellbeing JSONL files (Flow A bootstrap requirement).
-- Lumi + OpenClaw running on Pi.
+- Lamp + OpenClaw running on Pi.
 - **Reset agent session first** (file edits don't propagate into a live session — see Files table below). One way: the OpenClaw web monitor "Reset session" button on `agent:main:main`.
 
 ### Seed today's wellbeing data
@@ -178,7 +178,7 @@ Validates: Step 1 (read history) → Step 2 (compute delta) → Step 3 (fire nud
 Direct-append to today's file (same path lelamp writes to). Use `enter` early, `drink` early, `using computer` recent — produces a hydration delta well above the 5-min test threshold.
 
 ```bash
-ssh pi@<lumi-ip> 'sudo bash' <<'EOF'
+ssh pi@<lamp-ip> 'sudo bash' <<'EOF'
 F=/root/local/users/<user>/wellbeing/$(date +%F).jsonl
 > "$F"
 ENTER_TS=$(date -d "today 09:00" +%s)
@@ -193,12 +193,12 @@ EOF
 ### Fire the activity event (real lelamp pipeline path)
 
 ```bash
-curl -s -X POST 'http://<lumi-ip>/api/sensing/event' \
+curl -s -X POST 'http://<lamp-ip>/api/sensing/event' \
   -H 'Content-Type: application/json' \
   -d '{"type":"motion.activity","message":"Activity detected: using computer.","current_user":"<user>"}'
 ```
 
-### Expected agent behavior (verified 2026-04-28 on `lumi-002`)
+### Expected agent behavior (verified 2026-04-28 on `lamp-002`)
 
 | Stage | Observed |
 |---|---|
@@ -216,7 +216,7 @@ curl -s -X POST 'http://<lumi-ip>/api/sensing/event' \
 ### Verify
 
 ```bash
-ssh pi@<lumi-ip> 'sudo bash -c "
+ssh pi@<lamp-ip> 'sudo bash -c "
   cat /root/local/users/<user>/habit/patterns.json | jq .updated_at,.days_observed
   tail -1 /root/local/users/<user>/wellbeing/$(date +%F).jsonl | jq .action
 "'
@@ -238,10 +238,10 @@ The Users tab shows a **habit** badge per user when `patterns.json` exists. The 
 
 | File | Purpose |
 |------|---------|
-| `lumi/resources/openclaw-skills/habit/SKILL.md` | Skill definition — Flows A–D, algorithm, storage |
-| `lumi/internal/openclaw/resources/SOUL.md` | "Observing Habits" section — conversation intent logging |
-| `lumi/resources/openclaw-skills/wellbeing/SKILL.md` | Step 3b — invokes Flow A on nudge fire; uses patterns.json to enrich nudge phrasing |
-| `lumi/internal/openclaw/onboarding.go` | Registers habit in skills list |
+| `lamp/resources/openclaw-skills/habit/SKILL.md` | Skill definition — Flows A–D, algorithm, storage |
+| `lamp/internal/openclaw/resources/SOUL.md` | "Observing Habits" section — conversation intent logging |
+| `lamp/resources/openclaw-skills/wellbeing/SKILL.md` | Step 3b — invokes Flow A on nudge fire; uses patterns.json to enrich nudge phrasing |
+| `lamp/internal/openclaw/onboarding.go` | Registers habit in skills list |
 | `lelamp/models.py` | `habit_patterns` field in FacePersonDetail |
 | `lelamp/routes/sensing.py` | Checks habit/patterns.json in face/owners API |
-| `lumi/web/src/pages/monitor/FaceOwnersSection.tsx` | Habit badge + folder in Users tab |
+| `lamp/web/src/pages/monitor/FaceOwnersSection.tsx` | Habit badge + folder in Users tab |

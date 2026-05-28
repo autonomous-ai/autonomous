@@ -155,7 +155,7 @@ curl -s -o /dev/null -w "%{http_code}" \
 
 These were reviewed and explicitly deferred. They are not oversights.
 
-### F4 — Lumi Go wildcard CORS (`Access-Control-Allow-Origin: *`)
+### F4 — Lamp Go wildcard CORS (`Access-Control-Allow-Origin: *`)
 
 Not patched because CORS only matters when a browser can reach the endpoint.
 Every high-risk endpoint is already blocked at the nginx layer before a browser

@@ -4,7 +4,7 @@
 
 ## Tổng quan
 
-Lumi nhận diện người nói qua **WeSpeaker ResNet34** (vector nhúng 256 chiều, ONNX Runtime). Khi không nhận ra người nói, LeLamp lưu audio và tuỳ điều kiện sẽ yêu cầu AI agent đăng ký giọng nói. Đăng ký chỉ áp dụng **tự phục vụ** — mỗi người tự đăng ký giọng nói của mình.
+Lamp nhận diện người nói qua **WeSpeaker ResNet34** (vector nhúng 256 chiều, ONNX Runtime). Khi không nhận ra người nói, LeLamp lưu audio và tuỳ điều kiện sẽ yêu cầu AI agent đăng ký giọng nói. Đăng ký chỉ áp dụng **tự phục vụ** — mỗi người tự đăng ký giọng nói của mình.
 
 ## Kiến trúc
 
@@ -28,12 +28,12 @@ Lumi nhận diện người nói qua **WeSpeaker ResNet34** (vector nhúng 256 c
 │    │       │          auto enroll ...)"                              │
 │    │       └─ KHÔNG ĐẠT → "Unknown Speaker: ..." (không kèm yêu   │
 │    │          cầu đăng ký)                                          │
-│    └─ POST /api/sensing/event → Lumi (Go)                          │
+│    └─ POST /api/sensing/event → Lamp (Go)                          │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│  Lumi (Go, port 5000)                                               │
+│  Lamp (Go, port 5000)                                               │
 │                                                                     │
 │  Hai đường đi (cả hai gọi domain.AppendEnrollNudge):                │
 │                                                                     │
@@ -70,7 +70,7 @@ Bốn lớp ngăn agent hỏi "bạn là ai?" liên tục:
 |-----|--------|-----------|----------|
 | **Thời lượng audio** | LeLamp `voice_service.py` | `duration_s < SPEAKER_MIN_AUDIO_S` (0.8s) | Bỏ qua nhận diện hoàn toàn cho audio quá ngắn |
 | **Yêu cầu đăng ký** | LeLamp `_should_request_enroll()` | `≥ 15 từ VÀ ≥ 2s audio` | Không kèm instruction đăng ký đầy đủ cho câu ngắn (biến thể ngắn kèm gợi ý combine vẫn được gửi) |
-| **Cooldown nhắc nhở phía Lumi** | Lumi `domain/voice.go` | `5 phút kể từ lần nhắc trước` | Không chèn SKILL.md instruction quá 1 lần mỗi 5 phút |
+| **Cooldown nhắc nhở phía Lamp** | Lamp `domain/voice.go` | `5 phút kể từ lần nhắc trước` | Không chèn SKILL.md instruction quá 1 lần mỗi 5 phút |
 | **Cooldown theo voiceprint** | LeLamp `voice_service.py` | `30 phút mỗi voiceprint_hash` (`LELAMP_ENROLL_NUDGE_COOLDOWN_S`) | Không lặp lại "hỏi tên user" cho cùng một cluster giọng lạ; gửi message `Unknown Speaker:` trần |
 
 ## Model & Embedding
@@ -126,7 +126,7 @@ Mọi giọng lạ được gom cụm local để server biết "đây là cùng
 | Audio tối thiểu cho nhận diện | 0.8s | `LELAMP_SPEAKER_MIN_AUDIO_S` | Bỏ qua nhận diện dưới ngưỡng này |
 | Số từ tối thiểu cho nudge đăng ký | 15 | Hardcoded trong `_should_request_enroll()` | Cổng số từ transcript |
 | Thời lượng tối thiểu cho nudge đăng ký | 2.0s | Hardcoded trong `_should_request_enroll()` | Cổng thời lượng audio |
-| Cooldown nhắc nhở phía Lumi | 5 phút | Hardcoded trong `domain/voice.go` | Không inject SKILL instruction toàn cục quá 1 lần/5 phút |
+| Cooldown nhắc nhở phía Lamp | 5 phút | Hardcoded trong `domain/voice.go` | Không inject SKILL instruction toàn cục quá 1 lần/5 phút |
 | Cooldown nhắc nhở theo voiceprint | 30 phút | `LELAMP_ENROLL_NUDGE_COOLDOWN_S` | Không hỏi lại tên cho cùng cluster voiceprint |
 | Ngưỡng match voice stranger | 0.65 | `LELAMP_VOICE_STRANGER_MATCH_THRESHOLD` | Cosine similarity để gom giọng lạ vào `voice_N` đã có |
 | Số voice stranger tối đa | 50 | `LELAMP_MAX_VOICE_STRANGERS` | Giới hạn cluster; evict oldest khi vượt |
@@ -184,10 +184,10 @@ Mọi giọng lạ được gom cụm local để server biết "đây là cùng
 | Cổng đăng ký | `lelamp/service/voice/voice_service.py` | `_should_request_enroll()` |
 | Định dạng message | `lelamp/service/voice/voice_service.py` | `_format_unknown_speaker()` |
 | Bộ nhận diện giọng nói | `lelamp/service/voice/speaker_recognizer/speaker_recognizer.py` | `SpeakerRecognizer` |
-| Chèn instruction + cooldown | `lumi/domain/voice.go` | `AppendEnrollNudge()` |
-| Đường trực tiếp | `lumi/server/sensing/delivery/http/handler.go` | `PostEvent()` |
-| Đường hàng đợi/phát lại | `lumi/internal/openclaw/service.go` | `drainPendingEvents()` |
-| Skill agent | `lumi/resources/openclaw-skills/speaker-recognizer/SKILL.md` | — |
+| Chèn instruction + cooldown | `lamp/domain/voice.go` | `AppendEnrollNudge()` |
+| Đường trực tiếp | `lamp/server/sensing/delivery/http/handler.go` | `PostEvent()` |
+| Đường hàng đợi/phát lại | `lamp/internal/openclaw/service.go` | `drainPendingEvents()` |
+| Skill agent | `lamp/resources/openclaw-skills/speaker-recognizer/SKILL.md` | — |
 | Model embedding | `dlbackend/src/core/audio_recognition/audio_recognizer.py` | `ResNet34Recognizer` (mặc định), `EcapaTdnn1024Recognizer`, `CamPPlusRecognizer` — chọn qua env `AUDIO_RECOGNIZER_ENGINE` |
 | Endpoint embedding | `dlbackend/src/protocols/htpp/audio_recognizer.py` | `embed_audio()` |
 | Cấu hình | `lelamp/config.py` | Các hằng số `SPEAKER_*` |
@@ -206,7 +206,7 @@ User nói: "hey" (2 từ, 0.9s audio)
 User nói: "bật đèn lên đi" (4 từ, 3s audio)
 → LeLamp: nhận diện → unknown, _should_request_enroll(4 từ, 3s) = false
 → Message: "Unknown Speaker: bật đèn lên đi"
-→ Lumi: không có "audio save at" → AppendEnrollNudge giữ nguyên
+→ Lamp: không có "audio save at" → AppendEnrollNudge giữ nguyên
 → Agent: phản hồi bình thường, không hỏi user là ai
 ```
 
@@ -232,7 +232,7 @@ Turn 2: "I'm Alex." (2 từ)
 User nói: "Xin chào mình là Leo, mình vừa đi làm về..." (30 từ, 8s audio)
 → LeLamp: nhận diện → unknown, _should_request_enroll(30 từ, 8s) = true
 → Message: "Unknown Speaker: Xin chào mình là Leo... (audio save at /tmp/lumi-unknown-voice/incoming_xxx.wav, auto enroll...)"
-→ Lumi: AppendEnrollNudge → cooldown OK → chèn "[REQUIRED: Follow speaker-recognizer/SKILL.md...]"
+→ Lamp: AppendEnrollNudge → cooldown OK → chèn "[REQUIRED: Follow speaker-recognizer/SKILL.md...]"
 → Agent: phát hiện "mình là Leo" → POST /speaker/enroll → "Rất vui được biết bạn, Leo!"
 ```
 
@@ -241,6 +241,6 @@ User nói: "Xin chào mình là Leo, mình vừa đi làm về..." (30 từ, 8s 
 Cùng unknown speaker, 2 phút sau:
 → LeLamp: _should_request_enroll = true (đủ dài)
 → Message có "audio save at"
-→ Lumi: AppendEnrollNudge → cooldown CHƯA hết (< 5 phút) → bỏ qua instruction
+→ Lamp: AppendEnrollNudge → cooldown CHƯA hết (< 5 phút) → bỏ qua instruction
 → Agent: thấy "Unknown Speaker: ..." không có SKILL instruction → phản hồi bình thường
 ```

@@ -1,11 +1,11 @@
 # Vision Tracking — Object Follow with Servo
 
-Lumi can track and follow any object the user names. Two-stage approach: YOLOWorld API detects the object by name, TrackerVit follows it in real-time.
+Lamp can track and follow any object the user names. Two-stage approach: YOLOWorld API detects the object by name, TrackerVit follows it in real-time.
 
 ## Architecture
 
 ```
-User: "Lumi, follow the cup"
+User: "Lamp, follow the cup"
          |
     POST /servo/track {"target": "cup"}
          |
@@ -212,7 +212,7 @@ Note: there is no automatic periodic YOLO re-detect — the caller decides when 
 ### Happy path
 
 ```
-1. User: "Lumi, follow the cup"
+1. User: "Lamp, follow the cup"
 2. Agent calls POST /servo/track {"target": "cup"}
 3. LeLamp internally:
    a. Snapshots a frame and holds on to it

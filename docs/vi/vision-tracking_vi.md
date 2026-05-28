@@ -1,11 +1,11 @@
 # Vision Tracking — Theo dõi vật thể bằng servo
 
-Lumi có thể theo dõi và hướng theo bất kỳ vật thể nào mà người dùng gọi tên. Hai giai đoạn: YOLOWorld API phát hiện vật thể theo tên, TrackerVit bám theo real-time.
+Lamp có thể theo dõi và hướng theo bất kỳ vật thể nào mà người dùng gọi tên. Hai giai đoạn: YOLOWorld API phát hiện vật thể theo tên, TrackerVit bám theo real-time.
 
 ## Kiến trúc
 
 ```
-User: "Lumi, nhìn theo cái ly đi"
+User: "Lamp, nhìn theo cái ly đi"
          |
     POST /servo/track {"target": "cup"}
          |
@@ -200,7 +200,7 @@ Lưu ý: không có re-detect YOLO định kỳ tự động — caller tự quy
 ### Trường hợp thành công
 
 ```
-1. User: "Lumi, nhìn theo cái ly"
+1. User: "Lamp, nhìn theo cái ly"
 2. Agent gọi POST /servo/track {"target": "cup"}
 3. LeLamp nội bộ:
    a. Snapshot 1 frame và giữ lại

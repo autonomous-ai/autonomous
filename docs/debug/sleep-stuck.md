@@ -10,7 +10,7 @@ Observed 2026-04-22 trên Pi (test device). Log lelamp lặp hàng phút:
 
 ## Root cause
 
-Đèn ở `state._sleeping = True` từ lúc Lumi gửi `emotion=sleepy` (09:46:18, sau câu "Sleep tight. See you later.").
+Đèn ở `state._sleeping = True` từ lúc Lamp gửi `emotion=sleepy` (09:46:18, sau câu "Sleep tight. See you later.").
 
 Khi `_sleeping` bật, `sensing_service._send_event` suppress tất cả event ngoại trừ `presence.enter`:
 
@@ -25,9 +25,9 @@ if state._sleeping and req.emotion not in _WAKE_EMOTIONS:
 state._sleeping = req.emotion == EMO_SLEEPY
 ```
 
-`_WAKE_EMOTIONS = {greeting, stretching, sleepy}`. Lumi chỉ POST `thinking/happy/curious/acknowledge` → bị bỏ qua sớm, không flip `_sleeping` về False → kẹt sleep vĩnh viễn cho tới khi có `greeting`/`stretching`.
+`_WAKE_EMOTIONS = {greeting, stretching, sleepy}`. Lamp chỉ POST `thinking/happy/curious/acknowledge` → bị bỏ qua sớm, không flip `_sleeping` về False → kẹt sleep vĩnh viễn cho tới khi có `greeting`/`stretching`.
 
-User nói "No. I wake up." cũng không giúp: event `voice` gửi tới sensing xong bị sleep-gate chặn, không tới Lumi.
+User nói "No. I wake up." cũng không giúp: event `voice` gửi tới sensing xong bị sleep-gate chặn, không tới Lamp.
 
 ## Bug phụ: dedup log gây hiểu nhầm
 
@@ -39,9 +39,9 @@ Tham chiếu: `lelamp/service/sensing/perceptions/motion.py:414-425` (sau khi fl
 
 | Time | Event |
 |---|---|
-| 09:46:18 | Lumi: "Sleep tight. See you later. [yawn]" + POST `emotion=sleepy` → `_sleeping=True` |
+| 09:46:18 | Lamp: "Sleep tight. See you later. [yawn]" + POST `emotion=sleepy` → `_sleeping=True` |
 | 09:46:30 | User nói "No. I wake up." → voice event bị sleep-gate chặn |
-| 09:46:43 → 10:05:13 | **Kẹt ~19 phút.** Lumi spam `thinking/happy/curious/acknowledge` — tất cả ignored |
+| 09:46:43 → 10:05:13 | **Kẹt ~19 phút.** Lamp spam `thinking/happy/curious/acknowledge` — tất cả ignored |
 | 10:04:14 | `[motion] flushing: Activity detected: reading newspaper` (label khác → pass dedup) nhưng vẫn `sleeping — suppressed motion.activity` → xác nhận dedup không phải bug chính |
 | 10:05:13 | lelamp service **restart** (DisplayService/SensingService/VoiceService stop → start) |
 | 10:05:24 | Service up, `_sleeping` reset về default False |
@@ -50,10 +50,10 @@ Tham chiếu: `lelamp/service/sensing/perceptions/motion.py:414-425` (sau khi fl
 
 ## Fix ideas (chọn sau)
 
-1. **Wake từ voice wake-phrase.** Nhận diện "wake up"/"dậy đi" ở lelamp (trước khi bọc sleep gate) và flip `state._sleeping = False` + gọi `greeting` anim. Không chờ Lumi.
-2. **Lumi agent: wake flow chuẩn.** Khi user nói gì đó trong lúc lamp sleeping, agent phải POST `emotion=greeting` trước rồi mới `thinking`. Hiện agent không biết state sleep → cần expose `/state` hoặc gửi `sleeping=true` kèm mỗi event.
+1. **Wake từ voice wake-phrase.** Nhận diện "wake up"/"dậy đi" ở lelamp (trước khi bọc sleep gate) và flip `state._sleeping = False` + gọi `greeting` anim. Không chờ Lamp.
+2. **Lamp agent: wake flow chuẩn.** Khi user nói gì đó trong lúc lamp sleeping, agent phải POST `emotion=greeting` trước rồi mới `thinking`. Hiện agent không biết state sleep → cần expose `/state` hoặc gửi `sleeping=true` kèm mỗi event.
 3. **Không tính dedup cho event bị suppress.** Cho `SensingService.send_event` trả về `False` khi drop vì sleep, và perception chỉ update `_last_sent_ts` khi `True`. Tránh log nhiễu + cho phép burst ngay khi wake.
-4. **Timeout sleep.** `_sleeping` auto tắt sau N phút (ví dụ 30 min) để tránh kẹt vĩnh viễn khi Lumi/agent quên wake.
+4. **Timeout sleep.** `_sleeping` auto tắt sau N phút (ví dụ 30 min) để tránh kẹt vĩnh viễn khi Lamp/agent quên wake.
 
 ## Escape hatch (thủ công khi gặp)
 

@@ -1,7 +1,7 @@
 # Status LED — Đặc Tả
 
-Status LED giúp user nhìn đèn là biết Lumi đang làm gì bên trong.
-Không có tín hiệu này, user không phân biệt được Lumi đang khởi động, đang update, đang mất kết nối với AI brain, hay bị lỗi.
+Status LED giúp user nhìn đèn là biết Lamp đang làm gì bên trong.
+Không có tín hiệu này, user không phân biệt được Lamp đang khởi động, đang update, đang mất kết nối với AI brain, hay bị lỗi.
 
 ## Nguyên Tắc
 
@@ -18,7 +18,7 @@ Tất cả các state dùng effect `breathing` speed 3.0 trừ khi ghi rõ. Giá
 | `StateConnectivity` | Cam | `(255, 80, 0)` | **Mất internet** — Wi-Fi kết nối nhưng không có internet | Network monitor: 5 lần ping thất bại liên tiếp (~25s) | Có — khi ping thành công |
 | `StateError` | Đỏ | `(255, 0, 0)` | **Lỗi** — Lỗi hệ thống (reserved) | Lỗi nghiêm trọng | Có — khi lỗi được khắc phục |
 | `StateOTA` | Xanh lá | `(0, 255, 0)` | **Đang update** — OTA firmware đang chạy (enum dự trữ; bootstrap drive LED OTA trực tiếp qua `lib/lelamp` — xem "Bootstrap (OTA)" bên dưới) | Bootstrap reconcile phát hiện update | Khởi động lại sau khi update xong |
-| `StateBooting` | Xanh dương | `(0, 80, 255)` | **Đang khởi động** — Lumi đang bật | `server.go` lúc startup | Có — khi OpenClaw agent connect và sẵn sàng |
+| `StateBooting` | Xanh dương | `(0, 80, 255)` | **Đang khởi động** — Lamp đang bật | `server.go` lúc startup | Có — khi OpenClaw agent connect và sẵn sàng |
 | `StateLeLampDown` | Tím | `(180, 0, 255)` | **LeLamp Down** — Server phần cứng không phản hồi. Khi LeLamp đang down LED **tắt hẳn** vì driver LED cũng chết theo; tím breathing chỉ flash ~3s khi phục hồi | `healthwatch` poll LeLamp `/health` thất bại | Tự tắt 3s sau khi phục hồi |
 | `StateAgentDown` | Cyan | `(0, 200, 200)` | **Agent Down** — AI brain mất kết nối | OpenClaw WebSocket ngắt (`internal/openclaw/service_ws.go`) | Có — khi WebSocket reconnect |
 | `StateHardware` | Vàng | `(255, 255, 0)` | **Hardware Failure** — servo/LED/audio/voice không healthy qua LeLamp `/health` | `healthwatch` poll (mỗi 5s); camera và sensing không tính | Có — khi tất cả linh kiện báo OK |
@@ -59,9 +59,9 @@ Số ưu tiên (từ map `priority` trong `service.go`):
 | `StateAgentDown` | 2 |
 | `StateHardware` | 1 (thấp nhất) |
 
-Ví dụ: nếu Lumi mất internet VÀ agent down, **Mất internet** (cam) thắng vì ưu tiên cao hơn.
+Ví dụ: nếu Lamp mất internet VÀ agent down, **Mất internet** (cam) thắng vì ưu tiên cao hơn.
 
-LED OTA của bootstrap không qua priority queue — nó chạy khi bootstrap sở hữu strip, thường là lúc lumi đang restart.
+LED OTA của bootstrap không qua priority queue — nó chạy khi bootstrap sở hữu strip, thường là lúc lamp đang restart.
 
 ## Chi Tiết Hành Vi
 
@@ -74,7 +74,7 @@ LED OTA của bootstrap không qua priority queue — nó chạy khi bootstrap s
 - Network service ping mỗi 5 giây
 - Sau 5 lần thất bại liên tiếp (~25 giây), `StateConnectivity` được set
 - Tắt ngay khi ping thành công
-- Lumi vẫn hoạt động local nhưng cloud features không khả dụng
+- Lamp vẫn hoạt động local nhưng cloud features không khả dụng
 
 ### Agent Down (Cyan)
 - Activated khi OpenClaw WebSocket mất kết nối
@@ -102,12 +102,12 @@ LED OTA của bootstrap không qua priority queue — nó chạy khi bootstrap s
 - Thiết bị khởi động lại sau khi update thành công — LED chuyển sang Booting (xanh dương) trên boot mới
 
 ### Lỗi (Đỏ — reserved)
-- Enum `StateError` được định nghĩa trong `statusled.Service` nhưng hiện tại không được caller nào trong lumi set
+- Enum `StateError` được định nghĩa trong `statusled.Service` nhưng hiện tại không được caller nào trong lamp set
 - Bootstrap dùng `pulse` đỏ trực tiếp để báo OTA thất bại (không qua `statusled.Service`)
 
 ## Kiến Trúc
 
-### Lumi (lamp-server)
+### Lamp (lamp-server)
 
 `internal/statusled/Service` quản lý các state active với priority map. Caller `Set` và `Clear` các named state; service apply LED effect cho state có priority cao nhất.
 
@@ -164,16 +164,16 @@ Status state **ghi đè** tất cả các LED trên khi active. Khi state tắt,
 
 ## Trải Nghiệm User
 
-| User thấy | Lumi đang làm gì |
+| User thấy | Lamp đang làm gì |
 |---|---|
-| Xanh dương breathing | Lumi đang khởi động |
-| Flash trắng ngắn | Lumi sẵn sàng nghe |
-| Cyan breathing | AI brain mất kết nối (Lumi vẫn điều khiển đèn/servo local được) |
+| Xanh dương breathing | Lamp đang khởi động |
+| Flash trắng ngắn | Lamp sẵn sàng nghe |
+| Cyan breathing | AI brain mất kết nối (Lamp vẫn điều khiển đèn/servo local được) |
 | Tím breathing (sau khi tối) | LeLamp vừa phục hồi sau crash |
 | Tối / không LED | LeLamp crash (driver LED chết) |
-| Cam breathing | Mất internet (Lumi offline) |
+| Cam breathing | Mất internet (Lamp offline) |
 | Vàng breathing | Có linh kiện hardware không healthy |
 | Xanh lá breathing | OTA firmware update đang chạy |
 | Flash xanh lá | OTA update xong |
 | Đỏ pulse | OTA update thất bại |
-| Thở nhẹ ấm (bình thường) | Lumi idle, đang vibe |
+| Thở nhẹ ấm (bình thường) | Lamp idle, đang vibe |

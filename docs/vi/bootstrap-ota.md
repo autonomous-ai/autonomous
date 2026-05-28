@@ -178,7 +178,7 @@ UNIT
 | `bootstrap.service` | `/usr/local/bin/bootstrap-server` | 8080 | OTA worker, poll cập nhật. Expose `POST /force-check` để kích hoạt kiểm tra OTA ngay lập tức |
 | `openclaw.service` | `xvfb-run ... openclaw gateway run` | — | AI brain, memory limit 1500M |
 | `lumi-lelamp.service` | `uvicorn lelamp.server:app --host 127.0.0.1 --port 5001` | 5001 | Hardware drivers (servo, LED, camera, audio) |
-| nginx | `nginx` | 80 | Setup SPA + reverse proxy (`/api/` → Lumi 5000, `/hw/` → LeLamp 5001) |
+| nginx | `nginx` | 80 | Setup SPA + reverse proxy (`/api/` → Lamp 5000, `/hw/` → LeLamp 5001) |
 
 ### Thứ tự khởi động
 
@@ -327,7 +327,7 @@ Code LeLamp runtime được **copy** từ project upstream open-source vào mon
 
 **Tại sao copy, không dùng submodule/subtree:**
 - Cần **bỏ** phần LiveKit/OpenAI (thay bằng OpenClaw)
-- Cần **thêm** HTTP API server (FastAPI) để Lumi Server bridge đến
+- Cần **thêm** HTTP API server (FastAPI) để Lamp Server bridge đến
 - Cần **thêm** DisplayService (GC9A01 eyes + info, không có trong upstream)
 - Cần **sửa** services cho phù hợp kiến trúc mới
 - Phần overlap chỉ là drivers (~30-40% code upstream), phần còn lại viết lại
@@ -398,10 +398,10 @@ lelamp-{version}.zip
 
 ### LeLamp HTTP API (FastAPI trên port 5001)
 
-LeLamp Python runtime expose HTTP API trên `127.0.0.1:5001`. Lumi Server (Go, port 5000) bridge request từ OpenClaw skills đến API này. Nginx proxy `/hw/*` chỉ cho caller trên cùng máy — client bên ngoài nhận 403. Swagger UI tại `/hw/docs` không truy cập được từ LAN.
+LeLamp Python runtime expose HTTP API trên `127.0.0.1:5001`. Lamp Server (Go, port 5000) bridge request từ OpenClaw skills đến API này. Nginx proxy `/hw/*` chỉ cho caller trên cùng máy — client bên ngoài nhận 403. Swagger UI tại `/hw/docs` không truy cập được từ LAN.
 
 ```
-OpenClaw LLM → curl 127.0.0.1:5000/api/servo → Lumi Server → http://127.0.0.1:5001/servo → LeLamp Python → Phần cứng
+OpenClaw LLM → curl 127.0.0.1:5000/api/servo → Lamp Server → http://127.0.0.1:5001/servo → LeLamp Python → Phần cứng
 Bên ngoài    → http://<device-ip>/hw/docs    → nginx → 403 Forbidden
 ```
 
@@ -509,7 +509,7 @@ Guards trong script: từ chối nếu tag đã tồn tại local hoặc trên r
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 LDFLAGS_BOOTSTRAP := -X go-lamp.autonomous.ai/bootstrap/config.BootstrapVersion=$(VERSION)
-LDFLAGS_LAMP    := -X go-lamp.autonomous.ai/server/config.LumiVersion=$(VERSION)
+LDFLAGS_LAMP    := -X go-lamp.autonomous.ai/server/config.LampVersion=$(VERSION)
 
 build-bootstrap:
 	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_BOOTSTRAP)" -o bootstrap-server ./cmd/bootstrap
@@ -533,7 +533,7 @@ Version của LeLamp là file text `VERSION` trong thư mục gốc package. Boo
 | Setup stages | 7 (stage -1 đến 4) | **8** (+ stage 2b: LeLamp) |
 | Systemd services | 4 | **5** (+ lumi-lelamp.service) |
 | Python runtime | Không có | **LeLamp** tại /opt/lelamp/ với venv |
-| Hardware bridge | Không có | Lumi HTTP → LeLamp HTTP (localhost proxy) |
+| Hardware bridge | Không có | Lamp HTTP → LeLamp HTTP (localhost proxy) |
 | SPI usage | Chỉ LED | LED + **Display (GC9A01)** |
 
 ---
@@ -541,12 +541,12 @@ Version của LeLamp là file text `VERSION` trong thư mục gốc package. Boo
 ## 10. Câu Hỏi Mở
 
 - [x] **LeLamp source**: Mono-repo. Driver code copy từ `humancomputerlab/lelamp_runtime` vào `lelamp/`, bỏ LiveKit/OpenAI, thêm HTTP API + DisplayService. Track upstream thủ công qua `lelamp/UPSTREAM.md`.
-- [x] **LeLamp HTTP port**: `5001` (Lumi Server là `5000`).
-- [x] **Bridge protocol**: HTTP proxy đơn giản. LeLamp chạy FastAPI trên `127.0.0.1:5001`, Lumi Server proxy từ port 5000.
+- [x] **LeLamp HTTP port**: `5001` (Lamp Server là `5000`).
+- [x] **Bridge protocol**: HTTP proxy đơn giản. LeLamp chạy FastAPI trên `127.0.0.1:5001`, Lamp Server proxy từ port 5000.
 - [ ] **Python version**: Pin Python 3.11+? Yêu cầu Python hiện tại của LeLamp?
 - [ ] **Đóng gói LeLamp**: Include venv sẵn? Hay cài deps trên thiết bị? (Pi resources hạn chế cho `pip install`)
 - [ ] **Display driver**: DisplayService (GC9A01) — nằm trong LeLamp Python? Hay module mới?
-- [ ] **LeLamp config**: LeLamp cần config file riêng? Hay cấu hình qua Lumi Server?
+- [ ] **LeLamp config**: LeLamp cần config file riêng? Hay cấu hình qua Lamp Server?
 
 ---
 

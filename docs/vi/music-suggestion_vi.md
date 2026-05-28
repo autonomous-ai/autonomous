@@ -1,12 +1,12 @@
 # Gợi Ý Nhạc Chủ Động (Music Suggestion)
 
-> Lumi chủ động gợi ý nhạc phù hợp với mood/trạng thái người dùng — **không auto-play**, chỉ gợi ý bằng giọng nói và chờ xác nhận.
+> Lamp chủ động gợi ý nhạc phù hợp với mood/trạng thái người dùng — **không auto-play**, chỉ gợi ý bằng giọng nói và chờ xác nhận.
 
 ---
 
 ## Tổng quan
 
-Tính năng này cho phép Lumi **tự quyết định thời điểm** gợi ý nhạc dựa trên:
+Tính năng này cho phép Lamp **tự quyết định thời điểm** gợi ý nhạc dựa trên:
 - **Mood trigger** — khi mood được log (sad, stressed, tired, excited, happy, bored), agent dùng mood đó để suggest nhạc ngay
 - **Activity trigger** — khi camera phát hiện hoạt động tĩnh (ngồi máy tính, đọc sách), agent suggest background music
 - **Suggestion history** — lưu lại mỗi lần suggest, user accept/reject, để AI learn pattern
@@ -137,23 +137,23 @@ Agent: POST /api/music-suggestion/status → status="rejected"
 
 ## Các layer và file liên quan
 
-### Go server (Lumi)
+### Go server (Lamp)
 
 | File | Vai trò |
 |------|---------|
-| `lumi/lib/musicsuggestion/suggestion.go` | Logger JSONL per-user per-day. Log, Query, UpdateStatus, LastSuggestion, Days |
-| `lumi/lib/mood/mood.go` | Logger mood events |
-| `lumi/server/sensing/delivery/http/handler.go` | PostSuggestionLog/PostSuggestionStatus: API handlers. Motion.activity sedentary nudge agent follow Music skill |
-| `lumi/server/openclaw/delivery/sse/handler.go` | SuggestionHistory: GET endpoint |
-| `lumi/server/server.go` | Routes: /api/music-suggestion/*, /api/openclaw/music-suggestion-history |
+| `lamp/lib/musicsuggestion/suggestion.go` | Logger JSONL per-user per-day. Log, Query, UpdateStatus, LastSuggestion, Days |
+| `lamp/lib/mood/mood.go` | Logger mood events |
+| `lamp/server/sensing/delivery/http/handler.go` | PostSuggestionLog/PostSuggestionStatus: API handlers. Motion.activity sedentary nudge agent follow Music skill |
+| `lamp/server/openclaw/delivery/sse/handler.go` | SuggestionHistory: GET endpoint |
+| `lamp/server/server.go` | Routes: /api/music-suggestion/*, /api/openclaw/music-suggestion-history |
 
 ### OpenClaw Skills
 
 | File | Vai trò |
 |------|---------|
-| `lumi/resources/openclaw-skills/music/SKILL.md` | AI-driven suggestion logic, mood→music mapping, suggestion logging, cooldown check |
-| `lumi/resources/openclaw-skills/mood/SKILL.md` | Mood logging → follow Music skill suggestion |
-| `lumi/resources/openclaw-skills/sensing/SKILL.md` | Activity groups, sedentary → follow Music skill suggestion |
+| `lamp/resources/openclaw-skills/music/SKILL.md` | AI-driven suggestion logic, mood→music mapping, suggestion logging, cooldown check |
+| `lamp/resources/openclaw-skills/mood/SKILL.md` | Mood logging → follow Music skill suggestion |
+| `lamp/resources/openclaw-skills/sensing/SKILL.md` | Activity groups, sedentary → follow Music skill suggestion |
 
 ### LeLamp (Python)
 
@@ -166,8 +166,8 @@ Agent: POST /api/music-suggestion/status → status="rejected"
 
 | File | Vai trò |
 |------|---------|
-| `lumi/web/src/pages/monitor/types.ts` | FaceOwnerDetail: music_suggestion_days field |
-| `lumi/web/src/pages/monitor/FaceOwnersSection.tsx` | Hiển thị music_suggestion_days badge + folder tree |
+| `lamp/web/src/pages/monitor/types.ts` | FaceOwnerDetail: music_suggestion_days field |
+| `lamp/web/src/pages/monitor/FaceOwnersSection.tsx` | Hiển thị music_suggestion_days badge + folder tree |
 
 ---
 
@@ -200,7 +200,7 @@ Agent: POST /api/music-suggestion/status → status="rejected"
 
 ## Speaker conflict
 
-Lumi chỉ có 1 speaker chia sẻ giữa TTS và music:
+Lamp chỉ có 1 speaker chia sẻ giữa TTS và music:
 
 | Tình huống | Hành vi |
 |-----------|---------|

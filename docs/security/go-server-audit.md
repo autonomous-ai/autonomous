@@ -230,7 +230,7 @@ Any website can make browser requests to the device API and read responses if th
 Examples:
 
 - User visits malicious site on the same network as the lamp.
-- Site JavaScript calls `http://lumi.local/api/device/config`.
+- Site JavaScript calls `http://lamp.local/api/device/config`.
 - Because CORS is `*`, browser permits reading the response.
 - Secrets from config/logs can be exfiltrated.
 
@@ -275,7 +275,7 @@ For production, allowed origins should be exact, e.g.:
 map[string]bool{
     "http://127.0.0.1": true,
     "http://localhost": true,
-    "http://lumi.local": true,
+    "http://lamp.local": true,
 }
 ```
 
@@ -1121,7 +1121,7 @@ sensing.GET("snapshot/:category/:name", adminAuthMiddleware(s.config), s.sensing
 Where `internalOnlyMiddleware` checks either:
 
 - Loopback client IP and forwarded headers, or
-- `X-Lumi-Internal-Token` shared secret.
+- `X-Lamp-Internal-Token` shared secret.
 
 ### Acceptance checks
 
@@ -1384,12 +1384,12 @@ func adminAuthMiddleware(tokenProvider func() string) gin.HandlerFunc {
 
 ### Internal token middleware
 
-For LeLamp/OpenClaw -> Lumi internal ingestion, either use local-only or a shared header:
+For LeLamp/OpenClaw -> Lamp internal ingestion, either use local-only or a shared header:
 
 ```go
 func internalTokenMiddleware(expected string) gin.HandlerFunc {
     return func(c *gin.Context) {
-        got := c.GetHeader("X-Lumi-Internal-Token")
+        got := c.GetHeader("X-Lamp-Internal-Token")
         if expected == "" || subtle.ConstantTimeCompare([]byte(got), []byte(expected)) != 1 {
             c.JSON(http.StatusUnauthorized, serializers.ResponseError("unauthorized"))
             c.Abort()

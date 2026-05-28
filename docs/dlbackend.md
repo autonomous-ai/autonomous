@@ -195,8 +195,8 @@ GET /api/dl/health
 6. **RunPod**: Preprocesses (BGR→RGB, center crop, normalization), runs softmax over whitelisted actions
 7. **WebSocket**: Returns `{"detected_classes": [["walking", 0.87], ["reading book", 0.42]]}`
 8. **Pi**: Buffers actions + snapshots for `MOTION_FLUSH_S`, then sends aggregated event
-9. **Pi → Lumi**: `POST /api/sensing/event` with `type: "motion.activity"` or `type: "motion"`
-10. **Lumi → OpenClaw**: Agent receives event, responds based on detected activity
+9. **Pi → Lamp**: `POST /api/sensing/event` with `type: "motion.activity"` or `type: "motion"`
+10. **Lamp → OpenClaw**: Agent receives event, responds based on detected activity
 
 ### Emotion Analysis
 
@@ -206,7 +206,7 @@ GET /api/dl/health
 4. **RunPod**: YuNet re-detects face in crop (optional), POSTER V2 / EmoNet-8 / EmoNet-5 classifies emotion
 5. **HTTP**: Returns `{"detections": [{"emotion": "Happy", "confidence": 0.82}]}`
 6. **Pi**: Buffers, applies polarity-bucket dedup, fires `emotion.detected` event
-7. **Pi → Lumi**: `POST /api/sensing/event` with `type: "emotion.detected"`
+7. **Pi → Lamp**: `POST /api/sensing/event` with `type: "emotion.detected"`
 
 ### Speech Emotion Recognition
 
@@ -216,7 +216,7 @@ GET /api/dl/health
 4. **RunPod**: `emotion2vec_plus_large` runs softmax over 9 classes
 5. **HTTP**: Returns `{"label": "sad", "confidence": 0.72}`
 6. **Pi**: Buffers per user, every `SPEECH_EMOTION_FLUSH_S` (default 10 s) computes mode + bucket, applies `(user, bucket)` TTL dedup
-7. **Pi → Lumi**: `POST /api/sensing/event` with `type: "speech_emotion.detected"` and `current_user` set
+7. **Pi → Lamp**: `POST /api/sensing/event` with `type: "speech_emotion.detected"` and `current_user` set
 
 ## Configuration
 
@@ -333,7 +333,7 @@ LELAMP_MOTION_ENABLED=true
 | `service/sensing/perceptions/processors/motion.py` | `RemoteMotionChecker` — WS client, frame encoding, action buffering |
 | `service/sensing/perceptions/processors/emotion.py` | `RemoteEmotionRecognizer` — HTTP client, face crop → emotion classify |
 | `service/sensing/crypto.py` | Client-side `CryptoSession`, wire-format models, public key resolution |
-| `service/voice/speech_emotion/service.py` | `SpeechEmotionService` — queue + worker + flush + dedup + Lumi POST |
+| `service/voice/speech_emotion/service.py` | `SpeechEmotionService` — queue + worker + flush + dedup + Lamp POST |
 | `service/voice/speech_emotion/emotion2vec.py` | `Emotion2VecRecognizer` — HTTP client to `/api/dl/ser/recognize` |
 | `service/voice/speech_emotion/base.py` | `BaseSpeechEmotionRecognizer` ABC + `SpeechEmotionResult` |
 | `service/voice/speech_emotion/utils.py` | Bucketing + hedged message formatting |

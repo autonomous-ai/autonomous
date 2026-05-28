@@ -16,7 +16,7 @@ SSH="sshpass -p $PASS ssh -o StrictHostKeyChecking=no $PI"
 ```
 
 Pi services:
-- `lumi-server` on `:5000` (Go backend — event ingress, mood/wellbeing APIs, flow monitor)
+- `lamp-server` on `:5000` (Go backend — event ingress, mood/wellbeing APIs, flow monitor)
 - `nginx` on `:80` (proxy for browser UI at `http://<IP>/monitor`)
 - `lelamp` on `:5001` (Python sensing + face recognition)
 
@@ -41,7 +41,7 @@ Pi services:
 
 ## 3. When `motion.activity` actually fires
 
-LeLamp dedups the outbound stream so Lumi only sees events that matter. Understanding the rule is essential before reading any log or running any test.
+LeLamp dedups the outbound stream so Lamp only sees events that matter. Understanding the rule is essential before reading any log or running any test.
 
 ### Dedup key
 
@@ -98,7 +98,7 @@ $SSH "curl -s -X POST http://127.0.0.1:5000/api/sensing/event \
 # → {"status":1,"data":{"runId":"lumi-chat-<seq>-<ms>"},"message":null}
 ```
 
-Emotional cues (`laughing`, `crying`, `yawning`, `singing`) are filtered at LeLamp and never reach Lumi — there is no way to inject them via `motion.activity` anymore. A future `motion.emotional` event will carry them.
+Emotional cues (`laughing`, `crying`, `yawning`, `singing`) are filtered at LeLamp and never reach Lamp — there is no way to inject them via `motion.activity` anymore. A future `motion.emotional` event will carry them.
 
 Common test payloads (raw Kinetics labels — agent maps each to `drink`/`break`/`sedentary` bucket):
 
@@ -201,7 +201,7 @@ The agent is LLM-driven so "the code is correct" doesn't guarantee "the agent co
 ### 6.1 Agent skips mood logging entirely
 **Symptom:** `tool_call` trace contains no `/api/mood/log` call. Mood JSONL empty despite events firing.
 **Diagnose:** grep `tool_call` for `mood/log` — zero hits.
-**Fix path:** strengthen MANDATORY directive in `lumi/server/sensing/delivery/http/handler.go` and `user-emotion-detection/SKILL.md` to explicitly chain to Mood skill.
+**Fix path:** strengthen MANDATORY directive in `lamp/server/sensing/delivery/http/handler.go` and `user-emotion-detection/SKILL.md` to explicitly chain to Mood skill.
 
 ### 6.2 Agent bijas mood payload schema
 **Symptom:** `POST /api/mood/log` returns `Field validation for 'Mood' failed on the 'required' tag`.
@@ -235,9 +235,9 @@ The agent is LLM-driven so "the code is correct" doesn't guarantee "the agent co
 
 ## 8. Pipeline Stalls (No `chat.send` for Minutes)
 
-If Lumi suddenly stops forwarding sensing events — log shows a stream of `sensing event queued — agent busy ... runId=` (empty runId) but OpenClaw is idle (`active=0 queued=0`) — the busy flag is wedged. Most common trigger is an OpenClaw heartbeat / memoryFlush turn (`target=none`) that never emits `lifecycle.end` SSE.
+If Lamp suddenly stops forwarding sensing events — log shows a stream of `sensing event queued — agent busy ... runId=` (empty runId) but OpenClaw is idle (`active=0 queued=0`) — the busy flag is wedged. Most common trigger is an OpenClaw heartbeat / memoryFlush turn (`target=none`) that never emits `lifecycle.end` SSE.
 
-See **[`busy-stuck.md`](./busy-stuck.md)** for full root-cause + diagnostic commands + fix paths. Self-heals after `busyTTL = 5 min` (`lumi/internal/openclaw/service_events.go:29`).
+See **[`busy-stuck.md`](./busy-stuck.md)** for full root-cause + diagnostic commands + fix paths. Self-heals after `busyTTL = 5 min` (`lamp/internal/openclaw/service_events.go:29`).
 
 ---
 
@@ -250,8 +250,8 @@ $SSH "curl -s -X POST http://127.0.0.1:5000/api/openclaw/cron -d '{\"action\":\"
 # Clear mood for a user (manual — no API, just truncate)
 $SSH "echo $PASS | sudo -S truncate -s 0 /root/local/users/<user>/mood/$(date +%Y-%m-%d).jsonl"
 
-# Restart lumi-server (picks up new binary after OTA deploy)
-$SSH "echo $PASS | sudo -S systemctl restart lumi"
+# Restart lamp-server (picks up new binary after OTA deploy)
+$SSH "echo $PASS | sudo -S systemctl restart lamp"
 ```
 
 ---

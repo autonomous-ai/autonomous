@@ -192,7 +192,7 @@ Both markers are stripped before the message reaches the LLM (mirror of `[snapsh
 
 ### `/dm` auto-attach (Telegram)
 
-When the agent decides to nudge via `/dm`, Lumi's SSE handler calls `ConsumePoseBucketRun(runID)` (mirror of `ConsumeGuardRun`). If the run has a stashed bucket, the worst-snapshot filenames are resolved against `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<bid>/` and shipped to Telegram via `sendMediaGroup` — caption rides on the first photo, the rest appear as a gallery. The agent itself stays unaware of file paths; image attachment is decided entirely by Lamp based on whether the originating `motion.activity` carried a bucket.
+When the agent decides to nudge via `/dm`, Lamp's SSE handler calls `ConsumePoseBucketRun(runID)` (mirror of `ConsumeGuardRun`). If the run has a stashed bucket, the worst-snapshot filenames are resolved against `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<bid>/` and shipped to Telegram via `sendMediaGroup` — caption rides on the first photo, the rest appear as a gallery. The agent itself stays unaware of file paths; image attachment is decided entirely by Lamp based on whether the originating `motion.activity` carried a bucket.
 
 ### Angle sign workaround (temporary)
 
@@ -276,13 +276,13 @@ When a stranger's visit count first reaches the threshold (`_FAMILIAR_VISIT_THRE
 2. Appends a hint to the outgoing `presence.enter` message:
    `(familiar stranger <stranger_id> — seen 2 times, ask user if they want to remember this face; image saved at <path>)`
 
-The `face-enroll` skill (Lumi side) parses that hint and addresses the camera-person directly: "I've seen you 2 times now — mind if I remember you? What's your name?". On a name reply it calls `POST /face/enroll` with the saved image path. On decline, the skill acknowledges and stops; the threshold is a one-shot trigger (`count == 2`), so the same `stranger_id` is never re-prompted by lelamp. Visit counts above 2 do not re-fire — by then the stranger has either been enrolled (no longer a stranger) or has explicitly declined.
+The `face-enroll` skill (Lamp side) parses that hint and addresses the camera-person directly: "I've seen you 2 times now — mind if I remember you? What's your name?". On a name reply it calls `POST /face/enroll` with the saved image path. On decline, the skill acknowledges and stops; the threshold is a one-shot trigger (`count == 2`), so the same `stranger_id` is never re-prompted by lelamp. Visit counts above 2 do not re-fire — by then the stranger has either been enrolled (no longer a stranger) or has explicitly declined.
 
 ---
 
 ## Wellbeing (AI-Driven Hydration + Break Reminders)
 
-Lumi proactively cares for the user's health using AI-driven cron jobs managed by the OpenClaw agent. Instead of hardcoded timers, the agent decides reminder intervals based on scientific recommendations and the user's historical patterns.
+Lamp proactively cares for the user's health using AI-driven cron jobs managed by the OpenClaw agent. Instead of hardcoded timers, the agent decides reminder intervals based on scientific recommendations and the user's historical patterns.
 
 ### How it works (event-driven — no cron)
 
@@ -301,7 +301,7 @@ Wellbeing is **event-driven**. There are NO wellbeing cron jobs. On every `motio
 | `drink`, `break` | **LeLamp** (`motion.py` POSTs `/api/wellbeing/log` right before firing `motion.activity`) | Reset point for the corresponding nudge timer |
 | `using computer`, `writing`, `texting`, `reading book`, `reading newspaper`, `drawing`, `playing controller` | **LeLamp** (`motion.py`, same path) | Timeline + nudge phrasing. **Not** a reset point. |
 | `enter`, `leave` | **LeLamp** (`FaceRecognizer._post_wellbeing`, called from `_check_impl` on fresh detection and `_check_leaves` on forget expiry) | Session boundary — per-friend rows go to each friend's own timeline; strangers collapse to a single `"unknown"` timeline gated by the `_any_stranger_logged` flag (one enter on first stranger, one leave when the last one is forgotten). |
-| `nudge_hydration`, `nudge_break` | Agent (after speaking a reminder) | Records when Lumi actually reminded — purely for timeline visibility. Only the agent knows when it actually spoke, so only the agent writes these. |
+| `nudge_hydration`, `nudge_break` | Agent (after speaking a reminder) | Records when Lamp actually reminded — purely for timeline visibility. Only the agent knows when it actually spoke, so only the agent writes these. |
 
 **Dedup lives in two places.**
 
@@ -309,11 +309,11 @@ Wellbeing is **event-driven**. There are NO wellbeing cron jobs. On every `motio
 
 - User change (owner→owner, owner→unknown, unknown→owner) flips the key immediately → event passes through.
 - Different strangers (e.g. `stranger_46` → `stranger_54`) collapse to `"unknown"` via `FaceRecognizer.current_user()`, so swapping strangers alone doesn't break dedup.
-- After 5 min on the same state, the next event passes through even if nothing changed — this keeps the Lumi agent "woken up" periodically so the wellbeing threshold check still runs.
+- After 5 min on the same state, the next event passes through even if nothing changed — this keeps the Lamp agent "woken up" periodically so the wellbeing threshold check still runs.
 
-*Presence dedup (at-log safety net).* `lumi/lib/wellbeing/wellbeing.go::LogForUser` scans the user's JSONL bottom-up for the most recent **presence** row (enter/leave, ignoring activity rows in between). `enter` while the last presence is already `enter` is dropped; `leave` with no matching open session is dropped. Since LeLamp already emits one enter per real session (per-friend + collapsed-unknown), this runs as a safety net for restarts or out-of-order edge cases rather than load-bearing dedup.
+*Presence dedup (at-log safety net).* `lamp/lib/wellbeing/wellbeing.go::LogForUser` scans the user's JSONL bottom-up for the most recent **presence** row (enter/leave, ignoring activity rows in between). `enter` while the last presence is already `enter` is dropped; `leave` with no matching open session is dropped. Since LeLamp already emits one enter per real session (per-friend + collapsed-unknown), this runs as a safety net for restarts or out-of-order edge cases rather than load-bearing dedup.
 
-**Retention:** 30 days on the Lumi side. A goroutine started by `wellbeing.Init()` sweeps files older than the cutoff daily.
+**Retention:** 30 days on the Lamp side. A goroutine started by `wellbeing.Init()` sweeps files older than the cutoff daily.
 
 ### On `motion.activity` — what the agent does
 
@@ -327,7 +327,7 @@ By the time the agent sees the event, LeLamp has already logged the activity row
    break_reset     = max(last break entry, last enter entry, last nudge_break entry)
    ```
 
-   Three reset points: the actual activity (`drink` / `break`), a fresh arrival (`enter`), or the last nudge of that kind (`nudge_*`). The nudge reset is the key: after Lumi reminds, the delta drops back to 0 so the next reminder only fires after another full threshold window — no separate cooldown variable needed.
+   Three reset points: the actual activity (`drink` / `break`), a fresh arrival (`enter`), or the last nudge of that kind (`nudge_*`). The nudge reset is the key: after Lamp reminds, the delta drops back to 0 so the next reminder only fires after another full threshold window — no separate cooldown variable needed.
 3. **Decide path** (one response max per turn, reaction outranks nudge — the user just acted, nudging on top would feel tone-deaf):
    - **Reaction** — labels list contains `drink` or `break` → speak a 1–3 sentence acknowledgment (surprised / playful, not advice). Uses `count_today` ("lần thứ N hôm nay"), `time_of_day`, and the gap delta to flavor the line. **No log entry** — the underlying `drink` / `break` row was already written by LeLamp upstream.
    - **Hydration nudge** — else if hydration delta ≥ hydration threshold → hydration nudge.
@@ -340,7 +340,7 @@ The reaction path was added so positive actions don't fall into silence: drinkin
 
 ### Thresholds
 
-Hardcoded in `lumi/resources/openclaw-skills/wellbeing/SKILL.md`:
+Hardcoded in `lamp/resources/openclaw-skills/wellbeing/SKILL.md`:
 
 | Threshold | Test value | Production value |
 |---|---|---|
@@ -349,7 +349,7 @@ Hardcoded in `lumi/resources/openclaw-skills/wellbeing/SKILL.md`:
 
 > ⚠ **Release checklist:** before shipping, change both constants to the production values (45 / 30). Test values let us iterate within minutes instead of hours — hydration and break are intentionally offset (5 vs 7) so you can tell which path fired during testing.
 
-**How re-nudge spam is prevented.** The `nudge_hydration` / `nudge_break` log entry the agent writes after speaking is also counted as a reset point for its threshold. After Lumi reminds, the delta drops back to 0 and the next reminder of that kind only fires after another full threshold window (45 min for hydration, 30 min for break in production).
+**How re-nudge spam is prevented.** The `nudge_hydration` / `nudge_break` log entry the agent writes after speaking is also counted as a reset point for its threshold. After Lamp reminds, the delta drops back to 0 and the next reminder of that kind only fires after another full threshold window (45 min for hydration, 30 min for break in production).
 
 ```
 10:45  hydration overdue → nudge 💧 + log nudge_hydration → hydration delta = 0
@@ -366,17 +366,17 @@ The sensing handler injects a `[context: current_user=X]` tag into every `motion
 
 Sorting by `session_start` (the timestamp of the re-enter after the last leave) rather than `last_seen` makes the answer deterministic when two friends are continuously present (Chloe 18:00, An 18:30 → An wins because her session started later), instead of depending on dict iteration order.
 
-**Source of truth lives in LeLamp.** `sensing_service._send_event` attaches `face_recognizer.current_user()` to every outbound payload as the `current_user` field. Lumi's sensing handler reads `req.CurrentUser` directly instead of parsing it back out of the message text — this closed a class of bugs where a stranger-only `presence.enter` fired while a friend was still present would downgrade Lumi's `mood.CurrentUser()` to `"unknown"`.
+**Source of truth lives in LeLamp.** `sensing_service._send_event` attaches `face_recognizer.current_user()` to every outbound payload as the `current_user` field. Lamp's sensing handler reads `req.CurrentUser` directly instead of parsing it back out of the message text — this closed a class of bugs where a stranger-only `presence.enter` fired while a friend was still present would downgrade Lamp's `mood.CurrentUser()` to `"unknown"`.
 
 External callers (web UI, skills) can query the same value via `GET http://127.0.0.1:5001/face/current-user` → `{"current_user": "<name>"}`. This is a dedicated endpoint; do NOT parse it out of `/face/cooldowns` (that endpoint is the friend/stranger cooldown debug view only).
 
 The Wellbeing, Mood, and Music skills are all required to use this exact value for the `user` field in their API calls — never inferring from memory, KNOWLEDGE.md, chat history, or `senderLabel`.
 
-Alongside `[context: current_user=X]`, the handler also injects `[user_info: {"name","is_friend","telegram_id","telegram_username"}]` (built by `lumi/lib/skillcontext/BuildUserContext`, fetched from lelamp `/user/info`). Skills must read `telegram_id` from this block — never `curl /user/info`. Block is omitted on hard fetch failure or when `current_user` is `unknown`; SKILL.md fallback path stays.
+Alongside `[context: current_user=X]`, the handler also injects `[user_info: {"name","is_friend","telegram_id","telegram_username"}]` (built by `lamp/lib/skillcontext/BuildUserContext`, fetched from lelamp `/user/info`). Skills must read `telegram_id` from this block — never `curl /user/info`. Block is omitted on hard fetch failure or when `current_user` is `unknown`; SKILL.md fallback path stays.
 
 ### Presence markers written by LeLamp
 
-LeLamp's `FaceRecognizer._post_wellbeing` writes `enter` / `leave` rows directly to Lumi's `POST /api/wellbeing/log` — the agent is not involved, and Lumi's sensing handler no longer writes them either.
+LeLamp's `FaceRecognizer._post_wellbeing` writes `enter` / `leave` rows directly to Lamp's `POST /api/wellbeing/log` — the agent is not involved, and Lamp's sensing handler no longer writes them either.
 
 - **Per-friend:** each friend gets their own timeline. Fresh friend detection (after gap > `FACE_OWNER_FORGET_S`) → `{"action": "enter", "user": "<name>"}`. Friend forgotten in `_check_leaves` → `{"action": "leave", "user": "<name>"}`. Chloe entering while Leo is still present produces `chloe: enter` only — does not touch Leo's timeline.
 - **Strangers (collapsed to `"unknown"`):** gated by a `_any_stranger_logged` flag. First stranger of a session → `unknown: enter`. Flag stays true while any stranger is still within the forget window, so stranger_37 → stranger_38 → stranger_52 churn does not produce extra rows. When `_check_leaves` drops the last stranger → `unknown: leave`.
@@ -449,7 +449,7 @@ Two control markers on channel-origin turns:
 
 By default, channel-origin turns (Telegram, webchat) suppress speaker TTS because the reply is routed as a channel message. `/speak` overrides that suppression without the fan-out side-effect.
 
-**Cron-fire turns auto-force TTS.** When OpenClaw emits an `event:"cron"` with `action:"started"`, Lumi caches the `sessionKey` and the next `lifecycle_start` on that session within 10 s is marked as a cron fire — `isChannelRun` is overridden to `false` so the lamp speaker fires without requiring `[HW:/speak]` in the reply. The marker is still useful as a defense-in-depth fallback if the cron event is dropped (`dropIfSlow: true` on the OpenClaw side).
+**Cron-fire turns auto-force TTS.** When OpenClaw emits an `event:"cron"` with `action:"started"`, Lamp caches the `sessionKey` and the next `lifecycle_start` on that session within 10 s is marked as a cron fire — `isChannelRun` is overridden to `false` so the lamp speaker fires without requiring `[HW:/speak]` in the reply. The marker is still useful as a defense-in-depth fallback if the cron event is dropped (`dropIfSlow: true` on the OpenClaw side).
 
 ### Per-user mood history
 
@@ -512,7 +512,7 @@ When the user is already present (PRESENT state), foreground motion triggers a `
   - `Activity detected: <labels>.` — LeLamp already categorises: physical actions collapse to the bucket name (`drink`, `break`), sedentary activities keep the raw Kinetics label (`using computer`, `writing`, `texting`, `reading book`, `reading newspaper`, `drawing`, `playing controller`). The agent logs each label verbatim — no mapping required at the agent level.
   - Emotional X3D actions (`laughing`, `crying`, `yawning`, `singing`) are **intentionally dropped** here. A dedicated `motion.emotional` event type will be added later; until then emotional detections are silently ignored. `motion.activity` stays purely physical.
   - No images attached — saves tokens. Friend recognition is **not** required.
-- **Otherwise** → event is **skipped** (logged, not sent). Lumi only expects `motion.activity` — plain `motion` from X3D/pose has no handler and wastes agent tokens.
+- **Otherwise** → event is **skipped** (logged, not sent). Lamp only expects `motion.activity` — plain `motion` from X3D/pose has no handler and wastes agent tokens.
 
 Example messages:
 ```
@@ -599,13 +599,13 @@ Includes the `face_id` in parentheses so the agent knows which person the activi
 
 ## Emotion Detection — User Emotion (UC-M1) ✅
 
-Lumi detects the **user's** emotional state via three channels:
+Lamp detects the **user's** emotional state via three channels:
 
 1. **Facial expression** (primary) — `emotion.detected` event from `lelamp/service/sensing/perceptions/emotion.py`. Uses a dedicated emotion classifier running on self-hosted dlbackend via WebSocket. Detects 7 emotions: Angry, Disgust, Fear, Happy, Sad, Surprise, Neutral. Configurable confidence threshold (`EMOTION_CONFIDENCE_THRESHOLD`).
 2. **Speech emotion** (secondary) — `speech_emotion.detected` event from `lelamp/service/voice/speech_emotion/`. Runs at the end of every speaker-identified STT session against the same WAV used for speaker recognition. Uses `emotion2vec_plus_large` on dlbackend via HTTP. See [Speech Emotion Recognition](speech-emotion.md) for the full pipeline.
 3. **Body action** (tertiary) — emotional X3D actions from action recognition are **intentionally dropped** from `motion.activity` (which is purely physical: sedentary/drink/break). A dedicated `motion.emotional` event type is planned for these.
 
-> **Not to be confused with Emotion Expression** (`emotion/SKILL.md`) — which controls Lumi's own emotional output (servo + LED + eyes). Emotion Detection is about sensing what the *user* feels; Emotion Expression is how *Lumi* shows its feelings.
+> **Not to be confused with Emotion Expression** (`emotion/SKILL.md`) — which controls Lamp's own emotional output (servo + LED + eyes). Emotion Detection is about sensing what the *user* feels; Emotion Expression is how *Lamp* shows its feelings.
 
 ### `emotion.detected` event
 
@@ -651,7 +651,7 @@ See `user-emotion-detection/SKILL.md` for the agent's full response rules.
 
 ### `speech_emotion.detected` event
 
-Fired by LeLamp at the end of every speaker-identified STT session, after the same WAV bytes used for speaker `/embed` are forwarded to `dlbackend /api/dl/ser/recognize` (emotion2vec_plus_large). Buffering, per-user aggregation, polarity-bucket dedup, and the Lumi POST are all handled inside `lelamp/service/voice/speech_emotion/SpeechEmotionService` — `voice_service.py` only calls `submit(user, wav, duration)`. Message format mirrors the facial pipeline:
+Fired by LeLamp at the end of every speaker-identified STT session, after the same WAV bytes used for speaker `/embed` are forwarded to `dlbackend /api/dl/ser/recognize` (emotion2vec_plus_large). Buffering, per-user aggregation, polarity-bucket dedup, and the Lamp POST are all handled inside `lelamp/service/voice/speech_emotion/SpeechEmotionService` — `voice_service.py` only calls `submit(user, wav, duration)`. Message format mirrors the facial pipeline:
 
 ```
 Speech emotion detected: <Label>. (weak voice cue; confidence=<0.00-1.00>; bucket=<positive|negative|other>; treat as uncertain, <bucket-tuned hedge>.)
@@ -674,7 +674,7 @@ Labels (from emotion2vec_plus_large): `angry`, `disgusted`, `fearful`, `happy`, 
 4. Neutral labels dropped at flush time.
 5. `(user, bucket)` TTL dedup over `SPEECH_EMOTION_DEDUP_WINDOW_S` (default 5 min). Each bucket keeps an independent timer — sending a positive event does not reset the negative window.
 
-The event payload carries `current_user` explicitly so the Lumi sensing handler doesn't need to look it up.
+The event payload carries `current_user` explicitly so the Lamp sensing handler doesn't need to look it up.
 
 ### Agent behavior (shared with face emotion)
 

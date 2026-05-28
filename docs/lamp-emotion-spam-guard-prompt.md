@@ -1,15 +1,15 @@
-# Claude Code Prompt — Lumi Emotion Spam Guard
+# Claude Code Prompt — Lamp Emotion Spam Guard
 
 ## Goal
 
-Review and fix Lumi/LeLamp camera emotion spam in `autonomous-ecm/ai-lamp-openclaw`.
+Review and fix Lamp/LeLamp camera emotion spam in `autonomous-ecm/ai-lamp-openclaw`.
 
 This is **not** about making emotion detection 100% correct. Face/camera emotion is noisy by nature. The product goal is:
 
 1. reduce bad/noisy emotion samples upstream, and
-2. prevent raw unstable emotion labels from continuously triggering Lumi/OpenClaw downstream.
+2. prevent raw unstable emotion labels from continuously triggering Lamp/OpenClaw downstream.
 
-We need a pragmatic production guard. It is better to drop/merge uncertain emotion events than to keep injecting `emotion.detected` into Lumi and spam the agent/token queue.
+We need a pragmatic production guard. It is better to drop/merge uncertain emotion events than to keep injecting `emotion.detected` into Lamp and spam the agent/token queue.
 
 ---
 

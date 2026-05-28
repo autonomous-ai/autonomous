@@ -15,7 +15,7 @@ Verdict: **not tight**. 6 verified P0 bugs + 8 P1 cross-cutting issues. Guard an
 
 ### 1. Guard tag never attaches to motion events
 
-`lumi/server/sensing/delivery/http/handler.go:248`:
+`lamp/server/sensing/delivery/http/handler.go:248`:
 
 ```go
 guardActive := isPassive && h.config.GuardModeEnabled() &&
@@ -28,7 +28,7 @@ LeLamp emits `motion.activity` (`lelamp/.../motion.py:488`), never bare `"motion
 
 ### 2. `guardTag` lost on queue drain
 
-`lumi/internal/openclaw/service_events.go:202` calls `sensingmsg.Build(..., "")` — guard tag is always empty when a queued event is drained later. Comment at `handler.go:301-307` acknowledges this.
+`lamp/internal/openclaw/service_events.go:202` calls `sensingmsg.Build(..., "")` — guard tag is always empty when a queued event is drained later. Comment at `handler.go:301-307` acknowledges this.
 
 **Effect**: If a stranger walks in while the agent is busy, the event is queued. When drained (up to 5 min later via `busyTTL`), it arrives without `[guard-active]` and without `MarkGuardRun`. No Telegram broadcast, no snapshot delivery. Combined with the busy-stuck wedge (`docs/debug/busy-stuck.md`), guard goes silent for the full 5 min window.
 
@@ -37,7 +37,7 @@ LeLamp emits `motion.activity` (`lelamp/.../motion.py:488`), never bare `"motion
 **Status (2026-05-15)**: resolved via code-side bump on branch `chore/bump-retention-wellbeing-mood-30d`. Wellbeing and mood retention bumped to 30 days; the `sensing-track/SKILL.md:10` flow-events claim was corrected to "7-day" (flow events stay at 7 — debug log only). Mood line at `:168` already said "30-day" and now matches the new code.
 
 
-`lumi/lib/flow/flow.go:56`:
+`lamp/lib/flow/flow.go:56`:
 
 ```go
 retentionDays = 7
@@ -47,11 +47,11 @@ retentionDays = 7
 
 **Effect**: Agent confidently answers "no events that day" when the file was purged 8+ days ago.
 
-**Empirical confirmation (2026-05-15)**: asked Lumi "ngày 7 tháng 5 có ai vào nhà không?" (8 days ago — inside the 30-day claim but outside actual 7-day window). Response: "log ngày 7/5 không còn trên máy ... Hiện chỉ còn dữ liệu từ 8/5 đến 15/5". 8 files retained matches `cutoff = today - 7 days = 2026-05-08`. Agent self-corrected by listing the directory first; had it gone straight to `cat /root/local/flow_events_2026-05-07.jsonl` based on the SKILL's 30-day claim, the user would have gotten a silent empty answer.
+**Empirical confirmation (2026-05-15)**: asked Lamp "ngày 7 tháng 5 có ai vào nhà không?" (8 days ago — inside the 30-day claim but outside actual 7-day window). Response: "log ngày 7/5 không còn trên máy ... Hiện chỉ còn dữ liệu từ 8/5 đến 15/5". 8 files retained matches `cutoff = today - 7 days = 2026-05-08`. Agent self-corrected by listing the directory first; had it gone straight to `cat /root/local/flow_events_2026-05-07.jsonl` based on the SKILL's 30-day claim, the user would have gotten a silent empty answer.
 
 ### 4. `patterns_now` hardcoded `nil` — pre-emptive posture route unreachable
 
-`lumi/lib/skillcontext/posture.go:175-178`:
+`lamp/lib/skillcontext/posture.go:175-178`:
 
 ```go
 // PatternsNow stays nil until habit Flow A starts emitting
@@ -68,7 +68,7 @@ PatternsNow: nil,
 
 ### 6. Stale comment in wellbeing handler
 
-`lumi/server/sensing/delivery/http/handler.go:606` still reads "Bucket names (agent writes from motion.activity hybrid output)" — contradicts the current rule that LeLamp posts drink/break directly (`lelamp/.../motion.py:490-513`). A skill rewrite based on this comment would reintroduce duplicate rows.
+`lamp/server/sensing/delivery/http/handler.go:606` still reads "Bucket names (agent writes from motion.activity hybrid output)" — contradicts the current rule that LeLamp posts drink/break directly (`lelamp/.../motion.py:490-513`). A skill rewrite based on this comment would reintroduce duplicate rows.
 
 ---
 
@@ -76,7 +76,7 @@ PatternsNow: nil,
 
 ### HW marker regex bans `}` in body — 5 skills exposed
 
-`lumi/server/openclaw/delivery/sse/handler_hw.go:57`:
+`lamp/server/openclaw/delivery/sse/handler_hw.go:57`:
 
 ```go
 var hwMarkerRe = regexp.MustCompile(`\[HW:(/[^:]+):(\{[^}]*\})\]`)
@@ -96,11 +96,11 @@ No defensive detection; "rarely a problem" notes in `mood/SKILL.md:118` and `mus
 | `user-emotion-detection` | suggest cooldown | 7 min | 30 min | `SKILL.md:53,108` |
 | `music-suggestion` | suggest cooldown | 7 min | 30 min | `SKILL.md:53` |
 
-All thresholds now live either in SKILL.md prose or in lelamp's config — none in Lumi Go anymore (the posture voice budget was removed, see `57fb6d87`). The SKILL-prose ones rely on the LLM reading them; compaction-summary distortion (`docs/debug/...`, see `project_openclaw_compaction_summary_risk` in memory) is a real risk — a re-summarized SKILL can change the threshold without code review.
+All thresholds now live either in SKILL.md prose or in lelamp's config — none in Lamp Go anymore (the posture voice budget was removed, see `57fb6d87`). The SKILL-prose ones rely on the LLM reading them; compaction-summary distortion (`docs/debug/...`, see `project_openclaw_compaction_summary_risk` in memory) is a real risk — a re-summarized SKILL can change the threshold without code review.
 
 ### `mapped_mood` vocabulary mismatch
 
-`lumi/lib/skillcontext/emotion.go:105-112` `suggestionWorthyMoods` includes `tired` and `bored`, but the FER/voice → mood map (`emotion.go:92-103`) never produces them — only `happy`, `sad`, `stressed`, `excited`.
+`lamp/lib/skillcontext/emotion.go:105-112` `suggestionWorthyMoods` includes `tired` and `bored`, but the FER/voice → mood map (`emotion.go:92-103`) never produces them — only `happy`, `sad`, `stressed`, `excited`.
 
 `music-suggestion/SKILL.md:126-127` example "Mood: tired (known user)" cannot trigger from `emotion.detected` today. Only Telegram/conversation paths through `mood/SKILL.md` can reach `tired/bored`.
 
@@ -252,13 +252,13 @@ Disk cost for Option B is negligible (under 5 MB per user for everything). Risk 
 
 ## Files referenced
 
-- `lumi/server/sensing/delivery/http/handler.go` — guard tag, wellbeing/mood/posture/music-suggestion log endpoints
-- `lumi/server/openclaw/delivery/sse/handler_hw.go` — HW marker dispatcher, regex
-- `lumi/server/openclaw/delivery/sse/handler_events.go` — `/broadcast`, `/speak`, `/dm` lifecycle handling
-- `lumi/internal/openclaw/service_events.go` — `busyTTL`, queue drain, `guardTag` loss
-- `lumi/lib/flow/flow.go` — `retentionDays`
-- `lumi/lib/skillcontext/{wellbeing,posture,emotion}.go` — pre-fetched context blocks
-- `lumi/lib/sensingmsg/sensingmsg.go` — context injection
-- `lumi/lib/wellbeing/wellbeing.go` — parallel `NormalizeUser`
+- `lamp/server/sensing/delivery/http/handler.go` — guard tag, wellbeing/mood/posture/music-suggestion log endpoints
+- `lamp/server/openclaw/delivery/sse/handler_hw.go` — HW marker dispatcher, regex
+- `lamp/server/openclaw/delivery/sse/handler_events.go` — `/broadcast`, `/speak`, `/dm` lifecycle handling
+- `lamp/internal/openclaw/service_events.go` — `busyTTL`, queue drain, `guardTag` loss
+- `lamp/lib/flow/flow.go` — `retentionDays`
+- `lamp/lib/skillcontext/{wellbeing,posture,emotion}.go` — pre-fetched context blocks
+- `lamp/lib/sensingmsg/sensingmsg.go` — context injection
+- `lamp/lib/wellbeing/wellbeing.go` — parallel `NormalizeUser`
 - `lelamp/service/sensing/perceptions/processors/motion.py` — `motion.activity` emitter, wellbeing log poster
-- `lumi/resources/openclaw-skills/{guard,sensing,sensing-track,wellbeing,posture,habit,mood,emotion,user-emotion-detection,music-suggestion}/SKILL.md`
+- `lamp/resources/openclaw-skills/{guard,sensing,sensing-track,wellbeing,posture,habit,mood,emotion,user-emotion-detection,music-suggestion}/SKILL.md`

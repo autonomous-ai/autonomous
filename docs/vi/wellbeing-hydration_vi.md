@@ -1,14 +1,14 @@
 # Chăm Sóc Sức Khỏe Chủ Động (Wellbeing — Hydration + Break)
 
-> Lumi chủ động nhắc uống nước và nghỉ ngơi — AI tự schedule, tự quan sát qua camera, tự học thói quen từng người.
+> Lamp chủ động nhắc uống nước và nghỉ ngơi — AI tự schedule, tự quan sát qua camera, tự học thói quen từng người.
 
-> **⚠️ 2026-04-17 — Storage đã đổi.** File này còn đúng về cơ chế cron + flow agent. Nhưng chi tiết về `wellbeing.md` summary và `wellbeing/YYYY-MM-DD.md` daily log đã **deprecated** — giờ dùng JSONL schema `{ts, seq, hour, action, notes}` mirror mood. Xem `docs/vi/sensing-behavior_vi.md` và `docs/vi/lamp-server_vi.md` cho đúng endpoint. Endpoint `POST /user/wellbeing/log`, `/summary`, `/today` trên LeLamp đã bị gỡ — thay bằng `POST http://127.0.0.1:5000/api/wellbeing/log` + `GET /api/openclaw/wellbeing-history` trên Lumi.
+> **⚠️ 2026-04-17 — Storage đã đổi.** File này còn đúng về cơ chế cron + flow agent. Nhưng chi tiết về `wellbeing.md` summary và `wellbeing/YYYY-MM-DD.md` daily log đã **deprecated** — giờ dùng JSONL schema `{ts, seq, hour, action, notes}` mirror mood. Xem `docs/vi/sensing-behavior_vi.md` và `docs/vi/lamp-server_vi.md` cho đúng endpoint. Endpoint `POST /user/wellbeing/log`, `/summary`, `/today` trên LeLamp đã bị gỡ — thay bằng `POST http://127.0.0.1:5000/api/wellbeing/log` + `GET /api/openclaw/wellbeing-history` trên Lamp.
 
 ---
 
 ## Tổng quan
 
-Lumi theo dõi sức khỏe người dùng qua 2 loại nhắc nhở:
+Lamp theo dõi sức khỏe người dùng qua 2 loại nhắc nhở:
 
 | Loại | Mục đích | Default interval | Emotion |
 |------|----------|-----------------|---------|
@@ -18,7 +18,7 @@ Lumi theo dõi sức khỏe người dùng qua 2 loại nhắc nhở:
 Toàn bộ logic nằm trong LLM (OpenClaw agent) — không có hard code timer. AI tự schedule cron jobs và tự quyết định có nhắc hay không.
 
 **Đặc điểm:**
-- Per-user: mỗi người quen có thói quen riêng, Lumi nhớ riêng. Người lạ chung vào `"unknown"`.
+- Per-user: mỗi người quen có thói quen riêng, Lamp nhớ riêng. Người lạ chung vào `"unknown"`.
 - AI học từ quan sát: user hay bỏ qua nhắc buổi sáng? hay mệt lúc 15h?
 - **Nhắc cho tất cả** — friend và stranger đều được chăm sóc. Stranger dùng `"unknown"` làm tên, share chung 1 bộ cron.
 - Cron chỉ tạo khi phát hiện **hoạt động tĩnh** (ngồi xài máy tính, đọc sách, chơi game) qua `motion.activity` — KHÔNG tạo khi `presence.enter`. Tránh tạo/xóa cron liên tục khi người đi qua mà không ngồi xuống.
@@ -137,7 +137,7 @@ Agent nhìn ảnh → phân tích user đang làm gì:
     → Reset cả 2 cron
 ```
 
-**Ý nghĩa:** Nếu user tự uống nước, Lumi nhận ra và đặt lại timer — không nhắc thừa.
+**Ý nghĩa:** Nếu user tự uống nước, Lamp nhận ra và đặt lại timer — không nhắc thừa.
 
 ### 5. Presence leave — Cleanup + ghi notebook
 
@@ -220,19 +220,19 @@ Observations: Bỏ qua hydration đầu tiên, phản hồi tốt từ lần 2.
 
 ## Các layer và file liên quan
 
-### Go server (Lumi)
+### Go server (Lamp)
 
 | File | Vai trò |
 |------|---------|
-| `lumi/server/openclaw/delivery/sse/handler.go` | Xử lý lifecycle end: fire HW calls (emotion), broadcast qua Telegram, suppress TTS nếu cần |
-| `lumi/lib/mood/mood.go` | Log `wellbeing.hydration`, `wellbeing.break` events. `IsMoodEvent()` whitelist cả 2 type |
+| `lamp/server/openclaw/delivery/sse/handler.go` | Xử lý lifecycle end: fire HW calls (emotion), broadcast qua Telegram, suppress TTS nếu cần |
+| `lamp/lib/mood/mood.go` | Log `wellbeing.hydration`, `wellbeing.break` events. `IsMoodEvent()` whitelist cả 2 type |
 
 ### OpenClaw Skills
 
 | File | Vai trò |
 |------|---------|
-| `lumi/resources/openclaw-skills/sensing/SKILL.md` | Toàn bộ wellbeing logic: bootstrap crons, science reference, principles, presence.enter/leave workflow, motion activity reset |
-| `lumi/internal/openclaw/resources/SOUL.md` | Định nghĩa user folder structure (wellbeing.md, wellbeing/YYYY-MM-DD.md) |
+| `lamp/resources/openclaw-skills/sensing/SKILL.md` | Toàn bộ wellbeing logic: bootstrap crons, science reference, principles, presence.enter/leave workflow, motion activity reset |
+| `lamp/internal/openclaw/resources/SOUL.md` | Định nghĩa user folder structure (wellbeing.md, wellbeing/YYYY-MM-DD.md) |
 
 ### LeLamp (Python)
 
@@ -245,8 +245,8 @@ Observations: Bỏ qua hydration đầu tiên, phản hồi tốt từ lần 2.
 
 | File | Vai trò |
 |------|---------|
-| `lumi/web/src/pages/monitor/FlowSection/types.ts` | Icon mapping: `wellbeing.hydration` → 💧, `wellbeing.break` → 🧘 |
-| `lumi/web/src/pages/monitor/FlowSection/index.tsx` | Hiển thị wellbeing events trong flow diagram |
+| `lamp/web/src/pages/monitor/FlowSection/types.ts` | Icon mapping: `wellbeing.hydration` → 💧, `wellbeing.break` → 🧘 |
+| `lamp/web/src/pages/monitor/FlowSection/index.tsx` | Hiển thị wellbeing events trong flow diagram |
 
 ---
 
@@ -270,7 +270,7 @@ Sau vài session, AI sẽ override bằng dữ liệu thực từ wellbeing note
 
 ### Điều kiện tiên quyết
 
-- Lumi Go server đang chạy (port 5000)
+- Lamp Go server đang chạy (port 5000)
 - LeLamp đang chạy (port 5001) với camera hoạt động
 - OpenClaw agent connected
 - Camera thấy được user (cho presence detection + snapshot)
