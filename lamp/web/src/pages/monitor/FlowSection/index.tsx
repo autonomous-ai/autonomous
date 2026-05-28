@@ -272,7 +272,7 @@ export function FlowSection({
   // Detect adjacent turn pairs where one is a Lamp-id turn that closed with
   // chat_final_empty (OpenClaw closed stream · no message · no lifecycle) and
   // the adjacent turn is an OpenClaw-assigned UUID with matching input text.
-  // Each pair gets a stable color (hashed from the lumi runId) so distinct
+  // Each pair gets a stable color (hashed from the lamp runId) so distinct
   // pairs in view are visually distinguishable. Purely visual correlation —
   // no semantic label.
   const pairTintMap = useMemo(() => {
@@ -307,21 +307,21 @@ export function FlowSection({
     for (let i = 0; i < filteredTurns.length - 1; i++) {
       const a = filteredTurns[i];
       const b = filteredTurns[i + 1];
-      const tryPair = (lumiTurn: typeof a, uuidTurn: typeof b) => {
-        if (!isLamp(lumiTurn.id) || isLamp(uuidTurn.id)) return false;
-        const closedEmpty = lumiTurn.events.some((ev) =>
+      const tryPair = (lampTurn: typeof a, uuidTurn: typeof b) => {
+        if (!isLamp(lampTurn.id) || isLamp(uuidTurn.id)) return false;
+        const closedEmpty = lampTurn.events.some((ev) =>
           ev.type === "flow_event" && (
             (ev.detail as Record<string, any>)?.node === "chat_final_empty" ||
             (ev.detail as Record<string, any>)?.node === "turn_steered"
           )
         );
         if (!closedEmpty) return false;
-        const lumiIn = normalizeForMatch(turnIO(lumiTurn).input);
+        const lampIn = normalizeForMatch(turnIO(lampTurn).input);
         const uuidIn = normalizeForMatch(turnIO(uuidTurn).input);
-        if (!lumiIn || !uuidIn) return false;
-        if (Math.min(lumiIn.length, uuidIn.length) < 32) return false;
-        if (!lumiIn.includes(uuidIn) && !uuidIn.includes(lumiIn)) return false;
-        const color = hashColor(lumiTurn.id);
+        if (!lampIn || !uuidIn) return false;
+        if (Math.min(lampIn.length, uuidIn.length) < 32) return false;
+        if (!lampIn.includes(uuidIn) && !uuidIn.includes(lampIn)) return false;
+        const color = hashColor(lampTurn.id);
         map.set(a.id, color);
         map.set(b.id, color);
         return true;

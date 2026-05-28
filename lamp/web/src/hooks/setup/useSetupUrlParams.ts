@@ -42,7 +42,7 @@ const INITIAL_PARAMS: URLSearchParams = new URLSearchParams(INITIAL_SEARCH);
 // The raw original query string ("?…") — used to build cross-origin redirect
 // URLs that must carry every param through the AP→.local handoff (so the new
 // origin can re-auth via the bearer in `llm_api_key` and prefill state from
-// the lumi-pushed values). Reading window.location.search at redirect time
+// the lamp-pushed values). Reading window.location.search at redirect time
 // returns the post-scrub value with secrets stripped — useless for the
 // re-auth step.
 export function getInitialSearch(): string {

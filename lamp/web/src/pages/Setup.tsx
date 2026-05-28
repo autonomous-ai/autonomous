@@ -145,7 +145,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   const [setupLanIP, setSetupLanIP] = useState<string>("");
   const [setupErrorMsg, setSetupErrorMsg] = useState<string>("");
   // Always start on Device. The admin-password input lives there (fresh
-  // devices need it; lumi-push doesn't carry that field via URL), so the
+  // devices need it; lamp-push doesn't carry that field via URL), so the
   // user must see it before submitting. For already-provisioned devices
   // useConfigPrefill detects cfg.device_id and skips device → wifi.
   const [activeSection, setActiveSection] = useState<SectionId>("device");

@@ -907,10 +907,10 @@ export function ChatSection({ events, isActive }: Props) {
     const pending = pendingRunIdRef.current;
     if (!pending || resolvedIds.current.has(pending)) return;
 
-    // Steered/merged pattern: OpenClaw closes the lumi run with chat_final_empty
+    // Steered/merged pattern: OpenClaw closes the lamp run with chat_final_empty
     // and re-fires the same input under a fresh UUID-keyed turn (see
     // docs/debug/openclaw-selfreplay.md). The actual reply (tts_send,
-    // lifecycle_end, etc.) flows under the UUID, not the lumi run id, so
+    // lifecycle_end, etc.) flows under the UUID, not the lamp run id, so
     // the loop below would never see it without this pairing.
     //
     // Pair by matching the user's outgoing text against a chat_input
