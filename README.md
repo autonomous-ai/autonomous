@@ -1,6 +1,8 @@
-# AI Lamp
+# Autonomus Lamp
 
-Lamp is an AI-powered desk lamp built on a Raspberry Pi or OrangePi. It listens, sees, moves, and talks. The brain is a pluggable agentic gateway (OpenClaw, Hermes, or any other LLM + skills + memory runtime); the hands are LeLamp (servo, LED, mic, speaker, camera, display); Lamp Server (Go) glues them together with networking, sensing, OTA, and a web UI.
+https://github.com/user-attachments/assets/2e6eea7d-312e-47dd-94cf-0914dedeccc4
+
+Autonomous Lamp is an AI-powered desk lamp built on a Raspberry Pi or OrangePi. It listens, sees, moves, and talks. The brain is a pluggable agentic gateway (OpenClaw, Hermes, or any other LLM + skills + memory runtime); the hands are LeLamp (servo, LED, mic, speaker, camera, display); Lamp Server (Go) glues them together with networking, sensing, OTA, and a web UI.
 
 Target hardware: Raspberry Pi 4/5 or OrangePi (any Linux ARM64 SBC with comparable I/O).
 
