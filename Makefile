@@ -101,7 +101,7 @@ twitch-build-irc:
 # Upload (OTA to GCS) — unified format: make upload-<component>
 # ============================================================================
 
-.PHONY: upload-lumi upload-bootstrap upload-lelamp upload-claude-desktop-buddy upload-lumi-buddy upload-web upload-skills upload-hooks upload-setup upload-setup-ap upload-openclaw upload-twitch-irc upload-all
+.PHONY: upload-lumi upload-bootstrap upload-lelamp upload-claude-desktop-buddy upload-lamp-buddy upload-web upload-skills upload-hooks upload-setup upload-setup-ap upload-openclaw upload-twitch-irc upload-all
 
 upload-lumi:
 	bash scripts/upload-lumi.sh
@@ -115,8 +115,8 @@ upload-lelamp:
 upload-claude-desktop-buddy:
 	bash scripts/upload-claude-desktop-buddy.sh
 
-upload-lumi-buddy:
-	bash scripts/upload-lumi-buddy.sh
+upload-lamp-buddy:
+	bash scripts/upload-lamp-buddy.sh
 
 upload-web:
 	bash scripts/upload-web.sh

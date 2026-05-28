@@ -114,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             MVP build: pairing, persistent WebSocket, command execution. \
             Lamp-side Go endpoints are required for end-to-end use; see \
-            lumi-buddy/docs/lumi-buddy-mvp.md.
+            lamp-buddy/docs/lumi-buddy-mvp.md.
             """
         alert.alertStyle = .informational
         alert.runModal()

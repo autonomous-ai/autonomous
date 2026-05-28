@@ -3,15 +3,15 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BUDDY_DIR="${ROOT_DIR}/lumi-buddy"
-VERSION_FILE="${BUDDY_DIR}/VERSION_LUMI_BUDDY"
+BUDDY_DIR="${ROOT_DIR}/lamp-buddy"
+VERSION_FILE="${BUDDY_DIR}/VERSION_LAMP_BUDDY"
 DIST_DIR="${BUDDY_DIR}/dist"
 
-# Bucket and path: lumi/ota/lumi-buddy/[semver].dmg
+# Bucket and path: lumi/ota/lamp-buddy/[semver].dmg
 GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
 
 # Build target — `dmg` (unsigned, default) or `dmg-signed` (Developer ID + notarized).
-# Override via env: BUDDY_DMG_TARGET=dmg-signed scripts/upload-lumi-buddy.sh
+# Override via env: BUDDY_DMG_TARGET=dmg-signed scripts/upload-lamp-buddy.sh
 DMG_TARGET="${BUDDY_DMG_TARGET:-dmg}"
 
 # Auto-increment semver (patch) before build
@@ -28,9 +28,9 @@ else
   echo "========== Version initialized: ${new_version} =========="
 fi
 
-DMG_NAME="LumiBuddy-${new_version}.dmg"
+DMG_NAME="LampBuddy-${new_version}.dmg"
 DMG_PATH="${DIST_DIR}/${DMG_NAME}"
-GCS_PATH="${GCS_PATH:-lumi/ota/lumi-buddy/${new_version}.dmg}"
+GCS_PATH="${GCS_PATH:-lumi/ota/lamp-buddy/${new_version}.dmg}"
 
 echo "========== Building DMG via 'make ${DMG_TARGET}' (VERSION=${new_version}) =========="
 (cd "$BUDDY_DIR" && make "$DMG_TARGET")
@@ -45,7 +45,7 @@ gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" \
        -h "Content-Type:application/x-apple-diskimage" \
        cp "$DMG_PATH" "gs://${GCS_BUCKET}/${GCS_PATH}"
 
-# Update metadata.json (lumi/ota/metadata.json) - lumi-buddy key
+# Update metadata.json (lumi/ota/metadata.json) - lamp-buddy key
 METADATA_PATH="lumi/ota/metadata.json"
 METADATA_TMP=$(mktemp)
 BUDDY_URL="${BUDDY_URL:-https://storage.googleapis.com/${GCS_BUCKET}/${GCS_PATH}}"
@@ -68,12 +68,13 @@ try:
     data = json.loads(raw) if raw.strip() else {}
 except json.JSONDecodeError:
     data = {}
-data['lumi-buddy'] = {'version': sys.argv[1], 'url': sys.argv[2]}
+data.pop('lumi-buddy', None)
+data['lamp-buddy'] = {'version': sys.argv[1], 'url': sys.argv[2]}
 print(json.dumps(data, indent=2))
 " "$new_version" "$BUDDY_URL")
 
 echo "$updated_metadata" > "$METADATA_TMP"
-echo "========== Upload metadata (lumi-buddy: v${new_version}) =========="
+echo "========== Upload metadata (lamp-buddy: v${new_version}) =========="
 gsutil -h "Content-Type:application/json" -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$METADATA_TMP" "gs://${GCS_BUCKET}/${METADATA_PATH}"
 rm -f "$METADATA_TMP"
 
