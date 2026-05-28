@@ -118,12 +118,11 @@ stage_prerequisites() {
 }
 
 # ----------------------------------------------------------
-# Stage 0a: Raspberry Pi 5 WiFi stability (reduces STA drops when SSID/PSK are correct)
+# Stage 0a: Disable IPv6 (RPi 5 STA-drop workaround; harmless on OrangePi)
 # ----------------------------------------------------------
 stage_rpi5_wifi_stability() {
-  echo "[stage] RPi 5 WiFi stability (power save off, IPv6 disable)"
+  echo "[stage] Disable IPv6"
 
-  # Disable IPv6 — can cause connection drops on RPi 5
   mkdir -p /etc/sysctl.d
   cat >/etc/sysctl.d/99-lumi-wifi.conf <<'EOF'
 net.ipv6.conf.all.disable_ipv6 = 1
@@ -131,27 +130,6 @@ net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
   sysctl -p /etc/sysctl.d/99-lumi-wifi.conf 2>/dev/null || true
-
-  # Disable WiFi power saving at boot (chip sleep causes STA drops)
-  # device-ap-mode and device-sta-mode also run power_save off when switching modes
-  cat >/etc/systemd/system/lumi-wifi-power-save.service <<'EOF'
-[Unit]
-Description=Disable WiFi power save on wlan0 (RPi 5 stability)
-After=network-online.target
-Before=hostapd.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/bin/sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do ip link show wlan0 >/dev/null 2>&1 && break; sleep 2; done; iw dev wlan0 set power_save off 2>/dev/null || iwconfig wlan0 power off 2>/dev/null || true'
-
-[Install]
-WantedBy=multi-user.target
-EOF
-  systemctl daemon-reload
-  systemctl enable lumi-wifi-power-save.service
-  # Run now if wlan0 exists (e.g. already on STA from image)
-  systemctl start lumi-wifi-power-save.service 2>/dev/null || true
 }
 
 # ----------------------------------------------------------
@@ -1038,10 +1016,6 @@ sleep 1
 ip link set wlan0 up
 sleep 1
 
-# Disable power saving
-iw dev wlan0 set power_save off 2>/dev/null || true
-iwconfig wlan0 power off 2>/dev/null || true
-
 # Assign static IP
 ip addr flush dev wlan0
 ip addr add 192.168.100.1/24 dev wlan0
@@ -1139,10 +1113,6 @@ iw dev wlan0 set type managed
 
 ip link set wlan0 up
 sleep 1
-
-# Disable power saving (better stability)
-iw dev wlan0 set power_save off 2>/dev/null || true
-iwconfig wlan0 power off 2>/dev/null || true
 
 # Remove any AP static IP
 ip addr flush dev wlan0
@@ -1345,6 +1315,11 @@ systemctl disable lumi.service 2>/dev/null || true
 systemctl stop lumi-lelamp.service 2>/dev/null || true
 systemctl disable lumi-lelamp.service 2>/dev/null || true
 rm -f /etc/systemd/system/lumi-lelamp.service
+# lumi-wifi-power-save.service was a no-op on OrangePi (iw/iwconfig not installed)
+# and was removed 2026-05-28; clean it up on field devices upgraded from older images.
+systemctl stop lumi-wifi-power-save.service 2>/dev/null || true
+systemctl disable lumi-wifi-power-save.service 2>/dev/null || true
+rm -f /etc/systemd/system/lumi-wifi-power-save.service
 systemctl daemon-reload 2>/dev/null || true
 
 run_stage stage_locale

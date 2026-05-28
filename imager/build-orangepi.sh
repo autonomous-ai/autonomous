@@ -328,21 +328,6 @@ SyslogIdentifier=lamp-lelamp
 WantedBy=multi-user.target
 UNIT
 
-cat > /etc/systemd/system/lumi-wifi-power-save.service <<'UNIT'
-[Unit]
-Description=Disable WiFi power save on wlan0 (stability)
-After=network-online.target
-Before=hostapd.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/bin/sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do ip link show wlan0 >/dev/null 2>&1 && break; sleep 2; done; iw dev wlan0 set power_save off 2>/dev/null || iwconfig wlan0 power off 2>/dev/null || true'
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
 # Default lelamp env — production-safe defaults. Secrets (GELF, API keys) are
 # filled by the device operator via setup wizard; not baked into the image.
 cat > /opt/lelamp/.env <<'ENV'
@@ -481,8 +466,6 @@ iw dev wlan0 set type __ap
 iw dev wlan0 set channel 6
 sleep 1
 ip link set wlan0 up; sleep 1
-iw dev wlan0 set power_save off 2>/dev/null || true
-iwconfig wlan0 power off 2>/dev/null || true
 ip addr flush dev wlan0
 ip addr add 192.168.100.1/24 dev wlan0
 
@@ -520,8 +503,6 @@ killall dnsmasq 2>/dev/null || true
 ip link set wlan0 down 2>/dev/null || true; sleep 1
 iw dev wlan0 set type managed
 ip link set wlan0 up; sleep 1
-iw dev wlan0 set power_save off 2>/dev/null || true
-iwconfig wlan0 power off 2>/dev/null || true
 ip addr flush dev wlan0
 sed -i '/static ip_address=192.168.100.1\\/24/d;/nohook wpa_supplicant/d' /etc/dhcpcd.conf 2>/dev/null || true
 systemctl unmask wpa_supplicant@wlan0 2>/dev/null || true
@@ -825,7 +806,7 @@ systemctl mask orangepi-firstrun-config.service 2>/dev/null || true
 
 # ── enable Lumi services (symlink, since chroot has no running systemd) ──────
 echo "[stage] enable Lumi services"
-for unit in lamp bootstrap lamp-lelamp lumi-wifi-power-save openclaw avahi-daemon bluetooth ssh; do
+for unit in lamp bootstrap lamp-lelamp openclaw avahi-daemon bluetooth ssh; do
   systemctl enable "\$unit" 2>/dev/null || true
 done
 

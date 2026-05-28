@@ -38,7 +38,7 @@
 #         - Install packages (btrfs-progs, hostapd, dnsmasq, nginx, etc.)
 #         - Verify btrfs binary works (shared libs check)
 #         - Generate locale
-#         - stage_rpi5_wifi_stability: disable IPv6, power-save service
+#         - stage_rpi5_wifi_stability: disable IPv6 (legacy RPi 5 workaround)
 #         - stage_enable_spi: dtparam=spi=on in config.txt
 #         - stage_backend_units: systemd services (bootstrap, lamp, lamp-lelamp) + software-update
 #         - stage_pulseaudio: PulseAudio echo cancellation (WebRTC AEC for mic/speaker)
@@ -760,13 +760,11 @@ systemctl enable systemd-timesyncd
 date -u '+%Y-%m-%d %H:%M:%S' > /etc/fake-hwclock.data
 
 # ── stage: WiFi stability (RPi 5 specific) ───────────────────────────────────
-# RPi 5 Wi-Fi drops connections when:
-#   1. IPv6 is enabled (causes duplicate address detection delays)
-#   2. Wi-Fi power save mode is on (chip sleeps between AP beacons)
-# Solutions:
-#   sysctl: disable IPv6 globally via kernel parameters
-#   service: runs 'iw dev wlan0 set power_save off' after interface appears
-echo "[stage] WiFi stability"
+# Legacy RPi 5 workaround: disable IPv6 globally to avoid duplicate address
+# detection delays. Harmless on OrangePi. The earlier `lumi-wifi-power-save`
+# systemd unit was removed 2026-05-28 — iw/iwconfig aren't installed on
+# OrangePi so the unit was a verified no-op on current hardware.
+echo "[stage] WiFi stability (IPv6 off)"
 mkdir -p /etc/sysctl.d
 cat > /etc/sysctl.d/99-lumi-wifi.conf <<'EOF'
 net.ipv6.conf.all.disable_ipv6 = 1
@@ -774,22 +772,6 @@ net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
 sysctl -p /etc/sysctl.d/99-lumi-wifi.conf 2>/dev/null || true
-
-cat > /etc/systemd/system/lumi-wifi-power-save.service <<'EOF'
-[Unit]
-Description=Disable WiFi power save (RPi 5 stability)
-After=network.target
-Before=hostapd.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/bin/sh -c 'for i in 1 2 3 4 5; do ip link show wlan0 >/dev/null 2>&1 && break; sleep 2; done; iw dev wlan0 set power_save off 2>/dev/null || true'
-
-[Install]
-WantedBy=multi-user.target
-EOF
-systemctl enable lumi-wifi-power-save.service
 
 # ── stage: SPI ────────────────────────────────────────────────────────────────
 # Enable the SPI bus in firmware config for hardware peripherals.
@@ -1226,7 +1208,6 @@ iw reg set "\$REG" 2>/dev/null || true
 ip link set wlan0 down 2>/dev/null || true; sleep 1
 iw dev wlan0 set type __ap 2>/dev/null || true
 ip link set wlan0 up; sleep 1
-iw dev wlan0 set power_save off 2>/dev/null || true
 ip addr flush dev wlan0
 ip addr add 192.168.100.1/24 dev wlan0
 # Start AP services
@@ -1262,7 +1243,6 @@ killall hostapd dnsmasq 2>/dev/null || true
 ip link set wlan0 down 2>/dev/null || true; sleep 1
 iw dev wlan0 set type managed
 ip link set wlan0 up; sleep 1
-iw dev wlan0 set power_save off 2>/dev/null || true
 ip addr flush dev wlan0
 # Remove AP static IP config from dhcpcd
 sed -i '/static ip_address=192.168.100.1\/24/d;/nohook wpa_supplicant/d' /etc/dhcpcd.conf

@@ -49,7 +49,7 @@ Phase 2  chroot qemu-arm64:
          - Node.js 22 from NodeSource + `openclaw@$OPENCLAW_VERSION` npm global
          - openclaw onboard --skip-health (creates /root/.openclaw scaffolding)
          - uv (Python pkg mgr for LeLamp)
-         - systemd units: lamp, bootstrap, lamp-lelamp, lumi-wifi-power-save, openclaw
+         - systemd units: lamp, bootstrap, lamp-lelamp, openclaw
          - helper scripts /usr/local/bin/{device-ap-mode, device-sta-mode, connect-wifi, software-update}
            (verbatim copy from production OPi @ 100.111.149.69)
          - configs: hostapd, dnsmasq, dhcpcd, full prod nginx (CSP + WS + captive-portal),
@@ -215,7 +215,7 @@ SSH in (`ssh system@lamp-xxxx.local`, password `12345` until rotated by the
 setup wizard) and verify:
 
 ```bash
-systemctl is-enabled lamp lamp-lelamp lumi-wifi-power-save openclaw avahi-daemon
+systemctl is-enabled lamp lamp-lelamp openclaw avahi-daemon
 ls /usr/local/bin/{lamp-server,bootstrap-server,device-ap-mode,connect-wifi,software-update}
 ls /opt/lelamp/.venv/bin/uvicorn       # LeLamp uv sync succeeded
 openclaw --version                       # OpenClaw npm global installed

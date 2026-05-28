@@ -180,10 +180,6 @@ sleep 1
 ip link set wlan0 up
 sleep 1
 
-# Disable power saving
-iw dev wlan0 set power_save off 2>/dev/null || true
-iwconfig wlan0 power off 2>/dev/null || true
-
 # Assign static IP
 ip addr flush dev wlan0
 ip addr add 192.168.100.1/24 dev wlan0
@@ -276,10 +272,6 @@ iw dev wlan0 set type managed
 
 ip link set wlan0 up
 sleep 1
-
-# Disable power saving (better stability)
-iw dev wlan0 set power_save off 2>/dev/null || true
-iwconfig wlan0 power off 2>/dev/null || true
 
 # Remove any AP static IP
 ip addr flush dev wlan0

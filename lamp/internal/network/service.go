@@ -373,9 +373,6 @@ func (s *Service) reconnectWiFi() {
 	_ = exec.Command("ip", "link", "set", defaultInterface, "up").Run()
 	time.Sleep(5 * time.Second)
 
-	// Disable power save after interface restart
-	_ = exec.Command("iw", "dev", defaultInterface, "set", "power_save", "off").Run()
-
 	if s.pingNetworkMonitor(networkMonitorPingTarget) {
 		slog.Info("WiFi reconnect succeeded", "component", "network-monitor", "attempt", attempt)
 		s.networkMonitorMu.Lock()
