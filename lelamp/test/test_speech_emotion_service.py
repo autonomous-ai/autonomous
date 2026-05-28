@@ -5,12 +5,12 @@ What it exercises:
   - Mic capture (sounddevice) → in-process `submit()`
   - Worker thread → POST dlbackend `/api/dl/ser/recognize`
   - Per-user buffer + polarity-bucket dedup
-  - Flush thread → POST sensing event to Lumi
+  - Flush thread → POST sensing event to Lamp
 
-To avoid needing a running Lumi instance on the dev machine, the script
+To avoid needing a running Lamp instance on the dev machine, the script
 spins up a tiny mock HTTP listener on `127.0.0.1:5000` that captures
 every `/api/sensing/event` POST and prints it. Override with --lumi-url
-to talk to a real Lumi instead.
+to talk to a real Lamp instead.
 
 Usage (from repo root):
 
@@ -27,7 +27,7 @@ Usage (from repo root):
     # Submit as 'unknown' to verify the unknown-collapse path
     python -m lelamp.test.test_speech_emotion_service --user unknown --reps 2
 
-    # Point at a real Lumi
+    # Point at a real Lamp
     python -m lelamp.test.test_speech_emotion_service \\
         --lumi-url http://192.168.1.42:5000/api/sensing/event
 
@@ -68,7 +68,7 @@ MOCK_LUMI_PORT = 5000
 DEFAULT_SER_ENDPOINT = "/api/dl/ser/recognize"
 
 
-# --- Mock Lumi listener ---------------------------------------------------
+# --- Mock Lamp listener ---------------------------------------------------
 
 class _CapturedPost:
     def __init__(self, path: str, payload: dict):
