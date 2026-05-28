@@ -1232,11 +1232,12 @@ OTA_METADATA_URL="${OTA_METADATA_URL:-https://storage.googleapis.com/s3-autonomo
 [ "$(id -u)" -ne 0 ] && { echo "Run as root."; exit 1; }
 [ $# -ne 1 ] && { echo "Usage: software-update <lamp|openclaw|web>"; exit 1; }
 APP="$1"
-# Back-compat: `software-update lumi` still works during the brand rename window.
+# Back-compat: `software-update lumi` / `lumi-buddy` still work during the brand rename window.
 [ "$APP" = "lumi" ] && APP="lamp"
+[ "$APP" = "lumi-buddy" ] && APP="lamp-buddy"
 case "$APP" in
-  lamp|openclaw|bootstrap|web|lelamp|lumi-buddy) ;;
-  *) echo "Unknown app: $APP. Use lamp, openclaw, bootstrap, web, lelamp, or lumi-buddy."; exit 1 ;;
+  lamp|openclaw|bootstrap|web|lelamp|lamp-buddy) ;;
+  *) echo "Unknown app: $APP. Use lamp, openclaw, bootstrap, web, lelamp, or lamp-buddy."; exit 1 ;;
 esac
 
 METADATA_TMP=$(mktemp)
@@ -1244,12 +1245,11 @@ ZIP_TMP=""
 DIR_TMP=""
 trap 'rm -f "$METADATA_TMP" "$ZIP_TMP"; rm -rf "$DIR_TMP"' EXIT
 curl -fsSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" -o "$METADATA_TMP" "$OTA_METADATA_URL" || { echo "Failed to fetch metadata from $OTA_METADATA_URL"; exit 1; }
-# Map command name to metadata key. Default 1:1. Legacy `lumi` arg from
-# pre-rename invocations still maps to the new `lamp` field.
-# `lumi-buddy` (BLE plugin) maps to claude-desktop-buddy.
+# Map command name to metadata key. Default 1:1.
+# `lamp-buddy` (BLE plugin) maps to claude-desktop-buddy. Legacy `lumi` /
+# `lumi-buddy` args are normalized above so no extra mapping needed here.
 META_KEY="$APP"
-[ "$APP" = "lumi" ] && META_KEY="lamp"
-[ "$APP" = "lumi-buddy" ] && META_KEY="claude-desktop-buddy"
+[ "$APP" = "lamp-buddy" ] && META_KEY="claude-desktop-buddy"
 VERSION=$(jq -r --arg a "$META_KEY" '.[$a].version // empty' "$METADATA_TMP")
 URL=$(jq -r --arg a "$META_KEY" '.[$a].url // empty' "$METADATA_TMP")
 [ -z "$VERSION" ] && { echo "Metadata has no version for $APP"; exit 1; }
@@ -1310,7 +1310,7 @@ elif [ "$APP" = "lelamp" ]; then
   cd /
   systemctl restart lumi-lelamp
   echo "lelamp updated to $VERSION"
-elif [ "$APP" = "lumi-buddy" ]; then
+elif [ "$APP" = "lamp-buddy" ]; then
   [ -z "$URL" ] && { echo "Metadata has no url for claude-desktop-buddy"; exit 1; }
   ZIP_TMP=$(mktemp)
   DIR_TMP=$(mktemp -d)
@@ -1322,7 +1322,7 @@ elif [ "$APP" = "lumi-buddy" ]; then
   [ ! -f "/root/config/buddy.json" ] && [ -f "$DIR_TMP/config/buddy.json" ] && mkdir -p /root/config && cp -f "$DIR_TMP/config/buddy.json" /root/config/buddy.json
   echo "$VERSION" > "$BUDDY_DIR/VERSION_BUDDY"
   systemctl restart lumi-buddy
-  echo "lumi-buddy updated to $VERSION"
+  echo "lamp-buddy updated to $VERSION"
 fi
 SOFTWAREUPDATE
   chmod +x /usr/local/bin/software-update
@@ -1366,7 +1366,7 @@ echo "Setup complete!"
 echo "AP SSID: Lamp-XXXX (actual: ${AP_SSID:-unknown — stage_ap may have failed})"
 echo "Setup page: http://192.168.100.1 (AP) — or http://${LAMP_HOSTNAME:-lamp-xxxx}.local once on home Wi-Fi"
 echo "Backends: systemctl status bootstrap lamp lumi-lelamp lumi-buddy"
-echo "Updates:  software-update <bootstrap|lamp|openclaw|lelamp|lumi-buddy|web>"
+echo "Updates:  software-update <bootstrap|lamp|openclaw|lelamp|lamp-buddy|web>"
 if [ -n "$FAILED_STAGES" ]; then
   echo ""
   echo "WARNING: the following stages FAILED:$FAILED_STAGES"
