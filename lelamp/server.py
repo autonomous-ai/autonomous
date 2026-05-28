@@ -314,9 +314,9 @@ async def lifespan(app: FastAPI):
             logger.info(f"Audio input device: {state.audio_input_device}")
 
     # Auto-start voice pipeline from Lamp config
-    lumi_config_path = LAMP_CONFIG_PATH
+    lamp_config_path = LAMP_CONFIG_PATH
     try:
-        with open(lumi_config_path) as f:
+        with open(lamp_config_path) as f:
             lamp_cfg = json.load(f)
         dgk = lamp_cfg.get("deepgram_api_key", "")
         llm_key = lamp_cfg.get("llm_api_key", "")
@@ -382,7 +382,7 @@ async def lifespan(app: FastAPI):
                 logger.info("VoiceService auto-started (%s, wake_words=%s)", stt_provider.name, wake_words)
     except FileNotFoundError:
         logger.info(
-            f"Lamp config not found at {lumi_config_path}, voice will wait for /voice/start"
+            f"Lamp config not found at {lamp_config_path}, voice will wait for /voice/start"
         )
     except Exception as e:
         logger.warning(f"Auto-start voice from lamp config failed: {e}")
