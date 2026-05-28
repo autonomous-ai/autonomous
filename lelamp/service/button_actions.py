@@ -32,7 +32,8 @@ from lelamp.presets import DEFAULT_LANG
 logger = logging.getLogger(__name__)
 
 DOUBLE_CLICK_WINDOW = 0.4  # seconds to wait for second click
-LONG_PRESS_DURATION = 5.0  # seconds to hold for shutdown
+LONG_PRESS_DURATION = 5.0  # seconds held → shutdown on release
+FACTORY_RESET_DURATION = 10.0  # seconds held → factory-reset on release (supersedes shutdown)
 
 # Lumi Go sensing endpoint. Head-pat notify is fire-and-forget — Lumi
 # Go appends a NO_REPLY hint so the agent records the event in
@@ -222,3 +223,53 @@ def long_press_action(source: str = "button"):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
+
+def _factory_reset_phrase() -> str:
+    """Inline i18n until PHRASE_FACTORY_RESET lands in i18n.py."""
+    lang = _current_lang()
+    if lang.startswith("vi"):
+        return "Đang khôi phục cài đặt gốc. Lumi sẽ khởi động lại."
+    if lang.startswith("zh"):
+        return "正在恢复出厂设置，Lumi 将重新启动。"
+    return "Factory reset starting. Lumi will reboot."
+
+
+def factory_reset_action(source: str = "button"):
+    """Announce + POST /api/system/factory-reset on lumi-server. Lumi-server
+    wipes per-device state (config, API keys, enrollments, WiFi) and reboots
+    into AP setup mode. Lelamp does NOT touch state itself — single source of
+    truth for what gets wiped lives in lumi-server's factoryResetWipePaths.
+
+    Authoritative because of physical presence: 10s deliberate hold + the
+    /api/system/factory-reset endpoint allows loopback origin without Bearer
+    (see lumi server.go adminOrLoopbackAuth)."""
+    logger.info("%s factory-reset hold (10s+) -- triggering soft reset", source)
+
+    # Step 1: TTS announce so the user knows the gesture registered. Brief —
+    # the reboot lands ~5s after lumi-server accepts the POST, we want the
+    # announce + 3s settle window to fit inside that.
+    if _tts_available():
+        state.tts_service.speak_cached(_factory_reset_phrase())
+        time.sleep(3)
+
+    # Step 2: park servo before reboot, same reasoning as long_press_action —
+    # systemd will kill us mid-pose otherwise and the body slams.
+    try:
+        from lelamp.routes.servo import release_servos
+
+        release_servos()
+    except Exception as e:
+        logger.warning(f"Servo release before factory-reset failed: {e}")
+
+    # Step 3: trigger the Go-side wipe. Loopback bypasses admin auth (see
+    # lumi server.go adminOrLoopbackAuth) so this works even on devices that
+    # never completed setup (no llm_api_key in config).
+    try:
+        requests.post(
+            "http://127.0.0.1:5000/api/system/factory-reset",
+            json={},
+            timeout=3.0,
+        )
+    except Exception as e:
+        logger.error("factory-reset HTTP call failed: %s", e)
