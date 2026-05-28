@@ -121,7 +121,7 @@ Chỉ chuyển động lớn được forward — LeLamp lọc và không gửi 
 
 ## Tư thế (RULA — sampling thầm lặng, gắn vào `motion.activity`)
 
-LeLamp stream từng frame camera lên dlbackend `/api/dl/pose-estimation/ws` và nhận RULA breakdown từng frame (whole-body score + `risk_level` + `body_scores` + `*_angle` cho `neck / trunk / upper_arm / lower_arm / wrist`, mỗi bên trái/phải). `PosePerception` throttle thành **một sample mỗi `POSE_SAMPLE_INTERVAL_S` (default 60s)** vào tumbling window + JSONL theo ngày tại `/tmp/lumi-sensing-snapshots/sensing_pose/samples_YYYY-MM-DD.jsonl`. **Không emit event trực tiếp** — `MotionPerception` check `is_window_complete()` mỗi tick và gắn aggregate vào `motion.activity` kế tiếp khi gate đỏ.
+LeLamp stream từng frame camera lên dlbackend `/api/dl/pose-estimation/ws` và nhận RULA breakdown từng frame (whole-body score + `risk_level` + `body_scores` + `*_angle` cho `neck / trunk / upper_arm / lower_arm / wrist`, mỗi bên trái/phải). `PosePerception` throttle thành **một sample mỗi `POSE_SAMPLE_INTERVAL_S` (default 60s)** vào tumbling window + JSONL theo ngày tại `/tmp/lamp-sensing-snapshots/sensing_pose/samples_YYYY-MM-DD.jsonl`. **Không emit event trực tiếp** — `MotionPerception` check `is_window_complete()` mỗi tick và gắn aggregate vào `motion.activity` kế tiếp khi gate đỏ.
 
 ### Tumbling window (lúc nào summary được inject)
 
@@ -154,7 +154,7 @@ Lifecycle window:
 
 ### Snapshot bucketed theo từng window
 
-Mỗi sample ghi 1 JPEG có overlay skeleton + nhãn RULA vào **bucket dir của window hiện tại**: `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<window_start_int>/<sample_ts_int>_<score>.jpg`. Tên file kèm ergo score → bucket tự mô tả trên disk, không cần đọc metadata.
+Mỗi sample ghi 1 JPEG có overlay skeleton + nhãn RULA vào **bucket dir của window hiện tại**: `/tmp/lamp-sensing-snapshots/sensing_pose/buckets/<window_start_int>/<sample_ts_int>_<score>.jpg`. Tên file kèm ergo score → bucket tự mô tả trên disk, không cần đọc metadata.
 
 Khi `reset_window()` chạy:
 
@@ -192,7 +192,7 @@ Cả 2 marker đều bị strip trước khi message tới LLM (mirror `[snapsho
 
 ### `/dm` tự đính ảnh (Telegram)
 
-Khi agent quyết định nudge qua `/dm`, SSE handler của Lamp gọi `ConsumePoseBucketRun(runID)` (mirror `ConsumeGuardRun`). Nếu run có bucket stash, các `worst_snapshots` filenames được resolve thành path tuyệt đối dưới `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<bid>/` rồi gửi Telegram qua `sendMediaGroup` — caption nằm trên photo đầu, còn lại hiển thị thành gallery. Agent không biết bất kỳ file path nào; việc đính ảnh hoàn toàn do Lamp quyết định dựa trên việc `motion.activity` gốc có mang bucket hay không.
+Khi agent quyết định nudge qua `/dm`, SSE handler của Lamp gọi `ConsumePoseBucketRun(runID)` (mirror `ConsumeGuardRun`). Nếu run có bucket stash, các `worst_snapshots` filenames được resolve thành path tuyệt đối dưới `/tmp/lamp-sensing-snapshots/sensing_pose/buckets/<bid>/` rồi gửi Telegram qua `sendMediaGroup` — caption nằm trên photo đầu, còn lại hiển thị thành gallery. Agent không biết bất kỳ file path nào; việc đính ảnh hoàn toàn do Lamp quyết định dựa trên việc `motion.activity` gốc có mang bucket hay không.
 
 ### Workaround sign góc (tạm thời)
 
@@ -662,7 +662,7 @@ Các sensing event có kèm camera frame (`motion`, `presence.enter`, `presence.
 
 | Tầng | Đường dẫn | Rotation | Giữ qua reboot |
 |------|-----------|----------|-----------------|
-| **Tmp buffer** | `/tmp/lumi-sensing-snapshots/sensing_<prefix>/` | Theo số lượng (tối đa 50 file) | Không |
+| **Tmp buffer** | `/tmp/lamp-sensing-snapshots/sensing_<prefix>/` | Theo số lượng (tối đa 50 file) | Không |
 | **Persistent** | `/var/lib/lelamp/snapshots/sensing_<prefix>/` | TTL (72h) + dung lượng (tối đa 50 MB) | Có |
 
 Mỗi loại event ghi vào subdir riêng (`sensing_<prefix>`, ví dụ `sensing_presence/`, `sensing_motion_activity/`, `sensing_emotion/`). Tên file là `<ms>.jpg`. Snapshot được lưu vào tmp trước, rồi copy sang persistent dir. Đường dẫn persistent được ghi trong event message (`[snapshot: /var/lib/lelamp/snapshots/sensing_<prefix>/<ms>.jpg]`) để agent có thể xem lại — kể cả sau khi thiết bị reboot. Monitor phục vụ ảnh qua `GET /api/sensing/snapshot/<category>/<name>`.

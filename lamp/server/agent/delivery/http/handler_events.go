@@ -18,7 +18,7 @@ import (
 // Matches lelamp/config.py:SNAPSHOT_TMP_DIR + "/sensing_pose/buckets/".
 // lelamp and lamp share the same Pi so this is the same FS location for
 // both processes.
-const poseBucketRoot = "/tmp/lumi-sensing-snapshots/sensing_pose/buckets"
+const poseBucketRoot = "/tmp/lamp-sensing-snapshots/sensing_pose/buckets"
 
 // buildPoseBucketImagePaths joins a bucket id with each worst-snapshot
 // filename to produce absolute paths Telegram can read. Filenames that

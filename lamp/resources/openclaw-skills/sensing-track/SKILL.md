@@ -132,7 +132,7 @@ ls -lt /var/lib/lelamp/snapshots/sensing_motion_activity/ | head -20
 
 ### Pose buckets (posture history)
 
-Posture snapshots are NOT in `/var/lib/lelamp/snapshots/` — they live in tmp under a per-window bucket layout at `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/<bucket_id>/`. A bucket only exists when a tumbling window closed with bad posture (`bad_ratio >= POSE_BAD_RATIO`). Kept buckets survive ~2 days (`POSE_BUCKET_KEEP_S`); windows that didn't fire a nudge are deleted immediately, so the buckets you can see are by definition "bad posture" sessions.
+Posture snapshots are NOT in `/var/lib/lelamp/snapshots/` — they live in tmp under a per-window bucket layout at `/tmp/lamp-sensing-snapshots/sensing_pose/buckets/<bucket_id>/`. A bucket only exists when a tumbling window closed with bad posture (`bad_ratio >= POSE_BAD_RATIO`). Kept buckets survive ~2 days (`POSE_BUCKET_KEEP_S`); windows that didn't fire a nudge are deleted immediately, so the buckets you can see are by definition "bad posture" sessions.
 
 Each kept bucket contains:
 
@@ -145,22 +145,22 @@ Each kept bucket contains:
 
 ```bash
 # List recent buckets (newest first)
-ls -lt /tmp/lumi-sensing-snapshots/sensing_pose/buckets/ | head -10
+ls -lt /tmp/lamp-sensing-snapshots/sensing_pose/buckets/ | head -10
 
 # Read a specific bucket's manifest
-jq . /tmp/lumi-sensing-snapshots/sensing_pose/buckets/1779259742/bucket.json
+jq . /tmp/lamp-sensing-snapshots/sensing_pose/buckets/1779259742/bucket.json
 
 # Buckets that closed in the last 2 hours
-find /tmp/lumi-sensing-snapshots/sensing_pose/buckets -maxdepth 1 -type d -mmin -120 -name '[0-9]*' | sort
+find /tmp/lamp-sensing-snapshots/sensing_pose/buckets -maxdepth 1 -type d -mmin -120 -name '[0-9]*' | sort
 
 # Worst-frame paths from the latest kept bucket
-LATEST=$(ls -t /tmp/lumi-sensing-snapshots/sensing_pose/buckets/ | head -1)
-jq -r '.worst_snapshots[]' "/tmp/lumi-sensing-snapshots/sensing_pose/buckets/${LATEST}/bucket.json" \
-  | sed "s|^|/tmp/lumi-sensing-snapshots/sensing_pose/buckets/${LATEST}/|"
+LATEST=$(ls -t /tmp/lamp-sensing-snapshots/sensing_pose/buckets/ | head -1)
+jq -r '.worst_snapshots[]' "/tmp/lamp-sensing-snapshots/sensing_pose/buckets/${LATEST}/bucket.json" \
+  | sed "s|^|/tmp/lamp-sensing-snapshots/sensing_pose/buckets/${LATEST}/|"
 
 # Today's bad-posture sessions — bucket id == window_start unix-seconds
 TODAY_START=$(date -d "today 00:00" +%s)
-for b in /tmp/lumi-sensing-snapshots/sensing_pose/buckets/*/bucket.json; do
+for b in /tmp/lamp-sensing-snapshots/sensing_pose/buckets/*/bucket.json; do
   jq --arg start "$TODAY_START" 'select((.window_start_ts | floor) >= ($start | tonumber)) | {bucket_id, dominant: .summary.dominant_region, bad_ratio: .summary.bad_ratio, started: .window_start_ts}' "$b"
 done
 ```
@@ -216,7 +216,7 @@ Storage: `/root/local/users/{name}/mood/YYYY-MM-DD.jsonl` (30-day retention).
 - **Span multiple days** — for questions covering more than today, `cat` multiple JSONL files together.
 - **Parse the message field** for who/what details — `friend (gray)`, `friend (chloe)`, `stranger (stranger_1)`, `Large movement detected`, etc.
 - **Reference snapshots** — when the user asks "what did you see?", extract the `[snapshot: ...]` path from the message. Path format is `/var/lib/lelamp/snapshots/sensing_<prefix>/<ms>.jpg` (category subdir per event kind). Snapshots have 72h TTL — check the file exists before referencing (`test -f <path>`).
-- **Posture history** — for questions about the user's posture ("how was I sitting this morning?", "show me my worst posture today"), scan `/tmp/lumi-sensing-snapshots/sensing_pose/buckets/`. Only sessions that crossed the bad-ratio threshold survive here, so the bucket list itself answers "when did my posture get bad today?". Read each bucket's `bucket.json` for `summary.dominant_region` and `summary.bad_ratio`, then reference `worst_snapshots[]` for representative frames.
+- **Posture history** — for questions about the user's posture ("how was I sitting this morning?", "show me my worst posture today"), scan `/tmp/lamp-sensing-snapshots/sensing_pose/buckets/`. Only sessions that crossed the bad-ratio threshold survive here, so the bucket list itself answers "when did my posture get bad today?". Read each bucket's `bucket.json` for `summary.dominant_region` and `summary.bad_ratio`, then reference `worst_snapshots[]` for representative frames.
 
 ---
 

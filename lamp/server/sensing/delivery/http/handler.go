@@ -548,9 +548,9 @@ func (h *SensingHandler) GetSnapshot(c *gin.Context) {
 		return
 	}
 	for _, dir := range []string{
-		"/tmp/lumi-sensing-snapshots",
-		"/tmp/lumi-emotion-snapshots",
-		"/tmp/lumi-motion-snapshots",
+		"/tmp/lamp-sensing-snapshots",
+		"/tmp/lamp-emotion-snapshots",
+		"/tmp/lamp-motion-snapshots",
 	} {
 		p := filepath.Join(dir, category, name)
 		if _, err := os.Stat(p); err == nil {
