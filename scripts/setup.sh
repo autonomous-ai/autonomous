@@ -322,12 +322,12 @@ PULSE_EOF
   # owner differs from the connecting uid). Pairs with the PULSE_SERVER env
   # added to the lamp-lelamp.service unit below. Required for Bluetooth
   # headset routing (pactl set-default-sink to a bluez sink).
-  if [ -f "$PULSE_CONF" ] && ! grep -q "pulse-anon-lumi" "$PULSE_CONF"; then
+  if [ -f "$PULSE_CONF" ] && ! grep -q "pulse-anon-lamp" "$PULSE_CONF"; then
     echo "[stage] Configuring PulseAudio anonymous socket for root access"
     cat >> "$PULSE_CONF" <<'PULSE_EOF'
 
 ### Anonymous unix socket so root-owned lamp-lelamp can reach this PA daemon
-load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-anon-lumi
+load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-anon-lamp
 PULSE_EOF
   fi
 
@@ -415,7 +415,7 @@ EnvironmentFile=$LELAMP_DIR/.env
 Environment="PYTHONPATH=/opt"
 # Anonymous PulseAudio socket — see /etc/pulse/default.pa. Lets root reach the
 # desktop user's PulseAudio so the Bluetooth headset routing works.
-Environment="PULSE_SERVER=unix:/tmp/pulse-anon-lumi"
+Environment="PULSE_SERVER=unix:/tmp/pulse-anon-lamp"
 ExecStart=$LELAMP_DIR/.venv/bin/uvicorn lelamp.server:app --host 127.0.0.1 --port 5001
 Restart=always
 RestartSec=5
