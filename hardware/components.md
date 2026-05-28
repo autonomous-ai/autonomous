@@ -24,3 +24,5 @@ Running list of parts that go into one lamp. Models / links filled in as we lock
 | DC-DC step-down (12V → 5V for OrangePi) | MP2482 | needs replacement — produces audible audio hiss |
 | Fan 5V | Nidec | |
 | Touch button x4 | TTP223 | mounted on the lamp head |
+| Steel plate (dead weight) | 5 mm thick steel disc, ~3 kg | optional — ballast for base stability |
+| Silicon pad | | optional — stuck to the bottom of the lamp base to reduce slipping |
