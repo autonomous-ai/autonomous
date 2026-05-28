@@ -2,10 +2,10 @@
 
 > **Status:** Ready to execute
 > **Last updated:** 2026-05-21
-> **Design doc:** [lumi-buddy.md](./lumi-buddy.md)
+> **Design doc:** [lamp-buddy.md](./lamp-buddy.md)
 > **Target completion:** ~2 weeks (single dev)
 
-This is the actionable plan for **MVP of Lamp Buddy** — the macOS companion app that lets Lamp control the user's computer via voice. Full design rationale in [lumi-buddy.md](./lumi-buddy.md). This doc lists *what to build, in what order, with acceptance criteria*.
+This is the actionable plan for **MVP of Lamp Buddy** — the macOS companion app that lets Lamp control the user's computer via voice. Full design rationale in [lamp-buddy.md](./lamp-buddy.md). This doc lists *what to build, in what order, with acceptance criteria*.
 
 ---
 
@@ -207,8 +207,8 @@ Each phase is independently shippable and reviewable.
 **Status:** ⏳ Deferred — VERSION_BUDDY file, root Makefile `build-buddy` target, and per-doc drift checks remain. Skipped for now because Leo is iterating solo; revisit when the project is shared or about to be released.
 
 **Files:**
-- Verify `docs/lumi-buddy.md` matches actual implementation (update if drift)
-- Verify `docs/vi/lumi-buddy_vi.md` matches
+- Verify `docs/lamp-buddy.md` matches actual implementation (update if drift)
+- Verify `docs/vi/lamp-buddy_vi.md` matches
 - Add `lumi-buddy/README.md` build instructions
 - Update root `CLAUDE.md`: doc table row for lumi-buddy
 - Update top-level `Makefile`: `build-buddy` target

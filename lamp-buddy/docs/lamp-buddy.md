@@ -3,11 +3,11 @@
 > **Status:** Design — MVP scoping in progress
 > **Last updated:** 2026-05-21
 > **Owner:** Leo
-> **Related:** [Lamp Buddy MVP plan](./lumi-buddy-mvp.md)
+> **Related:** [Lamp Buddy MVP plan](./lamp-buddy-mvp.md)
 
 This document captures the full design discussion behind the **Lamp Buddy** feature: a native companion app on the user's computer that lets the Lamp control the desktop (open apps, navigate browser, type, etc.) — TeamViewer-style but driven by voice/AI through the lamp.
 
-The MVP-only implementation plan lives in [`lumi-buddy-mvp.md`](./lumi-buddy-mvp.md). This doc is the long-form reference for *why* the architecture is what it is.
+The MVP-only implementation plan lives in [`lamp-buddy-mvp.md`](./lamp-buddy-mvp.md). This doc is the long-form reference for *why* the architecture is what it is.
 
 ---
 

@@ -4,8 +4,8 @@ Native companion apps that let a Lamp control your computer via voice (open apps
 
 **Status:** Phase 1A — Mac-only scaffold. Menu bar shell that runs but does no networking yet.
 
-**Design doc:** [`docs/lumi-buddy.md`](docs/lumi-buddy.md) · [VI](docs/vi/lumi-buddy_vi.md)
-**MVP plan:** [`docs/lumi-buddy-mvp.md`](docs/lumi-buddy-mvp.md) · [VI](docs/vi/lumi-buddy-mvp_vi.md)
+**Design doc:** [`docs/lamp-buddy.md`](docs/lamp-buddy.md) · [VI](docs/vi/lamp-buddy_vi.md)
+**MVP plan:** [`docs/lamp-buddy-mvp.md`](docs/lamp-buddy-mvp.md) · [VI](docs/vi/lamp-buddy-mvp_vi.md)
 
 ---
 
@@ -17,7 +17,7 @@ Native companion apps that let a Lamp control your computer via voice (open apps
 | Windows | Planned v1.2 (likely Tauri/Rust) | — |
 | Linux (X11) | Planned v1.3 | — |
 
-The MVP targets macOS only. Each platform lives in its own subfolder so toolchains don't leak between them. Cross-platform glue (protocol schemas, command formats) is captured in [`docs/lumi-buddy.md`](docs/lumi-buddy.md) so future ports stay aligned.
+The MVP targets macOS only. Each platform lives in its own subfolder so toolchains don't leak between them. Cross-platform glue (protocol schemas, command formats) is captured in [`docs/lamp-buddy.md`](docs/lamp-buddy.md) so future ports stay aligned.
 
 ---
 
@@ -74,8 +74,8 @@ lumi-buddy/
 ├── README.md           # this file
 ├── .gitignore
 ├── docs/               # design + MVP plan (EN + VI)
-│   ├── lumi-buddy.md
-│   ├── lumi-buddy-mvp.md
+│   ├── lamp-buddy.md
+│   ├── lamp-buddy-mvp.md
 │   └── vi/
 └── macos/              # macOS native (Swift) — current MVP target
     ├── Package.swift
@@ -106,7 +106,7 @@ lumi-buddy/
 - WebSocket to lamp (Phase 1D)
 - Command execution (Phase 1E)
 
-Each phase ships as a separate PR. See [`docs/lumi-buddy-mvp.md`](docs/lumi-buddy-mvp.md) for the full breakdown.
+Each phase ships as a separate PR. See [`docs/lamp-buddy-mvp.md`](docs/lamp-buddy-mvp.md) for the full breakdown.
 
 ---
 

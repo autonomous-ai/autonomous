@@ -25,7 +25,7 @@ This repo is developed in both **Cursor** and **Claude Code**. The following rul
    | Vision tracking, object follow, servo track | `docs/vision-tracking.md` | `docs/vi/vision-tracking_vi.md` |
    | Physical controls (GPIO button, TTP223 touchpad, gestures, pet response) | `docs/physical-controls.md` | `docs/vi/physical-controls_vi.md` |
    | DL backend, load balancer, encryption, models | `docs/dlbackend.md` | `docs/vi/dlbackend_vi.md` |
-   | Lumi Buddy (Mac companion app for remote computer use) | `lumi-buddy/docs/lumi-buddy.md`, `lumi-buddy/docs/lumi-buddy-mvp.md`, `lumi-buddy/docs/release-signing.md` | `lumi-buddy/docs/vi/lumi-buddy_vi.md`, `lumi-buddy/docs/vi/lumi-buddy-mvp_vi.md`, `lumi-buddy/docs/vi/release-signing_vi.md` |
+   | Lumi Buddy (Mac companion app for remote computer use) | `lumi-buddy/docs/lamp-buddy.md`, `lumi-buddy/docs/lamp-buddy-mvp.md`, `lumi-buddy/docs/release-signing.md` | `lumi-buddy/docs/vi/lamp-buddy_vi.md`, `lumi-buddy/docs/vi/lamp-buddy-mvp_vi.md`, `lumi-buddy/docs/vi/release-signing_vi.md` |
    | Security test checklist | `docs/security-test.md` | _(no vi version)_ |
 
 2. **Comments in English** — Project standard.
@@ -33,6 +33,22 @@ This repo is developed in both **Cursor** and **Claude Code**. The following rul
 4. **Do not commit binary artifacts** — Version is injected via ldflags at build time.
 
 See `docs/DEV-MULTI-IDE.md` for full conventions.
+
+## Subagent Usage
+
+When work can be split across independent, file-scoped tasks, spawn subagents in parallel instead of doing them sequentially. Common cases in this repo:
+
+- **Repetitive edits across many files** (e.g. rebrand string across docs EN+VI): one subagent per file or per language, brief each with exact rules + verification grep
+- **Long-running builds / cross-compile checks** (`swift build`, `GOOS=linux GOARCH=arm64 go build`): spawn in background, continue other work, react on notification
+- **Repo-wide audits** (find stale paths after folder rename, find broken cross-refs): spawn an `Explore` subagent with audit-only scope (no edits), let it report back
+- **Independent doc updates** (English + Vietnamese counterparts after a code change): spawn two agents in parallel
+
+Rules:
+- Spawn multiple agents in a **single message with multiple tool calls** for parallelism. Sequential `Agent` calls don't parallelize.
+- Use `run_in_background: true` for builds/long tasks; foreground for "I need the result to continue".
+- Brief each agent like a smart colleague: goal + context + already-done + exact rules + verification step + report format/length cap.
+- Don't delegate when overhead > the work itself (e.g. 1–2 quick edits in files you've already read).
+- Trust but verify: each agent reports what it intended to do; spot-check the actual diff before marking task done.
 
 ## Device Access Rules
 
