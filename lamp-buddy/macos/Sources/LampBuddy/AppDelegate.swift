@@ -5,7 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var discovery: LampDiscovery?
     private var pairingManager: PairingManager?
     private var dispatcher: CommandDispatcher?
-    private var connection: LumiConnection?
+    private var connection: LampConnection?
     private var auditLog: AuditLog?
     private var pairingWindow: PairingWindowController?
     private var activityWindow: ActivityWindowController?
@@ -92,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startConnection(record: PairingRecord) {
         connection?.disconnect()
         guard let dispatcher else { return }
-        let c = LumiConnection(host: record.lampHost, token: record.token, dispatcher: dispatcher)
+        let c = LampConnection(host: record.lampHost, token: record.token, dispatcher: dispatcher)
         c.connect()
         connection = c
     }

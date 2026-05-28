@@ -2,10 +2,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "LumiBuddy",
+    name: "LampBuddy",
     platforms: [.macOS(.v13)],
     products: [
-        .executable(name: "LumiBuddy", targets: ["LumiBuddy"])
+        .executable(name: "LampBuddy", targets: ["LampBuddy"])
     ],
     dependencies: [
         // URLSessionWebSocketTask on macOS Ventura (Darwin 22.x / CFNetwork 1410)
@@ -16,9 +16,9 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "LumiBuddy",
+            name: "LampBuddy",
             dependencies: ["Starscream"],
-            path: "Sources/LumiBuddy"
+            path: "Sources/LampBuddy"
         )
     ]
 )

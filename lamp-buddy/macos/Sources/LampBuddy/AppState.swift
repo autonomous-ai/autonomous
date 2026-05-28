@@ -5,7 +5,7 @@ extension Notification.Name {
     // (e.g. the Activity window) can refresh themselves instead of polling.
     // MenuBarController still uses the direct onChange closure to keep the
     // pairing/connection UI snappy.
-    static let lumiBuddyAppStateChanged = Notification.Name("lumiBuddyAppStateChanged")
+    static let lampBuddyAppStateChanged = Notification.Name("lampBuddyAppStateChanged")
 }
 
 enum PairingStatus: Equatable {
@@ -69,7 +69,7 @@ final class AppState {
         // didSet runs on whichever thread the setter ran. setPairing etc. always hop to main first,
         // so onChange always fires on main.
         onChange?()
-        NotificationCenter.default.post(name: .lumiBuddyAppStateChanged, object: nil)
+        NotificationCenter.default.post(name: .lampBuddyAppStateChanged, object: nil)
     }
 
     private func onMain(_ block: @escaping () -> Void) {

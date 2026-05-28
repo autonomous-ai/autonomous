@@ -31,7 +31,7 @@ final class ActivityWindowController: NSWindowController {
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(onStateChanged),
-            name: .lumiBuddyAppStateChanged,
+            name: .lampBuddyAppStateChanged,
             object: nil
         )
     }

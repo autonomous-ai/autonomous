@@ -1,7 +1,7 @@
 import Foundation
 import Starscream
 
-final class LumiConnection: WebSocketDelegate {
+final class LampConnection: WebSocketDelegate {
     private let host: String
     private let token: String
     private let dispatcher: CommandDispatcher
@@ -71,7 +71,7 @@ final class LumiConnection: WebSocketDelegate {
             Task { [weak self] in await self?.reconnect.reset() }
             startKeepAlive()
         case .disconnected(let reason, let code):
-            NSLog("LumiConnection disconnected: code=\(code) reason=\(reason)")
+            NSLog("LampConnection disconnected: code=\(code) reason=\(reason)")
             stopKeepAlive()
             socket = nil
             if !stopped { AppState.shared.setConnection(.disconnected) }
@@ -93,7 +93,7 @@ final class LumiConnection: WebSocketDelegate {
             }
         case .error(let err):
             let msg = err?.localizedDescription ?? "unknown"
-            NSLog("LumiConnection error: \(msg)")
+            NSLog("LampConnection error: \(msg)")
             stopKeepAlive()
             socket = nil
             if !stopped {

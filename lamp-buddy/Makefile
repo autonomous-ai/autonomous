@@ -1,9 +1,9 @@
-# Lumi Buddy — macOS build/run shortcuts.
+# Lamp Buddy — macOS build/run shortcuts.
 # Run from this directory: `make <target>`. `make help` for the list.
 
-APP_NAME   := LumiBuddy
-BUNDLE_ID  := network.autonomous.ai.lumi-buddy
-VERSION    := $(shell cat VERSION_LUMI_BUDDY | tr -d '[:space:]')
+APP_NAME   := LampBuddy
+BUNDLE_ID  := network.autonomous.ai.lamp-buddy
+VERSION    := $(shell cat VERSION_LAMP_BUDDY | tr -d '[:space:]')
 
 MACOS_DIR  := macos
 DIST_DIR   := dist
@@ -20,7 +20,7 @@ ICON_SCRIPT := $(MACOS_DIR)/scripts/gen-app-icon.swift
 ICON_MASTER := $(DIST_DIR)/AppIcon-master.png
 ICONSET_DIR := $(DIST_DIR)/AppIcon.iconset
 ICNS_FILE  := $(DIST_DIR)/AppIcon.icns
-AUDIT_LOG  := $(HOME)/Library/Application Support/LumiBuddy/audit.log
+AUDIT_LOG  := $(HOME)/Library/Application Support/LampBuddy/audit.log
 
 MOCK_DIR := mock-lamp
 
@@ -29,7 +29,7 @@ MOCK_DIR := mock-lamp
 .DEFAULT_GOAL := help
 
 help: ## Show this help
-	@echo "Lumi Buddy — make targets:"
+	@echo "Lamp Buddy — make targets:"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[1m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
@@ -45,13 +45,13 @@ run: ## Run buddy in dev mode (foreground)
 build: ## Build debug binary
 	cd $(MACOS_DIR) && swift build
 
-release: ## Build universal release binary (arm64 + x86_64) at macos/.build/apple/Products/Release/LumiBuddy
+release: ## Build universal release binary (arm64 + x86_64) at macos/.build/apple/Products/Release/LampBuddy
 	cd $(MACOS_DIR) && swift build -c release --arch arm64 --arch x86_64
 
 check: ## Compile-only check (no link)
 	cd $(MACOS_DIR) && swift build --build-tests
 
-app: release $(ICNS_FILE) ## Bundle into dist/LumiBuddy.app (ad-hoc signed with bundle ID)
+app: release $(ICNS_FILE) ## Bundle into dist/LampBuddy.app (ad-hoc signed with bundle ID)
 	@echo "==> Bundling $(APP_BUNDLE)"
 	@rm -rf "$(APP_BUNDLE)"
 	@mkdir -p "$(APP_BUNDLE)/Contents/MacOS"
@@ -115,7 +115,7 @@ open: ## Launch the bundled .app from dist/
 	@if [ ! -d "$(APP_BUNDLE)" ]; then echo "No bundle yet — run 'make app' first."; exit 1; fi
 	open "$(APP_BUNDLE)"
 
-kill: ## Stop any running LumiBuddy process
+kill: ## Stop any running LampBuddy process
 	-@pkill -x $(APP_NAME) 2>/dev/null && echo "Stopped $(APP_NAME)" || echo "$(APP_NAME) not running"
 
 audit: ## Tail the audit log
@@ -129,7 +129,7 @@ clean: ## Remove all build artifacts
 
 all: app ## Alias for `make app`
 
-mock: ## Run the mock lamp server (Go) — test buddy without real lumi side
+mock: ## Run the mock lamp server (Go) — test buddy without real Lamp side
 	cd $(MOCK_DIR) && go run .
 
 mock-build: ## Compile-only check for mock-lamp
@@ -142,11 +142,11 @@ mock-build: ## Compile-only check for mock-lamp
 #   DEV_ID_APP       e.g. "Developer ID Application: Autonomous Inc (ABCDE12345)"
 #                    — exact name as it appears in `security find-identity -v`
 #   NOTARY_PROFILE   keychain profile alias created via:
-#                    `xcrun notarytool store-credentials lumi-notary --apple-id X --team-id Y --password Z`
-#                    — replace `lumi-notary` with whatever you stored
+#                    `xcrun notarytool store-credentials lamp-notary --apple-id X --team-id Y --password Z`
+#                    — replace `lamp-notary` with whatever you stored
 #
 # Quick start for the dev doing the Apple Developer enrolment, full step-by-step:
-#   lumi-buddy/docs/release-signing.md
+#   lamp-buddy/docs/release-signing.md
 # ----------------------------------------------------------------------------
 
 DEV_ID_APP     ?=
@@ -155,7 +155,7 @@ NOTARY_PROFILE ?=
 app-signed: release $(ICNS_FILE) ## Bundle + sign .app with Developer ID + hardened runtime (requires DEV_ID_APP)
 	@if [ -z "$(DEV_ID_APP)" ]; then \
 		echo "ERROR: DEV_ID_APP env var is required (e.g. 'Developer ID Application: Foo Inc (TEAMID)')."; \
-		echo "       See lumi-buddy/docs/release-signing.md for setup."; \
+		echo "       See lamp-buddy/docs/release-signing.md for setup."; \
 		exit 1; \
 	fi
 	@echo "==> Bundling $(APP_BUNDLE) for release signing"
@@ -178,7 +178,7 @@ app-signed: release $(ICNS_FILE) ## Bundle + sign .app with Developer ID + harde
 dmg-signed: app-signed ## Build signed .app → package DMG → sign DMG → notarize → staple (requires DEV_ID_APP + NOTARY_PROFILE)
 	@if [ -z "$(NOTARY_PROFILE)" ]; then \
 		echo "ERROR: NOTARY_PROFILE env var is required (keychain profile created via xcrun notarytool store-credentials)."; \
-		echo "       See lumi-buddy/docs/release-signing.md for setup."; \
+		echo "       See lamp-buddy/docs/release-signing.md for setup."; \
 		exit 1; \
 	fi
 	@echo "==> Packaging $(DMG_FILE)"
