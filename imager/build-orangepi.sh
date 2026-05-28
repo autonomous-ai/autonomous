@@ -200,7 +200,7 @@ retry() {
   return 1
 }
 
-# ── apt: install Lumi runtime deps (matches setup.sh + production OPi list) ──
+# ── apt: install Lamp runtime deps (matches setup.sh + production OPi list) ──
 echo "[stage] apt update + install"
 apt-get update -qq
 apt-get install -y \\
@@ -308,7 +308,7 @@ UNIT
 
 cat > /etc/systemd/system/lamp-lelamp.service <<'UNIT'
 [Unit]
-Description=Lumi LeLamp Hardware Runtime
+Description=Lamp LeLamp Hardware Runtime
 After=network.target
 
 [Service]
@@ -751,7 +751,7 @@ server {
 }
 NGINX
 mkdir -p /usr/share/nginx/html/setup
-echo '<h1>Lumi setup — flash the device and reboot.</h1>' > /usr/share/nginx/html/setup/index.html
+echo '<h1>Lamp setup — flash the device and reboot.</h1>' > /usr/share/nginx/html/setup/index.html
 
 # ── PulseAudio: WebRTC echo cancel + udev ignore for I2S codecs ──────────────
 echo "[stage] PulseAudio"
@@ -759,7 +759,7 @@ PULSE_CONF="/etc/pulse/default.pa"
 if [ -f "\$PULSE_CONF" ] && ! grep -q "module-echo-cancel" "\$PULSE_CONF"; then
   cat >> "\$PULSE_CONF" <<'PULSE_EOF'
 
-### Echo cancellation (WebRTC AEC) for Lumi smart lamp
+### Echo cancellation (WebRTC AEC) for Lamp
 load-module module-echo-cancel source_name=aec_source sink_name=aec_sink aec_method=webrtc aec_args="analog_gain_control=0 digital_gain_control=0" channels=1
 set-default-source aec_source
 set-default-sink aec_sink
@@ -805,8 +805,8 @@ ALSA_EOF
 echo "[stage] mask conflicting vendor services"
 systemctl mask orangepi-firstrun-config.service 2>/dev/null || true
 
-# ── enable Lumi services (symlink, since chroot has no running systemd) ──────
-echo "[stage] enable Lumi services"
+# ── enable Lamp services (symlink, since chroot has no running systemd) ──────
+echo "[stage] enable Lamp services"
 for unit in lamp bootstrap lamp-lelamp openclaw avahi-daemon bluetooth ssh; do
   systemctl enable "\$unit" 2>/dev/null || true
 done
@@ -817,7 +817,7 @@ CHROOT_STAGES
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 3 — OTA bake: backend binaries + lelamp + web UI + buddy
 # ─────────────────────────────────────────────────────────────────────────────
-log "Phase 3 — OTA bake (Lumi binaries from metadata.json)"
+log "Phase 3 — OTA bake (Lamp binaries from metadata.json)"
 
 chroot "${MNT}" /bin/bash <<OVERLAY_STAGES
 set -euo pipefail
@@ -946,7 +946,7 @@ if [ -n "\$BUDDY_URL" ]; then
   rm -rf /tmp/buddy-extract
   cat > /etc/systemd/system/claude-desktop-buddy.service <<'UNIT'
 [Unit]
-Description=Lumi Claude Desktop Buddy (BLE)
+Description=Lamp Claude Desktop Buddy (BLE)
 After=bluetooth.target lamp.service
 Wants=bluetooth.target
 

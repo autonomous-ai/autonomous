@@ -43,7 +43,7 @@
 #         - stage_backend_units: systemd services (bootstrap, lamp, lamp-lelamp) + software-update
 #         - stage_pulseaudio: PulseAudio echo cancellation (WebRTC AEC for mic/speaker)
 #         - stage_lelamp_uv: install uv (Python package manager for LeLamp)
-#         - stage_nginx: write nginx config with lumi/lelamp/openclaw upstreams
+#         - stage_nginx: write nginx config with backend/lelamp/openclaw upstreams
 #         - stage_ap: hostapd, dnsmasq, dhcpcd, device-ap/sta-mode scripts
 #         - stage_nodejs_openclaw: Node.js 22 + OpenClaw gateway
 #  20.  Install btrfs-resize-once service
@@ -784,7 +784,7 @@ if [ -n "\$CFG" ]; then
   if grep -qE '^\s*#?\s*dtparam=spi=on' "\$CFG" 2>/dev/null; then
     sed -i -E 's/^\s*#\s*(dtparam=spi=on)/\1/' "\$CFG" || true
   else
-    printf '\n# SPI enabled by lumi build\ndtparam=spi=on\n' >> "\$CFG"
+    printf '\n# SPI enabled by lamp build\ndtparam=spi=on\n' >> "\$CFG"
   fi
 fi
 
@@ -835,7 +835,7 @@ EOF
 
 cat > /etc/systemd/system/lamp-lelamp.service <<'EOF'
 [Unit]
-Description=Lumi LeLamp Hardware Runtime
+Description=Lamp LeLamp Hardware Runtime
 After=network.target
 
 [Service]
@@ -959,7 +959,7 @@ server {
   add_header Referrer-Policy "no-referrer" always;
   add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()" always;
   # Strict CSP. LeLamp self-hosts Swagger UI assets under /static/ (served
-  # via the Lumi /api/hardware/* proxy), so no CDN whitelist or
+  # via the Lamp /api/hardware/* proxy), so no CDN whitelist or
   # `'unsafe-inline'` script-src is needed. Mirrors scripts/setup.sh.
   add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' ws: wss:; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'" always;
 
@@ -997,9 +997,9 @@ server {
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
   }
-  # Top-level openapi.json proxied to Lumi backend so the in-iframe Swagger
+  # Top-level openapi.json proxied to Lamp backend so the in-iframe Swagger
   # UI (loaded via /api/hardware/docs) can fetch its spec at the absolute
-  # path FastAPI hardcodes. Lumi adminAuthMiddleware gates the cookie/Bearer.
+  # path FastAPI hardcodes. Lamp adminAuthMiddleware gates the cookie/Bearer.
   location = /openapi.json {
     proxy_pass http://backend;
     proxy_set_header Host \$host;
@@ -1314,7 +1314,7 @@ PULSE_CONF="/etc/pulse/default.pa"
 if [ -f "\$PULSE_CONF" ] && ! grep -q "module-echo-cancel" "\$PULSE_CONF"; then
   cat >> "\$PULSE_CONF" <<'PULSE_EOF'
 
-### Echo cancellation (WebRTC AEC) for Lumi smart lamp
+### Echo cancellation (WebRTC AEC) for Lamp
 load-module module-echo-cancel source_name=aec_source sink_name=aec_sink aec_method=webrtc aec_args="analog_gain_control=0 digital_gain_control=0" channels=1
 set-default-source aec_source
 set-default-sink aec_sink
@@ -1942,7 +1942,7 @@ if [ -n "\$BUDDY_URL" ]; then
   rm -rf /tmp/buddy-extract
   cat > /etc/systemd/system/claude-desktop-buddy.service <<UNIT
 [Unit]
-Description=Lumi Claude Desktop Buddy (BLE)
+Description=Lamp Claude Desktop Buddy (BLE)
 After=bluetooth.target lamp.service
 Wants=bluetooth.target
 

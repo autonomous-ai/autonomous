@@ -1,6 +1,6 @@
 # Hardware
 
-Designs, schematics, and specifications for the Lumi lamp hardware.
+Designs, schematics, and specifications for the Lamp hardware.
 
 <table>
   <tr>

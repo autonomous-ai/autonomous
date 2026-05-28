@@ -1,7 +1,7 @@
-# imager — Lumi golden image builder
+# imager — Lamp golden image builder
 
 Produces SD card images that boot OrangePi 4 Pro (or Raspberry Pi 5) directly
-into the Lumi AP/hotspot setup wizard. Flash, insert, power on — no
+into the Lamp AP/hotspot setup wizard. Flash, insert, power on — no
 `scripts/setup.sh` needed on the target.
 
 ```bash
