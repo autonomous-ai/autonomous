@@ -134,7 +134,7 @@ func (h *DeviceHandler) SetupStatus(c *gin.Context) {
 //
 //	@Summary	update device config
 //	@Schemes
-//	@Description	update device config fields (all optional; saves to disk, restart Lumi for full effect)
+//	@Description	update device config fields (all optional; saves to disk, restart Lamp for full effect)
 //	@Tags			device
 //	@Accept			json
 //	@Param			body	body		domain.UpdateConfigRequest	true	"update config request"

@@ -23,7 +23,7 @@ import (
 	"go-lamp.autonomous.ai/server/serializers"
 )
 
-// serverStartTime records when the Lumi process started.
+// serverStartTime records when the Lamp process started.
 var serverStartTime = time.Now()
 
 // HealthHandler represents the HTTP handler for health and system info.

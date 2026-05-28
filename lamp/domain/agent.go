@@ -192,7 +192,7 @@ type AgentGateway interface {
 	RemovePendingChatTraceByRunID(target string) bool
 
 	// MatchPendingByMessage finds and removes the pending entry whose stored
-	// message text matches needle. Used when a UUID lifecycle arrives: Lumi
+	// message text matches needle. Used when a UUID lifecycle arrives: Lamp
 	// fetches chat.history, extracts the last user message, and calls this to
 	// recover the original idempotencyKey. Returns "" when no entry matches.
 	MatchPendingByMessage(needle string) string
@@ -256,7 +256,7 @@ type AgentGateway interface {
 	UpdatePrimaryModel(modelKey string) error
 
 	// StartPrimaryModelWatch watches the openclaw config directory for external
-	// changes to openclaw.json. When a change is detected without a Lumi write
+	// changes to openclaw.json. When a change is detected without a Lamp write
 	// flag, it reads the new primary model and syncs it to config.LLMModel
 	// (only when provider == "autonomous"; others are silently ignored).
 	StartPrimaryModelWatch(ctx context.Context)
@@ -273,14 +273,14 @@ type AgentGateway interface {
 	// NewSession sends a sessions.new RPC to start a fresh conversation
 	// session for the given key. Unlike CompactSession (which runs a
 	// summarize LLM call and can take 30-60s+), this is instant — the
-	// runtime drops in-session history and starts clean. External Lumi
+	// runtime drops in-session history and starts clean. External Lamp
 	// memory (mood log, habit tracking, owner identity, voice clusters)
 	// is unaffected because it lives outside the agent session JSONL.
 	NewSession(sessionKey string) error
 
-	// IsRecentOutboundChat returns true if Lumi just called chat.send with
+	// IsRecentOutboundChat returns true if Lamp just called chat.send with
 	// this exact text within the recent window. Used by the session.message
-	// handler to skip echoes of Lumi-injected user messages (wake greeting,
+	// handler to skip echoes of Lamp-injected user messages (wake greeting,
 	// ambient guard, sensing events) which OpenClaw broadcasts back as
 	// session.message role=user — identical in shape to real channel input.
 	IsRecentOutboundChat(text string) bool

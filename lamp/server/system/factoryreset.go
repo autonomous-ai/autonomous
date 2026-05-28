@@ -23,7 +23,7 @@ import (
 // codebase. Wildcards are NOT expanded — use a directory path and trust the
 // recursive remove. Missing paths are silently ignored.
 var FactoryResetWipePaths = []string{
-	"/root/config",                                  // lumi-server config.json (API keys, channel tokens, MQTT creds)
+	"/root/config",                                  // lamp-server config.json (API keys, channel tokens, MQTT creds)
 	"/root/.openclaw",                               // OpenClaw state (sessions, identity, browser profile, memory)
 	"/root/local/users",                             // face + voice enrollments (owner)
 	"/root/local/strangers",                         // face + voice enrollments (stranger)
@@ -110,7 +110,7 @@ func runFactoryReset(opts FactoryResetOptions) (started bool, errStatus int, err
 	return true, 0, ""
 }
 
-// FactoryReset performs a soft factory reset: wipe Lumi state (config / API
+// FactoryReset performs a soft factory reset: wipe Lamp state (config / API
 // keys / enrollments / WiFi creds) + reboot. Kernel / OS / system packages /
 // binaries / lelamp .venv are NOT touched — this is a state reset, not a
 // reflash. After reboot the device boots into AP "Lamp-XXXX" with a fresh
@@ -145,7 +145,7 @@ func FactoryReset(c *gin.Context) {
 
 	c.JSON(http.StatusAccepted, serializers.ResponseSuccess(gin.H{
 		"started": true,
-		"message": "Soft factory reset started. Device will wipe Lumi state and reboot into AP setup mode (~30s).",
+		"message": "Soft factory reset started. Device will wipe Lamp state and reboot into AP setup mode (~30s).",
 		"wipes":   FactoryResetWipePaths,
 	}))
 }

@@ -60,7 +60,7 @@ func (h *BuddyHandler) Command(c *gin.Context) {
 	}
 	slog.Info("buddy /command response", "component", "buddy", "id", cmd.ID, "action", cmd.Action, "bytes", len(raw))
 	// Buddy's response is already shaped {id, ok, result, error, duration_ms}.
-	// Pass it through inside the lumi envelope so callers get a consistent
+	// Pass it through inside the lamp envelope so callers get a consistent
 	// {status: 1, data: <buddy-response>, message: null}.
 	var inner map[string]any
 	if err := json.Unmarshal(raw, &inner); err != nil {

@@ -1,5 +1,5 @@
 // Package lelamp provides a lightweight HTTP client for the LeLamp hardware API.
-// Both lumi-server and bootstrap-server use this to control the lamp on port 5001.
+// Both lamp-server and bootstrap-server use this to control the lamp on port 5001.
 package lelamp
 
 import (
@@ -77,7 +77,7 @@ func doPost(path string, body io.Reader) (*http.Response, error) {
 
 // SetEffect stops any running effect, then starts a new one.
 //
-// All callers from Lumi (statusled health signals, ambient breathing, bootstrap
+// All callers from Lamp (statusled health signals, ambient breathing, bootstrap
 // OTA progress) are system-level overlays — they must not clobber the user's
 // saved LED state, which emotion restore reads back from. The transient flag
 // tells LeLamp to dispatch the effect without writing _user_led_state.
@@ -95,7 +95,7 @@ func StopEffect() {
 // SetSolid paints the strip a single color and saves it as the user LED state
 // (no transient flag) so subsequent RestoreLED calls repaint to this color.
 // Fire-and-forget: LeLamp may not be up yet at the moment this is called
-// (e.g. lumi boots faster than the Python server during AP-mode startup);
+// (e.g. lamp boots faster than the Python server during AP-mode startup);
 // callers don't care about the outcome.
 func SetSolid(r, g, b int) {
 	body := fmt.Sprintf(`{"color":[%d,%d,%d]}`, r, g, b)
@@ -178,9 +178,9 @@ func SpeakCachedInterruptible(text string) error {
 }
 
 // SpeakPreview plays a TTS preview using the supplied voice/provider/credentials.
-// Lumi's /api/voice/preview handler uses this to fan out the operator's
+// Lamp's /api/voice/preview handler uses this to fan out the operator's
 // "test voice" click without exposing the TTS API key in the browser body —
-// Lumi reads the key server-side from config and passes it here. Each arg
+// Lamp reads the key server-side from config and passes it here. Each arg
 // can be empty: LeLamp falls back to its own config-loaded defaults when a
 // field is missing, so partial overrides (e.g. just voice) work.
 func SpeakPreview(text, voice, provider, apiKey, baseURL string) error {
