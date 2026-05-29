@@ -34,6 +34,8 @@ class HumanActionRecognizer(PredictorBase[Video, RawHumanActionDetection]):
 
     DEFAULT_MAX_FRAMES: int = 8
     DEFAULT_FRAME_SIZE: tuple[int, int] = (224, 224)
+    ONNX_INPUT_NAME: str = "input"
+    ONNX_OUTPUT_NAME: str = "pred"
 
     MEAN: npt.NDArray[np.float32] = np.array([0, 0, 0], dtype=np.float32)
     STD: npt.NDArray[np.float32] = np.array([0, 0, 0], dtype=np.float32)
@@ -46,8 +48,9 @@ class HumanActionRecognizer(PredictorBase[Video, RawHumanActionDetection]):
         whitelist_path: Path | None = None,
         max_frames: int | None = None,
         frame_size: tuple[int, int] | None = None,
+        batch_size: int | None = None,
     ):
-        super().__init__()
+        super().__init__(batch_size=batch_size)
 
         model_path = get_or_default(model_path, self.DEFAULT_MODEL_PATH)
         if model_path is None:
@@ -105,7 +108,11 @@ class HumanActionRecognizer(PredictorBase[Video, RawHumanActionDetection]):
 
         self._model_path = ensure_downloaded(self._model_path, remote=self._remote_url)
         self._logger.info("Loading model from %s", self._model_path)
-        self._session = prepare_ort_session(self._model_path)
+        H, W = self._frame_size
+        warmup = {self.ONNX_INPUT_NAME: np.zeros(
+            (self._batch_size, 1, 3, self._max_frames, H, W), dtype=np.float32,
+        )}
+        self._session = prepare_ort_session(self._model_path, warmup_inputs=warmup)
         self._class_names, self._default_class_mask = self._load_classes(
             self._classes_path, self._whitelist_path
         )
@@ -168,7 +175,7 @@ class HumanActionRecognizer(PredictorBase[Video, RawHumanActionDetection]):
         else:
             class_mask = self._default_class_mask
 
-        (preds,) = self._session.run(["pred"], {"input": input_np})
+        (preds,) = self._session.run([self.ONNX_OUTPUT_NAME], {self.ONNX_INPUT_NAME: input_np})
         preds = cast(npt.NDArray[np.float32], preds)  # (N, C)
         probs = softmax(preds, axis=-1)
         probs[:, ~class_mask] = 0

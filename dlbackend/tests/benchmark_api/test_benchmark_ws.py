@@ -14,13 +14,13 @@ Run with:
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import functools
 import itertools
 import json
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -28,8 +28,8 @@ from typing import Any, Callable
 import cv2
 import numpy as np
 import pytest
-import websockets
 from dotenv import load_dotenv
+from websockets.sync.client import connect as ws_connect
 
 _ = load_dotenv(override=True)
 
@@ -132,34 +132,26 @@ AUTH_WS_HEADERS: dict[str, str] = {"X-API-Key": DL_API_KEY} if DL_API_KEY else {
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _run_async(coro: Any) -> Any:
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
 
-
-async def _probe_ws(ep: WSEndpointSpec) -> bool:
+def _probe_ws(ep: WSEndpointSpec) -> bool:
     try:
-        async with websockets.connect(
+        with ws_connect(
             _ws_url(ep.path),
             additional_headers=AUTH_WS_HEADERS,
             open_timeout=10,
         ) as ws:
-            await ws.send(json.dumps({"type": "heartbeat", "task": ep.task}))
-            resp = json.loads(await asyncio.wait_for(ws.recv(), timeout=10))
+            ws.send(json.dumps({"type": "heartbeat", "task": ep.task}))
+            resp = json.loads(ws.recv(timeout=10))
             return resp.get("status") == "ok"
     except Exception:
         return False
 
 
-async def _ws_send_n_frames(
-    ep: WSEndpointSpec, n_frames: int
-) -> list[WSResult]:
+def _ws_send_n_frames(ep: WSEndpointSpec, n_frames: int) -> list[WSResult]:
+    """Send n_frames on a single WS connection in its own thread."""
     results: list[WSResult] = []
     try:
-        async with websockets.connect(
+        with ws_connect(
             _ws_url(ep.path),
             additional_headers=AUTH_WS_HEADERS,
             open_timeout=15,
@@ -167,8 +159,8 @@ async def _ws_send_n_frames(
             for _ in range(n_frames):
                 msg = ep.frame_msg_fn()
                 t0 = time.perf_counter()
-                await ws.send(json.dumps(msg))
-                raw = await asyncio.wait_for(ws.recv(), timeout=240)
+                ws.send(json.dumps(msg))
+                raw = ws.recv(timeout=240)
                 latency = (time.perf_counter() - t0) * 1000
                 resp = json.loads(raw)
                 if "error" in resp:
@@ -180,7 +172,7 @@ async def _ws_send_n_frames(
                     results.append(WSResult(
                         endpoint=ep.name, latency_ms=latency,
                     ))
-    except asyncio.TimeoutError:
+    except TimeoutError:
         results.append(WSResult(
             endpoint=ep.name, latency_ms=0,
             error="TimeoutError", error_type=ERROR_TIMEOUT,
@@ -198,29 +190,30 @@ async def _ws_send_n_frames(
     return results
 
 
-async def _ws_concurrent_connections(
+def _ws_concurrent_connections(
     ep: WSEndpointSpec,
     n_connections: int,
     frames_per_conn: int | None = None,
 ) -> list[WSResult]:
     n_frames = frames_per_conn if frames_per_conn is not None else ep.frames_per_conn
-    coros = [_ws_send_n_frames(ep, n_frames) for _ in range(n_connections)]
-    batches = await asyncio.gather(*coros)
-    return list(itertools.chain.from_iterable(batches))
+    with ThreadPoolExecutor(max_workers=n_connections) as pool:
+        futures = [pool.submit(_ws_send_n_frames, ep, n_frames) for _ in range(n_connections)]
+        return list(itertools.chain.from_iterable(f.result() for f in futures))
 
 
-async def _ws_all_endpoints_concurrent(
+def _ws_all_endpoints_concurrent(
     endpoints: list[WSEndpointSpec],
     n_connections: int,
     frames_per_conn: int | None = None,
 ) -> list[WSResult]:
-    coros = [
-        _ws_send_n_frames(ep, frames_per_conn if frames_per_conn is not None else ep.frames_per_conn)
+    tasks = [
+        (ep, frames_per_conn if frames_per_conn is not None else ep.frames_per_conn)
         for ep in endpoints
         for _ in range(n_connections)
     ]
-    batches = await asyncio.gather(*coros)
-    return list(itertools.chain.from_iterable(batches))
+    with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+        futures = [pool.submit(_ws_send_n_frames, ep, n) for ep, n in tasks]
+        return list(itertools.chain.from_iterable(f.result() for f in futures))
 
 
 def _print_ws_report(
@@ -282,14 +275,7 @@ def _assert_error_rate(results: list[WSResult], label: str) -> None:
 
 @pytest.fixture(scope="module")
 def available_ws_endpoints() -> list[WSEndpointSpec]:
-    async def _probe_all() -> list[WSEndpointSpec]:
-        available: list[WSEndpointSpec] = []
-        for ep in ALL_WS_ENDPOINTS:
-            if await _probe_ws(ep):
-                available.append(ep)
-        return available
-
-    eps = _run_async(_probe_all())
+    eps = [ep for ep in ALL_WS_ENDPOINTS if _probe_ws(ep)]
     if not eps:
         pytest.skip("No WebSocket endpoints available")
     print(f"\nAvailable WS endpoints: {[e.name for e in eps]}")
@@ -327,9 +313,7 @@ class TestWSAllEndpoints:
         self, available_ws_endpoints: list[WSEndpointSpec], n_conn: int
     ) -> None:
         t0 = time.perf_counter()
-        results = _run_async(
-            _ws_all_endpoints_concurrent(available_ws_endpoints, n_conn)
-        )
+        results = _ws_all_endpoints_concurrent(available_ws_endpoints, n_conn)
         wall_ms = (time.perf_counter() - t0) * 1000
 
         _print_ws_report(results, n_conn, wall_ms)
@@ -340,9 +324,7 @@ class TestWSPoseScaling:
     @pytest.mark.parametrize("n_conn", WS_CONN_LEVELS)
     def test_scaling(self, ws_pose_endpoint: WSEndpointSpec, n_conn: int) -> None:
         t0 = time.perf_counter()
-        results = _run_async(
-            _ws_concurrent_connections(ws_pose_endpoint, n_conn)
-        )
+        results = _ws_concurrent_connections(ws_pose_endpoint, n_conn)
         wall_ms = (time.perf_counter() - t0) * 1000
         _print_ws_report(results, n_conn, wall_ms)
         _assert_error_rate(results, f"ws_pose @ {n_conn} conn")
@@ -352,9 +334,7 @@ class TestWSFERScaling:
     @pytest.mark.parametrize("n_conn", WS_CONN_LEVELS)
     def test_scaling(self, ws_fer_endpoint: WSEndpointSpec, n_conn: int) -> None:
         t0 = time.perf_counter()
-        results = _run_async(
-            _ws_concurrent_connections(ws_fer_endpoint, n_conn)
-        )
+        results = _ws_concurrent_connections(ws_fer_endpoint, n_conn)
         wall_ms = (time.perf_counter() - t0) * 1000
         _print_ws_report(results, n_conn, wall_ms)
         _assert_error_rate(results, f"ws_fer @ {n_conn} conn")
@@ -364,9 +344,7 @@ class TestWSActionScaling:
     @pytest.mark.parametrize("n_conn", WS_CONN_LEVELS)
     def test_scaling(self, ws_action_endpoint: WSEndpointSpec, n_conn: int) -> None:
         t0 = time.perf_counter()
-        results = _run_async(
-            _ws_concurrent_connections(ws_action_endpoint, n_conn)
-        )
+        results = _ws_concurrent_connections(ws_action_endpoint, n_conn)
         wall_ms = (time.perf_counter() - t0) * 1000
         _print_ws_report(results, n_conn, wall_ms)
         _assert_error_rate(results, f"ws_action @ {n_conn} conn")
@@ -376,11 +354,7 @@ class TestWSObjectScaling:
     @pytest.mark.parametrize("n_conn", WS_CONN_LEVELS)
     def test_scaling(self, ws_object_endpoint: WSEndpointSpec, n_conn: int) -> None:
         t0 = time.perf_counter()
-        results = _run_async(
-            _ws_concurrent_connections(ws_object_endpoint, n_conn)
-        )
+        results = _ws_concurrent_connections(ws_object_endpoint, n_conn)
         wall_ms = (time.perf_counter() - t0) * 1000
         _print_ws_report(results, n_conn, wall_ms)
         _assert_error_rate(results, f"ws_object @ {n_conn} conn")
-
-

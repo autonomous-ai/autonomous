@@ -28,8 +28,9 @@ class YOLOWorldDetector(ObjectDetector):
         model_path: Path | None = None,
         classes_path: Path | None = None,
         threshold: float | None = None,
+        batch_size: int | None = None,
     ) -> None:
-        super().__init__(model_path=model_path, classes_path=classes_path, threshold=threshold)
+        super().__init__(model_path=model_path, classes_path=classes_path, threshold=threshold, batch_size=batch_size)
         self._model: YOLOWorld | None = None
         self._running: bool = False
 

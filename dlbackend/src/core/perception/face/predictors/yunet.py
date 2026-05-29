@@ -33,8 +33,9 @@ class YuNetFaceDetector(FaceDetector):
         score_threshold: float | None = None,
         nms_threshold: float | None = None,
         top_k: int | None = None,
+        batch_size: int | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(batch_size=batch_size)
         self._model_path: Path = get_or_default(model_path, self.DEFAULT_MODEL_PATH)
         self._remote_url: str | None = get_or_default(remote_url, self.DEFAULT_REMOTE_URL)
         self._input_size: tuple[int, int] = get_or_default(input_size, self.DEFAULT_INPUT_SIZE)

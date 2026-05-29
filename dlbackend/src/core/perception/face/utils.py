@@ -16,17 +16,20 @@ class FaceDetectorFactory(PredictorFactory[FaceDetector]):
         model_path: Path | None = None,
         score_threshold: float | None = None,
         nms_threshold: float | None = None,
+        batch_size: int | None = None,
     ) -> None:
         self._model_name = model_name
         self._model_path = model_path
         self._score_threshold = score_threshold
         self._nms_threshold = nms_threshold
+        self._batch_size = batch_size
 
     def create(self) -> FaceDetector:
         return create_face_detector(
             self._model_name, self._model_path,
             score_threshold=self._score_threshold,
             nms_threshold=self._nms_threshold,
+            batch_size=self._batch_size,
         )
 
 
@@ -35,6 +38,7 @@ def create_face_detector(
     model_path: Path | None = None,
     score_threshold: float | None = None,
     nms_threshold: float | None = None,
+    batch_size: int | None = None,
 ) -> FaceDetector:
     """Instantiate the correct face detector model."""
     if model_name == FaceDetectorEnum.YUNET:
@@ -47,4 +51,5 @@ def create_face_detector(
         model_path=model_path,
         score_threshold=score_threshold,
         nms_threshold=nms_threshold,
+        batch_size=batch_size,
     )

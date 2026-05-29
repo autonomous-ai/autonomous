@@ -33,8 +33,9 @@ class GroundingDINODetector(ObjectDetector):
         classes_path: Path | None = None,
         threshold: float | None = None,
         text_threshold: float | None = None,
+        batch_size: int | None = None,
     ) -> None:
-        super().__init__(model_path=model_path, classes_path=classes_path, threshold=threshold)
+        super().__init__(model_path=model_path, classes_path=classes_path, threshold=threshold, batch_size=batch_size)
         self._text_threshold: float = get_or_default(text_threshold, self.DEFAULT_TEXT_THRESHOLD)
         self._processor: AutoProcessor | None = None
         self._model: AutoModelForZeroShotObjectDetection | None = None

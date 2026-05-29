@@ -41,6 +41,13 @@ dl = [
 ]
 cpu = ["onnxruntime"]
 gpu = ["onnxruntime-gpu"]
+tensorrt = [
+    "onnxruntime-gpu",
+    "tensorrt_cu12==10.8.*",
+    "tensorrt_cu12_bindings==10.8.*",
+    "tensorrt_cu12_libs==10.8.*",
+    "nvidia-cudnn-cu12",
+]
 lb = [
     "httpx",
     "websockets",

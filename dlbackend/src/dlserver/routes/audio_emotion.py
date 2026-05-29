@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 
 from dlserver.models.audio_emotion import (
@@ -11,6 +13,8 @@ from dlserver.models.audio_emotion import (
 )
 from dlserver.utils.audio import decode_b64_wav
 from dlserver.utils.state import get_audio_emotion_model
+
+logger: logging.Logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ser"])
 
@@ -24,12 +28,17 @@ async def recognize_emotion(req: RecognizeEmotionRequest):
 
     try:
         audio = decode_b64_wav(req.audio_b64)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid audio: {exc}") from exc
+
+    try:
         detection = await model.predict_audio(audio)
         return RecognizeEmotionResponse.from_detection(detection, return_scores=req.return_scores)
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        logger.exception("Error processing audio emotion HTTP message")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/ser/labels", response_model=LabelsResponse)

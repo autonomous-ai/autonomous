@@ -47,6 +47,7 @@ class EmoNetRecognizer(EmotionRecognizer):
         model_path: Path | None = None,
         remote_url: str | None = None,
         classes_path: Path | None = None,
+        batch_size: int | None = None,
     ) -> None:
         if n_expression not in (5, 8):
             msg: str = f"n_expression must be 5 or 8, got {n_expression}"
@@ -60,7 +61,7 @@ class EmoNetRecognizer(EmotionRecognizer):
         if classes_path is None:
             classes_path = self.DEFAULT_CLASSES_PATH_8 if n_expression == 8 else self.DEFAULT_CLASSES_PATH_5
 
-        super().__init__(model_path=model_path, remote_url=remote_url, classes_path=classes_path)
+        super().__init__(model_path=model_path, remote_url=remote_url, classes_path=classes_path, batch_size=batch_size)
 
     @override
     def _postprocess_batch(

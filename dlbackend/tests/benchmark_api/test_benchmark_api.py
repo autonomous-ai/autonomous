@@ -15,7 +15,6 @@ Run with:
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import functools
 import os
@@ -140,12 +139,6 @@ def _object_detect_payload() -> dict[str, Any]:
 
 ALL_ENDPOINTS: list[EndpointSpec] = [
     EndpointSpec(
-        name="pose",
-        method="POST",
-        path="/lelamp/api/dl/pose-estimate",
-        payload_fn=_pose_payload,
-    ),
-    EndpointSpec(
         name="fer",
         method="POST",
         path="/lelamp/api/dl/emotion-recognize",
@@ -184,36 +177,31 @@ ALL_ENDPOINTS: list[EndpointSpec] = [
 # ---------------------------------------------------------------------------
 
 
-def _run_async(coro: Any) -> Any:
-    loop = asyncio.new_event_loop()
+def _probe_endpoint(ep: EndpointSpec) -> bool:
     try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
-
-async def _probe_endpoint(client: httpx.AsyncClient, ep: EndpointSpec) -> bool:
-    try:
-        if ep.method == "GET":
-            resp = await client.get(_url(ep.path), headers=_headers(), timeout=15.0)
-        else:
-            resp = await client.post(
-                _url(ep.path), json=ep.payload_fn(), headers=_headers(), timeout=30.0
-            )
-        return resp.status_code != 404
+        with httpx.Client() as client:
+            if ep.method == "GET":
+                resp = client.get(_url(ep.path), headers=_headers(), timeout=15.0)
+            else:
+                resp = client.post(
+                    _url(ep.path), json=ep.payload_fn(), headers=_headers(), timeout=30.0
+                )
+            return resp.status_code != 404
     except Exception:
         return False
 
 
-async def _fire_request(client: httpx.AsyncClient, ep: EndpointSpec) -> RequestResult:
+def _fire_request(ep: EndpointSpec) -> RequestResult:
+    """Send a single HTTP request and measure latency in its own thread."""
     t0 = time.perf_counter()
     try:
-        if ep.method == "GET":
-            resp = await client.get(_url(ep.path), headers=_headers(), timeout=240.0)
-        else:
-            resp = await client.post(
-                _url(ep.path), json=ep.payload_fn(), headers=_headers(), timeout=240.0
-            )
+        with httpx.Client() as client:
+            if ep.method == "GET":
+                resp = client.get(_url(ep.path), headers=_headers(), timeout=240.0)
+            else:
+                resp = client.post(
+                    _url(ep.path), json=ep.payload_fn(), headers=_headers(), timeout=240.0
+                )
         latency = (time.perf_counter() - t0) * 1000
         if resp.status_code in ep.ok_codes:
             return RequestResult(endpoint=ep.name, latency_ms=latency)
@@ -241,13 +229,15 @@ async def _fire_request(client: httpx.AsyncClient, ep: EndpointSpec) -> RequestR
         )
 
 
-async def _run_concurrent_batch(
+def _run_concurrent_batch(
     endpoints: list[EndpointSpec],
     n_per_endpoint: int,
 ) -> list[RequestResult]:
-    async with httpx.AsyncClient() as client:
-        coros = [_fire_request(client, ep) for ep in endpoints for _ in range(n_per_endpoint)]
-        return list(await asyncio.gather(*coros))
+    from concurrent.futures import ThreadPoolExecutor
+
+    tasks = [ep for ep in endpoints for _ in range(n_per_endpoint)]
+    with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+        return list(pool.map(_fire_request, tasks))
 
 
 def _print_report(
@@ -337,15 +327,7 @@ def _assert_error_rate(results: list[RequestResult], label: str) -> None:
 
 @pytest.fixture(scope="module")
 def available_endpoints() -> list[EndpointSpec]:
-    async def _probe_all() -> list[EndpointSpec]:
-        available: list[EndpointSpec] = []
-        async with httpx.AsyncClient() as client:
-            for ep in ALL_ENDPOINTS:
-                if await _probe_endpoint(client, ep):
-                    available.append(ep)
-        return available
-
-    eps = _run_async(_probe_all())
+    eps = [ep for ep in ALL_ENDPOINTS if _probe_endpoint(ep)]
     if not eps:
         pytest.skip("No API endpoints available")
     print(f"\nAvailable endpoints: {[e.name for e in eps]}")
@@ -386,7 +368,7 @@ class TestAllEndpoints:
     @pytest.mark.parametrize("n", CONCURRENCY_LEVELS)
     def test_scaling(self, available_endpoints: list[EndpointSpec], n: int) -> None:
         t0 = time.perf_counter()
-        results = _run_async(_run_concurrent_batch(available_endpoints, n))
+        results = _run_concurrent_batch(available_endpoints, n)
         wall_ms = (time.perf_counter() - t0) * 1000
 
         _print_report(results, n, wall_ms)
@@ -397,7 +379,7 @@ class TestPoseScaling:
     @pytest.mark.parametrize("n", CONCURRENCY_LEVELS)
     def test_scaling(self, pose_endpoint: EndpointSpec, n: int) -> None:
         t0 = time.perf_counter()
-        results = _run_async(_run_concurrent_batch([pose_endpoint], n))
+        results = _run_concurrent_batch([pose_endpoint], n)
         wall_ms = (time.perf_counter() - t0) * 1000
         _print_report(results, n, wall_ms)
         _assert_error_rate(results, f"pose @ {n} concurrent")
@@ -407,7 +389,7 @@ class TestFERScaling:
     @pytest.mark.parametrize("n", CONCURRENCY_LEVELS)
     def test_scaling(self, fer_endpoint: EndpointSpec, n: int) -> None:
         t0 = time.perf_counter()
-        results = _run_async(_run_concurrent_batch([fer_endpoint], n))
+        results = _run_concurrent_batch([fer_endpoint], n)
         wall_ms = (time.perf_counter() - t0) * 1000
         _print_report(results, n, wall_ms)
         _assert_error_rate(results, f"fer @ {n} concurrent")
@@ -417,7 +399,7 @@ class TestSERScaling:
     @pytest.mark.parametrize("n", CONCURRENCY_LEVELS)
     def test_scaling(self, ser_endpoint: EndpointSpec, n: int) -> None:
         t0 = time.perf_counter()
-        results = _run_async(_run_concurrent_batch([ser_endpoint], n))
+        results = _run_concurrent_batch([ser_endpoint], n)
         wall_ms = (time.perf_counter() - t0) * 1000
         _print_report(results, n, wall_ms)
         _assert_error_rate(results, f"ser @ {n} concurrent")
@@ -427,7 +409,7 @@ class TestAudioEmbedScaling:
     @pytest.mark.parametrize("n", CONCURRENCY_LEVELS)
     def test_scaling(self, audio_embed_endpoint: EndpointSpec, n: int) -> None:
         t0 = time.perf_counter()
-        results = _run_async(_run_concurrent_batch([audio_embed_endpoint], n))
+        results = _run_concurrent_batch([audio_embed_endpoint], n)
         wall_ms = (time.perf_counter() - t0) * 1000
         _print_report(results, n, wall_ms)
         _assert_error_rate(results, f"audio_embed @ {n} concurrent")
@@ -437,7 +419,7 @@ class TestObjectDetectScaling:
     @pytest.mark.parametrize("n", CONCURRENCY_LEVELS)
     def test_scaling(self, object_detect_endpoint: EndpointSpec, n: int) -> None:
         t0 = time.perf_counter()
-        results = _run_async(_run_concurrent_batch([object_detect_endpoint], n))
+        results = _run_concurrent_batch([object_detect_endpoint], n)
         wall_ms = (time.perf_counter() - t0) * 1000
         _print_report(results, n, wall_ms)
         _assert_error_rate(results, f"object_detect @ {n} concurrent")

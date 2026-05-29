@@ -1,6 +1,6 @@
-import asyncio
 """Tests for the action-analysis WebSocket endpoint using the local UniformerV2 model."""
 
+import asyncio
 import base64
 import json
 import os
@@ -76,20 +76,22 @@ class TestHealthEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "ok"
-        assert body["action_model"] is True
+        assert body["models"]["action"] is True
 
     def test_health_not_loaded(self, client):
 
         saved = get_action_model()
         set_action_model(None)
         resp = client.get("/lelamp/api/dl/health", headers=AUTH_HEADERS)
-        assert resp.json()["action_model"] is False
+        assert resp.json()["models"]["action"] is False
         set_action_model(saved)
 
 
 class TestActionAnalysisWebSocket:
     def test_frame_returns_detected_classes(self, client):
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(
                 json.dumps({"type": "frame", "task": "action", "frame_b64": _make_frame_b64()})
             )
@@ -98,7 +100,9 @@ class TestActionAnalysisWebSocket:
             assert isinstance(resp["detected_classes"], list)
 
     def test_multiple_frames(self, client):
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             for _ in range(3):
                 ws.send_text(
                     json.dumps({"type": "frame", "task": "action", "frame_b64": _make_frame_b64()})
@@ -107,7 +111,9 @@ class TestActionAnalysisWebSocket:
                 assert "detected_classes" in resp
 
     def test_whitelist_update(self, client):
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(
                 json.dumps(
                     {"type": "config", "task": "action", "whitelist": ["walking", "running"]}
@@ -116,18 +122,24 @@ class TestActionAnalysisWebSocket:
             assert ws.receive_json()["status"] == "config_updated"
 
     def test_threshold_update(self, client):
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "config", "task": "action", "threshold": 0.2}))
             assert ws.receive_json()["status"] == "config_updated"
 
     def test_whitelist_reset(self, client):
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "config", "task": "action", "whitelist": None}))
             assert ws.receive_json()["status"] == "config_updated"
 
     def test_whitelist_then_frame(self, client):
         allowed = {"applauding", "clapping"}
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(
                 json.dumps({"type": "config", "task": "action", "whitelist": list(allowed)})
             )
@@ -145,22 +157,30 @@ class TestActionAnalysisWebSocket:
             ws.receive_json()
 
     def test_invalid_json(self, client):
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text("not json at all")
             assert "error" in ws.receive_json()
 
     def test_missing_type_field(self, client):
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"frame_b64": "abc"}))
             assert "error" in ws.receive_json()
 
     def test_unknown_type(self, client):
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "bogus"}))
             assert "error" in ws.receive_json()
 
     def test_frame_missing_frame_b64(self, client):
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "frame"}))
             assert "error" in ws.receive_json()
 
@@ -169,20 +189,26 @@ class TestActionAnalysisWebSocket:
         saved = get_action_model()
         set_action_model(None)
         with pytest.raises(Exception):
-            with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+            with client.websocket_connect(
+                "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+            ) as ws:
                 ws.send_text(json.dumps({"type": "frame", "task": "action", "frame_b64": "abc"}))
                 ws.receive_json()
         set_action_model(saved)
 
     def test_heartbeat_returns_ok(self, client):
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "heartbeat", "task": "action"}))
             resp = ws.receive_json()
             assert resp == {"status": "ok"}
 
     def test_heartbeat_multiple(self, client):
         """Multiple heartbeats in a row should all return ok."""
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             for _ in range(3):
                 ws.send_text(json.dumps({"type": "heartbeat", "task": "action"}))
                 resp = ws.receive_json()
@@ -190,7 +216,9 @@ class TestActionAnalysisWebSocket:
 
     def test_heartbeat_interleaved_with_frames(self, client):
         """Heartbeat should work between frame requests."""
-        with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(
                 json.dumps({"type": "frame", "task": "action", "frame_b64": _make_frame_b64()})
             )

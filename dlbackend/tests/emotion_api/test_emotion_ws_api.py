@@ -69,7 +69,7 @@ class TestHealthEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "ok"
-        assert body["emotion_model"] is True
+        assert body["models"]["emotion"] is True
 
 
 class TestEmotionAnalysisWebSocket:

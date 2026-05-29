@@ -6,7 +6,6 @@ investigation of work-related upper limb disorders."
 
 from core.models.pose import RiskLevel
 
-
 # ---------------------------------------------------------------------------
 # Scoring functions (angle → individual body-part score)
 # ---------------------------------------------------------------------------

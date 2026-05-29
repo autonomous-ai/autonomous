@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, Discriminator, Tag
 from core.models.facial_emotion import EmotionDetection
 from core.types import Omit, omit
 
-
 # --- WebSocket messages ---
 
 

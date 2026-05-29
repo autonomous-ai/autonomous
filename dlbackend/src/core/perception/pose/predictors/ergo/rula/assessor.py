@@ -56,8 +56,9 @@ class RULAAssessor(ErgoAssessor):
         confidence_threshold: float | None = None,
         muscle_use_score: int | None = None,
         force_load_score: int | None = None,
+        batch_size: int | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(batch_size=batch_size)
         self._confidence_threshold: float = get_or_default(
             confidence_threshold, self.DEFAULT_CONFIDENCE_THRESHOLD
         )

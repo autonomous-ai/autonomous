@@ -35,6 +35,8 @@ class PoseEstimator2D(PredictorBase[cv2t.MatLike, RawPose2DDetection]):
     DEFAULT_MODEL_PATH: Path | None = None
     DEFAULT_REMOTE_URL: str | None = None
     DEFAULT_INPUT_SIZE: tuple[int, int] = (192, 256)
+    ONNX_INPUT_NAME: str = "input"
+    ONNX_OUTPUT_NAMES: list[str] = ["simcc_x", "simcc_y"]
 
     INPUT_MEAN: npt.NDArray[np.float32] = np.array([123.675, 116.28, 103.53], dtype=np.float32)
     INPUT_STD: npt.NDArray[np.float32] = np.array([58.395, 57.12, 57.375], dtype=np.float32)
@@ -44,8 +46,9 @@ class PoseEstimator2D(PredictorBase[cv2t.MatLike, RawPose2DDetection]):
         model_path: Path | None = None,
         remote_url: str | None = None,
         input_size: tuple[int, int] | None = None,
+        batch_size: int | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(batch_size=batch_size)
 
         model_path = get_or_default(model_path, self.DEFAULT_MODEL_PATH)
         if model_path is None:
@@ -69,7 +72,9 @@ class PoseEstimator2D(PredictorBase[cv2t.MatLike, RawPose2DDetection]):
             return
         self._model_path = ensure_downloaded(self._model_path, remote=self._remote_url)
         self._logger.info("Loading model from %s", self._model_path)
-        self._session = prepare_ort_session(self._model_path)
+        W, H = self._input_size
+        warmup = {self.ONNX_INPUT_NAME: np.zeros((self._batch_size, 3, H, W), dtype=np.float32)}
+        self._session = prepare_ort_session(self._model_path, warmup_inputs=warmup)
         self._running = True
         self._logger.info("Ready")
 
@@ -121,7 +126,7 @@ class PoseEstimator2D(PredictorBase[cv2t.MatLike, RawPose2DDetection]):
 
         # Batch inference: stack (1, C, H, W) → (N, C, H, W)
         batch: npt.NDArray[np.float32] = np.concatenate(preprocessed, axis=0)
-        simcc_x, simcc_y = self._session.run(["simcc_x", "simcc_y"], {"input": batch})
+        simcc_x, simcc_y = self._session.run(self.ONNX_OUTPUT_NAMES, {self.ONNX_INPUT_NAME: batch})
         simcc_x = np.asarray(simcc_x, dtype=np.float32)  # (N, K, Lx)
         simcc_y = np.asarray(simcc_y, dtype=np.float32)  # (N, K, Ly)
 

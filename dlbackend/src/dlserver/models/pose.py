@@ -1,14 +1,12 @@
 """HTTP/WS models for pose endpoints — Pydantic request/response types."""
 
+from dataclasses import asdict
 from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Discriminator, Tag
 
-from dataclasses import asdict
-
 from core.models.pose import PoseDetection
 from core.types import Omit, omit
-
 
 # --- WebSocket messages ---
 

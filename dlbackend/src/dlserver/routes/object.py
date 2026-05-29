@@ -84,7 +84,7 @@ async def object_detection_ws(websocket: WebSocket, detector_name: str):
             except WebSocketDisconnect:
                 raise
             except Exception as e:
-                logger.exception("Error processing object WS message")
+                logger.exception("Error processing object detection WS message")
                 await websocket.send_json({"error": str(e)})
 
     except WebSocketDisconnect:
@@ -98,11 +98,17 @@ async def object_detect(detector_name: str, req: ObjectDetectRequest):
     if object_model is None or not object_model.is_ready():
         raise HTTPException(status_code=503, detail=f"Object detector '{detector_name}' not loaded")
 
-    frame = decode_image(req.image_b64)
-    result = await object_model.predict_image(frame, classes=req.classes)
+    try:
+        frame = decode_image(req.image_b64)
+        result = await object_model.predict_image(frame, classes=req.classes)
 
-    logger.info("[Object/%s] Detected %d objects", detector_name, len(result.detections))
-    return ObjectDetectResponse.from_object_detection(result)
+        logger.info("[Object/%s] Detected %d objects", detector_name, len(result.detections))
+        return ObjectDetectResponse.from_object_detection(result)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error processing object detection HTTP message")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @http_router.post("/{detector_name}", response_model=list[ObjectDetectionItemResponse])
@@ -112,18 +118,24 @@ async def object_detect_compat(detector_name: str, req: ObjectDetectRequest):
     if object_model is None or not object_model.is_ready():
         raise HTTPException(status_code=503, detail=f"Object detector '{detector_name}' not loaded")
 
-    frame = decode_image(req.image_b64)
-    result = await object_model.predict_image(frame, classes=req.classes)
+    try:
+        frame = decode_image(req.image_b64)
+        result = await object_model.predict_image(frame, classes=req.classes)
 
-    logger.info("[Object/%s] Detected %d objects", detector_name, len(result.detections))
-    return [
-        ObjectDetectionItemResponse(
-            class_name=d.class_name,
-            xywh=d.xywh,
-            confidence=d.confidence,
-        )
-        for d in result.detections
-    ]
+        logger.info("[Object/%s] Detected %d objects", detector_name, len(result.detections))
+        return [
+            ObjectDetectionItemResponse(
+                class_name=d.class_name,
+                xywh=d.xywh,
+                confidence=d.confidence,
+            )
+            for d in result.detections
+        ]
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error processing object detection HTTP message")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @http_router.get("/object-detect/models")

@@ -15,24 +15,29 @@ class AudioEmotionRecognizerFactory(PredictorFactory[AudioEmotionRecognizer]):
         model_name: SpeechEmotionRecognizerEnum,
         model_path: Path | None = None,
         remote_url: str | None = None,
+        batch_size: int | None = None,
     ) -> None:
         self._model_name: SpeechEmotionRecognizerEnum = model_name
         self._model_path: Path | None = model_path
         self._remote_url: str | None = remote_url
+        self._batch_size: int | None = batch_size
 
     def create(self) -> AudioEmotionRecognizer:
-        return create_audio_emotion_recognizer(self._model_name, self._model_path, remote_url=self._remote_url)
+        return create_audio_emotion_recognizer(self._model_name, self._model_path, remote_url=self._remote_url, batch_size=self._batch_size)
 
 
 def create_audio_emotion_recognizer(
     model_name: SpeechEmotionRecognizerEnum,
     model_path: Path | None = None,
     remote_url: str | None = None,
+    batch_size: int | None = None,
 ) -> AudioEmotionRecognizer:
     """Create the audio emotion recognizer for the given model type."""
     if model_name == SpeechEmotionRecognizerEnum.EMOTION2VEC:
-        from core.perception.audio_emotion.predictors.emotion2vec import Emotion2VecPlusLargeRecognizer
+        from core.perception.audio_emotion.predictors.emotion2vec import (
+            Emotion2VecPlusLargeRecognizer,
+        )
 
-        return Emotion2VecPlusLargeRecognizer(model_path=model_path, remote_url=remote_url)
+        return Emotion2VecPlusLargeRecognizer(model_path=model_path, remote_url=remote_url, batch_size=batch_size)
     else:
         raise ValueError(f"Unknown audio emotion model: {model_name}")

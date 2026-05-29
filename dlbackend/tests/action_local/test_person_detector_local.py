@@ -1,4 +1,3 @@
-import asyncio
 """Tests for action recognition with person detector enabled.
 
 Uses a small YOLO model (yolo11n.pt) for person detection and
@@ -6,6 +5,7 @@ X3D for action recognition. Verifies that the person detector
 crops the person before feeding to the action model.
 """
 
+import asyncio
 import base64
 import json
 import os
@@ -234,7 +234,9 @@ class TestActionWithPersonDetector:
         frame_b64 = _img_to_b64(PERSON_DRINKING_IMG)
 
         for client in [client_with_detector, client_without_detector]:
-            with client.websocket_connect("/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS) as ws:
+            with client.websocket_connect(
+                "/lelamp/api/dl/action-analysis/ws", headers=AUTH_HEADERS
+            ) as ws:
                 for _ in range(8):
                     ws.send_text(
                         json.dumps({"type": "frame", "task": "action", "frame_b64": frame_b64})

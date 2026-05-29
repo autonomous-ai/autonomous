@@ -167,7 +167,7 @@ class TestHTTPEncryptionPipeline:
         encrypted_body = self._make_encrypted_request(crypto, plain_body)
 
         resp = lb_client_with_crypto.post(
-            "/api/dl/pose-estimate",
+            "/api/dl/emotion-recognize",
             content=encrypted_body,
             headers={"Content-Type": "application/json"},
         )

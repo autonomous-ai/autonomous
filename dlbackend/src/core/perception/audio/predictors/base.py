@@ -36,7 +36,7 @@ class AudioEmbedder(PredictorBase[Audio, RawAudioEmbedding]):
     DEFAULT_HOP_FRAMES: int = 100
     DEFAULT_SAMPLE_RATE: int = 16000
     DEFAULT_NUM_MEL_BINS: int = 80
-    DEFAULT_BATCH_SIZE: int = 8
+    ONNX_INPUT_NAME: str = "feats"
 
     def __init__(
         self,
@@ -49,7 +49,7 @@ class AudioEmbedder(PredictorBase[Audio, RawAudioEmbedding]):
         num_mel_bins: int | None = None,
         batch_size: int | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(batch_size=batch_size)
 
         self._model_path: Path | None = get_or_default(model_path, self.DEFAULT_MODEL_PATH)
         self._remote_url: str | None = get_or_default(remote_url, self.DEFAULT_REMOTE_URL)
@@ -60,7 +60,6 @@ class AudioEmbedder(PredictorBase[Audio, RawAudioEmbedding]):
         self._hop_frames: int = get_or_default(hop_frames, self.DEFAULT_HOP_FRAMES)
         self._sample_rate: int = get_or_default(sample_rate, self.DEFAULT_SAMPLE_RATE)
         self._num_mel_bins: int = get_or_default(num_mel_bins, self.DEFAULT_NUM_MEL_BINS)
-        self._batch_size: int = get_or_default(batch_size, self.DEFAULT_BATCH_SIZE)
 
         self._session: ort.InferenceSession | None = None
         self._processor: CompositeAudioProcessor | None = None
@@ -78,7 +77,10 @@ class AudioEmbedder(PredictorBase[Audio, RawAudioEmbedding]):
         self._processor = self._processor_factory.create()
         self._processor.start()
         self._logger.info("Loading audio embedder from %s", self._model_path)
-        self._session = prepare_ort_session(self._model_path)
+        warmup = {self.ONNX_INPUT_NAME: np.zeros(
+            (self._batch_size, self._window_frames, self._num_mel_bins), dtype=np.float32,
+        )}
+        self._session = prepare_ort_session(self._model_path, warmup_inputs=warmup)
         self._logger.info("Audio embedder started")
 
     @override
@@ -183,7 +185,7 @@ class AudioEmbedder(PredictorBase[Audio, RawAudioEmbedding]):
 
         for i in range(0, len(windows), self._batch_size):
             batch = windows[i : i + self._batch_size]  # (B, W, M)
-            (output,) = self._session.run(None, {"feats": batch})
+            (output,) = self._session.run(None, {self.ONNX_INPUT_NAME: batch})
             output = np.asarray(output, dtype=np.float32)  # (B, D)
 
             norms = np.linalg.norm(output, axis=1, keepdims=True)

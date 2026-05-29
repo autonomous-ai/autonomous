@@ -1,14 +1,12 @@
-"""Pose estimation WebSocket + HTTP endpoints."""
+"""Pose estimation WebSocket endpoint."""
 
 import logging
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter, ValidationError
 
 from dlserver.models.pose import (
     PoseConfigRequest,
-    PoseEstimateRequest,
-    PoseEstimateResponse,
     PoseFrameRequest,
     PoseHeartBeatRequest,
     PoseRequest,
@@ -20,7 +18,6 @@ from dlserver.utils.state import get_pose_model
 logger: logging.Logger = logging.getLogger(__name__)
 
 ws_router: APIRouter = APIRouter()
-http_router: APIRouter = APIRouter()
 _request_adapter: TypeAdapter[PoseRequest] = TypeAdapter(PoseRequest)
 
 
@@ -85,23 +82,3 @@ async def pose_estimation_ws(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("Pose estimation WebSocket disconnected")
-
-
-@http_router.post("/pose-estimate", response_model=PoseEstimateResponse)
-async def pose_estimate(req: PoseEstimateRequest):
-    """Single-shot pose estimation from a base64-encoded image.
-
-    Returns 2D keypoints (always) and 3D joints (if 3D lifter is configured).
-    """
-    pose_model = get_pose_model()
-    if pose_model is None or not pose_model.is_ready():
-        raise HTTPException(status_code=503, detail="Pose model not loaded")
-
-    frame = decode_image(req.image_b64)
-    session = await pose_model.create_session()
-    result = await session.update(frame)
-    if result is None:
-        raise HTTPException(status_code=500, detail="Pose estimation failed")
-
-    logger.info("[Pose] Estimated %d joints", len(result.pose_2d.joints))
-    return PoseEstimateResponse.from_pose_detection(result)

@@ -12,16 +12,16 @@ import cv2.typing as cv2t
 import numpy as np
 from typing_extensions import override
 
+from core.models.face import FaceCrop
 from core.models.facial_emotion import (
     Emotion,
     EmotionDetection,
     EmotionPerceptionSessionConfig,
     RawEmotionDetection,
 )
-from core.models.face import FaceCrop
 from core.perception.base import PerceptionSessionBase
-from core.perception.facial_emotion.predictors.base import EmotionRecognizer
 from core.perception.face.predictors.base import FaceDetector
+from core.perception.facial_emotion.predictors.base import EmotionRecognizer
 from core.types import Omit, omit
 
 

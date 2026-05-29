@@ -1,6 +1,6 @@
-import asyncio
 """Tests for the emotion-analysis WebSocket endpoint."""
 
+import asyncio
 import base64
 import json
 import os
@@ -11,10 +11,10 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
+from core.perception.face.utils import FaceDetectorFactory
 from core.perception.facial_emotion.constants import RESOURCES_DIR
 from core.perception.facial_emotion.perception import EmotionPerception
 from core.perception.facial_emotion.utils import EmotionRecognizerFactory
-from core.perception.face.utils import FaceDetectorFactory
 from dlserver.utils.state import get_emotion_model, set_emotion_model
 
 EMONET_EMOTIONS: list[str] = (
@@ -69,7 +69,9 @@ def model():
         model_name=EmotionRecognizerEnum.EMONET_8, model_path=EMONET_MODEL_PATH
     )
     face_factory = FaceDetectorFactory(model_name=FaceDetectorEnum.YUNET)
-    m = EmotionPerception(emotion_recognizer_factory=emotion_factory, face_detector_factory=face_factory)
+    m = EmotionPerception(
+        emotion_recognizer_factory=emotion_factory, face_detector_factory=face_factory
+    )
     asyncio.run(m.start())
     return m
 
@@ -95,14 +97,14 @@ class TestHealthEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "ok"
-        assert body["emotion_model"] is True
+        assert body["models"]["emotion"] is True
 
     def test_health_emotion_not_loaded(self, client):
 
         saved = get_emotion_model()
         set_emotion_model(None)
         resp = client.get("/lelamp/api/dl/health", headers=AUTH_HEADERS)
-        assert resp.json()["emotion_model"] is False
+        assert resp.json()["models"]["emotion"] is False
         set_emotion_model(saved)
 
 
@@ -141,7 +143,9 @@ class TestEmotionRecognizeHTTP:
 class TestEmotionAnalysisWebSocket:
     def test_frame_returns_detections(self, client):
         frame_b64 = _make_frame_b64()
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "frame", "task": "emotion", "frame_b64": frame_b64}))
             resp = ws.receive_json()
             assert "detections" in resp
@@ -150,7 +154,9 @@ class TestEmotionAnalysisWebSocket:
     def test_frame_with_face_returns_emotion_fields(self, client):
         """When a face is detected, each detection has the expected fields."""
         frame_b64 = _make_face_frame_b64()
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "frame", "task": "emotion", "frame_b64": frame_b64}))
             resp = ws.receive_json()
             assert "detections" in resp
@@ -168,7 +174,9 @@ class TestEmotionAnalysisWebSocket:
 
     def test_multiple_frames(self, client):
         """Sending multiple frames should each produce a response."""
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             for _ in range(3):
                 ws.send_text(
                     json.dumps({"type": "frame", "task": "emotion", "frame_b64": _make_frame_b64()})
@@ -177,14 +185,18 @@ class TestEmotionAnalysisWebSocket:
                 assert "detections" in resp
 
     def test_config_update_threshold(self, client):
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "config", "task": "emotion", "threshold": 0.8}))
             resp = ws.receive_json()
             assert resp["status"] == "config_updated"
 
     def test_high_threshold_filters_detections(self, client):
         """With threshold=1.0, no emotion should pass the filter."""
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "config", "task": "emotion", "threshold": 1.0}))
             resp = ws.receive_json()
             assert resp["status"] == "config_updated"
@@ -198,25 +210,33 @@ class TestEmotionAnalysisWebSocket:
             assert resp["detections"] == []
 
     def test_invalid_json(self, client):
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text("not json at all")
             resp = ws.receive_json()
             assert "error" in resp
 
     def test_missing_type_field(self, client):
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"frame_b64": "abc"}))
             resp = ws.receive_json()
             assert "error" in resp
 
     def test_unknown_type(self, client):
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "bogus"}))
             resp = ws.receive_json()
             assert "error" in resp
 
     def test_frame_missing_frame_b64(self, client):
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "frame", "task": "emotion"}))
             resp = ws.receive_json()
             assert "error" in resp
@@ -234,14 +254,18 @@ class TestEmotionAnalysisWebSocket:
         set_emotion_model(saved)
 
     def test_heartbeat_returns_ok(self, client):
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(json.dumps({"type": "heartbeat", "task": "emotion"}))
             resp = ws.receive_json()
             assert resp == {"status": "ok"}
 
     def test_heartbeat_multiple(self, client):
         """Multiple heartbeats in a row should all return ok."""
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             for _ in range(3):
                 ws.send_text(json.dumps({"type": "heartbeat", "task": "emotion"}))
                 resp = ws.receive_json()
@@ -249,7 +273,9 @@ class TestEmotionAnalysisWebSocket:
 
     def test_heartbeat_interleaved_with_frames(self, client):
         """Heartbeat should work between frame requests."""
-        with client.websocket_connect("/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/emotion-analysis/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(
                 json.dumps({"type": "frame", "task": "emotion", "frame_b64": _make_frame_b64()})
             )

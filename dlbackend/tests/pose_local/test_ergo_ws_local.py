@@ -1,6 +1,6 @@
-import asyncio
 """Tests for ergonomic assessment through the pose estimation endpoint."""
 
+import asyncio
 import base64
 import json
 import os
@@ -73,7 +73,9 @@ AUTH_HEADERS = {"X-API-Key": TEST_API_KEY}
 class TestErgoViaWebSocket:
     def test_frame_returns_ergo(self, client):
         """With ergo assessor configured, response should include ergo field."""
-        with client.websocket_connect("/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(
                 json.dumps({"type": "frame", "task": "pose", "frame_b64": _make_frame_b64()})
             )
@@ -82,7 +84,9 @@ class TestErgoViaWebSocket:
             assert "ergo" in resp
 
     def test_ergo_has_expected_fields(self, client):
-        with client.websocket_connect("/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(
                 json.dumps({"type": "frame", "task": "pose", "frame_b64": _make_frame_b64()})
             )
@@ -94,7 +98,9 @@ class TestErgoViaWebSocket:
             assert "right" in ergo
 
     def test_ergo_side_has_body_scores(self, client):
-        with client.websocket_connect("/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(
                 json.dumps({"type": "frame", "task": "pose", "frame_b64": _make_frame_b64()})
             )
@@ -110,7 +116,9 @@ class TestErgoViaWebSocket:
                 assert "trunk" in side["body_scores"]
 
     def test_ergo_score_range(self, client):
-        with client.websocket_connect("/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(
                 json.dumps({"type": "frame", "task": "pose", "frame_b64": _make_frame_b64()})
             )
@@ -120,7 +128,9 @@ class TestErgoViaWebSocket:
             assert 1 <= resp["ergo"]["right"]["score"] <= 7
 
     def test_ergo_overall_is_max_of_sides(self, client):
-        with client.websocket_connect("/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS
+        ) as ws:
             ws.send_text(
                 json.dumps({"type": "frame", "task": "pose", "frame_b64": _make_frame_b64()})
             )
@@ -130,36 +140,15 @@ class TestErgoViaWebSocket:
             )
 
     def test_multiple_frames_all_have_ergo(self, client):
-        with client.websocket_connect("/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS) as ws:
+        with client.websocket_connect(
+            "/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS
+        ) as ws:
             for _ in range(3):
                 ws.send_text(
                     json.dumps({"type": "frame", "task": "pose", "frame_b64": _make_frame_b64()})
                 )
                 resp = ws.receive_json()
                 assert "ergo" in resp
-
-
-class TestErgoViaHTTP:
-    def test_http_returns_ergo(self, client):
-        resp = client.post(
-            "/lelamp/api/dl/pose-estimate",
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-        )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "ergo" in body
-        assert body["ergo"]["score"] >= 1
-
-    def test_http_ergo_has_both_sides(self, client):
-        resp = client.post(
-            "/lelamp/api/dl/pose-estimate",
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-        )
-        body = resp.json()
-        assert "left" in body["ergo"]
-        assert "right" in body["ergo"]
 
 
 class TestNoErgoWithoutAssessor:

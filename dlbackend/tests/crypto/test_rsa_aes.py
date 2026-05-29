@@ -6,7 +6,12 @@ import pytest
 from cryptography.exceptions import InvalidTag
 
 from core.crypto.rsa_aes import AESGCMSession, RSAAESCrypto
-from core.models.crypto import AESGCMCipherPayload, AESGCMPlainPayload, RSAAESCipherPayload, RSAAESPlainPayload
+from core.models.crypto import (
+    AESGCMCipherPayload,
+    AESGCMPlainPayload,
+    RSAAESCipherPayload,
+    RSAAESPlainPayload,
+)
 
 
 class TestAESGCMSession:

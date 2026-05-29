@@ -58,6 +58,7 @@ def build_action_perception() -> ActionPerception:
         remote_url=settings.action.remote_url,
         max_frames=settings.action.max_frames,
         frame_size=action_frame_size,
+        batch_size=settings.action.batch_size,
     )
 
     person_factory: PersonDetectorFactory | None = None
@@ -67,6 +68,7 @@ def build_action_perception() -> ActionPerception:
             model_path=settings.person_detector.model_name,
             threshold=settings.person_detector.confidence_threshold,
             bbox_expand_scale=settings.person_detector.bbox_expand_scale,
+            batch_size=settings.person_detector.batch_size,
         )
 
     default_config: ActionPerceptionSessionConfig = ActionPerceptionSessionConfig()
@@ -92,6 +94,7 @@ def build_emotion_perception() -> EmotionPerception:
         model_name=settings.fer.model,
         model_path=emotion_ckpt,
         remote_url=settings.fer.remote_url,
+        batch_size=settings.fer.batch_size,
     )
 
     face_factory = FaceDetectorFactory(model_name=FaceDetectorEnum.YUNET)
@@ -121,6 +124,7 @@ def build_pose_perception() -> PosePerception:
         model_name=settings.pose.model,
         model_path=pose_ckpt,
         remote_url=settings.pose.remote_url,
+        batch_size=settings.pose.batch_size,
     )
 
     lifter_3d_factory: PoseLifter3DFactory | None = None
@@ -142,6 +146,7 @@ def build_pose_perception() -> PosePerception:
             model_path=lifter_3d_ckpt,
             remote_url=settings.pose.lifter_3d_remote_url,
             input_size=lifter_3d_input_size,
+            batch_size=settings.pose.batch_size,
         )
 
     ergo_factory: ErgoAssessorFactory | None = None
@@ -189,6 +194,7 @@ def build_object_perceptions() -> dict[str, ObjectPerception]:
             model_path=model_path,
             classes_path=classes_path,
             threshold=det_settings.threshold,
+            batch_size=det_settings.batch_size,
         )
 
         default_config: ObjectPerceptionSessionConfig = ObjectPerceptionSessionConfig()
@@ -229,6 +235,7 @@ def build_audio_embedder() -> AudioEmbedder:
         model_path=model_path,
         remote_url=settings.audio_embedder.remote_url,
         processor_factory=processor_factory,
+        batch_size=settings.audio_embedder.batch_size,
     )
 
 
@@ -242,6 +249,7 @@ def build_audio_emotion_perception() -> AudioEmotionPerception:
         model_name=settings.ser.model,
         model_path=ckpt_path,
         remote_url=settings.ser.remote_url,
+        batch_size=settings.ser.batch_size,
     )
 
     return AudioEmotionPerception(

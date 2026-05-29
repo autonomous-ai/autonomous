@@ -188,43 +188,6 @@ class TestEncryptedEmotionHTTP:
 
 
 # ---------------------------------------------------------------------------
-# Encrypted HTTP: Pose estimation
-# ---------------------------------------------------------------------------
-
-
-class TestEncryptedPoseHTTP:
-    def test_encrypted_pose_estimate(self, crypto_session):
-        plain = json.dumps({"image_b64": _make_frame_b64()}).encode()
-
-        resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
-            content=crypto_session.wrap_http_request(plain),
-            headers={**AUTH_HEADERS, "Content-Type": "application/json"},
-            timeout=15.0,
-        )
-        assert resp.status_code == 200
-
-        decrypted = json.loads(crypto_session.unwrap_http_response(resp.content))
-        assert "pose_2d" in decrypted
-        assert "joints" in decrypted["pose_2d"]
-        assert "confs" in decrypted["pose_2d"]
-
-    def test_encrypted_pose_has_ergo_field(self, crypto_session):
-        plain = json.dumps({"image_b64": _make_frame_b64()}).encode()
-
-        resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
-            content=crypto_session.wrap_http_request(plain),
-            headers={**AUTH_HEADERS, "Content-Type": "application/json"},
-            timeout=15.0,
-        )
-        assert resp.status_code == 200
-
-        decrypted = json.loads(crypto_session.unwrap_http_response(resp.content))
-        assert "ergo" in decrypted
-
-
-# ---------------------------------------------------------------------------
 # Encrypted WebSocket: Action analysis
 # ---------------------------------------------------------------------------
 
@@ -415,16 +378,6 @@ class TestRequireEncryptionHTTP:
 
     def test_plain_post_rejected(self):
         resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-            timeout=15.0,
-        )
-        assert resp.status_code == 400
-        assert "Encryption required" in resp.json()["detail"]
-
-    def test_plain_emotion_rejected(self):
-        resp = httpx.post(
             _http_url("/lelamp/api/dl/emotion-recognize"),
             json={"image_b64": _make_face_frame_b64(), "threshold": 0.5},
             headers=AUTH_HEADERS,
@@ -434,16 +387,14 @@ class TestRequireEncryptionHTTP:
         assert "Encryption required" in resp.json()["detail"]
 
     def test_encrypted_post_accepted(self, crypto_session):
-        plain = json.dumps({"image_b64": _make_frame_b64()}).encode()
+        plain = json.dumps({"image_b64": _make_face_frame_b64(), "threshold": 0.5}).encode()
         resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
+            _http_url("/lelamp/api/dl/emotion-recognize"),
             content=crypto_session.wrap_http_request(plain),
             headers={**AUTH_HEADERS, "Content-Type": "application/json"},
             timeout=15.0,
         )
         assert resp.status_code == 200
-        decrypted = json.loads(crypto_session.unwrap_http_response(resp.content))
-        assert "pose_2d" in decrypted
 
     def test_get_requests_unaffected(self):
         """GET /api/dl/health should still work without encryption."""

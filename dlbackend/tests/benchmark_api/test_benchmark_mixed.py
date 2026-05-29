@@ -15,27 +15,23 @@ Run with:
 
 from __future__ import annotations
 
-import asyncio
 import itertools
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any
 
 import pytest
 
 from .test_benchmark_api import (
     ALL_ENDPOINTS,
     EndpointSpec,
-    RequestResult,
     _fire_request,
-    _headers,
     _probe_endpoint,
     _url,
 )
 from .test_benchmark_ws import (
     ALL_WS_ENDPOINTS,
     WSEndpointSpec,
-    WSResult,
     _probe_ws,
     _ws_send_n_frames,
 )
@@ -58,47 +54,32 @@ class MixedResult:
     error: str | None = None
 
 
-def _run_async(coro: Any) -> Any:
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
-
-
-async def _run_mixed(
+def _run_mixed(
     http_endpoints: list[EndpointSpec],
     ws_endpoints: list[WSEndpointSpec],
     n_http_per_endpoint: int,
     n_ws_connections: int,
     ws_frames_per_conn: int,
 ) -> list[MixedResult]:
-    import httpx
+    http_tasks = [ep for ep in http_endpoints for _ in range(n_http_per_endpoint)]
+    ws_tasks = [
+        (ep, ws_frames_per_conn)
+        for ep in ws_endpoints
+        for _ in range(n_ws_connections)
+    ]
 
-    async def _http_batch() -> list[MixedResult]:
-        async with httpx.AsyncClient() as client:
-            coros = [
-                _fire_request(client, ep)
-                for ep in http_endpoints
-                for _ in range(n_http_per_endpoint)
-            ]
-            results = await asyncio.gather(*coros)
-        return [
-            MixedResult(
-                endpoint=r.endpoint, protocol="http",
-                latency_ms=r.latency_ms, error=r.error,
-            )
-            for r in results
-        ]
+    total_workers = len(http_tasks) + len(ws_tasks)
 
-    async def _ws_batch() -> list[MixedResult]:
-        coros = [
-            _ws_send_n_frames(ep, ws_frames_per_conn)
-            for ep in ws_endpoints
-            for _ in range(n_ws_connections)
-        ]
-        batches = await asyncio.gather(*coros)
-        ws_results = list(itertools.chain.from_iterable(batches))
+    def _do_http(ep: EndpointSpec) -> list[MixedResult]:
+        r = _fire_request(ep)
+        return [MixedResult(
+            endpoint=r.endpoint, protocol="http",
+            latency_ms=r.latency_ms, error=r.error,
+        )]
+
+    def _do_ws(args: tuple[WSEndpointSpec, int]) -> list[MixedResult]:
+        ep, n_frames = args
+        ws_results = _ws_send_n_frames(ep, n_frames)
         return [
             MixedResult(
                 endpoint=r.endpoint, protocol="ws",
@@ -107,8 +88,14 @@ async def _run_mixed(
             for r in ws_results
         ]
 
-    http_results, ws_results = await asyncio.gather(_http_batch(), _ws_batch())
-    return http_results + ws_results
+    with ThreadPoolExecutor(max_workers=total_workers) as pool:
+        http_futures = [pool.submit(_do_http, ep) for ep in http_tasks]
+        ws_futures = [pool.submit(_do_ws, t) for t in ws_tasks]
+        all_results = list(itertools.chain.from_iterable(
+            f.result() for f in http_futures + ws_futures
+        ))
+
+    return all_results
 
 
 def _print_mixed_report(
@@ -180,17 +167,7 @@ def _assert_mixed_error_rate(results: list[MixedResult], label: str) -> None:
 
 @pytest.fixture(scope="module")
 def available_http_endpoints() -> list[EndpointSpec]:
-    import httpx
-
-    async def _probe_all() -> list[EndpointSpec]:
-        available: list[EndpointSpec] = []
-        async with httpx.AsyncClient() as client:
-            for ep in ALL_ENDPOINTS:
-                if await _probe_endpoint(client, ep):
-                    available.append(ep)
-        return available
-
-    eps = _run_async(_probe_all())
+    eps = [ep for ep in ALL_ENDPOINTS if _probe_endpoint(ep)]
     if not eps:
         pytest.skip("No HTTP endpoints available")
     print(f"\nAvailable HTTP endpoints: {[e.name for e in eps]}")
@@ -199,14 +176,7 @@ def available_http_endpoints() -> list[EndpointSpec]:
 
 @pytest.fixture(scope="module")
 def available_ws_endpoints() -> list[WSEndpointSpec]:
-    async def _probe_all() -> list[WSEndpointSpec]:
-        available: list[WSEndpointSpec] = []
-        for ep in ALL_WS_ENDPOINTS:
-            if await _probe_ws(ep):
-                available.append(ep)
-        return available
-
-    eps = _run_async(_probe_all())
+    eps = [ep for ep in ALL_WS_ENDPOINTS if _probe_ws(ep)]
     if not eps:
         pytest.skip("No WS endpoints available")
     print(f"\nAvailable WS endpoints: {[e.name for e in eps]}")
@@ -238,11 +208,11 @@ class TestMixedLoad:
         ws_frames: int,
     ) -> None:
         t0 = time.perf_counter()
-        results = _run_async(_run_mixed(
+        results = _run_mixed(
             available_http_endpoints,
             available_ws_endpoints,
             n_http, n_ws, ws_frames,
-        ))
+        )
         wall_ms = (time.perf_counter() - t0) * 1000
 
         _print_mixed_report(results, wall_ms, n_http, n_ws)

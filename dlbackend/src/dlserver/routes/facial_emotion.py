@@ -43,7 +43,7 @@ async def emotion_analysis_ws(websocket: WebSocket):
 
     emotion_model = get_emotion_model()
     if emotion_model is None or not emotion_model.is_ready():
-        await websocket.close(code=1011, reason="Emotion model not loaded")
+        await websocket.close(code=1011, reason="Facial emotion model not loaded")
         return
 
     try:
@@ -81,11 +81,20 @@ async def emotion_analysis_ws(websocket: WebSocket):
             except WebSocketDisconnect:
                 raise
             except Exception as e:
-                logger.exception("Error processing emotion WS message")
+                logger.exception("Error processing facial emotion WS message")
                 await websocket.send_json({"error": str(e)})
 
     except WebSocketDisconnect:
-        logger.info("Emotion analysis WebSocket disconnected")
+        logger.info("Facial emotion analysis WebSocket disconnected")
+
+
+@http_router.get("/emotion-labels")
+async def list_fer_labels():
+    """Return the ordered label list for the active facial emotion model."""
+    emotion_model = get_emotion_model()
+    if emotion_model is None or not emotion_model.is_ready():
+        raise HTTPException(status_code=503, detail="Facial emotion model not loaded")
+    return {"labels": emotion_model.labels}
 
 
 @http_router.post("/emotion-recognize", response_model=EmotionRecognizeResponse)
@@ -93,24 +102,30 @@ async def emotion_recognize(req: EmotionRecognizeRequest):
     """Single-shot emotion recognition from a pre-cropped face image."""
     emotion_model = get_emotion_model()
     if emotion_model is None or not emotion_model.is_ready():
-        raise HTTPException(status_code=503, detail="Emotion model not loaded")
+        raise HTTPException(status_code=503, detail="Facial emotion model not loaded")
 
-    face_crop = decode_image(req.image_b64)
-    emotion = await emotion_model.predict_face(face_crop)
+    try:
+        face_crop = decode_image(req.image_b64)
+        emotion = await emotion_model.predict_face(face_crop)
 
-    if emotion is None or emotion.confidence < req.threshold:
-        return EmotionRecognizeResponse(detections=[])
+        if emotion is None or emotion.confidence < req.threshold:
+            return EmotionRecognizeResponse(detections=[])
 
-    logger.info("[Emotion] Detected %s (%.2f)", emotion.emotion, emotion.confidence)
-    return EmotionRecognizeResponse(
-        detections=[
-            EmotionItem(
-                emotion=emotion.emotion,
-                confidence=emotion.confidence,
-                face_confidence=emotion.face_confidence,
-                bbox=emotion.bbox,
-                valence=emotion.valence,
-                arousal=emotion.arousal,
-            )
-        ]
-    )
+        logger.info("[Facial emotion] Detected %s (%.2f)", emotion.emotion, emotion.confidence)
+        return EmotionRecognizeResponse(
+            detections=[
+                EmotionItem(
+                    emotion=emotion.emotion,
+                    confidence=emotion.confidence,
+                    face_confidence=emotion.face_confidence,
+                    bbox=emotion.bbox,
+                    valence=emotion.valence,
+                    arousal=emotion.arousal,
+                )
+            ]
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Error processing facial emotion HTTP message")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

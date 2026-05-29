@@ -30,8 +30,9 @@ class OWLv2Detector(ObjectDetector):
         model_path: Path | None = None,
         classes_path: Path | None = None,
         threshold: float | None = None,
+        batch_size: int | None = None,
     ) -> None:
-        super().__init__(model_path=model_path, classes_path=classes_path, threshold=threshold)
+        super().__init__(model_path=model_path, classes_path=classes_path, threshold=threshold, batch_size=batch_size)
         self._processor: Owlv2Processor | None = None
         self._model: Owlv2ForObjectDetection | None = None
         self._device: str = ""

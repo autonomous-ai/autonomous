@@ -12,19 +12,19 @@ import numpy as np
 import numpy.typing as npt
 from typing_extensions import override
 
+from core.models.face import FaceCrop
 from core.models.facial_emotion import (
     Emotion,
     EmotionDetection,
     EmotionPerceptionSessionConfig,
     RawEmotionDetection,
 )
-from core.models.face import FaceCrop
 from core.perception.base import PerceptionBase
+from core.perception.face.predictors.base import FaceDetector
+from core.perception.face.utils import FaceDetectorFactory
 from core.perception.facial_emotion.predictors.base import EmotionRecognizer
 from core.perception.facial_emotion.session import EmotionPerceptionSession
 from core.perception.facial_emotion.utils import EmotionRecognizerFactory
-from core.perception.face.predictors.base import FaceDetector
-from core.perception.face.utils import FaceDetectorFactory
 
 
 class EmotionPerception(PerceptionBase[EmotionPerceptionSession]):
@@ -45,6 +45,12 @@ class EmotionPerception(PerceptionBase[EmotionPerceptionSession]):
         self._emotion_recognizer: EmotionRecognizer | None = None
         self._face_detector: FaceDetector | None = None
         self._running: bool = False
+
+    @property
+    def labels(self) -> list[str]:
+        if self._emotion_recognizer is None:
+            return []
+        return self._emotion_recognizer.class_names
 
     @override
     async def start(self) -> None:

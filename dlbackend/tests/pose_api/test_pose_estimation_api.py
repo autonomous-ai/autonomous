@@ -50,36 +50,7 @@ class TestHealthEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "ok"
-        assert "pose_model" in body
-
-
-class TestPoseEstimationHTTP:
-    def test_single_image_returns_pose_2d(self):
-        resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-        )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "pose_2d" in body
-        assert "joints" in body["pose_2d"]
-        assert "confs" in body["pose_2d"]
-        assert "graph_type" in body["pose_2d"]
-        assert len(body["pose_2d"]["joints"]) == 17
-        assert len(body["pose_2d"]["confs"]) == 17
-
-    def test_pose_2d_joints_have_xy(self):
-        resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-        )
-        assert resp.status_code == 200
-        for joint in resp.json()["pose_2d"]["joints"]:
-            assert len(joint) == 2
-            assert isinstance(joint[0], float)
-            assert isinstance(joint[1], float)
+        assert "pose" in body["models"]
 
 
 class TestPoseEstimationWebSocket:
@@ -167,88 +138,6 @@ class TestPoseEstimationWebSocket:
             ) as conn:
                 await conn.send(json.dumps({"type": "heartbeat", "task": "pose"}))
                 _ = await conn.recv()
-
-
-class TestErgoAssessmentHTTP:
-    """Tests for ergonomic assessment via the pose HTTP endpoint.
-
-    These tests only pass when the remote server has ergo_assessor configured.
-    """
-
-    def test_http_returns_ergo_when_configured(self):
-        resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-        )
-        assert resp.status_code == 200
-        body = resp.json()
-        # ergo may be None if not configured on the server — just check the field exists
-        assert "ergo" in body
-
-    def test_ergo_has_both_sides_when_present(self):
-        resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-        )
-        body = resp.json()
-        if body.get("ergo") is not None:
-            ergo = body["ergo"]
-            assert "score" in ergo
-            assert "risk_level" in ergo
-            assert "left" in ergo
-            assert "right" in ergo
-
-    def test_ergo_sides_have_body_scores(self):
-        resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-        )
-        body = resp.json()
-        if body.get("ergo") is not None:
-            for side_key in ("left", "right"):
-                side = body["ergo"][side_key]
-                assert "score" in side
-                assert "risk_level" in side
-                assert "body_scores" in side
-                assert "skipped_joints" in side
-                bs = side["body_scores"]
-                assert "upper_arm" in bs
-                assert "lower_arm" in bs
-                assert "wrist" in bs
-                assert "neck" in bs
-                assert "trunk" in bs
-                assert "upper_arm_angle" in bs
-                assert "lower_arm_angle" in bs
-                assert "neck_angle" in bs
-                assert "trunk_angle" in bs
-
-    def test_ergo_score_in_valid_range(self):
-        resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-        )
-        body = resp.json()
-        if body.get("ergo") is not None:
-            assert 1 <= body["ergo"]["score"] <= 7
-            assert 1 <= body["ergo"]["left"]["score"] <= 7
-            assert 1 <= body["ergo"]["right"]["score"] <= 7
-
-    def test_ergo_overall_is_max_of_sides(self):
-        resp = httpx.post(
-            _http_url("/lelamp/api/dl/pose-estimate"),
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-        )
-        body = resp.json()
-        if body.get("ergo") is not None:
-            assert body["ergo"]["score"] == max(
-                body["ergo"]["left"]["score"],
-                body["ergo"]["right"]["score"],
-            )
 
 
 class TestErgoAssessmentWebSocket:

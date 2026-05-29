@@ -16,11 +16,13 @@ class ObjectDetectorFactory(PredictorFactory[ObjectDetector]):
         model_path: Path | None = None,
         classes_path: Path | None = None,
         threshold: float | None = None,
+        batch_size: int | None = None,
     ) -> None:
         self._model_name = model_name
         self._model_path = model_path
         self._classes_path = classes_path
         self._threshold = threshold
+        self._batch_size = batch_size
 
     def create(self) -> ObjectDetector:
         return create_object_detector(
@@ -28,6 +30,7 @@ class ObjectDetectorFactory(PredictorFactory[ObjectDetector]):
             model_path=self._model_path,
             classes_path=self._classes_path,
             threshold=self._threshold,
+            batch_size=self._batch_size,
         )
 
 
@@ -36,6 +39,7 @@ def create_object_detector(
     model_path: Path | None = None,
     classes_path: Path | None = None,
     threshold: float | None = None,
+    batch_size: int | None = None,
 ) -> ObjectDetector:
     """Instantiate the correct object detector."""
     if model_name == ObjectDetectorEnum.YOLO_WORLD:
@@ -45,8 +49,10 @@ def create_object_detector(
     elif model_name == ObjectDetectorEnum.OWLV2:
         from core.perception.object.predictors.owlv2 import OWLv2Detector as detector_cls
     elif model_name == ObjectDetectorEnum.GROUNDING_DINO:
-        from core.perception.object.predictors.grounding_dino import GroundingDINODetector as detector_cls
+        from core.perception.object.predictors.grounding_dino import (
+            GroundingDINODetector as detector_cls,
+        )
     else:
         raise ValueError(f"Unknown object detector: {model_name}")
 
-    return detector_cls(model_path=model_path, classes_path=classes_path, threshold=threshold)
+    return detector_cls(model_path=model_path, classes_path=classes_path, threshold=threshold, batch_size=batch_size)

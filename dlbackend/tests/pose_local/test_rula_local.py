@@ -1,7 +1,6 @@
 """Tests for RULA ergonomic assessment from H36M keypoints."""
 
 import numpy as np
-import pytest
 
 from core.models.pose import RiskLevel
 from core.perception.pose.graph.h36m import H36MJoint
@@ -12,44 +11,44 @@ from core.utils.compute import ensure_3d
 def _upright_skeleton_2d() -> np.ndarray:
     """Neutral upright sitting posture in 2D (17, 2)."""
     kps = np.zeros((17, 2), dtype=np.float32)
-    kps[0]  = [160, 400]   # pelvis
-    kps[7]  = [160, 300]   # spine
-    kps[8]  = [160, 200]   # thorax
-    kps[9]  = [160, 150]   # neck
-    kps[10] = [160, 100]   # head
-    kps[11] = [190, 210]   # L shoulder
-    kps[12] = [190, 290]   # L elbow (arms down)
-    kps[13] = [190, 300]   # L wrist
-    kps[14] = [130, 210]   # R shoulder
-    kps[15] = [130, 290]   # R elbow (arms down)
-    kps[16] = [130, 300]   # R wrist
+    kps[0] = [160, 400]  # pelvis
+    kps[7] = [160, 300]  # spine
+    kps[8] = [160, 200]  # thorax
+    kps[9] = [160, 150]  # neck
+    kps[10] = [160, 100]  # head
+    kps[11] = [190, 210]  # L shoulder
+    kps[12] = [190, 290]  # L elbow (arms down)
+    kps[13] = [190, 300]  # L wrist
+    kps[14] = [130, 210]  # R shoulder
+    kps[15] = [130, 290]  # R elbow (arms down)
+    kps[16] = [130, 300]  # R wrist
     return kps
 
 
 def _hunched_skeleton_2d() -> np.ndarray:
     """Forward-hunched posture: head forward, arms raised."""
     kps = _upright_skeleton_2d()
-    kps[10] = [200, 120]   # head forward
-    kps[14] = [100, 220]   # R shoulder
-    kps[15] = [70, 200]    # R elbow raised forward
-    kps[16] = [50, 180]    # R wrist raised forward
+    kps[10] = [200, 120]  # head forward
+    kps[14] = [100, 220]  # R shoulder
+    kps[15] = [70, 200]  # R elbow raised forward
+    kps[16] = [50, 180]  # R wrist raised forward
     return kps
 
 
 def _upright_skeleton_3d() -> np.ndarray:
     """Neutral upright posture in 3D (17, 3). x=right, y=down, z=depth."""
     kps = np.zeros((17, 3), dtype=np.float32)
-    kps[0]  = [0, 400, 0]      # pelvis (lowest)
-    kps[7]  = [0, 300, 0]      # spine
-    kps[8]  = [0, 200, 0]      # thorax
-    kps[9]  = [0, 150, 0]      # neck
-    kps[10] = [0, 100, 0]      # head (highest, smallest y)
-    kps[11] = [30, 210, 0]     # L shoulder
-    kps[12] = [30, 290, 0]     # L elbow (arms down)
-    kps[13] = [30, 300, 0]     # L wrist
-    kps[14] = [-30, 210, 0]    # R shoulder
-    kps[15] = [-30, 290, 0]    # R elbow (arms down)
-    kps[16] = [-30, 300, 0]    # R wrist
+    kps[0] = [0, 400, 0]  # pelvis (lowest)
+    kps[7] = [0, 300, 0]  # spine
+    kps[8] = [0, 200, 0]  # thorax
+    kps[9] = [0, 150, 0]  # neck
+    kps[10] = [0, 100, 0]  # head (highest, smallest y)
+    kps[11] = [30, 210, 0]  # L shoulder
+    kps[12] = [30, 290, 0]  # L elbow (arms down)
+    kps[13] = [30, 300, 0]  # L wrist
+    kps[14] = [-30, 210, 0]  # R shoulder
+    kps[15] = [-30, 290, 0]  # R elbow (arms down)
+    kps[16] = [-30, 300, 0]  # R wrist
     return kps
 
 
@@ -196,7 +195,7 @@ class TestConfidenceFiltering:
     def test_low_neck_confidence_skips_neck(self):
         assessor = RULAAssessor(confidence_threshold=0.3)
         scores = _all_confident()
-        scores[9] = 0.1   # neck
+        scores[9] = 0.1  # neck
         result = assessor.predict([(_upright_skeleton_2d(), scores)])[0]
         assert result is not None
         assert "neck" in result.left.skipped_joints

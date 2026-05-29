@@ -1,6 +1,6 @@
-import asyncio
 """Tests for pose estimation with 2D RTMPose + 3D TCPFormer lifting."""
 
+import asyncio
 import base64
 import json
 import os
@@ -75,8 +75,12 @@ AUTH_HEADERS = {"X-API-Key": TEST_API_KEY}
 class TestPoseWith3DLifting:
     def test_ws_returns_pose_2d_and_3d(self, client):
         """A single frame should produce both 2D and 3D output."""
-        with client.websocket_connect("/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS) as ws:
-            ws.send_text(json.dumps({"type": "frame", "task": "pose", "frame_b64": _make_frame_b64()}))
+        with client.websocket_connect(
+            "/lelamp/api/dl/pose-estimation/ws", headers=AUTH_HEADERS
+        ) as ws:
+            ws.send_text(
+                json.dumps({"type": "frame", "task": "pose", "frame_b64": _make_frame_b64()})
+            )
             resp = ws.receive_json()
 
             # 2D
@@ -91,16 +95,3 @@ class TestPoseWith3DLifting:
             for joint in pose_3d["joints"]:
                 assert len(joint) == 3
                 assert all(isinstance(v, float) for v in joint)
-
-    def test_http_returns_pose_2d_and_3d(self, client):
-        """HTTP single-shot should produce both 2D and 3D."""
-        resp = client.post(
-            "/lelamp/api/dl/pose-estimate",
-            json={"image_b64": _make_frame_b64()},
-            headers=AUTH_HEADERS,
-        )
-        assert resp.status_code == 200
-        body = resp.json()
-        assert "pose_2d" in body
-        assert body["pose_3d"] is not None
-        assert len(body["pose_3d"]["joints"]) == 17

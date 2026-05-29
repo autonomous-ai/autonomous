@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 from core.models.crypto import AESGCMCipherPayload
 
-
 # ---------------------------------------------------------------------------
 # HTTP
 # ---------------------------------------------------------------------------

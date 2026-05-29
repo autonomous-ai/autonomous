@@ -12,7 +12,7 @@ import time
 import httpx
 import pytest
 import uvicorn
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from core.crypto.rsa_aes import AESGCMSession, RSAAESCrypto
@@ -22,7 +22,6 @@ from lbserver.models import (
     CipherHTTPResponse,
     WSCipherMessage,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -132,7 +131,7 @@ class TestHTTPEncryption:
         plain_body = json.dumps({"image_b64": "abc123"}).encode()
         encrypted_body = _encrypt_body(session, encrypted_key, plain_body)
 
-        resp = lb_client.post("/api/dl/pose-estimate", content=encrypted_body)
+        resp = lb_client.post("/api/dl/emotion-recognize", content=encrypted_body)
         assert resp.status_code == 200
 
         # Response is encrypted
@@ -313,7 +312,6 @@ class _ClientCryptoSession:
 
     def encrypt(self, plaintext: bytes) -> dict:
         nonce = os.urandom(GCM_NONCE_SIZE)
-        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
         cipher_data = self._aesgcm.encrypt(nonce, plaintext, None)
         return {
             "nonce": base64.b64encode(nonce).decode(),
@@ -414,7 +412,6 @@ class TestRequireEncryption:
         assert json.loads(decrypted["body"]) == {"test": "data"}
 
     def test_ws_without_key_exchange_closed(self, lb_ws_client_require_encryption):
-        from starlette.testclient import WebSocketDenialResponse
 
         with pytest.raises(Exception):
             with lb_ws_client_require_encryption.websocket_connect("/api/dl/test/ws") as ws:

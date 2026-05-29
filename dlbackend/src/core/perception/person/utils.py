@@ -12,16 +12,19 @@ class PersonDetectorFactory(PredictorFactory[PersonDetector]):
         model_path: str | None = None,
         threshold: float | None = None,
         bbox_expand_scale: float | None = None,
+        batch_size: int | None = None,
     ) -> None:
         self._model_name = model_name
         self._model_path = model_path
         self._threshold = threshold
         self._bbox_expand_scale = bbox_expand_scale
+        self._batch_size = batch_size
 
     def create(self) -> PersonDetector:
         return create_person_detector(
             self._model_name, self._model_path,
             threshold=self._threshold, bbox_expand_scale=self._bbox_expand_scale,
+            batch_size=self._batch_size,
         )
 
 
@@ -30,6 +33,7 @@ def create_person_detector(
     model_path: str | None = None,
     threshold: float | None = None,
     bbox_expand_scale: float | None = None,
+    batch_size: int | None = None,
 ) -> PersonDetector:
     """Instantiate the correct recognizer model."""
     if model_name == PersonDetectorEnum.YOLO:
@@ -38,4 +42,4 @@ def create_person_detector(
         msg = f"Unknown person detector model: {model_name}"
         raise ValueError(msg)
 
-    return predictor_cls(model_path, threshold=threshold, bbox_expand_scale=bbox_expand_scale)
+    return predictor_cls(model_path, threshold=threshold, bbox_expand_scale=bbox_expand_scale, batch_size=batch_size)

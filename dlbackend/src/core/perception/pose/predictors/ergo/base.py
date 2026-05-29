@@ -27,8 +27,8 @@ class ErgoAssessor(PredictorBase[ErgoInput, ErgoAssessment | None], ABC):
 
     GRAPH_TYPE: GraphEnum
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, batch_size: int | None = None) -> None:
+        super().__init__(batch_size=batch_size)
         self._running: bool = True
 
     @override

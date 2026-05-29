@@ -3,6 +3,8 @@ import threading
 from abc import ABC, abstractmethod
 from typing import Any, Generic, TypeVar
 
+from core.utils.common import get_or_default
+
 INPUT_T = TypeVar("INPUT_T")
 OUTPUT_T = TypeVar("OUTPUT_T")
 PREDICTOR_T = TypeVar("PREDICTOR_T")
@@ -21,12 +23,15 @@ class PredictorFactory(Generic[PREDICTOR_T], ABC):
 
 
 class PredictorBase(Generic[INPUT_T, OUTPUT_T], ABC):
-    def __init__(self) -> None:
+    DEFAULT_BATCH_SIZE: int = 1
+
+    def __init__(self, batch_size: int | None = None) -> None:
         self._logger: logging.Logger = logging.getLogger(
             f"{self.__class__.__module__}.{self.__class__.__name__}"
         )
         self._logger.setLevel(logging.DEBUG)
         self._lock: threading.RLock = threading.RLock()
+        self._batch_size: int = get_or_default(batch_size, self.DEFAULT_BATCH_SIZE)
 
     @abstractmethod
     def _start_impl(self) -> None:
@@ -67,6 +72,8 @@ class PredictorBase(Generic[INPUT_T, OUTPUT_T], ABC):
     ) -> list[OUTPUT_T]:
         """Make prediction on a batch of input. Thread-safe via lock.
 
+        Large batches are chunked by ``_batch_size`` to limit peak memory.
+
         Args:
             input: Batch of inputs.
             preprocess: If True (default), run preprocess on each input
@@ -79,4 +86,10 @@ class PredictorBase(Generic[INPUT_T, OUTPUT_T], ABC):
         with self._lock:
             if not self._is_ready_impl():
                 raise RuntimeError(f"{self.__class__.__name__} is not ready")
-            return self._predict_impl(input, preprocess=preprocess, **kwargs)
+            if len(input) <= self._batch_size:
+                return self._predict_impl(input, preprocess=preprocess, **kwargs)
+            results: list[OUTPUT_T] = []
+            for i in range(0, len(input), self._batch_size):
+                chunk = input[i : i + self._batch_size]
+                results.extend(self._predict_impl(chunk, preprocess=preprocess, **kwargs))
+            return results

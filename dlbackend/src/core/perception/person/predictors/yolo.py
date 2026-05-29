@@ -44,8 +44,9 @@ class YOLOPersonDetector(PersonDetector):
         model_path: str | None = None,
         threshold: float | None = None,
         bbox_expand_scale: float | None = None,
+        batch_size: int | None = None,
     ):
-        super().__init__()
+        super().__init__(batch_size=batch_size)
         self._model_name: str = get_or_default(model_path, self.DEFAULT_MODEL_NAME)
         self._threshold: float = get_or_default(threshold, self.DEFAULT_CONFIDENCE_THRESHOLD)
         self._bbox_expand_scale: float = get_or_default(

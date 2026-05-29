@@ -46,8 +46,8 @@ class AudioEmotionRecognizer(PredictorBase[Audio, RawAudioEmotionDetection]):
         enable_vad=False,
         enable_rms_normalize=False,
     )
-    DEFAULT_INPUT_NAME: str = "input"
-    DEFAULT_OUTPUT_NAME: str = "logits"
+    ONNX_INPUT_NAME: str = "input"
+    ONNX_OUTPUT_NAME: str = "logits"
 
     def __init__(
         self,
@@ -56,8 +56,9 @@ class AudioEmotionRecognizer(PredictorBase[Audio, RawAudioEmotionDetection]):
         labels_path: Path | None = None,
         processor_factory: AudioProcessorFactory | None = None,
         sample_rate: int | None = None,
+        batch_size: int | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(batch_size=batch_size)
 
         model_path = get_or_default(model_path, self.DEFAULT_MODEL_PATH)
         if model_path is None:
@@ -98,7 +99,9 @@ class AudioEmotionRecognizer(PredictorBase[Audio, RawAudioEmotionDetection]):
         self._processor = self._processor_factory.create()
         self._processor.start()
         self._logger.info("Loading model from %s", self._model_path)
-        self._session = prepare_ort_session(self._model_path)
+        warmup_t = self._sample_rate * 10  # 10s at target sample rate
+        warmup = {self.ONNX_INPUT_NAME: np.zeros((self._batch_size, warmup_t), dtype=np.float32)}
+        self._session = prepare_ort_session(self._model_path, warmup_inputs=warmup)
         self._class_names = self._load_classes(self._labels_path)
         self._running = True
         self._logger.info("Ready — %d emotion classes", len(self._class_names))
@@ -146,7 +149,7 @@ class AudioEmotionRecognizer(PredictorBase[Audio, RawAudioEmotionDetection]):
 
         raw_outputs: list[npt.NDArray[np.float32]] = cast(
             list[npt.NDArray[np.float32]],
-            self._session.run([self.DEFAULT_OUTPUT_NAME], {self.DEFAULT_INPUT_NAME: batch}),
+            self._session.run([self.ONNX_OUTPUT_NAME], {self.ONNX_INPUT_NAME: batch}),
         )
         return self._postprocess_batch(raw_outputs, len(input))
 

@@ -42,6 +42,7 @@ class EmotionRecognizer(PredictorBase[cv2t.MatLike, RawEmotionDetection]):
     DEFAULT_REMOTE_URL: str | None = None
     DEFAULT_CLASSES_PATH: Path = RESOURCES_DIR / "posterv2_classes.txt"
     DEFAULT_INPUT_SIZE: tuple[int, int] = (224, 224)
+    ONNX_INPUT_NAME: str = "input"
 
     MEAN: npt.NDArray[np.float32] = np.array([0, 0, 0], dtype=np.float32)
     STD: npt.NDArray[np.float32] = np.array([1, 1, 1], dtype=np.float32)
@@ -52,8 +53,9 @@ class EmotionRecognizer(PredictorBase[cv2t.MatLike, RawEmotionDetection]):
         remote_url: str | None = None,
         classes_path: Path | None = None,
         input_size: tuple[int, int] | None = None,
+        batch_size: int | None = None,
     ) -> None:
-        super().__init__()
+        super().__init__(batch_size=batch_size)
 
         model_path = get_or_default(model_path, self.DEFAULT_MODEL_PATH)
         if model_path is None:
@@ -84,7 +86,9 @@ class EmotionRecognizer(PredictorBase[cv2t.MatLike, RawEmotionDetection]):
 
         self._model_path = ensure_downloaded(self._model_path, remote=self._remote_url)
         self._logger.info("Loading model from %s", self._model_path)
-        self._session = prepare_ort_session(self._model_path)
+        H, W = self._input_size
+        warmup = {self.ONNX_INPUT_NAME: np.zeros((self._batch_size, 3, H, W), dtype=np.float32)}
+        self._session = prepare_ort_session(self._model_path, warmup_inputs=warmup)
         self._class_names = self._load_classes(self._classes_path)
         self._running = True
         self._logger.info("Ready — %d emotion classes", len(self._class_names))
@@ -139,7 +143,7 @@ class EmotionRecognizer(PredictorBase[cv2t.MatLike, RawEmotionDetection]):
         input_np = (input_np / 255.0 - self.MEAN) / self.STD
         input_np = input_np.transpose(0, 3, 1, 2)  # (N, C, H, W)
 
-        raw_outputs: list[npt.NDArray[np.float32]] = self._session.run(None, {"input": input_np})
+        raw_outputs: list[npt.NDArray[np.float32]] = self._session.run(None, {self.ONNX_INPUT_NAME: input_np})
         return self._postprocess_batch(raw_outputs, len(input))
 
     def _postprocess_batch(
