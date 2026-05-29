@@ -154,7 +154,7 @@ function AgentGWMenu({ section, setSection, closeSidebar }: {
             rel="noopener noreferrer"
             style={S.navItem(false)}
             onClick={closeSidebar}
-            title="Opens in a new tab — OpenClaw blocks iframe embedding"
+            title="Opens in a new tab — Agent blocks iframe embedding"
           >
             <span style={{ fontSize: 12, lineHeight: 1 }}>↗</span>
             Gateway

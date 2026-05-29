@@ -433,7 +433,7 @@ export function FlowSection({
                 at: selectedTurn.startTime,
                 label: `${selectedTurn.type} @ ${new Date(selectedTurn.startTime).toLocaleTimeString()}`,
               })}
-              title="Show the OpenClaw compaction summary that was active at the moment this turn fired — the text injected at the top of this turn's prompt."
+              title="Show the Agent compaction summary that was active at the moment this turn fired — the text injected at the top of this turn's prompt."
               style={{
                 fontSize: 10, padding: "2px 8px", borderRadius: 4,
                 background: "var(--lm-purple)", border: "1px solid var(--lm-purple)",
@@ -512,8 +512,8 @@ export function FlowSection({
             <button
               onClick={() => setShowCompaction(true)}
               title={
-                "Xem 'bộ nhớ tóm tắt' mà OpenClaw tự sinh và chèn vào đầu prompt của MỖI turn agent.\n\n" +
-                "• Vì sao cần: khi context vượt ~80k tokens, OpenClaw auto-compact — gộp history cũ thành 1 đoạn summary, rồi dùng summary này thay cho history đến lần compact tiếp theo.\n" +
+                "Xem 'bộ nhớ tóm tắt' mà Agent tự sinh và chèn vào đầu prompt của MỖI turn agent.\n\n" +
+                "• Vì sao cần: khi context vượt ~80k tokens, Agent auto-compact — gộp history cũ thành 1 đoạn summary, rồi dùng summary này thay cho history đến lần compact tiếp theo.\n" +
                 "• Rủi ro: nếu summary vô tình copy/méo rule từ SKILL.md, KNOWLEDGE.md, SOUL.md → agent sẽ theo summary (đứng đầu prompt) thay vì SKILL.md → Lamp trả lời sai lý do không giải thích nổi.\n\n" +
                 "Click để xem: timestamp, summary chars, session file, và TOÀN VĂN summary đang điều khiển Lamp."
               }
@@ -531,7 +531,7 @@ export function FlowSection({
             <button
               type="button"
               onClick={() => void downloadFlowBundle()}
-              title={`Downloads 3 files: (1) server JSONL last ${FLOW_EVENTS_MAX} lines — same tail as this panel; (2) UI snapshot JSON (events + turns); (3) OpenClaw debug payload JSONL.`}
+              title={`Downloads 3 files: (1) server JSONL last ${FLOW_EVENTS_MAX} lines — same tail as this panel; (2) UI snapshot JSON (events + turns); (3) Agent debug payload JSONL.`}
               style={flowGhostBtn}
             >↓ Bundle</button>
             <a
@@ -546,7 +546,7 @@ export function FlowSection({
             {/* Destructive */}
             <button
               onClick={clearServerFlowLog}
-              title="Clear server flow log + OpenClaw debug logs"
+              title="Clear server flow log + Agent debug logs"
               style={flowDangerBtn}
             >🗑 Clear</button>
           </div>

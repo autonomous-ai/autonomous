@@ -98,7 +98,7 @@ export const FLOW_NODES: FlowNodeDef[] = [
 
   { id: "agent_call",
     label: "Agent Call", short: "AGENT", icon: "🤖", color: "var(--lm-blue)", path: "agent",
-    desc: "WebSocket chat.send RPC to OpenClaw",
+    desc: "WebSocket chat.send RPC to Agent",
     triggers: [
       "flow_event:agent_call", "flow_enter:agent_call", "flow_exit:agent_call",
       "flow_event:lifecycle_start",
@@ -144,7 +144,7 @@ export const FLOW_NODES: FlowNodeDef[] = [
 
   { id: "schedule_trigger",
     label: "Schedule", short: "CRON", icon: "⏰", color: "#f97316", path: "agent",
-    desc: "Cron/timer fired by OpenClaw · agent turn triggered by schedule",
+    desc: "Cron/timer fired by Agent · agent turn triggered by schedule",
     triggers: [
       "schedule_trigger", "flow_event:schedule_trigger",
       "flow_enter:schedule_trigger", "flow_exit:schedule_trigger",
@@ -173,7 +173,7 @@ export const FLOW_NODES: FlowNodeDef[] = [
   { id: "tg_out",
     label: "Channel Out", short: "CH OUT", icon: "💬", color: "#229ed9", path: "agent",
     shape: "diamond",
-    desc: "OpenClaw delivers response to messaging channel (Telegram, Discord, Slack, etc.)",
+    desc: "Agent delivers response to messaging channel (Telegram, Discord, Slack, etc.)",
     triggers: [
       "flow_event:telegram_alert_broadcast",
     ] },
