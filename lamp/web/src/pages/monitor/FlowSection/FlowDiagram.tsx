@@ -298,7 +298,7 @@ export function FlowDiagram({
             fill="var(--lm-blue)" fontSize={11} fontWeight={700}
             fontFamily="monospace" opacity={0.6}
             style={{ letterSpacing: "0.08em" }}>
-            OpenClaw
+            Agent
           </text>
         </g>
 
@@ -474,7 +474,7 @@ export function FlowDiagram({
           // a bug report or log.
           const buildPipelineText = (): string => {
             const lines: string[] = [];
-            lines.push(`⟨openclaw event pipeline⟩`);
+            lines.push(`⟨agent event pipeline⟩`);
             if (headerSummary) lines.push(`⏱ ${headerSummary}`);
             for (let i = 0; i < pipelineRows.length; i++) {
               const r = pipelineRows[i];
@@ -518,7 +518,7 @@ export function FlowDiagram({
             done();
           };
           const guideEntries: { stream: string; desc: string; common: boolean }[] = [
-            { stream: "lifecycle:start", desc: "Turn begins. OpenClaw acked chat.send and is about to call the LLM.", common: true },
+            { stream: "lifecycle:start", desc: "Turn begins. Agent acked chat.send and is about to call the LLM.", common: true },
             { stream: "thinking",            desc: "LLM reasoning delta. Codex thinking=low / Claude extended thinking. Many per turn.", common: true },
             { stream: "thinking:first_token",desc: "Marker — first delta of the thinking stream. Persisted to JSONL so reloaded turns show when reasoning began. Only fires when extended thinking is enabled.", common: false },
             { stream: "assistant",           desc: "LLM reply text delta. The string that becomes the assistant message / TTS.", common: true },
@@ -544,7 +544,7 @@ export function FlowDiagram({
               <text x={px + 8} y={py + 12}
                 fill={pipelineColor} fontSize={7} fontWeight={700}
                 fontFamily="monospace" opacity={0.85} style={{ letterSpacing: "0.06em" }}>
-                ⟨openclaw event pipeline⟩
+                ⟨agent event pipeline⟩
               </text>
               {/* Copy button: just left of the guide ?. Copies the pipeline
                   content as plain text to the clipboard. */}
@@ -716,7 +716,7 @@ export function FlowDiagram({
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, alignItems: "center" }}>
                       <span style={{ fontWeight: 700, color: "#0A2A1F", fontSize: 7.5 }}>
-                        OpenClaw streams (event:"agent")
+                        Agent streams (event:"agent")
                       </span>
                       <button
                         type="button"

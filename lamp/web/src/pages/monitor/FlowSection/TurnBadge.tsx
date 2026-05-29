@@ -64,7 +64,7 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
       (ev.detail as Record<string, any>)?.node === "turn_steered"
     )
   );
-  const pathLabel = turn.path === "agent" ? "OpenClaw" : turn.path === "dropped" ? "dropped" : turn.path === "queued" ? "queued" : turn.path;
+  const pathLabel = turn.path === "agent" ? "Agent" : turn.path === "dropped" ? "dropped" : turn.path === "queued" ? "queued" : turn.path;
 
   return (
     <div style={{
@@ -146,7 +146,7 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
       </div>
       {/* Turn ID for tracing — label by ID origin (Lamp-emitted vs OpenClaw-assigned UUID) */}
       <div style={{ fontSize: 8, color: "var(--lm-text)", fontFamily: "monospace", marginBottom: 3, opacity: 0.7 }}>
-        {turn.id.startsWith("lamp-") ? "lamp id" : "openclaw uuid"}: {turn.id}
+        {turn.id.startsWith("lamp-") ? "lamp id" : "agent uuid"}: {turn.id}
       </div>
       {/* Row 2: input */}
       <div style={{
@@ -261,10 +261,10 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
       ) : hasEmptyFinalNoLifecycle ? (
         <div
           title={
-            "OpenClaw sent state:final with empty message for this Lamp run_id, and never opened a lifecycle for it.\n\n" +
+            "Agent sent state:final with empty message for this Lamp run_id, and never opened a lifecycle for it.\n\n" +
             "To find the likely paired turn:\n" +
-            "  • Scan ±10s in the list for an 'openclaw uuid' turn with matching input text.\n" +
-            "  • If found → OpenClaw likely re-fired this message under its own UUID (source:\"channel\"), or merged it into that concurrent turn. The actual reply lives there.\n" +
+            "  • Scan ±10s in the list for an 'agent uuid' turn with matching input text.\n" +
+            "  • If found → Agent likely re-fired this message under its own UUID (source:\"channel\"), or merged it into that concurrent turn. The actual reply lives there.\n" +
             "  • If no UUID turn with matching input → the message was steered into an already-running concurrent turn, or dropped silently.\n\n" +
             "Adjacent paired turns are tinted purple in the list."
           }
@@ -274,7 +274,7 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
             fontWeight: 700, cursor: "help",
           }}
         >
-          ⚠ OpenClaw closed stream · no message · no lifecycle
+          ⚠ Agent closed stream · no message · no lifecycle
         </div>
       ) : turn.status === "done" ? (
         <div style={{
