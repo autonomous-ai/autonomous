@@ -20,8 +20,8 @@
 # Variables
 # ---------------------------------------------------------------------------
 
-NGINX_CONF ?= /workspace/ai-lamp-lumi/dlbackend/nginx.conf
-NGINX_SSL_CONF ?= /workspace/ai-lamp-lumi/dlbackend/nginx-ssl.conf
+NGINX_CONF ?= /workspace/lamp/dlbackend/nginx.conf
+NGINX_SSL_CONF ?= /workspace/lamp/dlbackend/nginx-ssl.conf
 SSL_DIR ?= /workspace/ssl
 SSL_CERT ?= $(SSL_DIR)/cert.pem
 SSL_KEY ?= $(SSL_DIR)/key.pem
