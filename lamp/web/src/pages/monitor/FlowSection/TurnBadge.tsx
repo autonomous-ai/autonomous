@@ -30,7 +30,7 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
     : turn.status === "error" ? "var(--lm-red)"
     : "var(--lm-amber)";
   const icon = SOURCE_ICON[turn.type] ?? SOURCE_ICON.unknown;
-  const { input, output, hwOutput, snapshotUrls, poseBucket } = turnIO(turn);
+  const { input, output, hwOutput, snapshotUrls, audioUrls, poseBucket } = turnIO(turn);
   // When a motion.activity turn folded in a posture nudge, append the
   // first two worst pose snapshots to the existing strip (capped to 3
   // tiles total including the motion frame). The remaining samples are
@@ -171,6 +171,27 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
                 cursor: "pointer",
               }}
             />
+          ))}
+        </div>
+      )}
+      {audioUrls.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 4 }}>
+          {audioUrls.map((url, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span
+                title="Debug clip that produced this emotion — not sent to the LLM"
+                style={{ fontSize: 9, color: "var(--lm-text-dim)", whiteSpace: "nowrap" }}
+              >
+                🎙 debug
+              </span>
+              <audio
+                controls
+                preload="none"
+                src={url}
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: "100%", height: 28 }}
+              />
+            </div>
           ))}
         </div>
       )}

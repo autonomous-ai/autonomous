@@ -51,6 +51,13 @@ type SensingEventRequest struct {
 	// event fired while a friend was still present (Lamp would downgrade
 	// mood to "unknown" even though the friend was within forget window).
 	CurrentUser string `json:"current_user,omitempty"`
+	// Audio is an optional path (on the Pi) to the WAV clip that produced this
+	// event — currently only speech_emotion.detected, carrying the latest clip
+	// of the dominant label this flush. It is a DEBUG aid surfaced in the Flow
+	// Monitor UI as a clickable player; it is NEVER forwarded to the LLM (the
+	// field is not part of Message and is never concatenated into the outgoing
+	// chat text). Served back to the UI via GetAudio.
+	Audio string `json:"audio,omitempty"`
 }
 
 // SensingHandler handles incoming sensing events from LeLamp and forwards them to the agent.
@@ -108,6 +115,11 @@ func (h *SensingHandler) PostEvent(c *gin.Context) {
 
 	// Push sensing input to monitor.
 	monitorDetail := map[string]any{"type": req.Type}
+	// Surface the debug audio clip (speech_emotion) to the Flow Monitor UI only
+	// — as a servable URL, never the raw path, and never to the LLM.
+	if audioURL := audioURLForPath(req.Audio); audioURL != "" {
+		monitorDetail["audio"] = audioURL
+	}
 	h.monitorBus.Push(domain.MonitorEvent{
 		Type:    "sensing_input",
 		Summary: "[" + req.Type + "] " + req.Message,
@@ -553,6 +565,49 @@ func (h *SensingHandler) GetSnapshot(c *gin.Context) {
 		"/tmp/lamp-motion-snapshots",
 	} {
 		p := filepath.Join(dir, category, name)
+		if _, err := os.Stat(p); err == nil {
+			c.File(p)
+			return
+		}
+	}
+	c.Status(http.StatusNotFound)
+}
+
+// speechEmotionAudioDirs are the on-Pi locations where the speech_emotion
+// service writes its debug WAV clips (mirrors LELAMP_SPEECH_EMOTION_AUDIO_DIR
+// default + a persistent fallback). GetAudio serves files by basename from
+// these dirs only.
+var speechEmotionAudioDirs = []string{
+	"/var/lib/lelamp/speech-emotion",
+	"/tmp/lamp-speech-emotion",
+}
+
+// audioURLForPath maps a raw on-Pi WAV path (from SensingEventRequest.Audio)
+// to a UI-servable URL, or "" when the path is empty / not a .wav. Only the
+// basename is exposed so the full filesystem path never leaks to the UI.
+func audioURLForPath(path string) string {
+	if path == "" {
+		return ""
+	}
+	name := filepath.Base(path)
+	if !strings.HasSuffix(name, ".wav") {
+		return ""
+	}
+	return "/api/sensing/audio/" + name
+}
+
+// GetAudio serves a speech_emotion debug WAV clip by basename. This is a
+// debug-only affordance for the Flow Monitor UI; the audio is never sent to
+// the LLM. The speech_emotion service names clips <ms>_<user>_<label>.wav with
+// user/label sanitized to [a-zA-Z0-9_-], so a strict basename check suffices.
+func (h *SensingHandler) GetAudio(c *gin.Context) {
+	name := c.Param("name")
+	if !strings.HasSuffix(name, ".wav") || strings.ContainsAny(name, "/\\") || strings.Contains(name, "..") {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	for _, dir := range speechEmotionAudioDirs {
+		p := filepath.Join(dir, name)
 		if _, err := os.Stat(p); err == nil {
 			c.File(p)
 			return
