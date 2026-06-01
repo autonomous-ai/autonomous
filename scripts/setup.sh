@@ -1009,7 +1009,6 @@ sleep 1
 
 # switch to AP mode
 iw dev wlan0 set type __ap
-iw dev wlan0 set channel 6
 sleep 1
 
 # Bring interface up
@@ -1025,9 +1024,13 @@ ip addr add 192.168.100.1/24 dev wlan0
 # can no longer reach it. Best-effort: resolvconf may not be installed.
 command -v resolvconf >/dev/null 2>&1 && resolvconf -d wlan0.dhcp 2>/dev/null || true
 
-# Enable AP services
+# Enable AP services — start nginx+dnsmasq first so web UI is ready before
+# the SSID becomes visible, preventing a 404 on first connect.
 systemctl unmask hostapd dnsmasq 2>/dev/null || true
 systemctl enable hostapd dnsmasq
+
+systemctl restart nginx 2>/dev/null || true
+systemctl restart dnsmasq
 
 systemctl restart hostapd
 sleep 2
@@ -1075,12 +1078,6 @@ fi
 # work when switching back to AP mode.
 grep -q '^address=/#/' /etc/dnsmasq.d/99-lamp.conf 2>/dev/null || \
   echo 'address=/#/192.168.100.1' >> /etc/dnsmasq.d/99-lamp.conf
-
-# Restart DHCP server
-systemctl restart dnsmasq
-
-# Restart web service if using captive portal
-systemctl restart nginx 2>/dev/null || true
 
 echo "AP MODE ENABLED"
 EOF
