@@ -39,9 +39,8 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, PointElement, LineEleme
 const EMBED_SECTIONS = new Set<Section>(["api-docs", "agent-config"]);
 
 // Sections shown to non-debug users. Append `?debug=true` to the URL to reveal
-// the full menu (Flow, Camera, Sensing, Analytics, Servo, Logs, CLI, API Docs,
-// Agent gateway).
-const PUBLIC_SECTIONS = new Set<Section>(["chat", "overview", "system", "face-owners", "bluetooth"]);
+// the full menu (Sensing, Analytics, Servo, Logs, CLI, API Docs, Agent gateway).
+const PUBLIC_SECTIONS = new Set<Section>(["chat", "overview", "system", "flow", "camera", "face-owners", "bluetooth"]);
 
 const iframeStyle: React.CSSProperties = {
   width: "100%",
