@@ -29,7 +29,7 @@ var openclawSemverRe = regexp.MustCompile(`(\d+\.\d+\.\d+(?:[-+._][0-9A-Za-z.-]+
 // via populateOpenClawVersion(); stays valid until the process restarts.
 var openClawVersion atomic.Pointer[string]
 
-// GetOpenClawVersion returns the cached OpenClaw binary version (e.g. "2026.5.7").
+// GetOpenClawVersion returns the cached OpenClaw binary version (e.g. "2026.5.27").
 // Empty string if openclaw is not installed or version has not been populated yet.
 func GetOpenClawVersion() string {
 	if v := openClawVersion.Load(); v != nil {

@@ -31,7 +31,7 @@ OTA_METADATA_URL="${OTA_METADATA_URL:-https://storage.googleapis.com/s3-autonomo
 AP_BAND="${AP_BAND:-2.4}"
 AP_CHANNEL="${AP_CHANNEL:-}"
 COUNTRY_CODE="${COUNTRY_CODE:-US}"
-OPENCLAW_VERSION="${OPENCLAW_VERSION:-2026.5.7}"
+OPENCLAW_VERSION="${OPENCLAW_VERSION:-2026.5.27}"
 
 # Google Drive file ID for the bookworm server image. Override via env var when
 # the dev team rotates the .7z (new Orange Pi release).
