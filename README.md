@@ -100,7 +100,7 @@ make upload-lelamp         # push Python runtime
 make upload-web            # push web/dist
 make upload-skills         # push resources/openclaw-skills/ (skill files for the agentic gateway)
 make upload-all            # everything except the gateway itself
-make upload-openclaw 2026.5.2  # explicit gateway version bump (not in upload-all)
+make upload-openclaw 2026.5.27  # explicit gateway version bump (not in upload-all)
 ```
 
 ## API Response Convention

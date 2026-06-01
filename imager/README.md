@@ -104,7 +104,7 @@ All env vars; override at the `make` call.
 | `TARGET` | `opi` | `opi` or `rpi` — picks builder script + output filename |
 | `OUT_IMG_SIZE` | `14G` | Partition size after expansion. ext4 fills this; xz compresses unused space away. SD card must be ≥ this (lamp-resize-once will expand further on first boot if SD is larger). |
 | `OPI_FILE_ID` | `1CYfOaY6f5DozJBNvPJ0Gx1jBIFlGe8fn` | Google Drive file ID for `Orangepi4pro_1.0.6_debian_bookworm_server_*.7z`. Bump when the dev team uploads a new vendor release. |
-| `OPENCLAW_VERSION` | `2026.5.7` | npm package version pin. Bump as OpenClaw releases. |
+| `OPENCLAW_VERSION` | `2026.5.27` | npm package version pin. Bump as OpenClaw releases. |
 | `OTA_METADATA_URL` | `https://storage.googleapis.com/s3-autonomous-upgrade-3/lamp/ota/metadata.json` | Backend binaries source. Used by Phase 3 to download `lamp-server`, `bootstrap-server`, `lelamp`, `web`, optional `claude-desktop-buddy`. |
 | `AP_BAND` | `2.4` | `2.4` or `5` — hostapd hw_mode. 5 GHz needs chip + regulatory support. |
 | `AP_CHANNEL` | `6` (2.4 GHz) / `36` (5 GHz) | hostapd channel |
@@ -179,7 +179,7 @@ Source image:
 - sha256:   …
 
 Build config:
-- openclaw: 2026.5.7
+- openclaw: 2026.5.27
 - out_size: 14G
 - ota_url:  https://storage.googleapis.com/.../metadata.json
 ```

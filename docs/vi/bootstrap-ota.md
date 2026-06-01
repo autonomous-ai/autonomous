@@ -64,7 +64,7 @@ File JSON duy nhất trên GCS. Tất cả thành phần tham chiếu file này.
     "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/web/0.9.0/setup-0.9.0.zip"
   },
   "openclaw": {
-    "version": "2026.3.8"
+    "version": "2026.5.27"
   },
   "lelamp": {
     "version": "1.0.0",
@@ -218,7 +218,7 @@ Lưu version đã cài của mỗi thành phần:
     "lamp": "1.2.3",
     "bootstrap": "1.0.5",
     "web": "0.9.0",
-    "openclaw": "2026.3.8",
+    "openclaw": "2026.5.27",
     "lelamp": "1.0.0"
   }
 }
