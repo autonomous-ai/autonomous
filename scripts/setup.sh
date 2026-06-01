@@ -1024,6 +1024,13 @@ ip addr add 192.168.100.1/24 dev wlan0
 # can no longer reach it. Best-effort: resolvconf may not be installed.
 command -v resolvconf >/dev/null 2>&1 && resolvconf -d wlan0.dhcp 2>/dev/null || true
 
+# Restore captive-portal DNS wildcard before starting dnsmasq — device-sta-mode
+# strips this line so DNS resolves correctly in STA mode; must be re-added here
+# so dnsmasq loads with the wildcard active on first start, not just after a
+# second restart.
+grep -q '^address=/#/' /etc/dnsmasq.d/99-lamp.conf 2>/dev/null || \
+  echo 'address=/#/192.168.100.1' >> /etc/dnsmasq.d/99-lamp.conf
+
 # Enable AP services — start nginx+dnsmasq first so web UI is ready before
 # the SSID becomes visible, preventing a 404 on first connect.
 systemctl unmask hostapd dnsmasq 2>/dev/null || true
@@ -1072,12 +1079,6 @@ if ! systemctl is-active --quiet hostapd; then
 
   exit 1
 fi
-
-# Restore captive-portal DNS wildcard — device-sta-mode strips this line so
-# DNS resolves correctly in STA mode; re-add it here so setup page redirects
-# work when switching back to AP mode.
-grep -q '^address=/#/' /etc/dnsmasq.d/99-lamp.conf 2>/dev/null || \
-  echo 'address=/#/192.168.100.1' >> /etc/dnsmasq.d/99-lamp.conf
 
 echo "AP MODE ENABLED"
 EOF
