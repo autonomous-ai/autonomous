@@ -120,7 +120,7 @@ func (s *Service) runWSConn(ctx context.Context, handler domain.AgentEventHandle
 		"id":     "lamp-1",
 		"method": "connect",
 		"params": map[string]interface{}{
-			"minProtocol": 4,
+			"minProtocol": 3,
 			"maxProtocol": 4,
 			"client": map[string]interface{}{
 				"id":       "node-host",
