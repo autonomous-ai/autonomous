@@ -1272,6 +1272,7 @@ export function turnIO(turn: Turn): {
   output: string;
   hwOutput: string;
   snapshotUrls: string[];
+  audioUrls: string[];
   poseBucket?: { id: string; files: string[] } | null;
 } {
   let input = "";
@@ -1279,6 +1280,7 @@ export function turnIO(turn: Turn): {
   let outputFromIntent = false;
   let hwOutput = "";
   const snapshotUrls: string[] = [];
+  const audioUrls: string[] = [];
   let poseBucket: { id: string; files: string[] } | null = null;
   const turnRunId = turn.runId;
   for (const ev of turn.events) {
@@ -1291,6 +1293,13 @@ export function turnIO(turn: Turn): {
       if (!input) {
         const m = ev.summary.match(/^\[([^\]]+)\]\s*(.*)/);
         input = dataMsg || (m ? m[2] : "") || ev.summary;
+      }
+      // Debug audio clip (speech_emotion) — carried as a servable URL in the
+      // sensing_input detail by the Lamp backend, never in the message text
+      // (audio is never sent to the LLM). Surfaced as a click-to-play player.
+      const audioUrl = d?.data?.audio ?? d?.audio;
+      if (typeof audioUrl === "string" && audioUrl && !audioUrls.includes(audioUrl)) {
+        audioUrls.push(audioUrl);
       }
       // Extract snapshot paths from sensing_input (backend strips [snapshot:...] from chat_send
       // text, so sensing_input is the authoritative source for the Monitor turn-item thumbnails).
@@ -1406,7 +1415,7 @@ export function turnIO(turn: Turn): {
       }
     }
   }
-  return { input, output, hwOutput, snapshotUrls, poseBucket };
+  return { input, output, hwOutput, snapshotUrls, audioUrls, poseBucket };
 }
 
 // Scan a turn for the backend-injected `[context: current_user=X]` tag and

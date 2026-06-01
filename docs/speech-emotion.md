@@ -129,13 +129,45 @@ Content-Type: application/json
 {
   "type": "speech_emotion.detected",
   "message": "Speech emotion detected: Sad. (weak voice cue; confidence=0.72; bucket=negative; treat as uncertain, do not assume the user is distressed.)",
-  "current_user": "alice"
+  "current_user": "alice",
+  "audio": "/tmp/lamp-speech-emotion/1715587812413_alice_sad.wav"
 }
 ```
 
 The raw `Speech emotion detected: <Label>.` prefix is the parser anchor for Lamp-side routing. The parenthetical is a hedge clause to stop the LLM from over-committing on noisy SER reads — same pattern as the facial `Emotion detected: …` message.
 
+The `audio` field is a **separate, optional** field — the on-disk path of the WAV clip that produced this event. It is **not** embedded in `message` and is **never** forwarded to the LLM (see [Debug Audio Persistence](#debug-audio-persistence) below). Empty when persistence is disabled or the write failed.
+
 Retry policy: 3 attempts with 2 s back-off on `ConnectionError` or HTTP `503`. Other 4xx/5xx are logged and dropped (the sample is gone — we don't retry-storm Lamp).
+
+---
+
+## Debug Audio Persistence
+
+To make noisy SER reads debuggable, the service persists the WAV clip behind each event and surfaces it in the Flow Monitor UI as a click-to-play player. **This is a debug aid only — the audio is never sent to the LLM.**
+
+### Write side (LeLamp)
+
+In `_process_job`, every inference that clears the per-label confidence gate is written to disk by `_persist_wav()` before it lands in the buffer:
+
+- **Directory:** `SPEECH_EMOTION_AUDIO_DIR` (config in `lelamp/config.py`, env `LELAMP_SPEECH_EMOTION_AUDIO_DIR`), default `<tempdir>/lamp-speech-emotion` (i.e. `/tmp/lamp-speech-emotion`). Created with `os.makedirs(exist_ok=True)` at init; if creation fails the directory is disabled and every POST carries an empty `audio` field (graceful degradation — SER keeps working).
+- **Filename:** `<ms>_<user>_<label>.wav`, where `<ms>` is the inference timestamp in milliseconds and `<user>`/`<label>` are sanitized to `[a-zA-Z0-9_-]` (anything else collapsed to `_`).
+- **Flush selection:** when a user's flush emits the dominant non-neutral label, it attaches the **latest** clip among the dominant-label inferences — `max(dom_inferences, key=lambda i: i.ts).audio_path` — as the `audio` field in the POST.
+
+### Serve side (Lamp)
+
+The Lamp backend exposes the clip to the Flow Monitor UI **only** via a new route `GET /api/sensing/audio/:name` (`SensingHandler.GetAudio`). It serves the WAV by **basename** (the full path never leaves the Pi) from one of:
+
+```
+/var/lib/lelamp/speech-emotion
+/tmp/lamp-speech-emotion
+```
+
+The basename is validated (`.wav` suffix, no `/`, `\`, or `..`) before serving. On `PostEvent`, the raw `audio` path is mapped to a servable URL (`/api/sensing/audio/<name>`) and attached to the Monitor `sensing_input` event detail; the Monitor turn item renders it as a clickable audio player. The raw path is never exposed to the UI, and the `audio` field is never concatenated into the outgoing chat text.
+
+### Known limitation: no cleanup
+
+Every qualifying inference's WAV is persisted — including neutral / non-dominant clips that never become an event. There is currently **no automatic cleanup** of the audio directory, so it can grow over time and should be pruned manually (or via external housekeeping) on long-running devices.
 
 ---
 

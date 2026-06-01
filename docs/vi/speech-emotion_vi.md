@@ -117,11 +117,43 @@ POST http://127.0.0.1:5000/api/sensing/event
 {
   "type": "speech_emotion.detected",
   "message": "Speech emotion detected: Sad. (weak voice cue; confidence=0.72; bucket=negative; ...)",
-  "metadata": { "user": "alice", "label": "sad", "bucket": "negative", "confidence": 0.72, ... }
+  "current_user": "alice",
+  "audio": "/tmp/lamp-speech-emotion/1715587812413_alice_sad.wav"
 }
 ```
 
+Trường `audio` là field **riêng, tùy chọn** — đường dẫn trên đĩa tới clip WAV sinh ra event này. Nó **không** nằm trong `message` và **không bao giờ** được gửi tới LLM (xem [Lưu Audio Để Gỡ Lỗi](#lưu-audio-để-gỡ-lỗi) bên dưới). Rỗng khi persistence bị tắt hoặc ghi file thất bại.
+
 OpenClaw / sensing pipeline xử lý như sự kiện sensing khác (xem [sensing-behavior_vi.md](sensing-behavior_vi.md)).
+
+---
+
+## Lưu Audio Để Gỡ Lỗi
+
+Để debug các lần đọc SER nhiễu, service lưu lại clip WAV đứng sau mỗi event và hiển thị nó trong Flow Monitor UI dưới dạng trình phát bấm-để-nghe. **Đây chỉ là công cụ gỡ lỗi — audio không bao giờ được gửi tới LLM.**
+
+### Phía ghi (LeLamp)
+
+Trong `_process_job`, mọi inference vượt qua ngưỡng confidence theo label đều được ghi ra đĩa bởi `_persist_wav()` trước khi vào buffer:
+
+- **Thư mục:** `SPEECH_EMOTION_AUDIO_DIR` (cấu hình trong `lelamp/config.py`, env `LELAMP_SPEECH_EMOTION_AUDIO_DIR`), mặc định `<tempdir>/lamp-speech-emotion` (tức `/tmp/lamp-speech-emotion`). Tạo bằng `os.makedirs(exist_ok=True)` lúc khởi tạo; nếu tạo thất bại thì thư mục bị tắt và mọi POST mang trường `audio` rỗng (graceful degradation — SER vẫn chạy bình thường).
+- **Tên file:** `<ms>_<user>_<label>.wav`, trong đó `<ms>` là timestamp inference tính bằng mili-giây, còn `<user>`/`<label>` được sanitize về `[a-zA-Z0-9_-]` (ký tự khác gộp thành `_`).
+- **Chọn lúc flush:** khi flush của một user phát ra label dominant non-neutral, nó đính kèm clip **mới nhất** trong nhóm inference cùng label dominant — `max(dom_inferences, key=lambda i: i.ts).audio_path` — làm trường `audio` trong POST.
+
+### Phía phục vụ (Lamp)
+
+Lamp backend chỉ expose clip cho Flow Monitor UI qua route mới `GET /api/sensing/audio/:name` (`SensingHandler.GetAudio`). Nó phục vụ WAV theo **basename** (đường dẫn đầy đủ không bao giờ rời khỏi Pi) từ một trong:
+
+```
+/var/lib/lelamp/speech-emotion
+/tmp/lamp-speech-emotion
+```
+
+Basename được kiểm tra (đuôi `.wav`, không chứa `/`, `\`, hay `..`) trước khi phục vụ. Trong `PostEvent`, đường dẫn `audio` thô được map sang URL phục vụ được (`/api/sensing/audio/<name>`) và đính vào detail của event Monitor `sensing_input`; turn item của Monitor render thành trình phát audio bấm được. Đường dẫn thô không bao giờ lộ ra UI, và trường `audio` không bao giờ bị nối vào chuỗi chat gửi đi.
+
+### Giới hạn đã biết: không tự dọn dẹp
+
+Mọi inference đạt ngưỡng đều được lưu WAV — kể cả clip neutral / non-dominant không bao giờ trở thành event. Hiện **chưa có cơ chế tự động dọn** thư mục audio, nên nó có thể phình lên theo thời gian và cần được dọn thủ công (hoặc qua housekeeping bên ngoài) trên thiết bị chạy lâu.
 
 ---
 
