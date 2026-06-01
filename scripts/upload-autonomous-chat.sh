@@ -3,8 +3,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-AUTONOMOUS_CHAT_BIN="${ROOT_DIR}/autonomous-chat-hook/autonomous-chat"
-VERSION_FILE="${ROOT_DIR}/autonomous-chat-hook/${VERSION_FILE:-VERSION_AUTONOMOUS_CHAT}"
+AUTONOMOUS_CHAT_BIN="${ROOT_DIR}/chat-hooks/autonomous-chat-hook/autonomous-chat"
+VERSION_FILE="${ROOT_DIR}/chat-hooks/autonomous-chat-hook/${VERSION_FILE:-VERSION_AUTONOMOUS_CHAT}"
 
 # Bucket and path: lamp/ota/autonomous-chat/[semver].zip
 GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"

@@ -3,8 +3,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-TWITCH_IRC_BIN="${ROOT_DIR}/twitch-chat-hook/twitch-irc"
-VERSION_FILE="${ROOT_DIR}/twitch-chat-hook/${VERSION_FILE:-VERSION_TWITCH_IRC}"
+TWITCH_IRC_BIN="${ROOT_DIR}/chat-hooks/twitch-chat-hook/twitch-irc"
+VERSION_FILE="${ROOT_DIR}/chat-hooks/twitch-chat-hook/${VERSION_FILE:-VERSION_TWITCH_IRC}"
 
 # Bucket and path: lamp/ota/twitch-irc/[semver].zip
 GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"

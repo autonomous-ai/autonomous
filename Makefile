@@ -7,8 +7,8 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 LAMP_DIR       := lamp
 LELAMP_DIR     := lelamp
 BUDDY_DIR      := claude-desktop-buddy
-TWITCH_DIR     := twitch-chat-hook
-AUTONOMOUS_DIR := autonomous-chat-hook
+TWITCH_DIR     := chat-hooks/twitch-chat-hook
+AUTONOMOUS_DIR := chat-hooks/autonomous-chat-hook
 WEB_DIR        := $(LAMP_DIR)/web
 
 # Go build
