@@ -588,6 +588,7 @@ func (s *Server) Serve(closeFn func()) error {
 	sensing := api.Group("sensing")
 	sensing.POST("event", sameOriginOrLAN(), s.sensingHandler.PostEvent)
 	sensing.GET("snapshot/:category/:name", s.sensingHandler.GetSnapshot)
+	sensing.GET("audio/:name", s.sensingHandler.GetAudio)
 
 	// Voice file delete (filesystem orchestration on Pi). Voice enroll
 	// itself lives on lelamp at /hw/speaker/record-enroll because hardware
