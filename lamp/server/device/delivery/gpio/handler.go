@@ -70,22 +70,7 @@ func (h *DeviceGPIOHandler) powerOff() {
 }
 
 func (h *DeviceGPIOHandler) factoryReset() {
-	slog.Info("factory reset (10s hold)", "component", "device-button")
-
-	// Match the openclaw-lobster reset-button flow: roll the whole Btrfs root
-	// back to the @factory golden snapshot, then reboot. @factory is the
-	// build-time image and contains NO /root/config, so the device comes back
-	// exactly like a freshly-flashed golden image — golden binaries AND not set
-	// up (the setup wizard runs again). On success fr-rollback reboots and this
-	// never returns. When the script is missing or fails (e.g. a non-Btrfs
-	// image) fall through to the board-agnostic soft reset below.
-	if out, err := exec.Command("/usr/local/bin/fr-rollback").CombinedOutput(); err != nil {
-		slog.Warn("fr-rollback unavailable/failed, falling back to soft reset",
-			"component", "device-button", "error", err, "output", string(out))
-	} else {
-		return // fr-rollback triggers reboot; unreachable on success
-	}
-
+	slog.Info("factory reset", "component", "device-button")
 	if err := h.agentGateway.ResetAgent(); err != nil {
 		slog.Error("reset agent failed", "component", "device-button", "error", err)
 		return

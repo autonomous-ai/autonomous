@@ -504,19 +504,14 @@ func (s *Server) Serve(closeFn func()) error {
 	// English even when STTLanguage is "vi"/"zh-*".
 	i18n.SetConfig(s.config)
 
-	// device button (GPIO26): dev/test boards wire a tactile button here for the
-	// lamp-server reset flow (short=restart agent, >=3s=power off, >=10s=factory
-	// reset). Production lamps instead use the GPIO17 button owned by lelamp
-	// (single=stop, triple=reboot, long=shutdown) — a different pin, so the two
-	// coexist. ProvideDeviceButtonOptional already opened the GPIO line; it's nil
-	// when no line is available (dev machine / line busy), so we skip silently.
-	if s.deviceButton != nil {
-		slog.Info("[device button] watching GPIO26 (short=restart, >=3s=poweroff, >=10s=factory reset)", "component", "server")
-		s.deviceButton.Start(context.Background(), s.deviceGPIOHandler.HandlePress, s.deviceGPIOHandler.HandlePressAndHold)
-		defer s.deviceButton.Close()
-	} else {
-		slog.Info("[device button] GPIO unavailable — reset button disabled", "component", "server")
-	}
+	// device button — disabled here so lelamp (Python) gpio_button can grab
+	// GPIO17. Long-press shutdown w/ servo release lives in lelamp.
+	// if err := s.deviceButton.Init(); err == nil {
+	// 	s.deviceButton.Start(context.Background(), s.deviceGPIOHandler.HandlePress, s.deviceGPIOHandler.HandlePressAndHold)
+	// 	defer s.deviceButton.Close()
+	// } else {
+	// 	slog.Info("[device button] can not init")
+	// }
 
 	s.handleSetUpCompleteChange(s.config.SetUpCompleted)
 	s.handleDeviceIDChange(s.config.DeviceID)
