@@ -9,123 +9,50 @@ Pipeline:
   5. Lamp Go → local intent match or OpenClaw → AI responds → POST /voice/speak
 
 STT provider is pluggable (default: Deepgram).
+
+Helpers live in `_internal/` — config constants, audio I/O, VAD filters,
+speaker decoration, and Lamp event sender.
 """
 
 import logging
-import os
-import re
 import subprocess
 import threading
 import time
 from collections import deque
-from pathlib import Path
 from typing import Optional
 
 import requests
 
 from lelamp.service.voice.backchannel import Backchannel
 from lelamp.service.voice.stt_provider import STTProvider
-from lelamp import config as _lelamp_config
+from lelamp.service.voice._internal.audio_dsp import resample_to_stt, rms
+from lelamp.service.voice._internal.audio_recorder import ArecordStream
+from lelamp.service.voice._internal.config import (
+    CHANNELS,
+    DEFAULT_WAKE_WORDS,
+    ECHO_GATE_MAX_WAIT_S,
+    ECHO_GATE_WINDOW_S,
+    ECHO_RMS_FLOOR,
+    ENROLL_NUDGE_COOLDOWN_S,
+    FRAME_DURATION_MS,
+    MAX_SESSION_DURATION_S,
+    PRE_ROLL_FRAMES,
+    RMS_THRESHOLD,
+    SESSION_COOLDOWN_S,
+    SILENCE_TIMEOUT_S,
+    SILERO_MODEL_PATH,
+    SILERO_VAD_ENABLED,
+    SPEECH_HOLDOFF_S,
+    STT_KEEPALIVE,
+    STT_RATE,
+    WEBRTCVAD_AGGRESSIVENESS,
+    WEBRTCVAD_ENABLED,
+)
+from lelamp.service.voice._internal.lamp_sender import LampSender
+from lelamp.service.voice._internal.speaker_decorate import SpeakerDecorator
+from lelamp.service.voice._internal.vad_filters import SileroVADFilter, WebRTCVADFilter
 
 logger = logging.getLogger("lelamp.voice")
-
-LAMP_SENSING_URL = "http://127.0.0.1:5000/api/sensing/event"
-
-STT_RATE = 16000   # Rate expected by all STT providers
-CHANNELS = 1
-FRAME_DURATION_MS = 64  # Frame duration in ms (device-rate-independent)
-
-# Local VAD config — can be overridden via .env on the device
-RMS_THRESHOLD = int(os.environ.get("LELAMP_VAD_THRESHOLD", "3500"))      # RMS above this = speech
-SILENCE_TIMEOUT_S = float(os.environ.get("LELAMP_SILENCE_TIMEOUT", "2.5"))  # Silence before STT disconnect
-SPEECH_HOLDOFF_S = float(os.environ.get("LELAMP_SPEECH_HOLDOFF", "0.2"))  # Minimum speech duration before connecting STT
-# Pre-roll lookback — frames retained BEFORE VAD trigger so quiet first
-# syllables ("b", "k", "t", "p" stop consonants, or any utterance starting
-# under RMS_THRESHOLD) reach STT instead of getting clipped. 8 × 64ms = 512ms
-# of audio history. Equivalent to user manually saying "Uhm..." before speech.
-PRE_ROLL_FRAMES = int(os.environ.get("LELAMP_PRE_ROLL_FRAMES", "8"))
-
-SESSION_COOLDOWN_S = float(os.environ.get("LELAMP_SESSION_COOLDOWN_S", "0.3"))
-
-# Silero VAD config
-SILERO_VAD_ENABLED = os.environ.get("LELAMP_SILERO_ENABLED", "false").lower() == "true"
-SILERO_VAD_THRESHOLD = float(os.environ.get("LELAMP_SILERO_THRESHOLD", "0.3"))
-SILERO_CHUNK_SIZE = int(os.environ.get("LELAMP_SILERO_CHUNK_SIZE", "512"))
-_SILERO_MODEL_PATH = Path(__file__).parent / "resources" / "silero_vad.onnx"
-
-# WebRTC VAD config — fast C-based pre-filter before Silero (runs in ~0.1ms vs ~20ms)
-WEBRTCVAD_ENABLED = os.environ.get("LELAMP_WEBRTCVAD_ENABLED", "false").lower() == "true"
-WEBRTCVAD_AGGRESSIVENESS = int(os.environ.get("LELAMP_WEBRTCVAD_AGGRESSIVENESS", "2"))
-WEBRTCVAD_FRAME_MS = int(os.environ.get("LELAMP_WEBRTCVAD_FRAME_MS", "30"))
-
-# Echo cancellation config
-ECHO_RMS_FLOOR = int(os.environ.get("LELAMP_ECHO_RMS_FLOOR", "200"))
-ECHO_GATE_MAX_WAIT_S = float(os.environ.get("LELAMP_ECHO_GATE_MAX_WAIT_S", "1.5"))
-ECHO_GATE_WINDOW_S = float(os.environ.get("LELAMP_ECHO_GATE_WINDOW_S", "0.05"))
-ECHO_SIMILARITY_THRESHOLD = float(os.environ.get("LELAMP_ECHO_SIMILARITY_THRESHOLD", "0.55"))
-ECHO_RELEVANCE_WINDOW_S = float(os.environ.get("LELAMP_ECHO_RELEVANCE_WINDOW_S", "15.0"))
-MAX_SESSION_DURATION_S = float(os.environ.get("LELAMP_MAX_SESSION_DURATION_S", "30"))
-
-# Keep-alive mode: pre-connect STT WS before speech is detected so there's no connect delay.
-STT_KEEPALIVE = os.environ.get("LELAMP_STT_KEEPALIVE", "false").lower() == "true"
-
-# Speaker recognition — prefix every transcript with "<Name>: " identified from
-SPEAKER_RECOGNITION_ENABLED = _lelamp_config.SPEAKER_RECOGNITION_ENABLED
-SPEAKER_MIN_AUDIO_S = _lelamp_config.SPEAKER_MIN_AUDIO_S
-
-SPEECH_EMOTION_ENABLED = _lelamp_config.SPEECH_EMOTION_ENABLED
-
-# Wake word patterns (lowercase match) — default for agent named "Lamp"
-DEFAULT_WAKE_WORDS = ["hello lamp", "hey lamp", "này lamp", "ê lamp", "lamp ơi"]
-
-
-
-class _ArecordStream:
-    """Drop-in replacement for sd.InputStream using arecord subprocess.
-
-    Records directly via ALSA plughw which handles sample-rate conversion
-    natively — the same path as `arecord -D plughw:X,0`.  sounddevice uses
-    PortAudio's hw: interface which bypasses ALSA SRC, producing corrupted
-    audio at rates the hardware doesn't natively support.
-    """
-
-    def __init__(self, alsa_device: str, rate: int, channels: int, blocksize: int, np):
-        self._device = alsa_device
-        self._rate = rate
-        self._channels = channels
-        self._blocksize = blocksize
-        self._np = np
-        self._proc = None
-        self._bytes_per_frame = 2 * channels  # int16 = 2 bytes
-
-    def __enter__(self):
-        self._proc = subprocess.Popen(
-            ["arecord", "-D", self._device, "-f", "S16_LE",
-             "-r", str(self._rate), "-c", str(self._channels),
-             "-t", "raw", "-q"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-        )
-        return self
-
-    def __exit__(self, *args):
-        if self._proc:
-            self._proc.terminate()
-            try:
-                self._proc.wait(timeout=2)
-            except Exception:
-                self._proc.kill()
-            self._proc = None
-
-    def read(self, frames):
-        n_bytes = frames * self._bytes_per_frame
-        raw = self._proc.stdout.read(n_bytes)
-        if not raw:
-            # arecord process died — raise so _loop can restart it
-            raise IOError("arecord process exited (stdout EOF)")
-        if len(raw) < n_bytes:
-            raw = raw + b"\x00" * (n_bytes - len(raw))
-        data = self._np.frombuffer(raw, dtype=self._np.int16).reshape(frames, self._channels)
-        return data, False
 
 
 class VoiceService:
@@ -147,8 +74,6 @@ class VoiceService:
         self._listening = False
         self._tts = tts_service
         self._music = music_service
-        self._wake_words: list = list(wake_words) if wake_words else list(DEFAULT_WAKE_WORDS)
-        self._wake_words_lock = threading.Lock()
         self._device_rate: Optional[int] = None  # detected once at first use
 
         self._sd = None
@@ -157,55 +82,6 @@ class VoiceService:
         self._alsa_device: Optional[str] = alsa_device or None
 
         self._backchannel = Backchannel(tts_service)
-
-        # Enroll-nudge cooldown per voiceprint_hash. When the recognizer
-        # assigns a stable cluster label to an unknown voice, we stop
-        # asking the agent to ask that voice's name again for
-        # _NUDGE_COOLDOWN_S so the agent doesn't repeat "who are you?"
-        # to the same person every short utterance.
-        # In-memory only — resets on restart (acceptable; worst case is
-        # one extra prompt after reboot).
-        self._last_nudge_time: dict[str, float] = {}
-        self._nudge_cooldown_s: float = float(
-            os.environ.get("LELAMP_ENROLL_NUDGE_COOLDOWN_S", str(30 * 60))
-        )
-
-        # Speaker recognizer (optional). Lazy-initialized — if embedding API
-        # isn't configured the prefix is simply skipped.
-        self._speaker = None
-        if not SPEAKER_RECOGNITION_ENABLED:
-            logger.info("Speaker recognizer disabled by LELAMP_SPEAKER_RECOGNITION_ENABLED=false. This is the default value.")
-        else:
-            try:
-                from lelamp.service.voice.speaker_recognizer import SpeakerRecognizer
-                self._speaker = SpeakerRecognizer()
-                if not self._speaker.available:
-                    logger.info(
-                        "Speaker recognizer idle — SPEAKER_EMBEDDING_API_URL not set "
-                        "(service instance exists but embedding calls will return 'unknown' with an error)"
-                    )
-                else:
-                    logger.info("Speaker recognizer enabled — will prefix every STT final with speaker name")
-            except Exception as e:
-                logger.warning("Speaker recognizer init failed: %s", e)
-                self._speaker = None
-
-        self._speech_emotion = None
-        if not SPEECH_EMOTION_ENABLED:
-            logger.info("Speech emotion recognition disabled by LELAMP_SPEECH_EMOTION_ENABLED=false")
-        else:
-            try:
-                from lelamp.service.voice.speech_emotion import SpeechEmotionService
-                self._speech_emotion = SpeechEmotionService()
-                if not self._speech_emotion.available:
-                    logger.info(
-                        "Speech emotion service idle — DL backend URL not set"
-                    )
-                else:
-                    logger.info("Speech emotion service enabled")
-            except Exception as e:
-                logger.warning("Speech emotion service init failed: %s", e)
-                self._speech_emotion = None
 
         try:
             import numpy as np
@@ -219,58 +95,31 @@ class VoiceService:
         except ImportError:
             logger.warning("sounddevice not available")
 
-        # WebRTC VAD — fast C-based pre-filter (runs before Silero to save CPU)
+        # WebRTC VAD — fast C-based pre-filter (~0.1ms vs Silero ~20ms).
         # Enable via LELAMP_WEBRTCVAD_ENABLED=true in .env.
-        self._webrtcvad: Optional[object] = None
-        if WEBRTCVAD_ENABLED:
-            try:
-                import webrtcvad as _webrtcvad
-                self._webrtcvad = _webrtcvad.Vad(WEBRTCVAD_AGGRESSIVENESS)
-                logger.info("WebRTC VAD loaded (aggressiveness=%d)", WEBRTCVAD_AGGRESSIVENESS)
-            except ImportError:
-                logger.warning("webrtcvad not installed — pip install webrtcvad")
-            except Exception as e:
-                logger.warning("WebRTC VAD not available: %s", e)
-        else:
+        self._webrtc_vad = WebRTCVADFilter(WEBRTCVAD_AGGRESSIVENESS, self._np) if WEBRTCVAD_ENABLED else None
+        if not WEBRTCVAD_ENABLED:
             logger.info("WebRTC VAD disabled (LELAMP_WEBRTCVAD_ENABLED=false)")
 
-        # Silero VAD (ONNX) — secondary speech filter to reject non-speech audio (TV, music, noise)
-        # Auto-enabled if model file exists. Disable via LELAMP_SILERO_ENABLED=false in .env.
-        self._silero: Optional[object] = None
-        self._silero_state: Optional[object] = None
-        self._silero_lock = threading.Lock()
-        if SILERO_VAD_ENABLED and _SILERO_MODEL_PATH.exists():
-            try:
-                import os as _os
-                _os.environ.setdefault("OMP_NUM_THREADS", "1")
-                _os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-                import onnxruntime as ort
-                _sess_opts = ort.SessionOptions()
-                _sess_opts.intra_op_num_threads = 1
-                _sess_opts.inter_op_num_threads = 1
-                _sess_opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-                self._silero = ort.InferenceSession(
-                    str(_SILERO_MODEL_PATH),
-                    sess_options=_sess_opts,
-                    providers=["CPUExecutionProvider"],
-                )
-                self._silero_reset_state()
-                logger.info("Silero VAD loaded (threshold=%.2f)", SILERO_VAD_THRESHOLD)
-            except Exception as e:
-                logger.warning("Silero VAD not available — falling back to RMS only: %s", e)
-        elif not _SILERO_MODEL_PATH.exists():
-            logger.info("Silero VAD model not found — using RMS only")
-        else:
+        self._silero_vad = SileroVADFilter(SILERO_MODEL_PATH, self._np) if SILERO_VAD_ENABLED else None
+        if not SILERO_VAD_ENABLED:
             logger.info("Silero VAD disabled via LELAMP_SILERO_ENABLED=false")
+
+        # Speaker decoration (wake-word + speaker recognizer + SER)
+        self._decorator = SpeakerDecorator(
+            wake_words=list(wake_words) if wake_words else list(DEFAULT_WAKE_WORDS),
+            nudge_cooldown_s=ENROLL_NUDGE_COOLDOWN_S,
+        )
+
+        # Lamp Server event sender (with echo similarity filter)
+        self._lamp_sender = LampSender(tts_service=tts_service)
 
     def set_music_service(self, music_service) -> None:
         self._music = music_service
 
     def set_wake_words(self, words: list) -> None:
         """Update wake word list at runtime (called when agent is renamed)."""
-        with self._wake_words_lock:
-            self._wake_words = [w.lower() for w in words]
-        logger.info("Wake words updated: %s", self._wake_words)
+        self._decorator.set_wake_words(words)
 
     @property
     def available(self) -> bool:
@@ -307,6 +156,9 @@ class VoiceService:
             self._thread = None
         logger.info("VoiceService stopped")
 
+    # ------------------------------------------------------------------
+    # Audio device discovery
+    # ------------------------------------------------------------------
     def _get_alsa_device_str(self) -> Optional[str]:
         """Derive ALSA plughw device string from the sounddevice input device index.
 
@@ -354,7 +206,6 @@ class VoiceService:
             info = sd.query_devices(self._input_device, "input")
             native = int(info["default_samplerate"])
             # Try to open stream at STT_RATE directly — ALSA plughw does SRC transparently.
-            # check_input_settings can fail even when ALSA can handle it, so just try opening.
             try:
                 with sd.InputStream(device=self._input_device, samplerate=STT_RATE,
                                     channels=CHANNELS, dtype="int16", blocksize=512):
@@ -368,109 +219,28 @@ class VoiceService:
             logger.warning("Could not detect device rate, defaulting to %dHz: %s", STT_RATE, e)
             return STT_RATE
 
-    def _resample_to_stt(self, data, device_rate: int):
-        """Resample audio from device_rate to STT_RATE with proper anti-aliasing.
-        Uses scipy.signal.resample_poly (polyphase + anti-aliasing FIR filter).
-        Returns raw bytes at STT_RATE. No-op if rates already match."""
-        if device_rate == STT_RATE:
-            return data.tobytes()
-        from math import gcd
-        import scipy.signal
-        samples = data.flatten().astype(self._np.float32)
-        g = gcd(STT_RATE, device_rate)
-        up, down = STT_RATE // g, device_rate // g
-        resampled = scipy.signal.resample_poly(samples, up, down).astype(self._np.int16)
-        return resampled.tobytes()
-
-    def _rms(self, audio_data) -> float:
-        """Calculate RMS energy of audio frame."""
-        np = self._np
-        samples = audio_data.flatten().astype(np.float32)
-        return float(np.sqrt(np.mean(samples ** 2)))
-
+    # ------------------------------------------------------------------
+    # VAD helpers — thin wrappers that fail-open when filter is None
+    # ------------------------------------------------------------------
     def _webrtcvad_is_speech(self, data, device_rate: int) -> bool:
-        """Run WebRTC VAD on audio frame. Returns True if any 30ms chunk contains speech.
-        Falls back to True (pass-through) if webrtcvad is unavailable."""
-        if self._webrtcvad is None:
+        """Run WebRTC VAD on `data` (normal STT path). True if speech or filter off."""
+        if self._webrtc_vad is None:
             return True
-        try:
-            np = self._np
-            if device_rate != STT_RATE:
-                from math import gcd
-                import scipy.signal
-                samples = data.flatten().astype(np.float32)
-                g = gcd(STT_RATE, device_rate)
-                audio_16k = scipy.signal.resample_poly(samples, STT_RATE // g, device_rate // g).astype(np.int16)
-            else:
-                audio_16k = data.flatten().astype(np.int16)
-            frame_samples = int(STT_RATE * WEBRTCVAD_FRAME_MS / 1000)  # 480 @ 16kHz/30ms
-            raw = audio_16k.tobytes()
-            frame_bytes = frame_samples * 2  # int16 = 2 bytes
-            for i in range(0, len(raw) - frame_bytes + 1, frame_bytes):
-                if self._webrtcvad.is_speech(raw[i:i + frame_bytes], STT_RATE):
-                    return True
-            return False
-        except Exception as e:
-            logger.warning("WebRTC VAD error: %s", e)
+        return self._webrtc_vad.is_speech(data, device_rate)
+
+    def _silero_is_speech(self, data, device_rate: int) -> bool:
+        """Run Silero VAD on `data`. True if speech or filter off."""
+        if self._silero_vad is None:
             return True
+        return self._silero_vad.is_speech(data, device_rate)
 
-    def _silero_reset_state(self):
-        """Reset Silero LSTM state and context between speech segments."""
-        import numpy as np
-        self._silero_state = np.zeros((2, 1, 128), dtype=np.float32)
-        # Silero v5+ requires 64 context samples (16kHz) prepended to each chunk
-        self._silero_context = np.zeros((1, 64), dtype=np.float32)
+    def _silero_reset_state(self) -> None:
+        if self._silero_vad is not None:
+            self._silero_vad.reset_state()
 
-    def _silero_is_speech(self, data: "np.ndarray", device_rate: int) -> bool:
-        """Run Silero VAD on audio frame. Returns True if speech detected.
-        Falls back to True (pass-through) if model is unavailable."""
-        if self._silero is None:
-            return True
-        try:
-            import numpy as np
-            # Resample to 16kHz for silero (same target as STT)
-            if device_rate != STT_RATE:
-                from math import gcd
-                import scipy.signal
-                samples = data.flatten().astype(np.float32)
-                g = gcd(STT_RATE, device_rate)
-                up, down = STT_RATE // g, device_rate // g
-                audio_16k = scipy.signal.resample_poly(samples, up, down).astype(np.float32)
-            else:
-                audio_16k = data.flatten().astype(np.float32)
-
-            # Normalize int16 → float32 [-1, 1]
-            audio_norm = audio_16k / 32768.0
-
-            # Run inference in 512-sample chunks, keep max confidence
-            max_conf = 0.0
-            with self._silero_lock:
-                for i in range(0, len(audio_norm), SILERO_CHUNK_SIZE):
-                    chunk = audio_norm[i:i + SILERO_CHUNK_SIZE]
-                    if len(chunk) < SILERO_CHUNK_SIZE:
-                        chunk = np.pad(chunk, (0, SILERO_CHUNK_SIZE - len(chunk)))
-                    # Silero v5+: prepend 64-sample context from previous chunk
-                    x = np.concatenate([self._silero_context, chunk.reshape(1, -1)], axis=1)
-                    out = self._silero.run(
-                        None,
-                        {
-                            "input": x,
-                            "state": self._silero_state,
-                            "sr": np.array(STT_RATE, dtype=np.int64),
-                        },
-                    )
-                    max_conf = max(max_conf, float(out[0][0][0]))
-                    self._silero_state = out[1]
-                    self._silero_context = x[:, -64:]
-
-            is_speech = max_conf >= SILERO_VAD_THRESHOLD
-            if not is_speech:
-                logger.info("Silero: conf=%.3f < threshold=%.2f — rejected", max_conf, SILERO_VAD_THRESHOLD)
-            return is_speech
-        except Exception as e:
-            logger.warning("Silero VAD inference error: %s", e)
-            return True  # fail open — don't block speech
-
+    # ------------------------------------------------------------------
+    # State checks
+    # ------------------------------------------------------------------
     def _tts_is_speaking(self) -> bool:
         """Check if TTS is currently using the audio device."""
         return self._tts is not None and self._tts.speaking
@@ -479,211 +249,9 @@ class VoiceService:
         """Check if music is currently playing."""
         return self._music is not None and self._music.playing
 
-    @staticmethod
-    def _should_request_speaker_enroll(
-        transcript: str,
-        duration_s: float = 0.0,
-        min_words: int = 10,
-        min_duration_s: float = 2.0,
-    ) -> bool:
-        """Whether unknown-speaker message should include a strong enroll nudge."""
-        return len(transcript.split()) >= min_words and duration_s >= min_duration_s
-
-    def _format_unknown_speaker_message(
-        self,
-        transcript: str,
-        audio_path: str,
-        duration_s: float = 0.0,
-        voiceprint_hash: Optional[str] = None,
-    ) -> str:
-        """Format Lamp message for an unrecognized speaker (enroll hints, cooldown)."""
-        now = time.time()
-        in_cooldown = False
-        if voiceprint_hash:
-            last = self._last_nudge_time.get(voiceprint_hash, 0.0)
-            if now - last < self._nudge_cooldown_s:
-                in_cooldown = True
-                logger.info(
-                    "Enroll nudge skipped for %s — asked %.0fs ago "
-                    "(cooldown %.0fs); path + tag still surfaced",
-                    voiceprint_hash, now - last, self._nudge_cooldown_s,
-                )
-
-        hash_tag = f" [voice:{voiceprint_hash}]" if voiceprint_hash else ""
-        audio_hint = f" (audio saved at {audio_path})" if audio_path else ""
-
-        if in_cooldown:
-            return f"Unknown Speaker:{hash_tag} {transcript}{audio_hint}"
-
-        if audio_path and self._should_request_speaker_enroll(transcript, duration_s):
-            if voiceprint_hash:
-                self._last_nudge_time[voiceprint_hash] = now
-            return (
-                f"Unknown Speaker:{hash_tag} {transcript} "
-                f"(audio save at {audio_path}, auto enroll this speaker "
-                f"if having speaker name in transcript, else ask user's name)"
-            )
-
-        return (
-            f"Unknown Speaker:{hash_tag} {transcript} "
-            f"(audio saved at {audio_path}. Note: audio is too short for "
-            f"single enrollment. If prior turns tagged the same {voiceprint_hash or 'voice cluster'}, "
-            f"combine their saved paths with this one when enrolling; "
-            f"otherwise ask the user to introduce themselves longer.)"
-        )
-
-    def _session_wav_for_ser(
-        self, audio_buffer: list[bytes],
-    ) -> Optional[tuple[bytes, float]]:
-        """Build mono 16 kHz WAV + duration from the STT session buffer (for SER)."""
-        if not audio_buffer:
-            return None
-        duration_s = sum(len(b) for b in audio_buffer) / (STT_RATE * 2)
-        if duration_s < SPEAKER_MIN_AUDIO_S:
-            return None
-        try:
-            from lelamp.service.voice.speaker_recognizer.speaker_recognizer import (
-                pcm16_bytes_to_wav,
-            )
-        except Exception as e:
-            logger.warning("Session WAV for SER skipped — helper import failed: %s", e)
-            return None
-        try:
-            return pcm16_bytes_to_wav(b"".join(audio_buffer), STT_RATE), duration_s
-        except Exception as e:
-            logger.warning("Session WAV for SER failed: %s", e)
-            return None
-
-    def _submit_speech_emotion_from_session(
-        self,
-        audio_buffer: list[bytes],
-        user: str,
-    ) -> None:
-        """Submit SER on the full mic-session buffer."""
-        if self._speech_emotion is None or not self._speech_emotion.available:
-            logger.info(
-                "Speech emotion submit skipped: service_init=%s available=%s",
-                self._speech_emotion is not None,
-                bool(self._speech_emotion and self._speech_emotion.available),
-            )
-            return
-        session_audio = self._session_wav_for_ser(audio_buffer)
-        if session_audio is None:
-            return
-        wav_bytes, duration_s = session_audio
-
-        logger.info(
-            "Speech emotion submit (session-end): user=%r duration=%.2fs wav=%d bytes",
-            user, duration_s, len(wav_bytes),
-        )
-        try:
-            self._speech_emotion.submit(
-                user=user, wav_bytes=wav_bytes, duration_s=duration_s,
-            )
-        except Exception as e:
-            logger.warning("Speech emotion submit failed: %s", e)
-
-    def _resolve_wake_word_split(self, combined: str) -> tuple[str, str]:
-        """Detect wake word in `combined` and split it off.
-
-        Returns ``(final_text, event_type)``:
-        * ``final_text`` — the text that will be sent to Lamp (wake word stripped
-          when a command, otherwise the original transcript).
-        * ``event_type`` — ``"voice_command"`` when a wake word matched at the
-          start, otherwise ``"voice"``. Used as the sensing-event ``type`` field.
-
-        Empty ``combined`` short-circuits to ``("", "voice")``; the caller still
-        gets a usable shape but typically skips the Lamp POST.
-        """
-        if not combined:
-            return "", "voice"
-
-        normalized = re.sub(r"[^\w\s]", "", combined.lower())
-        with self._wake_words_lock:
-            wake_words = list(self._wake_words)
-        if not any(w in normalized for w in wake_words):
-            return combined, "voice"
-
-        cmd = normalized
-        for w in wake_words:
-            if cmd.startswith(w):
-                cmd = cmd[len(w):].strip()
-                break
-        return (cmd or combined), "voice_command"
-
-    def _identify_and_decorate(
-        self, transcript: str, audio_buffer: list[bytes],
-    ) -> tuple[str, Optional[str]]:
-        """Run speaker recognition; return (Lamp message, SER user name or None).
-
-        ``user_name`` is set only when speaker recognize completes without
-        ``error`` — known label or ``unknown`` for no match. ``None`` skips SER.
-        """
-        logger.info("Identify and decorate transcript: raw transcript is: '%s'", transcript)
-        if self._speaker is None:
-            logger.info(
-                "Skip speaker ID: recognizer not initialized "
-                "(LELAMP_SPEAKER_RECOGNITION_ENABLED or init failure)"
-            )
-            return transcript, None
-        if not audio_buffer:
-            logger.warning("Skip speaker ID: audio buffer is empty (no frames captured this session)")
-            return transcript, None
-        try:
-            from lelamp.service.voice.speech_emotion.constants import UNKNOWN_USER_LABEL
-            from lelamp.service.voice.speaker_recognizer.speaker_recognizer import pcm16_bytes_to_wav
-        except Exception as e:
-            logger.warning("Skip speaker ID: helper import failed: %s", e)
-            return transcript, None
-
-        total_bytes = sum(len(b) for b in audio_buffer)
-        duration_s = total_bytes / (STT_RATE * 2)  # int16 mono
-        if duration_s < SPEAKER_MIN_AUDIO_S:
-            logger.info(
-                "Skip speaker ID: only %.2fs of audio buffered (<%.2fs)",
-                duration_s, SPEAKER_MIN_AUDIO_S,
-            )
-            return transcript, None
-
-        try:
-            wav_bytes = pcm16_bytes_to_wav(b"".join(audio_buffer), STT_RATE)
-            import base64 as _b64
-            audio_b64 = _b64.b64encode(wav_bytes).decode("ascii")
-            result = self._speaker.recognize(audio_b64, source_type="base64")
-        except Exception as e:
-            logger.warning("Speaker recognize failed: %s", e)
-            return transcript, None
-
-        logger.info("Speaker recognize result: %r", result)
-        err = result.get("error")
-        audio_path = result.get("unknown_audio_path", "")
-        vp_hash = result.get("voiceprint_hash")
-        if err:
-            logger.warning("Speaker ID skipped — embedding server issue: %s", err)
-            if audio_path:
-                return self._format_unknown_speaker_message(
-                    transcript, audio_path, duration_s, vp_hash,
-                ), None
-            return transcript, None
-
-        name = result.get("name", "unknown")
-        confidence = result.get("confidence", 0.0)
-        if result.get("match") and name and name != "unknown":
-            display = result.get("display_name") or name.capitalize()
-            logger.info(
-                "Speaker ID: %s (confidence=%.2f, audio=%s)",
-                name, confidence, audio_path or "-",
-            )
-            return f"Speaker - {display}: {transcript}", name
-
-        logger.info(
-            "Speaker ID: unknown (best=%.2f, audio=%s, hash=%s)",
-            confidence, audio_path or "-", vp_hash or "-",
-        )
-        return self._format_unknown_speaker_message(
-            transcript, audio_path, duration_s, vp_hash,
-        ), UNKNOWN_USER_LABEL
-
+    # ------------------------------------------------------------------
+    # TTS wait + reverb gate (Layer 1 + Layer 2 echo handling)
+    # ------------------------------------------------------------------
     def _wait_for_tts(self):
         """Block until TTS finishes speaking, then wait for reverb to decay (adaptive RMS gate)."""
         if not self._tts_is_speaking():
@@ -702,7 +270,7 @@ class VoiceService:
         try:
             # Prefer arecord backend (same as recording loop) — avoids PortAudio rate errors
             if self._alsa_device is not None:
-                mic_ctx = _ArecordStream(
+                mic_ctx = ArecordStream(
                     alsa_device=self._alsa_device, rate=device_rate,
                     channels=CHANNELS, blocksize=window_frames, np=np,
                 )
@@ -717,16 +285,19 @@ class VoiceService:
                     data, overflowed = tmp_mic.read(window_frames)
                     if overflowed:
                         continue
-                    rms = float(np.sqrt(np.mean(data.astype(np.float32) ** 2)))
+                    measured = float(np.sqrt(np.mean(data.astype(np.float32) ** 2)))
                     elapsed += ECHO_GATE_WINDOW_S
-                    if rms < ECHO_RMS_FLOOR:
-                        logger.info("Reverb decayed (RMS=%.0f < %d) after %.2fs", rms, ECHO_RMS_FLOOR, elapsed)
+                    if measured < ECHO_RMS_FLOOR:
+                        logger.info("Reverb decayed (RMS=%.0f < %d) after %.2fs", measured, ECHO_RMS_FLOOR, elapsed)
                         return
             logger.info("Reverb gate timeout after %.1fs, resuming anyway", ECHO_GATE_MAX_WAIT_S)
         except Exception as e:
             logger.warning("RMS gate failed, falling back to fixed delay: %s", e)
             time.sleep(1.0)
 
+    # ------------------------------------------------------------------
+    # Main loop
+    # ------------------------------------------------------------------
     def _loop(self):
         """Main loop: local VAD → STT on speech → disconnect on silence."""
         time.sleep(0.5)  # Brief pause for audio subsystem to settle
@@ -760,7 +331,7 @@ class VoiceService:
 
             try:
                 if self._alsa_device is not None:
-                    mic_ctx = _ArecordStream(
+                    mic_ctx = ArecordStream(
                         alsa_device=self._alsa_device,
                         rate=device_rate,
                         channels=CHANNELS,
@@ -787,6 +358,9 @@ class VoiceService:
                 if self._running:
                     time.sleep(3)
 
+    # ------------------------------------------------------------------
+    # VAD trigger loop — waits for energy + speech, then hands to STT
+    # ------------------------------------------------------------------
     def _vad_loop(self, mic, frame_size: int, device_rate: int):
         """Monitor mic with local VAD, connect STT when speech detected.
         Breaks out when TTS starts speaking so _loop can close mic and reopen after."""
@@ -822,9 +396,9 @@ class VoiceService:
             # Append to lookback for pre-roll.
             lookback.append(data)
 
-            rms = self._rms(data)
+            energy = rms(data, self._np)
 
-            if rms >= RMS_THRESHOLD and self._webrtcvad_is_speech(data, device_rate):
+            if energy >= RMS_THRESHOLD and self._webrtcvad_is_speech(data, device_rate):
                 if speech_start is None:
                     speech_start = time.time()
                     speech_pre_buffer = [data]
@@ -833,7 +407,7 @@ class VoiceService:
                 # Wait for holdoff before connecting STT (avoid short noises)
                 if (time.time() - speech_start) >= SPEECH_HOLDOFF_S:
                     # Run Silero on accumulated buffer (needs multiple chunks for LSTM)
-                    if self._silero is not None:
+                    if self._silero_vad is not None:
                         combined = self._np.concatenate(speech_pre_buffer)
                         if not self._silero_is_speech(combined, device_rate):
                             speech_start = None
@@ -845,9 +419,11 @@ class VoiceService:
                     all_frames = history + speech_pre_buffer
                     logger.info(
                         "Speech detected (RMS=%.0f) — pre-roll=%d frames (~%dms) + holdoff=%d frames",
-                        rms, len(history), len(history) * FRAME_DURATION_MS, buffered,
+                        energy, len(history), len(history) * FRAME_DURATION_MS, buffered,
                     )
-                    speech_pre_buffer = [self._resample_to_stt(f, device_rate) for f in all_frames]
+                    speech_pre_buffer = [
+                        resample_to_stt(f, device_rate, STT_RATE, self._np) for f in all_frames
+                    ]
                     self._stream_session(mic, frame_size, device_rate,
                                         preconnected_session=keepalive_session,
                                         speech_pre_buffer=speech_pre_buffer)
@@ -870,9 +446,12 @@ class VoiceService:
             else:
                 speech_start = None
                 speech_pre_buffer = []
-                if rms >= RMS_THRESHOLD:
-                    logger.debug("VAD: RMS=%.0f above threshold but Silero rejected — not speech", rms)
+                if energy >= RMS_THRESHOLD:
+                    logger.debug("VAD: RMS=%.0f above threshold but Silero rejected — not speech", energy)
 
+    # ------------------------------------------------------------------
+    # STT streaming session — fires while user is speaking
+    # ------------------------------------------------------------------
     def _stream_session(self, mic, frame_size: int, device_rate: int, preconnected_session=None, speech_pre_buffer=None):
         """Stream audio to STT provider until silence or TTS interrupts.
 
@@ -938,9 +517,6 @@ class VoiceService:
                 # Already connected — swap in the real transcript callback.
                 session._on_transcript_cb = on_transcript
                 logger.info("STT keepalive: reusing pre-connected session")
-            else:
-                # Connect WS in background while buffering mic audio so speech start isn't lost.
-                pass
 
             connect_ok = [False]
             connect_done = threading.Event()
@@ -962,7 +538,7 @@ class VoiceService:
                     break
                 data, overflowed = mic.read(frame_size)
                 if not overflowed:
-                    pre_buffer.append(self._resample_to_stt(data, device_rate))
+                    pre_buffer.append(resample_to_stt(data, device_rate, STT_RATE, self._np))
 
             if not connect_ok[0]:
                 return
@@ -1009,12 +585,11 @@ class VoiceService:
                     logger.warning("STT session exceeded %ds, force-closing", MAX_SESSION_DURATION_S)
                     break
 
-
                 data, overflowed = mic.read(frame_size)
                 if overflowed:
                     continue
 
-                resampled = self._resample_to_stt(data, device_rate)
+                resampled = resample_to_stt(data, device_rate, STT_RATE, self._np)
                 try:
                     session.send_audio(resampled)
                 except Exception as e:
@@ -1022,8 +597,8 @@ class VoiceService:
                     break
                 audio_buffer.append(resampled)
 
-                rms = self._rms(data)
-                if rms >= RMS_THRESHOLD:
+                energy = rms(data, self._np)
+                if energy >= RMS_THRESHOLD:
                     last_speech_time = time.time()
                     last_speech_idx = len(audio_buffer) - 1
                 elif (time.time() - last_speech_time) > SILENCE_TIMEOUT_S:
@@ -1067,23 +642,22 @@ class VoiceService:
                 "Session END — buffer frames=%d bytes=%d duration=%.2fs transcript=%r",
                 buf_frames, buf_bytes, buf_duration, combined or "(empty)",
             )
-                      
-            # Prepare message and user for speaker recognition and SER. 
+
+            # Prepare message and user for speaker recognition and SER.
             from lelamp.service.voice.speech_emotion.constants import UNKNOWN_USER_LABEL
-            final_text, event_type = self._resolve_wake_word_split(combined)
+            final_text, event_type = self._decorator.resolve_wake_word_split(combined)
             user = UNKNOWN_USER_LABEL
-            
+
             # 1. Speaker recognize and decorate the final text to send to Lamp.
             if combined:
-                final_msg, se_user = self._identify_and_decorate(final_text, audio_buffer)
+                final_msg, se_user = self._decorator.identify_and_decorate(final_text, audio_buffer)
                 user = se_user if se_user else UNKNOWN_USER_LABEL
                 logger.info("Final message → Lamp (%s): %r", event_type, final_msg)
-                self._send_to_lamp(final_msg, event_type=event_type)
+                self._lamp_sender.send(final_msg, event_type=event_type)
 
             # 2. Submit SER — uses the UNTRIMMED snapshot so laughter / sighs
-            self._submit_speech_emotion_from_session(ser_audio_buffer, user=user)
-            
-            
+            self._decorator.submit_speech_emotion_from_session(ser_audio_buffer, user=user)
+
             # Clear listening LED
             try:
                 requests.post("http://127.0.0.1:5000/api/sensing/event",
@@ -1116,66 +690,3 @@ class VoiceService:
             # fresh empty buffer. Leaving this log here as a breadcrumb so
             # operators can confirm session boundaries in the log stream.
             logger.info("Session RESET — audio_buffer discarded, ready for next turn")
-
-    def _is_echo(self, transcript: str) -> bool:
-        """Check if transcript is echo of last TTS output (Layer 3: transcript self-filter)."""
-        if not self._tts or not self._tts.last_spoken_text:
-            return False
-        # Only relevant within a time window after TTS finished
-        elapsed = time.time() - self._tts.last_spoken_time
-        if elapsed > ECHO_RELEVANCE_WINDOW_S:
-            return False
-        from difflib import SequenceMatcher
-        similarity = SequenceMatcher(
-            None, transcript.lower(), self._tts.last_spoken_text.lower()
-        ).ratio()
-        if similarity >= ECHO_SIMILARITY_THRESHOLD:
-            logger.info(
-                "Echo detected (similarity=%.2f): '%s' ≈ TTS:'%s' — dropping",
-                similarity, transcript[:60], self._tts.last_spoken_text[:60],
-            )
-            return True
-        return False
-
-    def _send_to_lamp(self, message: str, event_type: str = "voice"):
-        """Send the final decorated message (speaker prefix + optional audio
-        path) to Lamp as a sensing event.
-
-        ``message`` is already the output of ``_identify_and_decorate`` — it
-        contains ``"<Name>: <text>"`` for a known speaker or
-        ``"Unknown Speaker:<text> (audio save at <path>)"`` for an unenrolled one.
-        """
-        # Layer 3: transcript self-filter — drop if it's echo of our own TTS
-        if self._is_echo(message):
-            return
-
-        import json as _json
-        payload = {"type": event_type, "message": message}
-        logger.info("curl -s -X POST %s -H 'Content-Type: application/json' -d '%s'",
-                    LAMP_SENSING_URL, _json.dumps(payload))
-        max_retries = 3
-        for attempt in range(1, max_retries + 1):
-            try:
-                resp = requests.post(
-                    LAMP_SENSING_URL,
-                    json=payload,
-                    timeout=5,
-                )
-                if resp.status_code == 503 and attempt < max_retries:
-                    logger.warning("Lamp agent not ready (503), retrying in 2s... (attempt %d/%d)", attempt, max_retries)
-                    time.sleep(2)
-                    continue
-                elif resp.status_code != 200:
-                    logger.warning("Lamp returned %d: %s", resp.status_code, resp.text)
-                else:
-                    logger.info("Sent to Lamp: %r", message)
-                return
-            except requests.ConnectionError as e:
-                if attempt < max_retries:
-                    logger.warning("Lamp not reachable (attempt %d/%d), retrying in 2s...", attempt, max_retries)
-                    time.sleep(2)
-                else:
-                    logger.warning("Failed to send voice event to Lamp after %d attempts: %s", max_retries, e)
-            except requests.RequestException as e:
-                logger.warning("Failed to send voice event to Lamp: %s", e)
-                return
