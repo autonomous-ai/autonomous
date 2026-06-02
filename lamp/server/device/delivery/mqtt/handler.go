@@ -60,6 +60,12 @@ func (h *DeviceMQTTHandler) handleData(cmd domain.MQTTMessage) error {
 		return h.handleOAuthSet(cmd)
 	case domain.KindOAuthRemove:
 		return h.handleOAuthRemove(cmd)
+	case domain.KindSystemInfo:
+		return h.handleSystemInfo(cmd)
+	case domain.KindSystemVersion:
+		return h.handleSystemVersion(cmd)
+	case domain.KindSystemNetwork:
+		return h.handleSystemNetwork(cmd)
 	default:
 		slog.Warn("unknown data kind", "component", "mqtt", "kind", cmd.Kind)
 		return h.publishDataResult(cmd.Kind, "failure", "unknown kind: "+cmd.Kind, nil)

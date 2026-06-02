@@ -152,6 +152,66 @@ For the proxy to route inbound events back to the right device, each `/ping` inc
 `slack_team_id` — the workspace ID the device resolves on-device via Slack `auth.test`
 against its stored `botToken` (cached, sent once resolved).
 
+### `data` — Generic data envelope
+
+A generic envelope whose `kind` selects a sub-handler. The optional `data` object
+carries kind-specific fields. Every kind replies on fd_channel with the same shape:
+the standard device/version metadata plus `kind`, `status` (`success|failure`),
+optional `error`, and an optional `data` payload.
+
+**Receive:** `{"cmd": "data", "kind": "<kind>", "data": { ... }}`
+
+| Kind | Purpose | `data` fields |
+|------|---------|---------------|
+| `tts.set` | Persist TTS voice/provider/language config | `provider`, `voice`, `language` |
+| `tts.preview` | One-shot TTS preview (no config write) | `text` (required), optional `provider`/`voice`/`language` |
+| `oauth.set` | Store/replace an OAuth token for a provider | `provider`, `access_token`, optional `refresh_token`/`token_type`/`expires_at`/`scopes`/`user_email`/`client_id` |
+| `oauth.remove` | Delete the stored OAuth token for a provider | `provider` |
+| `system.info` | Aggregate snapshot: versions + network + host | _(none)_ |
+| `system.version` | Component versions only (cheaper than `system.info`) | _(none)_ |
+| `system.network` | wlan0 network facts only | _(none)_ |
+
+**`system.info` response:** synchronous (no `starting` intermediate); each probe
+falls back to its zero value on failure.
+```json
+{
+  "device": "ai_lamp",
+  "type": "data",
+  "kind": "system.info",
+  "status": "success",
+  "data": {
+    "versions": {
+      "lamp": "0.0.35",
+      "bootstrap": "0.0.10",
+      "lelamp": "1.2.3",
+      "openclaw": "2026.5.27",
+      "openclaw_detected": true
+    },
+    "network": {
+      "private_ip": "192.168.1.42",
+      "interface": "wlan0",
+      "mac": "aa:bb:cc:dd:ee:ff",
+      "ssid": "MyWiFi",
+      "gateway": "192.168.1.1"
+    },
+    "host": {
+      "hostname": "ai-lamp",
+      "device_id": "{DeviceID}",
+      "device_name": "Lamp-7f72",
+      "uptime_seconds": 86400
+    }
+  }
+}
+```
+
+`system.version` returns just the `versions` block as `data`; `system.network`
+returns just the `network` block. Version probes: `lamp` from the ldflags build
+var, `bootstrap` via `bootstrap-server --version`, `lelamp` over HTTP from the
+local LeLamp `/version` endpoint, `openclaw` from the agent monitor's cached probe
+(`openclaw_detected` distinguishes "not installed" from "installed but unparseable").
+
+An unrecognized `kind` replies with `status:"failure"` and `error:"unknown kind: <kind>"`.
+
 ### `ota` — Trigger OTA update
 
 Handled by bootstrap worker, not through MQTT handler directly.
@@ -168,6 +228,8 @@ Handled by bootstrap worker, not through MQTT handler directly.
 | `lamp/server/device/delivery/mqtt/info_handler.go` | Handle `info` command |
 | `lamp/server/device/delivery/mqtt/add_channel_hander.go` | Handle `add_channel` command (streams pairing events for WhatsApp) |
 | `lamp/server/device/delivery/mqtt/slack_event_handler.go` | Handle `slack_event` command (forwards Slack HTTP-mode events to local gateway) |
+| `lamp/server/device/delivery/mqtt/data_handler.go` | Handle `data` command kinds `oauth.set`/`oauth.remove` (+ access-token store) |
+| `lamp/server/device/delivery/mqtt/system_info_handler.go` | Handle `data` kinds `system.info`/`system.version`/`system.network` |
 | `lamp/server/device/delivery/mqtt/whatsapp_pair_handler.go` | Handle `whatsapp_pair` re-pair command |
 | `lamp/internal/openclaw/pairing.go` | WhatsApp Baileys QR pairing subprocess driver |
 | `lamp/domain/device.go` | MQTTMessage, command constants |

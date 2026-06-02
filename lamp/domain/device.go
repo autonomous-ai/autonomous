@@ -261,6 +261,10 @@ const (
 	KindTTSPreview  = "tts.preview"  // one-shot TTS preview, no config write
 	KindOAuthSet    = "oauth.set"    // store/replace OAuth token for a provider
 	KindOAuthRemove = "oauth.remove" // delete OAuth token for a provider
+
+	KindSystemInfo    = "system.info"    // aggregate: versions + network + host
+	KindSystemVersion = "system.version" // lamp + bootstrap + lelamp + openclaw versions
+	KindSystemNetwork = "system.network" // wlan0 IP, MAC, SSID, gateway
 )
 
 // Message is the standard envelope for MQTT messages from the server (fa_channel).
@@ -422,6 +426,44 @@ type MQTTDataResponse struct {
 	Status string      `json:"status"`
 	Error  string      `json:"error,omitempty"`
 	Data   interface{} `json:"data,omitempty"`
+}
+
+// MQTTSystemInfoData is the response payload for kind:"system.info" — an
+// aggregate snapshot of versions + network + host. Fields are zero-valued when
+// the probe fails (e.g. openclaw not yet installed → OpenClaw="", OpenClawDetected=false).
+type MQTTSystemInfoData struct {
+	Versions MQTTVersionsData `json:"versions"`
+	Network  MQTTNetworkData  `json:"network"`
+	Host     MQTTHostData     `json:"host"`
+}
+
+// MQTTVersionsData carries the component version strings on the device.
+// Empty string means probing failed; OpenClawDetected lets the caller
+// distinguish "not installed" from "installed but unparseable".
+type MQTTVersionsData struct {
+	Lamp             string `json:"lamp"`
+	Bootstrap        string `json:"bootstrap"`
+	Lelamp           string `json:"lelamp"`
+	OpenClaw         string `json:"openclaw"`
+	OpenClawDetected bool   `json:"openclaw_detected"`
+}
+
+// MQTTNetworkData carries wlan0 link facts. SSID/Gateway empty when the device
+// is in AP mode or otherwise not joined to upstream Wi-Fi.
+type MQTTNetworkData struct {
+	PrivateIP string `json:"private_ip"`
+	Interface string `json:"interface"`
+	MAC       string `json:"mac"`
+	SSID      string `json:"ssid"`
+	Gateway   string `json:"gateway"`
+}
+
+// MQTTHostData carries host-process facts useful for ops dashboards.
+type MQTTHostData struct {
+	Hostname      string `json:"hostname"`
+	DeviceID      string `json:"device_id"`
+	DeviceName    string `json:"device_name"` // friendly "Lamp-XXXX"
+	UptimeSeconds int64  `json:"uptime_seconds"`
 }
 
 // MQTTOAuthSetData is the Data payload for kind:"oauth.set".
