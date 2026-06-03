@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +19,17 @@ import (
 	"go-lamp.autonomous.ai/lib/i18n"
 	"go-lamp.autonomous.ai/server/config"
 )
+
+// normalizeBaseURL ensures autonomous.ai base URLs include the /v1 OpenAI-compat
+// prefix so all backends (TTS, STT, LLM) receive a ready-to-use URL without each
+// backend having to patch it individually. Non-autonomous URLs are left untouched.
+func normalizeBaseURL(base string) string {
+	base = strings.TrimSuffix(strings.TrimSpace(base), "/")
+	if strings.Contains(base, "campaign-api.autonomous.ai") && strings.HasSuffix(base, "/ai") {
+		base += "/v1"
+	}
+	return base
+}
 
 // Setup phase strings exposed via /api/setup/status so the web client can
 // follow the device through the AP→STA transition. Phases progress only
@@ -116,7 +128,7 @@ func (s *Service) Setup(data domain.SetupRequest) error {
 	channel := data.EffectiveChannel()
 
 	s.config.LLMAPIKey = llmAPIKey
-	s.config.LLMBaseURL = llmBaseURL
+	s.config.LLMBaseURL = normalizeBaseURL(llmBaseURL)
 	s.config.LLMModel = llmModel
 	s.config.Channel = channel
 	switch channel {
@@ -135,8 +147,8 @@ func (s *Service) Setup(data domain.SetupRequest) error {
 	s.config.DeepgramAPIKey = data.DeepgramAPIKey
 	s.config.STTAPIKey = data.STTAPIKey
 	s.config.TTSAPIKey = data.TTSAPIKey
-	s.config.STTBaseURL = data.STTBaseURL
-	s.config.TTSBaseURL = data.TTSBaseURL
+	s.config.STTBaseURL = normalizeBaseURL(data.STTBaseURL)
+	s.config.TTSBaseURL = normalizeBaseURL(data.TTSBaseURL)
 	s.config.STTLanguage = data.STTLanguage
 	s.config.STTModel = sttModelForLanguage(data.STTLanguage)
 	if data.TTSProvider != "" {
@@ -418,7 +430,7 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 			c.LLMAPIKey = data.LLMAPIKey
 		}
 		if data.LLMBaseURL != "" {
-			c.LLMBaseURL = data.LLMBaseURL
+			c.LLMBaseURL = normalizeBaseURL(data.LLMBaseURL)
 		}
 		if data.LLMModel != "" {
 			c.LLMModel = data.LLMModel
@@ -444,10 +456,10 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 			c.TTSAPIKey = data.TTSAPIKey
 		}
 		if data.STTBaseURL != "" {
-			c.STTBaseURL = data.STTBaseURL
+			c.STTBaseURL = normalizeBaseURL(data.STTBaseURL)
 		}
 		if data.TTSBaseURL != "" {
-			c.TTSBaseURL = data.TTSBaseURL
+			c.TTSBaseURL = normalizeBaseURL(data.TTSBaseURL)
 		}
 		// Operators pick a language; the matching Deepgram SKU is auto-derived
 		// because end users don't know which model handles which language.

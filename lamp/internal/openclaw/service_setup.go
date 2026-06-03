@@ -114,7 +114,7 @@ func (s *Service) SetupAgent(data domain.SetupRequest) error {
 		modelsEntries = append(modelsEntries, openclawModelToProviderEntry(m))
 	}
 	providersMap[customProviderName] = map[string]any{
-		"baseUrl": withOpenAIV1(llmBaseURL),
+		"baseUrl": llmBaseURL,
 		"api":     defaultModel.OpenClawAPIType(),
 		"apiKey":  llmAPIKey,
 		"models":  modelsEntries,
@@ -623,16 +623,6 @@ func (s *Service) RestartAgent() error {
 	return nil
 }
 
-// withOpenAIV1 appends /v1 to autonomous API base URLs that are missing it.
-// Only applies to autonomous.ai URLs ending with /ai (e.g. …/api/v1/ai).
-// External providers are left untouched.
-func withOpenAIV1(base string) string {
-	base = strings.TrimSuffix(strings.TrimSpace(base), "/")
-	if strings.Contains(base, "campaign-api.autonomous.ai") && strings.HasSuffix(base, "/ai") {
-		return base + "/v1"
-	}
-	return base
-}
 
 func findModelByLLMModel(models []domain.LLMModel, llmModel string) (domain.LLMModel, error) {
 	for _, m := range models {
