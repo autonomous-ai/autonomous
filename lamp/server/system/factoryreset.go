@@ -15,11 +15,9 @@ import (
 	"go-lamp.autonomous.ai/server/serializers"
 )
 
-const openclawConfigPath = "/root/.openclaw/openclaw.json"
-
-// openclawStatePaths are openclaw runtime state dirs wiped after openclaw reset.
-// openclaw reset --scope config+creds+sessions only removes openclaw.json +
-// credentials; the remaining state dirs below must be wiped manually.
+// openclawStatePaths are openclaw runtime state dirs wiped on factory reset.
+// openclaw reset --scope config+creds+sessions removes openclaw.json +
+// credentials but not these dirs — wipe them manually.
 // Missing paths are silently ignored.
 var openclawStatePaths = []string{
 	"/root/.openclaw/agents",                  // conversation sessions + history
@@ -36,11 +34,14 @@ var openclawStatePaths = []string{
 	"/root/.openclaw/cron",                    // cron jobs + state
 	"/root/.openclaw/media",                   // outbound media files
 	"/root/.openclaw/flows",                   // flow registry
-	"/root/.openclaw/openclaw.json.last-good", // stale config backup written on clean shutdown
+	"/root/.openclaw/openclaw.json.last-good", // stale config backup
 	"/root/.openclaw/update-check.json",       // OTA update-check timestamp
-	// Kept: npm/, plugin-skills/, canvas/, plugins/, identity/, lumi-device-key.json
-	// openclaw reset --scope config+creds+sessions preserves these automatically.
-	// openclaw.json is backed up before reset and restored after (see runFactoryReset).
+	// Kept by openclaw reset --scope config+creds+sessions:
+	//   npm/, plugin-skills/, canvas/, plugins/, identity/, lumi-device-key.json
+	// openclaw.json is intentionally wiped and NOT restored — SetupAgent detects
+	// the missing file and calls onboardOpenclaw() to create a fresh one.
+	// openclaw.service is disabled before reboot so it is NOT running when
+	// onboard executes (onboard fails if the gateway is already up).
 }
 
 // lumiWipePaths are Lumi-specific state files not managed by the openclaw CLI.
@@ -95,7 +96,7 @@ func runFactoryReset(opts FactoryResetOptions) (started bool, errStatus int, err
 	factoryResetLastFire = time.Now()
 	factoryResetMu.Unlock()
 
-	log.Printf("[factory-reset] accepted — 4-step reset: backup openclaw.json → openclaw reset → restore → wipe %d state + %d lumi paths → reboot",
+	log.Printf("[factory-reset] accepted — 3-step reset: openclaw reset → disable service → wipe %d state + %d lumi paths → reboot",
 		len(openclawStatePaths), len(lumiWipePaths))
 
 	go func() {
@@ -105,47 +106,36 @@ func runFactoryReset(opts FactoryResetOptions) (started bool, errStatus int, err
 			factoryResetMu.Unlock()
 		}()
 
-		// Step 1: backup openclaw.json.
-		// openclaw reset --scope config+creds+sessions removes openclaw.json, but
-		// we need it intact so openclaw.service starts normally after reboot and
-		// SetupAgent patches it in-place instead of triggering openclaw onboard
-		// (which fails when the gateway is already running).
-		log.Printf("[factory-reset] step 1/4 — backing up %s", openclawConfigPath)
-		configBackup, backupErr := os.ReadFile(openclawConfigPath)
-		if backupErr != nil {
-			log.Printf("[factory-reset] step 1/4 — backup failed: %v (will skip restore)", backupErr)
-		} else {
-			log.Printf("[factory-reset] step 1/4 — backup ok (%d bytes)", len(configBackup))
-		}
-
-		// Step 2: openclaw reset — stops the gateway service cleanly and wipes
-		// openclaw.json + credentials. Plugins (npm/, plugin-skills/, canvas/,
-		// plugins/) and identity are preserved by this scope.
-		log.Printf("[factory-reset] step 2/4 — openclaw reset --scope config+creds+sessions")
+		// Step 1: openclaw reset — stops the gateway cleanly, wipes openclaw.json
+		// + credentials. Preserves npm/, plugin-skills/, identity/.
+		// openclaw.json is intentionally NOT restored: SetupAgent will detect it
+		// missing and call onboardOpenclaw() → fresh config on next setup.
+		log.Printf("[factory-reset] step 1/3 — openclaw reset --scope config+creds+sessions")
 		out, err := exec.Command("openclaw", "reset",
 			"--scope", "config+creds+sessions",
 			"--yes", "--non-interactive",
 		).CombinedOutput()
 		outStr := strings.TrimSpace(string(out))
 		if err != nil {
-			log.Printf("[factory-reset] step 2/4 — openclaw reset error: %v — %s", err, outStr)
+			log.Printf("[factory-reset] step 1/3 — openclaw reset error: %v — %s", err, outStr)
 		} else {
-			log.Printf("[factory-reset] step 2/4 — openclaw reset done: %s", outStr)
+			log.Printf("[factory-reset] step 1/3 — openclaw reset done: %s", outStr)
 		}
 
-		// Step 3: restore openclaw.json so openclaw.service has its config on reboot.
-		log.Printf("[factory-reset] step 3/4 — restoring openclaw.json")
-		if backupErr != nil {
-			log.Printf("[factory-reset] step 3/4 — skipped (no backup)")
-		} else if err := os.WriteFile(openclawConfigPath, configBackup, 0600); err != nil {
-			log.Printf("[factory-reset] step 3/4 — restore failed: %v", err)
+		// Step 2: disable openclaw.service so it does NOT auto-start on reboot.
+		// Without this, the service starts without openclaw.json (broken state)
+		// and onboardOpenclaw() fails with "gateway already running".
+		// SetupAgent re-enables it via restartOpenclawGateway() after onboard.
+		log.Printf("[factory-reset] step 2/3 — disabling openclaw.service")
+		if out, err := exec.Command("systemctl", "disable", "openclaw").CombinedOutput(); err != nil {
+			log.Printf("[factory-reset] step 2/3 — disable openclaw error: %v — %s", err, strings.TrimSpace(string(out)))
 		} else {
-			log.Printf("[factory-reset] step 3/4 — restore ok")
+			log.Printf("[factory-reset] step 2/3 — openclaw.service disabled")
 		}
 
-		// Step 4: wipe remaining state (openclaw dirs + lumi paths).
+		// Step 3: wipe remaining state (openclaw dirs + lumi paths).
 		total := len(openclawStatePaths) + len(lumiWipePaths)
-		log.Printf("[factory-reset] step 4/4 — wiping %d paths (%d openclaw state + %d lumi)",
+		log.Printf("[factory-reset] step 3/3 — wiping %d paths (%d openclaw state + %d lumi)",
 			total, len(openclawStatePaths), len(lumiWipePaths))
 		for _, p := range append(openclawStatePaths, lumiWipePaths...) {
 			if err := os.RemoveAll(p); err != nil {
