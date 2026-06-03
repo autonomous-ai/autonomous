@@ -98,6 +98,9 @@ func (s *Service) SetupStatus() (phase, lanIP, errMsg string) {
 
 func (s *Service) Setup(data domain.SetupRequest) error {
 	slog.Info("starting setup", "component", "device")
+	data.LLMBaseURL = normalizeBaseURL(data.LLMBaseURL)
+	data.STTBaseURL = normalizeBaseURL(data.STTBaseURL)
+	data.TTSBaseURL = normalizeBaseURL(data.TTSBaseURL)
 	s.setupState.set(SetupPhaseConnecting, "", "")
 	result, err := s.networkService.SetupNetwork(data.SSID, data.Password)
 	if err != nil {
@@ -128,7 +131,7 @@ func (s *Service) Setup(data domain.SetupRequest) error {
 	channel := data.EffectiveChannel()
 
 	s.config.LLMAPIKey = llmAPIKey
-	s.config.LLMBaseURL = normalizeBaseURL(llmBaseURL)
+	s.config.LLMBaseURL = llmBaseURL
 	s.config.LLMModel = llmModel
 	s.config.Channel = channel
 	switch channel {
@@ -147,8 +150,8 @@ func (s *Service) Setup(data domain.SetupRequest) error {
 	s.config.DeepgramAPIKey = data.DeepgramAPIKey
 	s.config.STTAPIKey = data.STTAPIKey
 	s.config.TTSAPIKey = data.TTSAPIKey
-	s.config.STTBaseURL = normalizeBaseURL(data.STTBaseURL)
-	s.config.TTSBaseURL = normalizeBaseURL(data.TTSBaseURL)
+	s.config.STTBaseURL = data.STTBaseURL
+	s.config.TTSBaseURL = data.TTSBaseURL
 	s.config.STTLanguage = data.STTLanguage
 	s.config.STTModel = sttModelForLanguage(data.STTLanguage)
 	if data.TTSProvider != "" {
