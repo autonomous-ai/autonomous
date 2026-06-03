@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,20 +15,45 @@ import (
 	"go-lamp.autonomous.ai/server/serializers"
 )
 
-// FactoryResetWipePaths lists everything the soft reset deletes. These are the
-// per-device files written by the setup wizard + runtime — wiping them returns
-// the device to "fresh out of box" state. Binaries, systemd units, lelamp .venv,
-// kernel, and OS packages are NOT touched (those belong to software-update).
-//
-// Edit this slice when new persistent state is introduced anywhere in the
-// codebase. Wildcards are NOT expanded — use a directory path and trust the
-// recursive remove. Missing paths are silently ignored.
-var FactoryResetWipePaths = []string{
+// openclawStatePaths are openclaw runtime state dirs wiped on factory reset.
+// openclaw reset --scope config+creds+sessions removes openclaw.json +
+// credentials but not these dirs — wipe them manually.
+// Missing paths are silently ignored.
+var openclawStatePaths = []string{
+	"/root/.openclaw/agents",                  // conversation sessions + history
+	"/root/.openclaw/workspace",               // agent memory (HEARTBEAT.md, SOUL.md, USER.md, memory/)
+	"/root/.openclaw/devices",                 // paired devices list
+	"/root/.openclaw/tasks",                   // background task runs
+	"/root/.openclaw/logs",                    // runtime logs
+	"/root/.openclaw/telegram",                // telegram update offset
+	"/root/.openclaw/discord",                 // discord command deploy cache
+	"/root/.openclaw/plugin-state",            // plugin runtime state
+	"/root/.openclaw/memory",                  // memory sqlite db
+	"/root/.openclaw/delivery-queue",          // failed message delivery queue
+	"/root/.openclaw/subagents",               // subagent run history
+	"/root/.openclaw/cron",                    // cron jobs + state
+	"/root/.openclaw/media",                   // outbound media files
+	"/root/.openclaw/flows",                   // flow registry
+	"/root/.openclaw/openclaw.json.last-good", // stale config backup
+	"/root/.openclaw/openclaw.json.bak",       // backup config — contains gateway token
+	"/root/.openclaw/openclaw.json.bak.1",     // older backup — same risk
+	"/root/.openclaw/update-check.json",       // OTA update-check timestamp
+	"/root/.openclaw/.openclaw",               // nested stale workspace from initial install
+	"/root/.openclaw/.cache",                  // runtime cache (preventive)
+	// Kept by openclaw reset --scope config+creds+sessions:
+	//   npm/, plugin-skills/, canvas/, plugins/, identity/, lumi-device-key.json
+	// openclaw.json is intentionally wiped and NOT restored — SetupAgent detects
+	// the missing file and calls onboardOpenclaw() to create a fresh one.
+	// openclaw.service is disabled before reboot so it is NOT running when
+	// onboard executes (onboard fails if the gateway is already up).
+}
+
+// lumiWipePaths are Lumi-specific state files not managed by the openclaw CLI.
+var lumiWipePaths = []string{
 	"/root/config",                                  // lamp-server config.json (API keys, channel tokens, MQTT creds)
-	"/root/.openclaw",                               // OpenClaw state (sessions, identity, browser profile, memory)
 	"/root/local/users",                             // face + voice enrollments (owner)
 	"/root/local/strangers",                         // face + voice enrollments (stranger)
-	"/var/lib/lelamp/snapshots",                     // persistent camera snapshots (sensing_face / motion / emotion, 72h TTL). Matches lelamp/config.py LELAMP_SNAPSHOT_PERSIST_DIR default.
+	"/var/lib/lelamp/snapshots",                     // persistent camera snapshots (sensing_face / motion / emotion, 72h TTL)
 	"/etc/wpa_supplicant/wpa_supplicant-wlan0.conf", // home WiFi credentials → forces AP mode on next boot
 }
 
@@ -57,7 +83,7 @@ type FactoryResetOptions struct{}
 // Returns (started, errStatus, errMessage). errStatus mirrors HTTP semantics
 // so HTTP callers can use it directly; non-HTTP callers (MQTT/GPIO) just
 // check started=false and log errMessage.
-func runFactoryReset(opts FactoryResetOptions) (started bool, errStatus int, errMessage string) {
+func runFactoryReset(_ FactoryResetOptions) (started bool, errStatus int, errMessage string) {
 	factoryResetMu.Lock()
 	if factoryResetInFlight {
 		factoryResetMu.Unlock()
@@ -74,34 +100,57 @@ func runFactoryReset(opts FactoryResetOptions) (started bool, errStatus int, err
 	factoryResetLastFire = time.Now()
 	factoryResetMu.Unlock()
 
-	log.Printf("[factory-reset] starting (wipe %d paths, then reboot)", len(FactoryResetWipePaths))
+	log.Printf("[factory-reset] accepted — 3-step reset: openclaw reset → disable service → wipe %d state + %d lumi paths → reboot",
+		len(openclawStatePaths), len(lumiWipePaths))
 
 	go func() {
-		// Reset the in-flight flag on any non-reboot exit so a failed run
-		// doesn't block subsequent attempts forever. On successful reboot
-		// the process dies before this runs — harmless.
 		defer func() {
 			factoryResetMu.Lock()
 			factoryResetInFlight = false
 			factoryResetMu.Unlock()
 		}()
 
-		// Wipe state. systemd will kill any service holding these files when
-		// reboot fires below; no need to stop services first.
-		for _, p := range FactoryResetWipePaths {
+		// Step 1: openclaw reset — stops the gateway cleanly, wipes openclaw.json
+		// + credentials. Preserves npm/, plugin-skills/, identity/.
+		// openclaw.json is intentionally NOT restored: SetupAgent will detect it
+		// missing and call onboardOpenclaw() → fresh config on next setup.
+		log.Printf("[factory-reset] step 1/3 — openclaw reset --scope config+creds+sessions")
+		out, err := exec.Command("openclaw", "reset",
+			"--scope", "config+creds+sessions",
+			"--yes", "--non-interactive",
+		).CombinedOutput()
+		outStr := strings.TrimSpace(string(out))
+		if err != nil {
+			log.Printf("[factory-reset] step 1/3 — openclaw reset error: %v — %s", err, outStr)
+		} else {
+			log.Printf("[factory-reset] step 1/3 — openclaw reset done: %s", outStr)
+		}
+
+		// Step 2: disable openclaw.service so it does NOT auto-start on reboot.
+		// Without this, the service starts without openclaw.json (broken state)
+		// and onboardOpenclaw() fails with "gateway already running".
+		// SetupAgent re-enables it via restartOpenclawGateway() after onboard.
+		log.Printf("[factory-reset] step 2/3 — disabling openclaw.service")
+		if out, err := exec.Command("systemctl", "disable", "openclaw").CombinedOutput(); err != nil {
+			log.Printf("[factory-reset] step 2/3 — disable openclaw error: %v — %s", err, strings.TrimSpace(string(out)))
+		} else {
+			log.Printf("[factory-reset] step 2/3 — openclaw.service disabled")
+		}
+
+		// Step 3: wipe remaining state (openclaw dirs + lumi paths).
+		total := len(openclawStatePaths) + len(lumiWipePaths)
+		log.Printf("[factory-reset] step 3/3 — wiping %d paths (%d openclaw state + %d lumi)",
+			total, len(openclawStatePaths), len(lumiWipePaths))
+		for _, p := range append(openclawStatePaths, lumiWipePaths...) {
 			if err := os.RemoveAll(p); err != nil {
-				log.Printf("[factory-reset] wipe %s failed: %v", p, err)
-				// Best-effort — don't abort. Reboot will still proceed and
-				// the next boot sees whichever state was successfully wiped.
+				log.Printf("[factory-reset] wipe %s: %v (non-fatal)", p, err)
 				continue
 			}
 			log.Printf("[factory-reset] wiped %s", p)
 		}
 
-		// Detached `sleep 2 && systemctl reboot` so the HTTP response makes
-		// it out the door and journal flushes before init kills us.
-		// Fire-and-forget — we don't Wait() because reboot kills us mid-Wait.
-		log.Printf("[factory-reset] rebooting in 2s")
+		// Detached reboot so the HTTP response escapes before init kills us.
+		log.Printf("[factory-reset] all done — rebooting in 2s")
 		if err := exec.Command("sh", "-c", "(sleep 2 && systemctl reboot) &").Start(); err != nil {
 			log.Printf("[factory-reset] schedule reboot failed: %v", err)
 		}
@@ -131,7 +180,6 @@ func FactoryReset(c *gin.Context) {
 	started, status, msg := runFactoryReset(opts)
 	if !started {
 		if status == http.StatusTooManyRequests {
-			// Surface Retry-After so the web UI can show a useful countdown.
 			factoryResetMu.Lock()
 			wait := FactoryResetMinInterval - time.Since(factoryResetLastFire)
 			factoryResetMu.Unlock()
@@ -144,9 +192,10 @@ func FactoryReset(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, serializers.ResponseSuccess(gin.H{
-		"started": true,
-		"message": "Soft factory reset started. Device will wipe Lamp state and reboot into AP setup mode (~30s).",
-		"wipes":   FactoryResetWipePaths,
+		"started":        true,
+		"message":        "Soft factory reset started. Device will wipe Lamp state and reboot into AP setup mode (~30s).",
+		"openclaw_reset": "config+creds+sessions",
+		"lumi_wipes":     lumiWipePaths,
 	}))
 }
 

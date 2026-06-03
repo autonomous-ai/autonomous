@@ -126,6 +126,8 @@ class LBSetting(BaseModel):
     host: str = "0.0.0.0"
     port: int = 7999
     internal_prefix: str = ""
+    http_timeout: float = 120.0  # seconds, httpx client timeout for backend requests
+    ws_open_timeout: float = 120.0  # seconds, websocket handshake timeout to backend
 
 
 class Settings(BaseSettings):

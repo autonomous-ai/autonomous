@@ -89,6 +89,8 @@ async def object_detection_ws(websocket: WebSocket, detector_name: str):
 
     except WebSocketDisconnect:
         logger.info("Object detection WebSocket disconnected (%s)", detector_name)
+    except Exception:
+        logger.exception("Object detection WebSocket handler crashed (%s)", detector_name)
 
 
 @http_router.post("/object-detect/{detector_name}", response_model=ObjectDetectResponse)

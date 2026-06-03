@@ -112,6 +112,94 @@ func (s *Service) WatchIdentity(ctx context.Context) {
 	}
 }
 
+// UpdateIdentityName rewrites the `**Name:**` line in workspace/IDENTITY.md so
+// downstream consumers (parseIdentityName / WatchIdentity → wake words) see the
+// new agent name. Preserves any bullet prefix and everything else in the file;
+// appends a fresh `- **Name:** <name>` line when none exists yet. Atomic write
+// via tmp+rename so a mid-write crash cannot truncate the file.
+func (s *Service) UpdateIdentityName(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("identity name is required")
+	}
+
+	identityPath := filepath.Join(s.config.OpenclawConfigDir, "workspace", "IDENTITY.md")
+	dir := filepath.Dir(identityPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+
+	existing, err := os.ReadFile(identityPath)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("read %s: %w", identityPath, err)
+	}
+
+	updated := rewriteIdentityName(string(existing), name)
+
+	tmp, err := os.CreateTemp(dir, ".IDENTITY.*.tmp")
+	if err != nil {
+		return fmt.Errorf("create tmp: %w", err)
+	}
+	tmpPath := tmp.Name()
+	if _, err := tmp.WriteString(updated); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("write tmp: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("close tmp: %w", err)
+	}
+	if err := os.Rename(tmpPath, identityPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename: %w", err)
+	}
+	_ = chownRuntimeUserIfRoot(identityPath, openclawRuntimeUser)
+	slog.Info("identity name updated", "component", "openclaw", "name", name, "path", identityPath)
+	return nil
+}
+
+// rewriteIdentityName returns content with the first `**name:**` line's value
+// replaced by name. The line's leading prefix (e.g. "- ") is preserved; any
+// trailing description after the value is dropped. When no name line is found,
+// "- **Name:** <name>" is appended (with a leading newline if needed).
+func rewriteIdentityName(content, name string) string {
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		idx := strings.Index(strings.ToLower(line), "**name:**")
+		if idx < 0 {
+			continue
+		}
+		lines[i] = line[:idx] + "**Name:** " + name
+		// Drop a following italic-parens placeholder hint like
+		// `  _(pick something you like)_` left over from the OpenClaw onboarding
+		// template — once the user picks a name, the hint is stale.
+		if i+1 < len(lines) && isItalicPlaceholder(lines[i+1]) {
+			lines = append(lines[:i+1], lines[i+2:]...)
+		}
+		return strings.Join(lines, "\n")
+	}
+	// No existing name line — append one. Add a trailing newline only when the
+	// file doesn't already end with one so we don't accumulate blank lines.
+	prefix := content
+	if prefix != "" && !strings.HasSuffix(prefix, "\n") {
+		prefix += "\n"
+	}
+	return prefix + "- **Name:** " + name + "\n"
+}
+
+// isItalicPlaceholder returns true when line is a markdown italic note wrapped
+// in `_(...)_` or `*(...)*` (with optional leading whitespace). Used to detect
+// and remove OpenClaw's onboarding-template hint lines after rename.
+func isItalicPlaceholder(line string) bool {
+	t := strings.TrimSpace(line)
+	if len(t) < 4 {
+		return false
+	}
+	return (strings.HasPrefix(t, "_(") && strings.HasSuffix(t, ")_")) ||
+		(strings.HasPrefix(t, "*(") && strings.HasSuffix(t, ")*"))
+}
+
 // parseIdentityName extracts the agent name from IDENTITY.md content.
 // Looks for a line matching: - **Name:** <value>
 func parseIdentityName(content string) string {

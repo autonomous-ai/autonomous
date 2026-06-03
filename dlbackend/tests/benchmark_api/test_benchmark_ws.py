@@ -93,10 +93,6 @@ def _ws_frame_msg(task: str) -> dict[str, Any]:
     return {"type": "frame", "task": task, "frame_b64": _make_frame_b64()}
 
 
-def _ws_object_frame_msg() -> dict[str, Any]:
-    return {"type": "frame", "task": "object", "frame_b64": _load_image_b64()}
-
-
 ALL_WS_ENDPOINTS: list[WSEndpointSpec] = [
     WSEndpointSpec(
         name="ws_pose",
@@ -116,12 +112,6 @@ ALL_WS_ENDPOINTS: list[WSEndpointSpec] = [
         path="/lelamp/api/dl/action-analysis/ws",
         task="action",
         frame_msg_fn=lambda: _ws_frame_msg("action"),
-    ),
-    WSEndpointSpec(
-        name="ws_object",
-        path="/api/dl/object-detection/yoloworld/ws",
-        task="object",
-        frame_msg_fn=_ws_object_frame_msg,
     ),
 ]
 

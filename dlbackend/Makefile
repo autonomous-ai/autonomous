@@ -119,11 +119,15 @@ start-runpod-master: start-nginx start-runpod-dlserver start-runpod-lbserver
 start-runpod-master-ssl: start-nginx-ssl start-runpod-dlserver start-runpod-lbserver
 
 start-runpod-slave: start-nginx stop-runpod-dlserver install
-	@$(SET_TRT_LD_PATH); nohup python -m dlserver --host 127.0.0.1 --port $(LBSERVER_PORT) --log-dir /workspace/logs/dlbackend --pid-file $(DLSERVER_PID) </dev/null >/dev/null 2>&1 &
+	@command -v multilog >/dev/null || apt-get install -y daemontools
+	@mkdir -p /workspace/logs/dlserver/stderr
+	@$(SET_TRT_LD_PATH); nohup python -m dlserver --host 127.0.0.1 --port $(LBSERVER_PORT) --log-dir /workspace/logs/dlserver --pid-file $(DLSERVER_PID) </dev/null 2>&1 | multilog t s1048576 n3 /workspace/logs/dlserver/stderr &
 	@echo "dlserver started on port $(LBSERVER_PORT) (slave, no LB)"
 
 start-runpod-slave-ssl: start-nginx-ssl stop-runpod-dlserver install
-	@$(SET_TRT_LD_PATH); nohup python -m dlserver --host 127.0.0.1 --port $(LBSERVER_PORT) --log-dir /workspace/logs/dlbackend --pid-file $(DLSERVER_PID) </dev/null >/dev/null 2>&1 &
+	@command -v multilog >/dev/null || apt-get install -y daemontools
+	@mkdir -p /workspace/logs/dlserver/stderr
+	@$(SET_TRT_LD_PATH); nohup python -m dlserver --host 127.0.0.1 --port $(LBSERVER_PORT) --log-dir /workspace/logs/dlserver --pid-file $(DLSERVER_PID) </dev/null 2>&1 | multilog t s1048576 n3 /workspace/logs/dlserver/stderr &
 	@echo "dlserver started on port $(LBSERVER_PORT) (slave-ssl, no LB)"
 
 gen-ssl-cert:
@@ -154,24 +158,30 @@ start-nginx-ssl: gen-ssl-cert
 	nginx -c $(NGINX_SSL_CONF)
 
 start-runpod-dlserver: install stop-runpod-dlserver
-	@$(SET_TRT_LD_PATH); nohup python -m dlserver --host 127.0.0.1 --port $(DLSERVER_PORT) --log-dir /workspace/logs/dlbackend --pid-file $(DLSERVER_PID) </dev/null >/dev/null 2>&1 &
+	@command -v multilog >/dev/null || apt-get install -y daemontools
+	@mkdir -p /workspace/logs/dlserver/stderr
+	@$(SET_TRT_LD_PATH); nohup python -m dlserver --host 127.0.0.1 --port $(DLSERVER_PORT) --log-dir /workspace/logs/dlserver --pid-file $(DLSERVER_PID) </dev/null 2>&1 | multilog t s1048576 n3 /workspace/logs/dlserver/stderr &
 	@echo "dlserver started on port $(DLSERVER_PORT)"
 
 stop-runpod-dlserver:
 	@if [ -f $(DLSERVER_PID) ]; then \
 		kill $$(cat $(DLSERVER_PID)) 2>/dev/null || true; \
 		rm -f $(DLSERVER_PID); \
+		sleep 3; \
 		echo "dlserver stopped"; \
 	fi
 
 start-runpod-lbserver: install-lb stop-runpod-lbserver
-	@nohup python -m lbserver --host 127.0.0.1 --port $(LBSERVER_PORT) --log-dir /workspace/logs/lbserver --pid-file $(LBSERVER_PID) </dev/null >/dev/null 2>&1 &
+	@command -v multilog >/dev/null || apt-get install -y daemontools
+	@mkdir -p /workspace/logs/lbserver/stderr
+	@nohup python -m lbserver --host 127.0.0.1 --port $(LBSERVER_PORT) --log-dir /workspace/logs/lbserver --pid-file $(LBSERVER_PID) </dev/null 2>&1 | multilog t s1048576 n3 /workspace/logs/lbserver/stderr &
 	@echo "lbserver started on port $(LBSERVER_PORT)"
 
 stop-runpod-lbserver:
 	@if [ -f $(LBSERVER_PID) ]; then \
 		kill $$(cat $(LBSERVER_PID)) 2>/dev/null || true; \
 		rm -f $(LBSERVER_PID); \
+		sleep 3; \
 		echo "lbserver stopped"; \
 	fi
 
@@ -220,7 +230,7 @@ info:
 	fi
 	@echo ""
 	@echo "=== Logs ==="
-	@echo "  dlserver:  /workspace/logs/dlbackend/"
+	@echo "  dlserver:  /workspace/logs/dlserver/"
 	@echo "  lbserver:  /workspace/logs/lbserver/"
 	@echo "  jupyter:   /workspace/logs/jupyter/"
 

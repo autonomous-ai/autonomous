@@ -18,6 +18,8 @@ import logging
 import time
 from enum import Enum
 
+import requests
+
 import lelamp.config as config
 from lelamp.presets import RGB_CMD_SOLID
 
@@ -41,6 +43,10 @@ class PresenseService:
         self._state = PresenceState.PRESENT
         self._last_motion_time: float = time.time()
         self._enabled = True
+
+        # Guard mode cache — checked periodically from lamp-server API
+        self._guard_mode: bool = False
+        self._guard_last_check: float = 0.0
 
         # Last known scene color (before dimming/off) so we can restore
         self._last_color: tuple = (255, 180, 100)  # default warm white
@@ -83,9 +89,27 @@ class PresenseService:
             )
             self._restore_light()
 
+    def _is_guard_mode(self) -> bool:
+        """Check guard mode from lamp-server API, cached for _GUARD_CHECK_INTERVAL_S."""
+        now = time.time()
+        if now - self._guard_last_check < config.GUARD_CHECK_INTERVAL_S:
+            return self._guard_mode
+        self._guard_last_check = now
+        try:
+            resp = requests.get(config.GUARD_STATUS_URL, timeout=2)
+            if resp.status_code == 200:
+                self._guard_mode = resp.json().get("data", {}).get("guard_mode", False)
+        except Exception:
+            pass  # keep last known value
+        return self._guard_mode
+
     def tick(self):
         """Called periodically by sensing loop to check timeouts."""
         if not self._enabled or self._state == PresenceState.DISABLED:
+            return
+
+        # Guard mode: never transition to IDLE or AWAY — lamp must stay alert.
+        if self._is_guard_mode():
             return
 
         elapsed = time.time() - self._last_motion_time
