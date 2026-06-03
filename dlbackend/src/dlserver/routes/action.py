@@ -82,3 +82,5 @@ async def action_analysis_ws(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("Action analysis WebSocket disconnected")
+    except Exception:
+        logger.exception("Action analysis WebSocket handler crashed")

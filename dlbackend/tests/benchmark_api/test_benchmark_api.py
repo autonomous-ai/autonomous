@@ -164,6 +164,13 @@ ALL_ENDPOINTS: list[EndpointSpec] = [
         ok_codes={200, 503},
     ),
     EndpointSpec(
+        name="object_detect",
+        method="POST",
+        path="/api/dl/owlv2",
+        payload_fn=_object_detect_payload,
+        ok_codes={200, 503},
+    ),
+    EndpointSpec(
         name="health",
         method="GET",
         path="/lelamp/api/dl/health",

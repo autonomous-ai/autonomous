@@ -86,6 +86,8 @@ async def emotion_analysis_ws(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("Facial emotion analysis WebSocket disconnected")
+    except Exception:
+        logger.exception("Facial emotion WebSocket handler crashed")
 
 
 @http_router.get("/emotion-labels")

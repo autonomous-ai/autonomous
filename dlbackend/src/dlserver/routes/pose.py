@@ -82,3 +82,5 @@ async def pose_estimation_ws(websocket: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("Pose estimation WebSocket disconnected")
+    except Exception:
+        logger.exception("Pose estimation WebSocket handler crashed")

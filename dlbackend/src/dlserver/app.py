@@ -11,9 +11,13 @@ Usage:
 import argparse
 import asyncio
 import logging
+import logging.handlers
 import os
 import secrets
+import signal
 from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, Security
@@ -145,23 +149,24 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("Shutting down DL backend...")
-    action_model = get_action_model()
-    if action_model is not None:
-        await action_model.stop()
-    emotion_model = get_emotion_model()
-    if emotion_model is not None:
-        await emotion_model.stop()
-    pose_model = get_pose_model()
-    if pose_model is not None:
-        await pose_model.stop()
-    for name, model in get_object_models().items():
-        await model.stop()
-    audio_embedder = get_audio_embedder()
-    if audio_embedder is not None:
-        await asyncio.to_thread(audio_embedder.stop)
-    audio_emotion_model = get_audio_emotion_model()
-    if audio_emotion_model is not None:
-        await audio_emotion_model.stop()
+    for name, stopper in [
+        ("action", lambda: get_action_model().stop() if get_action_model() else None),
+        ("emotion", lambda: get_emotion_model().stop() if get_emotion_model() else None),
+        ("pose", lambda: get_pose_model().stop() if get_pose_model() else None),
+        ("audio_embedder", lambda: asyncio.to_thread(get_audio_embedder().stop) if get_audio_embedder() else None),
+        ("audio_emotion", lambda: get_audio_emotion_model().stop() if get_audio_emotion_model() else None),
+    ]:
+        try:
+            result = stopper()
+            if result is not None:
+                await result
+        except Exception:
+            logger.exception("Failed to stop %s", name)
+    for obj_name, obj_model in get_object_models().items():
+        try:
+            await obj_model.stop()
+        except Exception:
+            logger.exception("Failed to stop object detector '%s'", obj_name)
     logger.info("DL backend shutdown complete")
 
 
@@ -198,35 +203,78 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _setup_logging(log_dir: str | None) -> None:
-    if log_dir:
-        from logging.handlers import RotatingFileHandler
-        from pathlib import Path
+def _setup_logging(log_dir: str | None) -> dict[str, Any] | None:
+    """Configure application logging. Returns uvicorn log_config dict (or None for console)."""
+    if not log_dir:
+        logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+        return None
 
+    try:
         Path(log_dir).mkdir(parents=True, exist_ok=True)
-        # Clean up old .bak files, then rename current logs to .bak
-        for bak in Path(log_dir).glob("dlserver.log*.bak"):
-            bak.unlink()
-        for old in Path(log_dir).glob("dlserver.log*"):
-            old.rename(Path(str(old) + ".bak"))
         log_path = Path(log_dir) / "dlserver.log"
-        handler = RotatingFileHandler(
-            str(log_path), maxBytes=1_048_576, backupCount=3
-        )
+        uvicorn_log_path = Path(log_dir) / "uvicorn.log"
+        # Rotate old logs
+        for prefix in ("dlserver.log", "uvicorn.log"):
+            for bak in Path(log_dir).glob(f"{prefix}*.bak"):
+                bak.unlink()
+            for old in Path(log_dir).glob(f"{prefix}*"):
+                old.rename(Path(str(old) + ".bak"))
+        handler = logging.handlers.RotatingFileHandler(str(log_path), maxBytes=1_048_576, backupCount=3)
         handler.setFormatter(logging.Formatter(LOG_FORMAT))
         logging.basicConfig(level=logging.INFO, handlers=[handler])
-    else:
+
+        # Route uvicorn/fastapi logs to a separate file
+        return {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {"format": LOG_FORMAT},
+                "access": {"format": LOG_FORMAT},
+            },
+            "handlers": {
+                "default": {
+                    "formatter": "default",
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "filename": str(uvicorn_log_path),
+                    "maxBytes": 1_048_576,
+                    "backupCount": 3,
+                },
+                "access": {
+                    "formatter": "access",
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "filename": str(uvicorn_log_path),
+                    "maxBytes": 1_048_576,
+                    "backupCount": 3,
+                },
+            },
+            "loggers": {
+                "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": False},
+                "uvicorn.error": {"level": "INFO"},
+                "uvicorn.access": {"handlers": ["access"], "level": "INFO", "propagate": False},
+            },
+        }
+    except Exception as e:
         logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
+        logging.getLogger(__name__).warning("File logging setup failed, using console: %s", e)
+        return None
 
 
 def main() -> None:
     args = parse_args()
-    _setup_logging(args.log_dir)
+    uvicorn_log_config = _setup_logging(args.log_dir)
+
+    # Log SIGTERM so we know when the container/orchestrator kills us.
+    # SIGKILL (OOM) can't be caught — but SIGTERM (graceful stop) now logs.
+    def _handle_sigterm(signum, frame):
+        logger.critical("SIGTERM received — shutting down (pid=%d)", os.getpid())
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)
 
     if args.pid_file:
-        from pathlib import Path
-
-        Path(args.pid_file).write_text(str(os.getpid()))
+        try:
+            Path(args.pid_file).write_text(str(os.getpid()))
+        except Exception as e:
+            logger.warning("Failed to write PID file %s: %s", args.pid_file, e)
 
     logger.info("Starting DL backend on %s:%d (pid=%d)", args.host, args.port, os.getpid())
-    uvicorn.run(app, host=args.host, port=args.port)
+    uvicorn.run(app, host=args.host, port=args.port, log_config=uvicorn_log_config)
