@@ -5,6 +5,7 @@ from typing import Iterator, Optional
 
 from lelamp.presets import LANG_EN, LANG_VI
 from lelamp.service.voice.tts_backend import TTSBackend, STREAM_CHUNK_SIZE
+from lelamp.service.voice.tts_openai import _ensure_openai_v1
 
 logger = logging.getLogger("lelamp.voice.tts_backend")
 
@@ -114,7 +115,7 @@ class ElevenLabsTTSBackend(TTSBackend):
 
     def __init__(self, api_key: str, base_url: Optional[str] = None):
         self._api_key = api_key
-        self._base_url = (base_url or "").rstrip("/") + self.ELEVENLABS_PATH
+        self._base_url = _ensure_openai_v1(base_url or "") + self.ELEVENLABS_PATH
         self._client = None
         try:
             import httpx
