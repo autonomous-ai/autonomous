@@ -46,15 +46,31 @@ func (s *Service) GetTelegramTargets() ([]domain.TelegramTarget, error) {
 
 	seen := make(map[string]bool)
 	var targets []domain.TelegramTarget
-	for _, sess := range raw {
-		to := sess.LastTo
-		if dc := sess.DeliveryContext; dc != nil && dc.To != "" {
-			to = dc.To
-		}
-		if !strings.HasPrefix(to, "telegram:") {
+	for sessionKey, sess := range raw {
+		// Skip non-Telegram sessions (cron, dashboard, webchat, etc.)
+		if !strings.Contains(sessionKey, ":telegram:") {
 			continue
 		}
-		chatID := strings.TrimPrefix(to, "telegram:")
+
+		// Resolve chat ID from delivery target or session key.
+		var chatID string
+		if dc := sess.DeliveryContext; dc != nil && strings.HasPrefix(dc.To, "telegram:") {
+			chatID = strings.TrimPrefix(dc.To, "telegram:")
+		}
+		if chatID == "" && strings.HasPrefix(sess.LastTo, "telegram:") {
+			chatID = strings.TrimPrefix(sess.LastTo, "telegram:")
+		}
+		// Fallback: parse session key when delivery target is empty.
+		// DM keys:    agent:main:telegram:{account}:direct:{userId}
+		// Group keys: agent:main:telegram:group:{chatId}
+		if chatID == "" {
+			if i := strings.LastIndex(sessionKey, ":direct:"); i >= 0 {
+				chatID = sessionKey[i+len(":direct:"):]
+			} else if i := strings.LastIndex(sessionKey, ":group:"); i >= 0 {
+				chatID = sessionKey[i+len(":group:"):]
+			}
+		}
+
 		if chatID == "" || seen[chatID] {
 			continue
 		}
