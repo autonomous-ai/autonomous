@@ -404,6 +404,7 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 	var (
 		modelChanged    bool
 		thinkingChanged bool
+		baseURLChanged  bool
 		wifiChanged     bool
 		langChanged     bool
 		voiceChanged    bool
@@ -439,6 +440,7 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 			c.LLMModel = data.LLMModel
 		}
 		modelChanged = data.LLMModel != "" && data.LLMModel != prevModel
+		baseURLChanged = data.LLMBaseURL != "" && c.LLMBaseURL != prevLLMBaseURL
 		newModel = c.LLMModel
 
 		thinkingChanged = data.LLMDisableThinking != nil
@@ -586,9 +588,9 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 			slog.Warn("update openclaw primary model failed", "component", "device", "error", err)
 		}
 	}
-	if thinkingChanged && s.agentGateway != nil {
-		// RefreshModelsConfig also syncs agents.defaults.model.primary from
-		// s.config.LLMModel, so one restart covers both model and thinking changes.
+	if (thinkingChanged || baseURLChanged) && s.agentGateway != nil {
+		// RefreshModelsConfig syncs agents.defaults.model.primary, per-model
+		// reasoning, and providers.autonomous.baseUrl in one write + restart.
 		if err := s.agentGateway.RefreshModelsConfig(); err != nil {
 			slog.Error("refresh models config failed", "component", "device", "error", err)
 		}

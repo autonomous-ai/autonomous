@@ -548,10 +548,14 @@ func (s *Service) RefreshModelsConfig() error {
 	// here briefly) — consistent with syncPrimaryFromFile's order.
 	currentModel := s.config.LLMModelKey()
 
-	// Patch models.providers.autonomous.models[*].reasoning
+	// Patch models.providers.autonomous — baseUrl + per-model reasoning.
+	currentBaseURL := s.config.LLMBaseURL
 	if modelsMap, ok := configData["models"].(map[string]any); ok {
 		if providersMap, ok := modelsMap["providers"].(map[string]any); ok {
 			if providerEntry, ok := providersMap[customProviderName].(map[string]any); ok {
+				if currentBaseURL != "" {
+					providerEntry["baseUrl"] = currentBaseURL
+				}
 				if modelsList, ok := providerEntry["models"].([]any); ok {
 					for _, entry := range modelsList {
 						if m, ok := entry.(map[string]any); ok {
