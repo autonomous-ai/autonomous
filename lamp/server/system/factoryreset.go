@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,8 +36,7 @@ var openclawStatePaths = []string{
 	"/root/.openclaw/media",                   // outbound media files
 	"/root/.openclaw/flows",                   // flow registry
 	"/root/.openclaw/openclaw.json.last-good", // stale config backup
-	"/root/.openclaw/openclaw.json.bak",       // backup config — contains gateway token
-	"/root/.openclaw/openclaw.json.bak.1",     // older backup — same risk
+	// openclaw.json.bak* handled by glob below — covers .bak, .bak.1, .bak.2 … .bak.n
 	"/root/.openclaw/update-check.json",       // OTA update-check timestamp
 	"/root/.openclaw/.openclaw",               // nested stale workspace from initial install
 	"/root/.openclaw/.cache",                  // runtime cache (preventive)
@@ -138,6 +138,17 @@ func runFactoryReset(_ FactoryResetOptions) (started bool, errStatus int, errMes
 		}
 
 		// Step 3: wipe remaining state (openclaw dirs + lumi paths).
+		// First glob-wipe all openclaw.json.bak* variants (.bak, .bak.1, .bak.2 … .bak.n)
+		// to prevent credential leaks regardless of how many rotating backups openclaw made.
+		if bakFiles, err := filepath.Glob("/root/.openclaw/openclaw.json.bak*"); err == nil {
+			for _, f := range bakFiles {
+				if err := os.Remove(f); err != nil {
+					log.Printf("[factory-reset] wipe %s: %v (non-fatal)", f, err)
+				} else {
+					log.Printf("[factory-reset] wiped %s", f)
+				}
+			}
+		}
 		total := len(openclawStatePaths) + len(lumiWipePaths)
 		log.Printf("[factory-reset] step 3/3 — wiping %d paths (%d openclaw state + %d lumi)",
 			total, len(openclawStatePaths), len(lumiWipePaths))
