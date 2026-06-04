@@ -1,4 +1,4 @@
-# Autonomus Lamp
+# Autonomous Lamp
 
 https://github.com/user-attachments/assets/2e6eea7d-312e-47dd-94cf-0914dedeccc4
 
