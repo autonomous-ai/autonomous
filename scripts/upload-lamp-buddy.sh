@@ -3,7 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BUDDY_DIR="${ROOT_DIR}/lamp-buddy"
+BUDDY_DIR="${ROOT_DIR}/companions/lamp-buddy"
 VERSION_FILE="${BUDDY_DIR}/VERSION_LAMP_BUDDY"
 DIST_DIR="${BUDDY_DIR}/dist"
 
