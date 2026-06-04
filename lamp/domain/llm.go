@@ -57,6 +57,19 @@ func (m LLMModel) OpenClawAPIType() string {
 }
 
 type LLMModelsListResponse struct {
-	Count  int        `json:"count"`
+	Count int `json:"count"`
+	// Version is the upstream catalog version. The set-default-model flow only
+	// applies default_model / default_image_model when this is greater than the
+	// device's persisted DefaultModelVersion (avoids redundant gateway restarts).
+	Version int `json:"version"`
+	// DefaultModel is the upstream-recommended primary text model key.
+	DefaultModel string `json:"default_model"`
+	// DefaultImageModel is the upstream-recommended vision/image model key.
+	DefaultImageModel string `json:"default_image_model"`
+	// API is the wire protocol the autonomous provider speaks (e.g.
+	// "anthropic-messages"). Written into models.providers.autonomous.api at
+	// setup and overwritten on each sync. Empty falls back to the built-in
+	// default (autonomousProviderAPI).
+	API    string     `json:"api"`
 	Models []LLMModel `json:"models"`
 }

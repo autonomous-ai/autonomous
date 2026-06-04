@@ -12,17 +12,22 @@ import (
 	"time"
 
 	"go-lamp.autonomous.ai/domain"
+	"go-lamp.autonomous.ai/server/config"
 )
 
 // SyncModelsFromAPI fetches the live model list from ModelsAPIURL and
-// reconciles it into openclaw.json under s.config.OpenclawConfigDir. The
-// merge is additive:
-//   - providers.autonomous.models[] gains entries for any new model id;
-//     nothing is ever removed.
-//   - agents.defaults.models gains a "{provider}/{key}" entry for each model
-//     in the API response. Legacy unprefixed keys for the same model are
-//     replaced with the prefixed form (metadata preserved). Keys for models
-//     not in the API response are left untouched.
+// reconciles it into openclaw.json under s.config.OpenclawConfigDir. The model
+// catalog is OVERWRITTEN (not merged):
+//   - providers.autonomous.models[] is replaced 1:1 with the fetched list —
+//     stale entries removed, new entries added.
+//   - agents.defaults.models autonomous/* keys are reconciled to exactly match
+//     the fetched keys (legacy unprefixed entries purged). Keys for other
+//     providers (e.g. "venice/...") are left untouched.
+//
+// When the fetched catalog version is newer than config.DefaultModelVersion it
+// also applies the upstream default_model and default_image_model (each gated
+// to skip fields the user manually pointed at another provider), then persists
+// the new version (and primary) into config.
 //
 // No-op (returns false, nil) when openclaw.json is missing or the provider
 // section is absent. A failed fetch / invalid JSON returns an error so the
@@ -60,7 +65,7 @@ func (s *Service) SyncModelsFromAPI() (bool, error) {
 		return false, nil
 	}
 
-	return applyModelsToConfig(configPath, configData, autonomousMap, resp.Models)
+	return s.applyModelsToConfig(configPath, configData, autonomousMap, resp)
 }
 
 // StartModelSync runs the periodic model sync loop until ctx is cancelled.
@@ -154,18 +159,31 @@ func autonomousProviderMap(configData map[string]any) (map[string]any, bool) {
 	return autonomousMap, true
 }
 
-// applyModelsToConfig merges the given fetched models into both
-// providers.autonomous.models and agents.defaults.models, writes the file when
-// anything changed, and restarts the openclaw gateway. Idempotent.
-func applyModelsToConfig(configPath string, configData map[string]any, autonomousMap map[string]any, fetched []domain.LLMModel) (bool, error) {
+// applyModelsToConfig overwrites the autonomous model catalog in both
+// providers.autonomous.models and agents.defaults.models, applies the
+// version-gated default text/image model, writes the file when anything
+// changed, restarts the openclaw gateway, and persists the applied catalog
+// version (and resolved primary) into config. Idempotent.
+func (s *Service) applyModelsToConfig(configPath string, configData map[string]any, autonomousMap map[string]any, resp *domain.LLMModelsListResponse) (bool, error) {
+	fetched := resp.Models
+
 	existingProvider, _ := autonomousMap["models"].([]any)
-	mergedProvider, providerChanged := mergeProviderModels(existingProvider, fetched)
+	newProvider, providerChanged := overwriteProviderModels(existingProvider, fetched)
+
+	// Overwrite the provider wire protocol from upstream (fallback to the
+	// built-in default when omitted). Always reconciled, like the catalog —
+	// not version-gated.
+	apiType := resolveAutonomousAPI(resp.API)
+	var apiChanged bool
+	if cur, _ := autonomousMap["api"].(string); cur != apiType {
+		apiChanged = true
+	}
 
 	var agentChanged bool
 	if agentsMap, ok := configData["agents"].(map[string]any); ok {
 		if defaultsMap, ok := agentsMap["defaults"].(map[string]any); ok {
 			existingAgent, _ := defaultsMap["models"].(map[string]any)
-			merged, changed := mergeAgentModels(existingAgent, fetched)
+			merged, changed := overwriteAgentAutonomousModels(existingAgent, fetched)
 			if changed {
 				defaultsMap["models"] = merged
 				agentChanged = true
@@ -173,20 +191,43 @@ func applyModelsToConfig(configPath string, configData map[string]any, autonomou
 		}
 	}
 
-	if !providerChanged && !agentChanged {
-		return false, nil
+	// Version-gated default model / image model. Only when upstream published a
+	// newer catalog version, and only for fields still on the autonomous
+	// provider (preserve a user's manual provider switch).
+	applyDefaults := resp.Version > 0 && resp.Version > s.config.DefaultModelVersion
+	var primaryChanged, imageChanged bool
+	if applyDefaults {
+		if isDefaultsOnAutonomous(configData) {
+			primaryChanged = applyDefaultPrimaryModel(configData, strings.TrimSpace(resp.DefaultModel))
+		}
+		if isImageModelOnAutonomous(configData) {
+			imageChanged = applyDefaultImageModel(configData, strings.TrimSpace(resp.DefaultImageModel))
+		}
 	}
+
 	if providerChanged {
-		autonomousMap["models"] = mergedProvider
+		autonomousMap["models"] = newProvider
+	}
+	if apiChanged {
+		autonomousMap["api"] = apiType
+	}
+
+	if !providerChanged && !apiChanged && !agentChanged && !primaryChanged && !imageChanged {
+		// File already in desired state. Still record that we've seen this
+		// catalog version so the gate stops re-evaluating it every tick.
+		if applyDefaults {
+			s.persistModelState(resp.Version, "")
+		}
+		return false, nil
 	}
 
 	written, err := json.MarshalIndent(configData, "", "  ")
 	if err != nil {
 		return false, fmt.Errorf("marshal openclaw config: %w", err)
 	}
-	// Write the current primary into the flag so the watcher can match by
-	// content: model-list sync never changes primary, so the flag value equals
-	// whatever is already set, and the watcher correctly skips this write.
+	// The flag value must equal whatever primary the file now carries so the
+	// watcher recognises this as a Lamp write and does not sync it back. When
+	// primaryChanged is true, extractPrimaryModel already returns the new value.
 	setLampWriteFlag(filepath.Dir(configPath), extractPrimaryModel(configData))
 	if err := atomicWriteFile(configPath, written, 0600); err != nil {
 		return false, fmt.Errorf("write openclaw config: %w", err)
@@ -194,10 +235,26 @@ func applyModelsToConfig(configPath string, configData map[string]any, autonomou
 	if err := chownRuntimeUserIfRoot(configPath, openclawRuntimeUser); err != nil {
 		return false, fmt.Errorf("set openclaw config ownership: %w", err)
 	}
+
+	// Persist version + LLMModel. Only sync LLMModel when we actually rewrote the
+	// primary to an autonomous default (mirrors the watcher's autonomous-only
+	// sync-back rule).
+	if applyDefaults {
+		newModel := ""
+		if primaryChanged {
+			_, newModel, _ = splitProviderModel(extractPrimaryModel(configData))
+		}
+		s.persistModelState(resp.Version, newModel)
+	}
+
 	slog.Info("[modelsync] reconciled openclaw config",
 		"path", configPath,
 		"provider_changed", providerChanged,
+		"api_changed", apiChanged,
 		"agent_changed", agentChanged,
+		"primary_changed", primaryChanged,
+		"image_changed", imageChanged,
+		"version", resp.Version,
 		"fetched", len(fetched),
 	)
 
@@ -207,52 +264,65 @@ func applyModelsToConfig(configPath string, configData map[string]any, autonomou
 	return true, nil
 }
 
-// mergeProviderModels reconciles the providers.autonomous.models[] slice with
-// the fetched list:
-//   - Models in fetched whose id is missing from existing are APPENDED.
-//   - Models present in both have their contextWindow and maxTokens REFRESHED
-//     to the upstream values (other fields are left as-is to preserve any
-//     local edits a reviewer may have made).
-//   - Models in existing but not in fetched are KEPT untouched (additive
-//     reconciliation — never removes).
+// persistModelState records the applied catalog version (and optionally the new
+// primary model) into config under the config mutex. newModel == "" leaves
+// LLMModel untouched. version only advances (never regresses).
+func (s *Service) persistModelState(version int, newModel string) {
+	if err := s.config.WithLockSave(func(c *config.Config) {
+		if version > c.DefaultModelVersion {
+			c.DefaultModelVersion = version
+		}
+		if newModel != "" {
+			c.LLMModel = newModel
+		}
+	}); err != nil {
+		slog.Warn("[modelsync] persist model state", "err", err)
+	}
+}
+
+// resolveAutonomousAPI returns the wire protocol to write into
+// models.providers.autonomous.api: the upstream-published value when present,
+// otherwise the built-in fallback (autonomousProviderAPI).
+func resolveAutonomousAPI(api string) string {
+	if v := strings.TrimSpace(api); v != "" {
+		return v
+	}
+	return autonomousProviderAPI
+}
+
+// overwriteProviderModels REPLACES the providers.autonomous.models[] slice with
+// the fetched list. Existing entries whose id is in fetched have their full
+// payload refreshed from openclawModelToProviderEntry (local edits discarded —
+// overwrite, not merge); entries whose id is NOT in fetched are dropped.
 //
-// Returns the (possibly modified) slice and a bool indicating whether anything
-// was added or updated.
-func mergeProviderModels(existing []any, fetched []domain.LLMModel) ([]any, bool) {
-	indexByID := make(map[string]int, len(existing))
-	for i, e := range existing {
-		if m, ok := e.(map[string]any); ok {
-			if id, ok := m["id"].(string); ok {
-				indexByID[id] = i
-			}
-		}
-	}
-	out := append([]any(nil), existing...)
-	changed := false
+// Returns (newSlice, changed) where changed=false when the result is equivalent
+// to existing (same length, same ids in order, same numeric fields). The
+// returned slice follows the fetched order so the result is deterministic.
+func overwriteProviderModels(existing []any, fetched []domain.LLMModel) ([]any, bool) {
+	out := make([]any, 0, len(fetched))
 	for _, m := range fetched {
-		fresh := openclawModelToProviderEntry(m)
-		idx, ok := indexByID[m.Key]
-		if !ok {
-			out = append(out, fresh)
-			indexByID[m.Key] = len(out) - 1
-			changed = true
-			continue
-		}
-		entry, ok := out[idx].(map[string]any)
-		if !ok {
-			continue
-		}
-		if !numbersEqual(entry["contextWindow"], fresh["contextWindow"]) {
-			entry["contextWindow"] = fresh["contextWindow"]
-			changed = true
-		}
-		if !numbersEqual(entry["maxTokens"], fresh["maxTokens"]) {
-			entry["maxTokens"] = fresh["maxTokens"]
-			changed = true
-		}
-		out[idx] = entry
+		out = append(out, openclawModelToProviderEntry(m))
 	}
-	return out, changed
+	if len(existing) != len(out) {
+		return out, true
+	}
+	for i, freshAny := range out {
+		fresh := freshAny.(map[string]any)
+		oldEntry, ok := existing[i].(map[string]any)
+		if !ok {
+			return out, true
+		}
+		if oldID, _ := oldEntry["id"].(string); oldID != fresh["id"].(string) {
+			return out, true
+		}
+		if !numbersEqual(oldEntry["contextWindow"], fresh["contextWindow"]) {
+			return out, true
+		}
+		if !numbersEqual(oldEntry["maxTokens"], fresh["maxTokens"]) {
+			return out, true
+		}
+	}
+	return out, false
 }
 
 // numbersEqual compares two JSON-decoded numeric values that may be int,
@@ -284,33 +354,53 @@ func toFloat(v any) (float64, bool) {
 	return 0, false
 }
 
-// mergeAgentModels reconciles the agents.defaults.models map with fetched
-// models. For every fetched model:
-//   - If "{provider}/{key}" exists, keep its metadata.
-//   - Otherwise, if the legacy unprefixed "{key}" exists, migrate its metadata
-//     to the prefixed form and drop the legacy entry.
-//   - Otherwise, add a new prefixed entry with empty metadata.
+// overwriteAgentAutonomousModels reconciles agents.defaults.models so the set
+// of "autonomous-owned" keys exactly matches the fetched list:
 //
-// Keys not corresponding to any fetched model are preserved as-is.
-func mergeAgentModels(existing map[string]any, fetched []domain.LLMModel) (map[string]any, bool) {
+//  1. Keys with the "autonomous/" prefix not in fetched are REMOVED.
+//  2. Keys with NO "/" separator are REMOVED — pre-prefix-era legacy
+//     autonomous catalog entries (e.g. "claude-haiku-4-5").
+//
+// Keys with a slash but a different provider prefix (e.g. "venice/x") are LEFT
+// UNTOUCHED — the firmware can't tell whether they belong to a provider it
+// doesn't manage, so it never deletes them. Missing "autonomous/<key>" entries
+// are added with empty value {}.
+//
+// Returns (newMap, changed) where changed=false iff the result equals existing.
+func overwriteAgentAutonomousModels(existing map[string]any, fetched []domain.LLMModel) (map[string]any, bool) {
 	out := make(map[string]any, len(existing)+len(fetched))
 	for k, v := range existing {
 		out[k] = v
 	}
-	changed := false
+	wanted := make(map[string]struct{}, len(fetched))
 	for _, m := range fetched {
-		newKey := agentModelKey(m)
-		if _, ok := out[newKey]; ok {
+		if m.Key == "" {
 			continue
 		}
-		if legacy, ok := out[m.Key]; ok {
-			out[newKey] = legacy
-			delete(out, m.Key)
+		wanted[agentModelKey(m)] = struct{}{}
+	}
+	changed := false
+	prefix := customProviderName + "/"
+	for k := range existing {
+		switch {
+		case strings.HasPrefix(k, prefix):
+			// Rule 1: autonomous/* must match the wanted set.
+			if _, keep := wanted[k]; !keep {
+				delete(out, k)
+				changed = true
+			}
+		case !strings.Contains(k, "/"):
+			// Rule 2: unprefixed → pre-prefix-era legacy autonomous, purge.
+			delete(out, k)
 			changed = true
-			continue
 		}
-		out[newKey] = map[string]any{}
-		changed = true
+		// Other slashed keys (e.g. "venice/x") are left untouched.
+	}
+	for want := range wanted {
+		if _, ok := out[want]; !ok {
+			out[want] = map[string]any{}
+			changed = true
+		}
 	}
 	return out, changed
 }

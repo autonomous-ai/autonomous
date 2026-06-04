@@ -19,10 +19,16 @@ import (
 const (
 	defaultGatewayWSURL = "ws://127.0.0.1:18789"
 	customProviderName  = "autonomous"
-	defaultGatewayMode  = "local"
-	defaultGatewayBind  = "loopback"
-	defaultGatewayPort  = 18789
-	openclawRuntimeUser = "root"
+	// autonomousProviderAPI is the FALLBACK wire protocol for the "autonomous"
+	// provider, used only when the models API response omits its `api` field
+	// (or on the hardcoded-fallback setup path). The autonomous gateway speaks a
+	// single protocol regardless of which model it routes to, so this is never
+	// derived per-model from the model name.
+	autonomousProviderAPI = "anthropic-messages"
+	defaultGatewayMode    = "local"
+	defaultGatewayBind    = "loopback"
+	defaultGatewayPort    = 18789
+	openclawRuntimeUser   = "root"
 )
 
 // Compile-time check: *Service implements domain.AgentGateway.
@@ -65,19 +71,19 @@ func extractPoseBucketMarkers(message string) (string, []string) {
 
 // Service provides setup, reset, restart of openclaw config/gateway and StartWS.
 type Service struct {
-	config         *config.Config
-	monitorBus     *monitor.Bus
-	statusLED      *statusled.Service
-	wsConnected    atomic.Bool // true when gateway WebSocket is connected and ready to receive messages
-	wsConnectedAt  atomic.Int64 // unix seconds when wsConnected last flipped to true; 0 when disconnected
+	config        *config.Config
+	monitorBus    *monitor.Bus
+	statusLED     *statusled.Service
+	wsConnected   atomic.Bool  // true when gateway WebSocket is connected and ready to receive messages
+	wsConnectedAt atomic.Int64 // unix seconds when wsConnected last flipped to true; 0 when disconnected
 	// agentStartedAt is the unix-seconds timestamp the OpenClaw gateway process
 	// started, derived from the server.uptimeMs field of the hello-ok response
 	// at handshake. Survives Lamp restarts because each fresh hello-ok carries
 	// the gateway's own age. 0 when not yet observed or disconnected.
 	agentStartedAt atomic.Int64
-	activeTurn     atomic.Bool // true while agent is processing a turn (lifecycle start → end)
+	activeTurn     atomic.Bool  // true while agent is processing a turn (lifecycle start → end)
 	busySince      atomic.Int64 // unix milli when activeTurn was last set to true; used to expire stuck busy state
-	wsHasConnected atomic.Bool // true after first successful WS connect (skip reconnect TTS on boot)
+	wsHasConnected atomic.Bool  // true after first successful WS connect (skip reconnect TTS on boot)
 
 	// wsConn is the active WebSocket connection; guarded by wsMu.
 	wsConn *websocket.Conn
