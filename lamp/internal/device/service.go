@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os/exec"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +19,17 @@ import (
 	"go-lamp.autonomous.ai/lib/i18n"
 	"go-lamp.autonomous.ai/server/config"
 )
+
+// normalizeBaseURL ensures autonomous.ai base URLs include the /v1 OpenAI-compat
+// prefix so all backends (TTS, STT, LLM) receive a ready-to-use URL without each
+// backend having to patch it individually. Non-autonomous URLs are left untouched.
+func normalizeBaseURL(base string) string {
+	base = strings.TrimSuffix(strings.TrimSpace(base), "/")
+	if strings.Contains(base, "campaign-api.autonomous.ai") && strings.HasSuffix(base, "/ai") {
+		base += "/v1"
+	}
+	return base
+}
 
 // Setup phase strings exposed via /api/setup/status so the web client can
 // follow the device through the AP→STA transition. Phases progress only
@@ -86,6 +98,9 @@ func (s *Service) SetupStatus() (phase, lanIP, errMsg string) {
 
 func (s *Service) Setup(data domain.SetupRequest) error {
 	slog.Info("starting setup", "component", "device")
+	data.LLMBaseURL = normalizeBaseURL(data.LLMBaseURL)
+	data.STTBaseURL = normalizeBaseURL(data.STTBaseURL)
+	data.TTSBaseURL = normalizeBaseURL(data.TTSBaseURL)
 	s.setupState.set(SetupPhaseConnecting, "", "")
 	result, err := s.networkService.SetupNetwork(data.SSID, data.Password)
 	if err != nil {
@@ -389,6 +404,7 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 	var (
 		modelChanged    bool
 		thinkingChanged bool
+		baseURLChanged  bool
 		wifiChanged     bool
 		langChanged     bool
 		voiceChanged    bool
@@ -418,12 +434,13 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 			c.LLMAPIKey = data.LLMAPIKey
 		}
 		if data.LLMBaseURL != "" {
-			c.LLMBaseURL = data.LLMBaseURL
+			c.LLMBaseURL = normalizeBaseURL(data.LLMBaseURL)
 		}
 		if data.LLMModel != "" {
 			c.LLMModel = data.LLMModel
 		}
 		modelChanged = data.LLMModel != "" && data.LLMModel != prevModel
+		baseURLChanged = data.LLMBaseURL != "" && c.LLMBaseURL != prevLLMBaseURL
 		newModel = c.LLMModel
 
 		thinkingChanged = data.LLMDisableThinking != nil
@@ -444,10 +461,10 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 			c.TTSAPIKey = data.TTSAPIKey
 		}
 		if data.STTBaseURL != "" {
-			c.STTBaseURL = data.STTBaseURL
+			c.STTBaseURL = normalizeBaseURL(data.STTBaseURL)
 		}
 		if data.TTSBaseURL != "" {
-			c.TTSBaseURL = data.TTSBaseURL
+			c.TTSBaseURL = normalizeBaseURL(data.TTSBaseURL)
 		}
 		// Operators pick a language; the matching Deepgram SKU is auto-derived
 		// because end users don't know which model handles which language.
@@ -566,14 +583,14 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 	// When thinking also changed, RefreshModelsConfig handles primary update +
 	// reasoning patch in a single write + restart — skip UpdatePrimaryModel to
 	// avoid a redundant gateway restart.
-	if modelChanged && !thinkingChanged && s.agentGateway != nil {
+	if modelChanged && !thinkingChanged && !baseURLChanged && s.agentGateway != nil {
 		if err := s.agentGateway.UpdatePrimaryModel(newModel); err != nil {
 			slog.Warn("update openclaw primary model failed", "component", "device", "error", err)
 		}
 	}
-	if thinkingChanged && s.agentGateway != nil {
-		// RefreshModelsConfig also syncs agents.defaults.model.primary from
-		// s.config.LLMModel, so one restart covers both model and thinking changes.
+	if (thinkingChanged || baseURLChanged) && s.agentGateway != nil {
+		// RefreshModelsConfig syncs agents.defaults.model.primary, per-model
+		// reasoning, and providers.autonomous.baseUrl in one write + restart.
 		if err := s.agentGateway.RefreshModelsConfig(); err != nil {
 			slog.Error("refresh models config failed", "component", "device", "error", err)
 		}

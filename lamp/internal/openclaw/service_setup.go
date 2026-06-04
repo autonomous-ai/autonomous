@@ -114,7 +114,7 @@ func (s *Service) SetupAgent(data domain.SetupRequest) error {
 		modelsEntries = append(modelsEntries, openclawModelToProviderEntry(m))
 	}
 	providersMap[customProviderName] = map[string]any{
-		"baseUrl": withOpenAIV1(llmBaseURL),
+		"baseUrl": llmBaseURL,
 		"api":     defaultModel.OpenClawAPIType(),
 		"apiKey":  llmAPIKey,
 		"models":  modelsEntries,
@@ -548,10 +548,14 @@ func (s *Service) RefreshModelsConfig() error {
 	// here briefly) — consistent with syncPrimaryFromFile's order.
 	currentModel := s.config.LLMModelKey()
 
-	// Patch models.providers.autonomous.models[*].reasoning
+	// Patch models.providers.autonomous — baseUrl + per-model reasoning.
+	currentBaseURL := s.config.LLMBaseURL
 	if modelsMap, ok := configData["models"].(map[string]any); ok {
 		if providersMap, ok := modelsMap["providers"].(map[string]any); ok {
 			if providerEntry, ok := providersMap[customProviderName].(map[string]any); ok {
+				if currentBaseURL != "" {
+					providerEntry["baseUrl"] = currentBaseURL
+				}
 				if modelsList, ok := providerEntry["models"].([]any); ok {
 					for _, entry := range modelsList {
 						if m, ok := entry.(map[string]any); ok {
@@ -623,16 +627,6 @@ func (s *Service) RestartAgent() error {
 	return nil
 }
 
-// withOpenAIV1 appends /v1 to autonomous API base URLs that are missing it.
-// Only applies to autonomous.ai URLs ending with /ai (e.g. …/api/v1/ai).
-// External providers are left untouched.
-func withOpenAIV1(base string) string {
-	base = strings.TrimSuffix(strings.TrimSpace(base), "/")
-	if strings.Contains(base, "campaign-api.autonomous.ai") && strings.HasSuffix(base, "/ai") {
-		return base + "/v1"
-	}
-	return base
-}
 
 func findModelByLLMModel(models []domain.LLMModel, llmModel string) (domain.LLMModel, error) {
 	for _, m := range models {

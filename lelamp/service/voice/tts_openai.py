@@ -12,8 +12,8 @@ logger = logging.getLogger("lelamp.voice.tts_backend")
 def _ensure_openai_v1(base_url: str) -> str:
     """Append /v1 to autonomous API base URLs that are missing it.
 
-    Only applies to autonomous.ai URLs ending with /ai (e.g. …/api/v1/ai).
-    External providers (openai.com, custom proxies) are left untouched.
+    Covers three cases: (1) missing /v1 → append it, (2) already has /v1 →
+    leave untouched, (3) non-autonomous URL → leave untouched.
     """
     base_url = base_url.rstrip("/")
     if "campaign-api.autonomous.ai" in base_url and base_url.endswith("/ai"):
