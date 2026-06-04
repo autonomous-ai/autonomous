@@ -1,7 +1,10 @@
+import logging
 import time
 from typing import Any, List, Union
 from ..base import ServiceBase
 from lelamp.presets import RGB_CMD_PAINT, RGB_CMD_SOLID
+
+logger = logging.getLogger("lelamp.rgb")
 
 
 def _is_pi5() -> bool:
@@ -144,7 +147,11 @@ class _StripSPI:
         for r, g, b in self._pixels:
             buf.extend(self._encode_pixel(r, g, b))
         buf.extend([0x00] * self._RESET_BYTES)
-        self._spi.writebytes2(buf)
+        try:
+            self._spi.writebytes2(buf)
+            logger.info("SPI write OK — pixel[0]=%s", self._pixels[0] if self._pixels else None)
+        except Exception as e:
+            logger.error("SPI write failed — LED signal did not reach strip: %s", e)
 
     def getPixelColor(self, index):
         return self._pixels[index]
