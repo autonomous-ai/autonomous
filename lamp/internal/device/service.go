@@ -121,18 +121,23 @@ func (s *Service) Setup(data domain.SetupRequest) error {
 		slog.Warn("setup: WiFi associated but no IP detected", "component", "device", "error", ipErr)
 	}
 
+	// Persist the user's model selection BEFORE running SetupAgent. When the
+	// model API is reachable, SetupAgent overrides LLMModel with the upstream
+	// default_model; when it is unreachable, SetupAgent falls back to this value.
+	s.config.LLMModel = data.LLMModel
+
 	if err := s.agentGateway.SetupAgent(data); err != nil {
 		return err
 	}
 
 	llmAPIKey := data.LLMAPIKey
-	llmModel := data.LLMModel
 	llmBaseURL := data.LLMBaseURL
 	channel := data.EffectiveChannel()
 
 	s.config.LLMAPIKey = llmAPIKey
 	s.config.LLMBaseURL = llmBaseURL
-	s.config.LLMModel = llmModel
+	// LLMModel already set above (and possibly overridden by SetupAgent from the
+	// upstream default_model). Do not re-assign it from the raw request here.
 	s.config.Channel = channel
 	switch channel {
 	case "slack":

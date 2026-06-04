@@ -50,6 +50,13 @@ type Config struct {
 	LLMAPIKey  string `json:"llm_api_key" yaml:"llmAPIKey" validate:"required"`
 	LLMModel   string `json:"llm_model" yaml:"llmModel" validate:"required"`
 	LLMBaseURL string `json:"llm_base_url" yaml:"llmBaseURL" validate:"required"`
+
+	// DefaultModelVersion is the upstream model-catalog version last applied by
+	// the set-default-model flow (setup + periodic sync). The sync only pushes
+	// default_model / default_image_model into openclaw.json when the freshly
+	// fetched version is greater than this, so a steady catalog never triggers
+	// redundant gateway restarts. 0 before the first versioned catalog applies.
+	DefaultModelVersion int `json:"default_model_version" yaml:"defaultModelVersion"`
 	// STTBaseURL / TTSBaseURL override LLMBaseURL when STT or TTS lives on
 	// a different host than the LLM. Empty = reuse LLMBaseURL.
 	STTBaseURL string `json:"stt_base_url" yaml:"sttBaseURL"`
@@ -63,7 +70,7 @@ type Config struct {
 	// used when DeepgramAPIKey is empty. Empty falls back to LLMAPIKey so
 	// existing one-key configs keep working; fill this when the STT account
 	// is separate from the LLM account.
-	STTAPIKey       string `json:"stt_api_key" yaml:"sttAPIKey"`
+	STTAPIKey string `json:"stt_api_key" yaml:"sttAPIKey"`
 	// TTSAPIKey is the API key for the TTS provider (OpenAI, ElevenLabs, …).
 	// Empty falls back to LLMAPIKey so existing one-key configs keep working;
 	// fill this when the TTS account is separate from the LLM account.
