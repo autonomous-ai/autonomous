@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/lib/flow"
-	"go-lamp.autonomous.ai/lib/mood"
-	"go-lamp.autonomous.ai/lib/sensingmsg"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/lib/flow"
+	"go.autonomous.ai/os/lib/mood"
+	"go.autonomous.ai/os/lib/sensingmsg"
 )
 
 // pendingEvent is a sensing event buffered while the agent was busy.

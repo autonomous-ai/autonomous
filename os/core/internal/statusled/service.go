@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/lelamp"
+	"go.autonomous.ai/os/lib/lelamp"
 )
 
 // State represents a named LED status.

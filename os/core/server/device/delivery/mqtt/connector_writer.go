@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"go-lamp.autonomous.ai/domain"
+	"go.autonomous.ai/os/domain"
 )
 
 const (

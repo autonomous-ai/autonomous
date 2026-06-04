@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go-lamp.autonomous.ai/server/config"
+	"go.autonomous.ai/os/server/config"
 )
 
 const (

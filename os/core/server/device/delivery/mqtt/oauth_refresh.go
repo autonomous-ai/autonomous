@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/domain"
+	"go.autonomous.ai/os/domain"
 )
 
 const (

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"go-lamp.autonomous.ai/server/serializers"
+	"go.autonomous.ai/os/server/serializers"
 )
 
 // PairStart issues a fresh 6-digit code. Admin-auth gated so random LAN clients

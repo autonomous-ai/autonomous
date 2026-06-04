@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"strings"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/lib/lelamp"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/lib/lelamp"
 )
 
 // handleTTSPreview plays a one-shot TTS preview on the lamp without

@@ -3,7 +3,7 @@ package openclaw
 import (
 	"testing"
 
-	"go-lamp.autonomous.ai/domain"
+	"go.autonomous.ai/os/domain"
 )
 
 func intPtr(v int) *int { return &v }

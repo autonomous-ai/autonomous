@@ -13,9 +13,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"go-lamp.autonomous.ai/lib/core/system"
-	"go-lamp.autonomous.ai/lib/lelamp"
-	"go-lamp.autonomous.ai/server/serializers"
+	"go.autonomous.ai/os/lib/core/system"
+	"go.autonomous.ai/os/lib/lelamp"
+	"go.autonomous.ai/os/server/serializers"
 )
 
 // openclawSemverRe captures the first semver-like token in `openclaw --version`

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/flow"
+	"go.autonomous.ai/os/lib/flow"
 )
 
 // SetSessionKey stores the session key for outgoing chat messages.

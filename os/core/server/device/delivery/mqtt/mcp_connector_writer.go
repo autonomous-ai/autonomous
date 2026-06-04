@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"go-lamp.autonomous.ai/domain"
+	"go.autonomous.ai/os/domain"
 )
 
 // mcpConnectorWriter is the single ConnectorWriter implementation for all

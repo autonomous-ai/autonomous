@@ -11,8 +11,8 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/lib/flow"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/lib/flow"
 )
 
 // GetConfigJSON reads and returns the raw bytes of openclaw.json.

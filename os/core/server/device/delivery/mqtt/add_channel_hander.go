@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/device"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/device"
 )
 
 // pairingQRFormat is the wire-format identifier for the QR text we ship.

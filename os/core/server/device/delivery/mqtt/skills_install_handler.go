@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/openclaw"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/openclaw"
 )
 
 // skillsInstallMu serializes role-skill installs: concurrent extracts into the

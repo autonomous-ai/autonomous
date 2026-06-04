@@ -25,8 +25,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/monitor"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/monitor"
 )
 
 // Kind mirrors doggi's flow_events.py vocabulary.

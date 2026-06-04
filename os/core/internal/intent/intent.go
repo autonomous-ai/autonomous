@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/i18n"
-	"go-lamp.autonomous.ai/lib/lelamp"
+	"go.autonomous.ai/os/lib/i18n"
+	"go.autonomous.ai/os/lib/lelamp"
 )
 
 // Result holds what to do after a match: the LeLamp action + a TTS reply.

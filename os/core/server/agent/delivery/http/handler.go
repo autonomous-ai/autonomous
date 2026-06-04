@@ -5,15 +5,15 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/monitor"
-	"go-lamp.autonomous.ai/internal/statusled"
-	"go-lamp.autonomous.ai/lib/flow"
-	"go-lamp.autonomous.ai/lib/mood"
-	"go-lamp.autonomous.ai/lib/musicsuggestion"
-	"go-lamp.autonomous.ai/lib/posture"
-	"go-lamp.autonomous.ai/lib/wellbeing"
-	"go-lamp.autonomous.ai/server/config"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/monitor"
+	"go.autonomous.ai/os/internal/statusled"
+	"go.autonomous.ai/os/lib/flow"
+	"go.autonomous.ai/os/lib/mood"
+	"go.autonomous.ai/os/lib/musicsuggestion"
+	"go.autonomous.ai/os/lib/posture"
+	"go.autonomous.ai/os/lib/wellbeing"
+	"go.autonomous.ai/os/server/config"
 )
 
 // AgentHandler handles OpenClaw gateway WebSocket events and exposes monitor endpoints.

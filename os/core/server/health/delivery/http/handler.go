@@ -14,13 +14,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/device"
-	"go-lamp.autonomous.ai/internal/network"
-	"go-lamp.autonomous.ai/lib/lelamp"
-	agenthttp "go-lamp.autonomous.ai/server/agent/delivery/http"
-	"go-lamp.autonomous.ai/server/config"
-	"go-lamp.autonomous.ai/server/serializers"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/device"
+	"go.autonomous.ai/os/internal/network"
+	"go.autonomous.ai/os/lib/lelamp"
+	agenthttp "go.autonomous.ai/os/server/agent/delivery/http"
+	"go.autonomous.ai/os/server/config"
+	"go.autonomous.ai/os/server/serializers"
 )
 
 // serverStartTime records when the Lamp process started.

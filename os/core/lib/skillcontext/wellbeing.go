@@ -19,9 +19,9 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/posture"
-	"go-lamp.autonomous.ai/lib/usercanon"
-	"go-lamp.autonomous.ai/lib/wellbeing"
+	"go.autonomous.ai/os/lib/posture"
+	"go.autonomous.ai/os/lib/usercanon"
+	"go.autonomous.ai/os/lib/wellbeing"
 )
 
 const (

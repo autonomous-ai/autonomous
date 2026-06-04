@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/device"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/device"
 )
 
 const (

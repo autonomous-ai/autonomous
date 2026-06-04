@@ -12,7 +12,7 @@ const configPath = "config/bootstrap.json"
 // BootstrapVersion is injected at build time via ldflags.
 // Example:
 //
-//	-X go-lamp.autonomous.ai/bootstrap/config.BootstrapVersion=v1.2.3
+//	-X go.autonomous.ai/os/bootstrap/config.BootstrapVersion=v1.2.3
 var BootstrapVersion = "dev"
 
 // Config holds bootstrap OTA worker configuration.

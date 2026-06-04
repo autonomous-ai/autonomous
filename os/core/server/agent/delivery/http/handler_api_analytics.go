@@ -13,7 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"go-lamp.autonomous.ai/server/serializers"
+	"go.autonomous.ai/os/server/serializers"
 )
 
 func (h *AgentHandler) Analytics(c *gin.Context) {

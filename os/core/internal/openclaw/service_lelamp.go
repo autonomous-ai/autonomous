@@ -6,9 +6,9 @@ import (
 	"regexp"
 	"strings"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/lib/flow"
-	"go-lamp.autonomous.ai/lib/lelamp"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/lib/flow"
+	"go.autonomous.ai/os/lib/lelamp"
 )
 
 // Regex for stripForTTS — precompiled once at package init. Compiling per-call

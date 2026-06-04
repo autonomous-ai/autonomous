@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/lib/flow"
-	sensinghttp "go-lamp.autonomous.ai/server/sensing/delivery/http"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/lib/flow"
+	sensinghttp "go.autonomous.ai/os/server/sensing/delivery/http"
 )
 
 // poseBucketRoot is the on-disk base where lelamp writes pose buckets.

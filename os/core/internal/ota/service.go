@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/network"
-	"go-lamp.autonomous.ai/server/config"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/network"
+	"go.autonomous.ai/os/server/config"
 )
 
 const defaultPollInterval = 1 * time.Hour

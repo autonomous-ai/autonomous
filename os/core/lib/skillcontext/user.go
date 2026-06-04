@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/lelamp"
-	"go-lamp.autonomous.ai/lib/usercanon"
+	"go.autonomous.ai/os/lib/lelamp"
+	"go.autonomous.ai/os/lib/usercanon"
 )
 
 const userInfoTimeout = 600 * time.Millisecond

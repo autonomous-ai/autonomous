@@ -13,10 +13,10 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/statusled"
-	"go-lamp.autonomous.ai/lib/flow"
-	"go-lamp.autonomous.ai/lib/i18n"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/statusled"
+	"go.autonomous.ai/os/lib/flow"
+	"go.autonomous.ai/os/lib/i18n"
 )
 
 // StartWS connects to the gateway WebSocket and runs the read loop, calling handler for each event.

@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/device"
-	"go-lamp.autonomous.ai/lib/core/system"
-	"go-lamp.autonomous.ai/lib/lelamp"
-	agenthttp "go-lamp.autonomous.ai/server/agent/delivery/http"
-	"go-lamp.autonomous.ai/server/config"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/device"
+	"go.autonomous.ai/os/lib/core/system"
+	"go.autonomous.ai/os/lib/lelamp"
+	agenthttp "go.autonomous.ai/os/server/agent/delivery/http"
+	"go.autonomous.ai/os/server/config"
 )
 
 // System info probes. All bounded by short timeouts — these are read-only

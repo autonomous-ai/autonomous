@@ -4,9 +4,9 @@ import (
 	"log/slog"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/flow"
-	"go-lamp.autonomous.ai/lib/i18n"
-	"go-lamp.autonomous.ai/lib/lelamp"
+	"go.autonomous.ai/os/lib/flow"
+	"go.autonomous.ai/os/lib/i18n"
+	"go.autonomous.ai/os/lib/lelamp"
 )
 
 // autoSessionThreshold is the conversation token count above which we

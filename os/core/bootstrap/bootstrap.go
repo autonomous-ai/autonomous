@@ -16,11 +16,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"go-lamp.autonomous.ai/bootstrap/config"
-	"go-lamp.autonomous.ai/bootstrap/state"
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/lib/core/system"
-	"go-lamp.autonomous.ai/lib/lelamp"
+	"go.autonomous.ai/os/bootstrap/config"
+	"go.autonomous.ai/os/bootstrap/state"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/lib/core/system"
+	"go.autonomous.ai/os/lib/lelamp"
 )
 
 // semverRe captures the first semver-like token (e.g. 2026.3.8 or v1.2.3-beta).

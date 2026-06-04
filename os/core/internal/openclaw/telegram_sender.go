@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/flow"
+	"go.autonomous.ai/os/lib/flow"
 )
 
 // telegramMaxMediaGroup is the upper bound imposed by Telegram's

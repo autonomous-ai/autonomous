@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go-lamp.autonomous.ai/internal/buddy"
-	"go-lamp.autonomous.ai/server/serializers"
+	"go.autonomous.ai/os/internal/buddy"
+	"go.autonomous.ai/os/server/serializers"
 )
 
 type commandRequest struct {

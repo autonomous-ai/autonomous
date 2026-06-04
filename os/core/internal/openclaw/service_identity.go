@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/lelamp"
+	"go.autonomous.ai/os/lib/lelamp"
 )
 
 // --- Device identity (Ed25519) for gateway auth ---

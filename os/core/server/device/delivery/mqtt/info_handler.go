@@ -3,10 +3,10 @@ package mqtthandler
 import (
 	"log/slog"
 
-	agenthttp "go-lamp.autonomous.ai/server/agent/delivery/http"
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/device"
-	"go-lamp.autonomous.ai/lib/lelamp"
+	agenthttp "go.autonomous.ai/os/server/agent/delivery/http"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/device"
+	"go.autonomous.ai/os/lib/lelamp"
 )
 
 func (h *DeviceMQTTHandler) handleInfo(_ domain.MQTTMessage) error {

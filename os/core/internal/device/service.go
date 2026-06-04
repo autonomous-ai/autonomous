@@ -13,11 +13,11 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/beclient"
-	"go-lamp.autonomous.ai/internal/network"
-	"go-lamp.autonomous.ai/lib/i18n"
-	"go-lamp.autonomous.ai/server/config"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/beclient"
+	"go.autonomous.ai/os/internal/network"
+	"go.autonomous.ai/os/lib/i18n"
+	"go.autonomous.ai/os/server/config"
 )
 
 // normalizeBaseURL ensures autonomous.ai base URLs include the /v1 OpenAI-compat

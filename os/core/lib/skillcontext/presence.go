@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/usercanon"
-	"go-lamp.autonomous.ai/lib/wellbeing"
+	"go.autonomous.ai/os/lib/usercanon"
+	"go.autonomous.ai/os/lib/wellbeing"
 )
 
 // presenceLookbackDays caps how far back LastActionTS scans for the most

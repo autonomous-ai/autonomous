@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go-lamp.autonomous.ai/domain"
+	"go.autonomous.ai/os/domain"
 )
 
 // --- Channel abstraction (backend-agnostic) ---

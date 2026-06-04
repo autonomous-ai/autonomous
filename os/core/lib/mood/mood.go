@@ -29,7 +29,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/usercanon"
+	"go.autonomous.ai/os/lib/usercanon"
 )
 
 // Event is one mood history record persisted to JSONL.

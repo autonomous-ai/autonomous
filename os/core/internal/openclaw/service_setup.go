@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go-lamp.autonomous.ai/domain"
+	"go.autonomous.ai/os/domain"
 )
 
 // defaultModels is the hardcoded list of supported models.

@@ -13,7 +13,7 @@ package i18n
 import (
 	"sync/atomic"
 
-	"go-lamp.autonomous.ai/server/config"
+	"go.autonomous.ai/os/server/config"
 )
 
 // BCP-47 language codes used across the codebase. Defined as constants so

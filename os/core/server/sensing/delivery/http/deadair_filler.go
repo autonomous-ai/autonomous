@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"go-lamp.autonomous.ai/internal/intent"
-	"go-lamp.autonomous.ai/lib/i18n"
-	"go-lamp.autonomous.ai/lib/lelamp"
+	"go.autonomous.ai/os/internal/intent"
+	"go.autonomous.ai/os/lib/i18n"
+	"go.autonomous.ai/os/lib/lelamp"
 )
 
 // Dead air filler — short TTS cues spoken by LeLamp while OpenClaw is busy,

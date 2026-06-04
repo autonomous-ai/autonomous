@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go-lamp.autonomous.ai/server/serializers"
+	"go.autonomous.ai/os/server/serializers"
 )
 
 // openclawStatePaths are openclaw runtime state dirs wiped on factory reset.

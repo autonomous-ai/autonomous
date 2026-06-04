@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/lelamp"
-	"go-lamp.autonomous.ai/lib/mood"
-	"go-lamp.autonomous.ai/lib/musicsuggestion"
-	"go-lamp.autonomous.ai/lib/usercanon"
+	"go.autonomous.ai/os/lib/lelamp"
+	"go.autonomous.ai/os/lib/mood"
+	"go.autonomous.ai/os/lib/musicsuggestion"
+	"go.autonomous.ai/os/lib/usercanon"
 )
 
 // detectedEmotionRe pulls the label out of either an emotion.detected or

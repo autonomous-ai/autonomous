@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"go-lamp.autonomous.ai/lib/mqtt"
+	"go.autonomous.ai/os/lib/mqtt"
 )
 
 const configPath = "config/config.json"
@@ -16,7 +16,7 @@ const configPath = "config/config.json"
 // LampVersion is injected at build time via ldflags.
 // Example:
 //
-//	-X go-lamp.autonomous.ai/server/config.LampVersion=v1.2.3
+//	-X go.autonomous.ai/os/server/config.LampVersion=v1.2.3
 var LampVersion = "dev"
 
 type Config struct {

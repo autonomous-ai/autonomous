@@ -2,7 +2,7 @@ package beclient
 
 import (
 	"github.com/google/wire"
-	"go-lamp.autonomous.ai/server/config"
+	"go.autonomous.ai/os/server/config"
 )
 
 // ProviderSet exposes beclient providers for Wire.

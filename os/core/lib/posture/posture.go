@@ -33,7 +33,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go-lamp.autonomous.ai/lib/usercanon"
+	"go.autonomous.ai/os/lib/usercanon"
 )
 
 // Event is one posture history record persisted to JSONL.

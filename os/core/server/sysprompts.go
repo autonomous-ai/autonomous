@@ -1,6 +1,6 @@
 package server
 
-import "go-lamp.autonomous.ai/lib/i18n"
+import "go.autonomous.ai/os/lib/i18n"
 
 // System-originated prompts sent to the OpenClaw agent. Kept separate from
 // server.go so they can be translated without touching boot wiring, and so

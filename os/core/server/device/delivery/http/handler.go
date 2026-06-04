@@ -8,13 +8,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/device"
-	"go-lamp.autonomous.ai/internal/network"
-	"go-lamp.autonomous.ai/lib/lelamp"
-	"go-lamp.autonomous.ai/server/config"
-	"go-lamp.autonomous.ai/server/serializers"
-	"go-lamp.autonomous.ai/server/session"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/device"
+	"go.autonomous.ai/os/internal/network"
+	"go.autonomous.ai/os/lib/lelamp"
+	"go.autonomous.ai/os/server/config"
+	"go.autonomous.ai/os/server/serializers"
+	"go.autonomous.ai/os/server/session"
 )
 
 // DeviceHandler represents the HTTP handler for device

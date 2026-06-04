@@ -1,11 +1,11 @@
 package agent
 
 import (
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/internal/monitor"
-	"go-lamp.autonomous.ai/internal/openclaw"
-	"go-lamp.autonomous.ai/internal/statusled"
-	"go-lamp.autonomous.ai/server/config"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/monitor"
+	"go.autonomous.ai/os/internal/openclaw"
+	"go.autonomous.ai/os/internal/statusled"
+	"go.autonomous.ai/os/server/config"
 )
 
 // ProvideGateway returns the AgentGateway implementation based on config.AgentRuntime.

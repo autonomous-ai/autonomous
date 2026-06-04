@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/server/config"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/server/config"
 )
 
 // SyncModelsFromAPI fetches the live model list from ModelsAPIURL and

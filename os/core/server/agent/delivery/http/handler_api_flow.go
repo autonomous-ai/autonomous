@@ -14,9 +14,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"go-lamp.autonomous.ai/domain"
-	"go-lamp.autonomous.ai/lib/flow"
-	"go-lamp.autonomous.ai/server/serializers"
+	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/lib/flow"
+	"go.autonomous.ai/os/server/serializers"
 )
 
 func (h *AgentHandler) Recent(c *gin.Context) {

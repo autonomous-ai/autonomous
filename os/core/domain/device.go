@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"go-lamp.autonomous.ai/server/config"
+	"go.autonomous.ai/os/server/config"
 )
 
 // Channel type identifiers. WhatsApp is intentionally NOT a valid Setup
