@@ -35,20 +35,20 @@ depends only on the one below, so any layer can be replaced without touching the
 What the device does: `guard`, `mood`, `scene`, `habit`. Each is a `SKILL.md`
 the runtime invokes. A skill is an *ability*; it is not the device's *character* — that's
 its `SOUL.md`. First-party skills use the same public contract a third party gets.
-*(`os/core/resources/openclaw-skills`)*
+*(`skills/`)*
 
 ### Agentic Runtime
 
 OpenClaw, Hermes, or any LLM + skills + memory runtime. It runs the
 skills, embodies the device's `SOUL.md`, and decides what to act on. Swappable — and where
 Autonomous's differentiated value (the default brain, memory, character) lives.
-*(`os/core/internal/openclaw`)*
+*(`os/services/internal/openclaw`)*
 
 ### System Services
 
 The always-on device daemon, in Go: `intent` (fast local commands),
 `network`, `OTA`, `sensing` routing, the `skill` manager, health and logging. Runs with or
-without the runtime. *(`os/core`)*
+without the runtime. *(`os/services`)*
 
 ### HAL — Capabilities
 
@@ -105,7 +105,7 @@ The tree maps onto the architecture layers (top of the stack first):
 contract/         HAL capability ABI — frozen, versioned (what skills build against)
 skills/           Skills — the apps (SKILL.md)
 os/
-  core/           Agentic-runtime bridge + System Services (Go): intent, network, OTA, sensing
+  services/       Agentic-runtime bridge + System Services (Go): intent, network, OTA, sensing
     web/          on-device setup + monitor UI (React)
   hal/lelamp/     HAL implementation (Python): drivers + capability host
     platform/     Board Support — per-board profiles + declaration-driven mounting
@@ -130,7 +130,7 @@ dlbackend/        off-device cloud inference service
 
 ```bash
 # Go system services (cross-compiled to linux/arm64 — Pi or OrangePi)
-make lamp-build            # builds the system server (os/core)
+make lamp-build            # builds the system server (os/services)
 make lamp-test             # go test ./...
 
 # Hardware runtime (runs on the Pi or OrangePi)

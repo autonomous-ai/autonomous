@@ -31,7 +31,7 @@ set a distinct `device_auth_token`.
 
 ## Known follow-ups (tracked)
 
-- **Go system server (`os/core`)** carries the same coupling and a legacy
+- **Go system server (`os/services`)** carries the same coupling and a legacy
   `?token=` query-string auth path (tokens leak via logs/referrers/history).
   Apply the same split there and remove query-token auth where possible.
 - **Internal hardware secret**: introduce a separate runtime-internal secret for

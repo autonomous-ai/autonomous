@@ -6,7 +6,7 @@ OS (Pi 4/5) and OrangePi. We run on it; we don't ship our own.
 > **Is the runtime (OpenClaw / Hermes) the kernel? No.**
 > A kernel is the *foundation* — it manages the hardware, and everything runs on top of it
 > (the bottom of the stack). The agentic runtime is the *brain* — it reasons and decides
-> (the top of the stack). Opposite ends. The thing that feels "core," our `os/core` daemon,
+> (the top of the stack). Opposite ends. The thing that feels "core," our `os/services` daemon,
 > is the **System Services** layer — not the kernel.
 
 ## Why the vendor kernel

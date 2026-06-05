@@ -3,16 +3,16 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${SCRIPT_DIR}/.."
-DIST_DIR="${PROJECT_ROOT}/os/core/web/dist"
+DIST_DIR="${PROJECT_ROOT}/os/services/web/dist"
 ZIP_NAME="setup-web.zip"
 ZIP_PATH="${PROJECT_ROOT}/${ZIP_NAME}"
-VERSION_FILE="${PROJECT_ROOT}/os/core/VERSION_WEB"
+VERSION_FILE="${PROJECT_ROOT}/os/services/VERSION_WEB"
 
 # Bucket for web bundle
 GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
 
 echo "========== npm install =========="
-(cd "$PROJECT_ROOT/os/core/web" && npm install)
+(cd "$PROJECT_ROOT/os/services/web" && npm install)
 
 # Auto-increment semver (patch) before upload
 if [[ -f "$VERSION_FILE" ]]; then
@@ -31,7 +31,7 @@ fi
 GCS_PATH="${GCS_PATH:-lamp/ota/web/${new_version}.zip}"
 
 echo "========== npm run build =========="
-(cd "$PROJECT_ROOT/os/core/web" && npm run build)
+(cd "$PROJECT_ROOT/os/services/web" && npm run build)
 
 if [[ ! -d "$DIST_DIR" ]]; then
   echo "Error: dist not found at $DIST_DIR"

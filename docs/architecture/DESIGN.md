@@ -107,7 +107,8 @@ The architecture is ~85% in place. The remaining work is surfacing the lower lay
 the conformance machinery, staged so nothing breaks:
 
 1. **Conformance + base** (additive, safe): `contract/COMPATIBILITY.md`, `cts/`, `devices/_base`.
-2. **Surface the Go layers** (CI-validated): `os/core` → `os/services` + `os/runtime`.
+2. **Surface the Go layer** (CI-validated): `os/core` → `os/services` (the runtime bridge
+   stays `os/services/internal/openclaw`).
 3. **Rename the HAL package** (`lelamp` → neutral) and split it into `os/hal/{drivers,board,runtime}`
    — the one change that touches deployed identifiers (`/opt/lelamp`, systemd units, `LELAMP_*`
    env, GCS `lamp/ota/lelamp`). Done as a **back-compat field migration**: add the new names,

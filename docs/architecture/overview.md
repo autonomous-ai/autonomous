@@ -11,16 +11,16 @@ depends only on the one below, so any layer can be replaced without touching the
 **Skills** — what the device does: `guard`, `mood`, `scene`, `habit`. Each is a `SKILL.md`
 the runtime invokes. A skill is an *ability*; it is not the device's *character* — that's
 its `SOUL.md`. First-party skills use the same public contract a third party gets.
-*(`os/core/resources/openclaw-skills`)*
+*(`skills/`)*
 
 **Agentic Runtime** — OpenClaw, Hermes, or any LLM + skills + memory runtime. It runs the
 skills, embodies the device's `SOUL.md`, and decides what to act on. Swappable — and where
 Autonomous's differentiated value (the default brain, memory, character) lives.
-*(`os/core/internal/openclaw`)*
+*(`os/services/internal/openclaw`)*
 
 **System Services** — the always-on device daemon, in Go: `intent` (fast local commands),
 `network`, `OTA`, `sensing` routing, the `skill` manager, health and logging. Runs with or
-without the runtime. *(`os/core`)*
+without the runtime. *(`os/services`)*
 
 **HAL — Capabilities** — the frozen, versioned interface between software and hardware:
 `audio.speak`, `motion.move`, `vision.snapshot`. Skills call capabilities, never hardware

@@ -4,7 +4,7 @@
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 # Directories
-LAMP_DIR       := os/core
+LAMP_DIR       := os/services
 LELAMP_DIR     := os/hal/lelamp
 BUDDY_DIR      := companions/desktop-buddy
 TWITCH_DIR     := chat-hooks/twitch-chat-hook
