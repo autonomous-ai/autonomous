@@ -98,17 +98,33 @@ The contract that governs them lives under [`contract/`](contract/) — see
 
 ## Repository layout
 
+The tree maps onto the architecture layers (top of the stack first):
+
 ```
-contract/         FROZEN — DEVICE-SPEC, capability vocabulary (the ABI third parties build on)
+# The OS
+contract/         HAL capability ABI — frozen, versioned (what skills build against)
+skills/           Skills — the apps (SKILL.md)
 os/
-  core/           Go system services: intent, network, OTA, sensing routing, runtime bridge
+  core/           Agentic-runtime bridge + System Services (Go): intent, network, OTA, sensing
     web/          on-device setup + monitor UI (React)
-  hal/lelamp/     Python hardware runtime — drivers + the capability host
-    platform/     board profiles + declaration-driven capability mounting
-devices/          per-device: lamp/ (DEVICE · SOUL · SAFETY · README · hardware/), intern/, examples/
-companions/       lamp-buddy (macOS) · desktop-buddy
-docs/  imager/  scripts/
+  hal/lelamp/     HAL implementation (Python): drivers + capability host
+    platform/     Board Support — per-board profiles + declaration-driven mounting
+devices/          reference devices: lamp/, intern/ (DEVICE · SOUL · SAFETY · README · hardware/)
+
+# Supporting
+docs/             documentation, incl. docs/architecture/
+scripts/  imager/ build, OTA, and SBC image tooling
+
+# Off-device & integrations
+companions/       desktop companion apps (lamp-buddy, desktop-buddy)
+chat-hooks/       on-device chat bridges (Twitch, web chat)
+dlbackend/        off-device cloud inference service
 ```
+
+> The OS layers `Drivers` and `Board Support` live inside `os/hal/lelamp` rather than as
+> top-level folders, because surfacing them means renaming the `lelamp` package and its
+> deployed identifiers (`/opt/lelamp`, systemd units, `LELAMP_*` env) — a back-compat field
+> migration tracked separately, not done casually while devices are in the field.
 
 ## Quick start
 
