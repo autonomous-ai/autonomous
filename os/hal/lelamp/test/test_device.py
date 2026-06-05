@@ -101,5 +101,38 @@ class TestMountPlanning(unittest.TestCase):
         self.assertNotIn("servo", plan.mounted)
 
 
+class TestInternBootProof(unittest.TestCase):
+    """Batch C boot-proof (no hardware): the same router set, gated by each
+    device's DEVICE.md, yields different mounts — Intern is Lamp-minus, not a fork."""
+
+    ALL_ROUTERS = {
+        "servo", "led", "camera", "audio", "emotion", "scene",
+        "sensing", "display", "voice", "music", "system", "bluetooth",
+    }
+
+    def _mounted(self, device_id):
+        declared = set(load_device(device_id, DEVICES_DIR).declared_routes())
+        return self.ALL_ROUTERS & declared
+
+    def test_lamp_mounts_servo_and_display(self):
+        m = self._mounted("lamp")
+        self.assertIn("servo", m)
+        self.assertIn("display", m)
+
+    def test_intern_mounts_neither_servo_nor_display(self):
+        m = self._mounted("intern")
+        self.assertNotIn("servo", m)
+        self.assertNotIn("display", m)
+
+    def test_both_mount_the_shared_audio_stack(self):
+        lamp, intern = self._mounted("lamp"), self._mounted("intern")
+        for route in ("audio", "voice", "system"):
+            self.assertIn(route, lamp)
+            self.assertIn(route, intern)
+
+    def test_intern_is_a_strict_subset_of_lamp(self):
+        self.assertTrue(self._mounted("intern") < self._mounted("lamp"))
+
+
 if __name__ == "__main__":
     unittest.main()
