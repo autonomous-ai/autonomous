@@ -104,6 +104,15 @@ def _lamp_cfg_get(key: str, default: str = "") -> str:
 
 DL_BACKEND_URL = _lamp_cfg_get("llm_base_url") or os.environ.get("DL_BACKEND_URL", "")
 DL_API_KEY = _lamp_cfg_get("llm_api_key") or os.environ.get("DL_API_KEY", "")
+# Device-internal auth token — the secret a caller presents to reach this HAL,
+# kept SEPARATE from the LLM provider key (DL_API_KEY). Falls back to the LLM key
+# for backward compatibility with devices provisioned before the split; new
+# provisioning should set a distinct device_auth_token. See SECURITY.md.
+DEVICE_AUTH_TOKEN = (
+    _lamp_cfg_get("device_auth_token")
+    or os.environ.get("LELAMP_DEVICE_AUTH_TOKEN")
+    or DL_API_KEY
+)
 DL_HEARTBEAT_INTERVAL_S = float(os.environ.get("LELAMP_DL_HEARTBEAT_INTERVAL_S", "60.0"))
 # Max time to wait for a dlbackend WS response (pose/motion frame, heartbeat,
 # key exchange). Without this, a non-responding backend blocks the recv() call

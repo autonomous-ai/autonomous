@@ -32,6 +32,7 @@ from lelamp.config import (
     CAMERA_INDEX,
     CAMERA_WIDTH,
     DL_API_KEY,
+    DEVICE_AUTH_TOKEN,
     HTTP_HOST,
     HTTP_PORT,
     LAMP_ID,
@@ -626,22 +627,57 @@ app = FastAPI(
     ],
 )
 
-# --- Include route modules ---
+# --- Include route modules (declaration-driven via DEVICE.md) ---
+# Mount only the routes this device's DEVICE.md declares. A device is "Lamp minus
+# motion+display" by declaring fewer capabilities — not by forking. Falls back to
+# mounting everything when no DEVICE.md is found, so existing deployments are
+# unaffected. See contract/DEVICE-SPEC.md and lelamp/platform/device.py.
 
 from lelamp.routes import servo, led, camera, audio, emotion, scene, sensing, display, voice, music, system, bluetooth
 
-app.include_router(servo.router)
-app.include_router(led.router)
-app.include_router(camera.router)
-app.include_router(audio.router)
-app.include_router(emotion.router)
-app.include_router(scene.router)
-app.include_router(sensing.router)
-app.include_router(display.router)
-app.include_router(voice.router)
-app.include_router(music.router)
-app.include_router(system.router)
-app.include_router(bluetooth.router)
+_ROUTERS_BY_NAME = {
+    "servo": servo.router, "led": led.router, "camera": camera.router,
+    "audio": audio.router, "emotion": emotion.router, "scene": scene.router,
+    "sensing": sensing.router, "display": display.router, "voice": voice.router,
+    "music": music.router, "system": system.router, "bluetooth": bluetooth.router,
+}
+
+
+def _resolve_device_id() -> str:
+    dev = os.environ.get("LELAMP_DEVICE_ID")
+    if dev:
+        return dev
+    try:
+        from lelamp.config import _lamp_cfg_get
+        return _lamp_cfg_get("device_type") or "lamp"
+    except Exception:
+        return "lamp"
+
+
+def _declared_routes_or_none():
+    """Route names this device declares, or None to mount all (safe fallback)."""
+    try:
+        from lelamp.platform.device import load_device
+        devices_dir = os.environ.get("LELAMP_DEVICES_DIR") or os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "devices")
+        )
+        return set(load_device(_resolve_device_id(), devices_dir).declared_routes())
+    except Exception as e:
+        logger.warning("DEVICE.md not loaded (%s) — mounting all routes (legacy behavior)", e)
+        return None
+
+
+_declared = _declared_routes_or_none()
+for _name, _router in _ROUTERS_BY_NAME.items():
+    if _declared is None or _name in _declared:
+        app.include_router(_router)
+    else:
+        logger.info("Route '%s' undeclared by device '%s' — skipped", _name, _resolve_device_id())
+if _declared is not None:
+    logger.info(
+        "Declaration-driven mount: device=%s mounted=%s",
+        _resolve_device_id(), sorted(_declared & set(_ROUTERS_BY_NAME)),
+    )
 
 # Speaker recognition routes (lazy import — import failure tolerated so the
 # rest of the server still boots if speaker deps are missing).
@@ -755,14 +791,15 @@ def _is_same_origin(origin_or_referer: str | None, host: str) -> bool:
 
 
 def _has_valid_bearer_token(request) -> bool:
-    """Return True if the request carries Authorization: Bearer <DL_API_KEY>.
+    """Return True if the request carries Authorization: Bearer <DEVICE_AUTH_TOKEN>.
 
-    DL_API_KEY mirrors config.json::llm_api_key (single shared secret used
-    both as the LLM provider key and the device-internal auth token). Empty
-    key disables this path — falls through to other auth in the middleware.
-    Constant-time compare guards against timing side-channels.
+    DEVICE_AUTH_TOKEN is the device-internal auth secret, kept SEPARATE from the
+    LLM provider key (it falls back to the LLM key only for devices provisioned
+    before the split — see config.py / SECURITY.md). Empty token disables this
+    path — falls through to other auth in the middleware. Constant-time compare
+    guards against timing side-channels.
     """
-    if not DL_API_KEY:
+    if not DEVICE_AUTH_TOKEN:
         return False
     auth = request.headers.get("authorization", "")
     if not auth.startswith("Bearer "):
@@ -770,7 +807,7 @@ def _has_valid_bearer_token(request) -> bool:
     provided = auth[len("Bearer "):].strip()
     if not provided:
         return False
-    return secrets.compare_digest(provided, DL_API_KEY)
+    return secrets.compare_digest(provided, DEVICE_AUTH_TOKEN)
 
 
 @app.middleware("http")
