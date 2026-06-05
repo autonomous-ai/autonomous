@@ -15,8 +15,8 @@ build a third.
 
 | Device | What it is | Declares |
 |--------|-----------|----------|
-| **Autonomous Lamp** | 5-DOF expressive desk robot | the maximal set — audio, vision, motion, light, display, sensing |
-| **Autonomous Intern** | always-on desk agent | audio, vision, sensing — **no** motion or display |
+| [**Autonomous Lamp**](devices/lamp) | 5-DOF expressive desk robot | the maximal set — audio, vision, motion, light, display, sensing |
+| [**Autonomous Intern**](devices/intern) | always-on desk agent | audio, vision, sensing — **no** motion or display |
 
 Lamp and Intern run the **same OS image**. The only difference is which capabilities each
 device's `DEVICE.md` declares. That is the whole thesis: a new device is a `DEVICE.md`,
