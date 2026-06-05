@@ -3,8 +3,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BOOTSTRAP_BIN="${ROOT_DIR}/lamp/bootstrap-server"
-VERSION_FILE="${ROOT_DIR}/lamp/${VERSION_FILE:-VERSION_BOOTSTRAP}"
+BOOTSTRAP_BIN="${ROOT_DIR}/os/core/bootstrap-server"
+VERSION_FILE="${ROOT_DIR}/os/core/${VERSION_FILE:-VERSION_BOOTSTRAP}"
 
 # Bucket and path: lamp/ota/bootstrap/[semver].zip
 GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"

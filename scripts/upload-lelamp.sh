@@ -3,8 +3,8 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LELAMP_DIR="${ROOT_DIR}/lelamp"
-VERSION_FILE="${ROOT_DIR}/lelamp/${VERSION_FILE:-VERSION_LELAMP}"
+LELAMP_DIR="${ROOT_DIR}/os/hal/lelamp"
+VERSION_FILE="${ROOT_DIR}/os/hal/lelamp/${VERSION_FILE:-VERSION_LELAMP}"
 
 # Bucket and path: lamp/ota/lelamp/[semver].zip
 GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"

@@ -1,18 +1,18 @@
-# AI Lamp — Makefile
+# Autonomous — Makefile
 # 4 components: Go (lamp + bootstrap + buddy), Python (lelamp), TypeScript (web)
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 # Directories
-LAMP_DIR       := lamp
-LELAMP_DIR     := lelamp
-BUDDY_DIR      := claude-desktop-buddy
+LAMP_DIR       := os/core
+LELAMP_DIR     := os/hal/lelamp
+BUDDY_DIR      := companions/desktop-buddy
 TWITCH_DIR     := chat-hooks/twitch-chat-hook
 AUTONOMOUS_DIR := chat-hooks/autonomous-chat-hook
 WEB_DIR        := $(LAMP_DIR)/web
 
 # Go build
-MODULE         := go-lamp.autonomous.ai
+MODULE         := go.autonomous.ai/os
 LDFLAGS_LAMP   := -X $(MODULE)/server/config.LampVersion=$(VERSION)
 LDFLAGS_BOOT   := -X $(MODULE)/bootstrap/config.BootstrapVersion=$(VERSION)
 LDFLAGS_IRC    := -X main.Version=$(VERSION)
