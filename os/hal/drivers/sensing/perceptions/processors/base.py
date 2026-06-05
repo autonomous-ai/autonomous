@@ -1,0 +1,66 @@
+import logging
+import threading
+from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, TypeVar
+
+from hal.drivers.sensing.perceptions.typing import SendEventCallable
+from hal.drivers.sensing.perceptions.utils import PerceptionStateObservers
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
+
+
+class Perception[T](ABC):
+    """Base class for a single camera-frame perception check.
+
+    check() is non-blocking: it submits _check_impl() to a shared thread
+    pool. A per-instance busy guard ensures each perception has at most one
+    task in the pool, preserving FIFO order per instance while different
+    perceptions run in parallel.
+    """
+
+    _pool: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=2)
+
+    def __init__(
+        self,
+        perception_state: PerceptionStateObservers,
+        send_event: SendEventCallable,
+        *args: Any,
+        **kwargs: Any,
+    ):
+        self._perception_state: PerceptionStateObservers = perception_state
+        self._send_event: SendEventCallable = send_event
+        self._busy: bool = False
+        self._lock: threading.RLock = threading.RLock()
+
+    def check(self, data: T) -> None:
+        """Non-blocking entry point. Skips if a previous check is still queued or running."""
+        with self._lock:
+            if self._busy:
+                return
+            self._busy = True
+
+        try:
+            _ = Perception._pool.submit(self._run, data)
+        except RuntimeError:
+            with self._lock:
+                self._busy = False
+
+    def _run(self, data: T) -> None:
+        try:
+            self._check_impl(data)
+        except Exception:
+            logger.exception("[%s] check error", type(self).__name__)
+        finally:
+            with self._lock:
+                self._busy = False
+
+    @abstractmethod
+    def _check_impl(self, data: T) -> None:
+        """Run detection on a single frame. Called in the shared thread pool."""
+
+    @abstractmethod
+    def cleanup(self) -> None:
+        """Release external resources (WS connections, files, etc.). Called on shutdown."""

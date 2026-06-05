@@ -3,10 +3,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LELAMP_DIR="${ROOT_DIR}/os/hal/lelamp"
-VERSION_FILE="${ROOT_DIR}/os/hal/lelamp/${VERSION_FILE:-VERSION_LELAMP}"
+LELAMP_DIR="${ROOT_DIR}/os/hal"
+VERSION_FILE="${ROOT_DIR}/os/hal/${VERSION_FILE:-VERSION_LELAMP}"
 
-# Bucket and path: lamp/ota/lelamp/[semver].zip
+# Bucket and path: lamp/ota/hal/[semver].zip
 GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
 
 # Auto-increment semver (patch) before upload
@@ -23,16 +23,16 @@ else
   echo "========== Version initialized: ${new_version} =========="
 fi
 
-ZIP_NAME="lelamp-${new_version}.zip"
+ZIP_NAME="hal-${new_version}.zip"
 ZIP_PATH="${ROOT_DIR}/${ZIP_NAME}"
-GCS_PATH="${GCS_PATH:-lamp/ota/lelamp/${new_version}.zip}"
+GCS_PATH="${GCS_PATH:-lamp/ota/hal/${new_version}.zip}"
 
 if [[ ! -d "$LELAMP_DIR" ]]; then
-  echo "Error: lelamp directory not found at $LELAMP_DIR"
+  echo "Error: hal directory not found at $LELAMP_DIR"
   exit 1
 fi
 
-echo "========== Zipping lelamp to ${ZIP_NAME} =========="
+echo "========== Zipping hal to ${ZIP_NAME} =========="
 rm -f "$ZIP_PATH"
 (cd "$LELAMP_DIR" && zip -r "$ZIP_PATH" . \
   -x ".venv/*" "__pycache__/*" "*/__pycache__/*" ".git/*" "*.pyc" \
@@ -41,7 +41,7 @@ rm -f "$ZIP_PATH"
 echo "========== Upload ${ZIP_NAME} to Google Cloud Storage (no-cache) =========="
 gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$ZIP_PATH" "gs://${GCS_BUCKET}/${GCS_PATH}"
 
-# Update metadata.json (lamp/ota/metadata.json) - lelamp key
+# Update metadata.json (lamp/ota/metadata.json) - hal key
 METADATA_PATH="lamp/ota/metadata.json"
 METADATA_TMP=$(mktemp)
 LELAMP_URL="${LELAMP_URL:-https://storage.googleapis.com/${GCS_BUCKET}/${GCS_PATH}}"
@@ -64,12 +64,12 @@ try:
     data = json.loads(raw) if raw.strip() else {}
 except json.JSONDecodeError:
     data = {}
-data['lelamp'] = {'version': sys.argv[1], 'url': sys.argv[2], 'updated_at': sys.argv[3]}
+data['hal'] = {'version': sys.argv[1], 'url': sys.argv[2], 'updated_at': sys.argv[3]}
 print(json.dumps(data, indent=2))
 " "$new_version" "$LELAMP_URL" "$(date '+%Y-%m-%d %H:%M:%S %z')")
 
 echo "$updated_metadata" > "$METADATA_TMP"
-echo "========== Upload metadata (lelamp: v${new_version}) =========="
+echo "========== Upload metadata (hal: v${new_version}) =========="
 gsutil -h "Content-Type:application/json" -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$METADATA_TMP" "gs://${GCS_BUCKET}/${METADATA_PATH}"
 rm -f "$METADATA_TMP"
 

@@ -28,11 +28,11 @@ models, so one skill runs on any body that declares the capability. A device's `
 declares which it has; the runtime mounts only those. *(`contract/` — see [hal.md](hal.md))*
 
 **Drivers** — each talks to one piece of hardware: the feetech servo, ws2812 LED, gc9a01
-display, camera, the audio STT/TTS/VAD pipeline. *(`os/hal/lelamp/service`)*
+display, camera, the audio STT/TTS/VAD pipeline. *(`os/hal/drivers`)*
 
 **Board Support** — per-board wiring (GPIO lines, PWM-vs-SPI LED, touch) for Raspberry Pi
 4/5 and OrangePi. One profile per board; swapping silicon is a port, not a rewrite.
-*(`os/hal/lelamp/platform/board.py`)*
+*(`os/hal/board/board.py`)*
 
 **Linux Kernel** — the vendor kernel (Raspberry Pi OS / OrangePi) we run on. We don't ship
 a kernel; drivers use its userspace interfaces (GPIO, SPI, ALSA, V4L2). *(see [kernel.md](kernel.md))*

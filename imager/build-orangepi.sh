@@ -12,7 +12,7 @@
 #   Phase 0  download .7z from Google Drive (cached in /input/)
 #   Phase 1  extract .img, expand to OUT_IMG_SIZE, partprobe, resize2fs
 #   Phase 2  chroot apt install + write systemd units + helper scripts + configs
-#   Phase 3  chroot OTA bake — backend binaries + lelamp + web UI + buddy
+#   Phase 3  chroot OTA bake — backend binaries + hal + web UI + buddy
 #   Phase 4  install lamp-resize-once.service for first-boot SD-fill expand
 #   Phase 5  unmount + compress → /output/golden-opi.img.xz
 #
@@ -269,7 +269,7 @@ if ! command -v uv &>/dev/null; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 export PATH="/root/.local/bin:\$PATH"
-mkdir -p /opt/lelamp
+mkdir -p /opt/hal
 
 # ── systemd units ────────────────────────────────────────────────────────────
 echo "[stage] systemd units"
@@ -311,31 +311,31 @@ SyslogIdentifier=bootstrap
 WantedBy=multi-user.target
 UNIT
 
-cat > /etc/systemd/system/lamp-lelamp.service <<'UNIT'
+cat > /etc/systemd/system/lamp-hal.service <<'UNIT'
 [Unit]
 Description=Lamp LeLamp Hardware Runtime
 After=network.target
 
 [Service]
-EnvironmentFile=/opt/lelamp/.env
+EnvironmentFile=/opt/hal/.env
 Type=simple
 User=root
-WorkingDirectory=/opt/lelamp
+WorkingDirectory=/opt/hal
 Environment="PYTHONPATH=/opt"
-ExecStart=/opt/lelamp/.venv/bin/uvicorn lelamp.server:app --host 127.0.0.1 --port 5001
+ExecStart=/opt/hal/.venv/bin/uvicorn hal.server:app --host 127.0.0.1 --port 5001
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=lamp-lelamp
+SyslogIdentifier=lamp-hal
 
 [Install]
 WantedBy=multi-user.target
 UNIT
 
-# Default lelamp env — production-safe defaults. Secrets (GELF, API keys) are
+# Default hal env — production-safe defaults. Secrets (GELF, API keys) are
 # filled by the device operator via setup wizard; not baked into the image.
-cat > /opt/lelamp/.env <<'ENV'
+cat > /opt/hal/.env <<'ENV'
 LELAMP_MODE=production
 LELAMP_LOG_LEVEL=INFO
 LELAMP_AUDIO_INPUT_ALSA=plug:lamp_micro2
@@ -570,10 +570,10 @@ cat > /usr/local/bin/software-update <<'EOFSCRIPT'
 set -e
 OTA_METADATA_URL="\${OTA_METADATA_URL:-https://storage.googleapis.com/s3-autonomous-upgrade-3/lamp/ota/metadata.json}"
 [ "\$(id -u)" -ne 0 ] && { echo "Run as root."; exit 1; }
-[ \$# -ne 1 ] && { echo "Usage: software-update <lamp|openclaw|bootstrap|web|lelamp|claude-desktop-buddy>"; exit 1; }
+[ \$# -ne 1 ] && { echo "Usage: software-update <lamp|openclaw|bootstrap|web|hal|claude-desktop-buddy>"; exit 1; }
 APP="\$1"
 case "\$APP" in
-  lamp|openclaw|bootstrap|web|lelamp|claude-desktop-buddy) ;;
+  lamp|openclaw|bootstrap|web|hal|claude-desktop-buddy) ;;
   *) echo "Unknown app: \$APP"; exit 1 ;;
 esac
 META=\$(mktemp); ZIP=\$(mktemp); DIR=\$(mktemp -d)
@@ -659,7 +659,7 @@ echo "[stage] nginx"
 rm -f /etc/nginx/sites-enabled/default
 cat > /etc/nginx/sites-enabled/default <<'NGINX'
 upstream backend  { server 127.0.0.1:5000; }
-upstream lelamp   { server 127.0.0.1:5001; }
+upstream hal   { server 127.0.0.1:5001; }
 upstream openclaw { server 127.0.0.1:18789; }
 
 server {
@@ -714,7 +714,7 @@ server {
     allow 127.0.0.1;
     allow ::1;
     deny all;
-    proxy_pass http://lelamp/;
+    proxy_pass http://hal/;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -768,8 +768,8 @@ load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-anon-
 PULSE_EOF
 fi
 
-cat > /etc/udev/rules.d/91-pulseaudio-lelamp-ignore.rules <<'UDEV_EOF'
-# Keep PulseAudio away from the lamp speaker codec so lelamp can own it.
+cat > /etc/udev/rules.d/91-pulseaudio-hal-ignore.rules <<'UDEV_EOF'
+# Keep PulseAudio away from the lamp speaker codec so hal can own it.
 SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
 SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
 UDEV_EOF
@@ -808,7 +808,7 @@ systemctl mask orangepi-firstrun-config.service 2>/dev/null || true
 
 # ── enable Lamp services (symlink, since chroot has no running systemd) ──────
 echo "[stage] enable Lamp services"
-for unit in lamp bootstrap lamp-lelamp openclaw avahi-daemon bluetooth ssh; do
+for unit in lamp bootstrap lamp-hal openclaw avahi-daemon bluetooth ssh; do
   systemctl enable "\$unit" 2>/dev/null || true
 done
 
@@ -824,7 +824,7 @@ echo "[stage] chroot Phase 2 complete"
 CHROOT_STAGES
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 3 — OTA bake: backend binaries + lelamp + web UI + buddy
+# Phase 3 — OTA bake: backend binaries + hal + web UI + buddy
 # ─────────────────────────────────────────────────────────────────────────────
 log "Phase 3 — OTA bake (Lamp binaries from metadata.json)"
 
@@ -864,29 +864,29 @@ retry "curl -fsSL -H 'Cache-Control: no-cache' -o '\$META' '${OTA_METADATA_URL}'
 WEB_URL=\$(jq -r '.web.url // empty'               "\$META")
 LAMP_URL=\$(jq -r '.lamp.url // empty'             "\$META")
 BOOTSTRAP_URL=\$(jq -r '.bootstrap.url // empty'   "\$META")
-LELAMP_URL=\$(jq -r '.lelamp.url // empty'         "\$META")
+LELAMP_URL=\$(jq -r '.hal.url // empty'         "\$META")
 BUDDY_URL=\$(jq -r '."claude-desktop-buddy".url // empty' "\$META")
 WEB_VER=\$(jq -r '.web.version // empty'           "\$META")
 LAMP_VER=\$(jq -r '.lamp.version // empty'         "\$META")
 BOOTSTRAP_VER=\$(jq -r '.bootstrap.version // empty' "\$META")
-LELAMP_VER=\$(jq -r '.lelamp.version // empty'     "\$META")
+LELAMP_VER=\$(jq -r '.hal.version // empty'     "\$META")
 BUDDY_VER=\$(jq -r '."claude-desktop-buddy".version // empty' "\$META")
 rm -f "\$META"
 [ -z "\$WEB_URL" ] || [ -z "\$LAMP_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
   echo "ERROR: OTA metadata missing web.url / lamp.url / bootstrap.url"; exit 1
 }
-echo "[overlay] web=\$WEB_VER lamp=\$LAMP_VER bootstrap=\$BOOTSTRAP_VER lelamp=\$LELAMP_VER buddy=\$BUDDY_VER"
+echo "[overlay] web=\$WEB_VER lamp=\$LAMP_VER bootstrap=\$BOOTSTRAP_VER hal=\$LELAMP_VER buddy=\$BUDDY_VER"
 
 echo "[overlay] backend binaries"
 install_binary_from_zip "\$BOOTSTRAP_URL" /usr/local/bin/bootstrap-server "bootstrap"
 install_binary_from_zip "\$LAMP_URL"      /usr/local/bin/lamp-server      "lamp"
 
 echo "[overlay] LeLamp"
-LELAMP_DIR="/opt/lelamp"
+LELAMP_DIR="/opt/hal"
 if [ -n "\$LELAMP_URL" ]; then
-  retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/lelamp.zip '\$LELAMP_URL'" 5
-  unzip -o -q /tmp/lelamp.zip -d "\$LELAMP_DIR"
-  rm -f /tmp/lelamp.zip
+  retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/hal.zip '\$LELAMP_URL'" 5
+  unzip -o -q /tmp/hal.zip -d "\$LELAMP_DIR"
+  rm -f /tmp/hal.zip
   # If zip nested into subdir, hoist up.
   if [ ! -f "\$LELAMP_DIR/pyproject.toml" ]; then
     SUBDIR=\$(find "\$LELAMP_DIR" -maxdepth 2 -name pyproject.toml 2>/dev/null | head -1 | xargs dirname 2>/dev/null)
@@ -929,7 +929,7 @@ WEBRTCVAD_EOF
   fi
   cd /
 else
-  echo "[overlay] WARN: no lelamp URL — skipping"
+  echo "[overlay] WARN: no hal URL — skipping"
 fi
 
 echo "[overlay] web UI"
@@ -1019,7 +1019,7 @@ cat > /output/manifest-opi.json <<MANIFEST_JSON
     "web": "${BAKED_WEB_VER}",
     "lamp": "${BAKED_LAMP_VER}",
     "bootstrap": "${BAKED_BOOTSTRAP_VER}",
-    "lelamp": "${BAKED_LELAMP_VER}",
+    "hal": "${BAKED_LELAMP_VER}",
     "claude-desktop-buddy": "${BAKED_BUDDY_VER}"
   },
   "source_image": {

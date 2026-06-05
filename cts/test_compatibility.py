@@ -9,9 +9,9 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-sys.path.insert(0, os.path.join(ROOT, "os", "hal"))
+sys.path.insert(0, os.path.join(ROOT, "os"))
 
-from lelamp.platform.device import load_device  # noqa: E402  (path set above)
+from hal.board.device import load_device  # noqa: E402  (path set above)
 
 DEVICES_DIR = os.path.join(ROOT, "devices")
 

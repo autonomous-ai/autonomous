@@ -10,7 +10,7 @@ not a fork" true.
 | | Capability | Driver |
 |---|---|---|
 | Example | `motion.move` | feetech servo on `/dev/ttyACM0` |
-| Lives in | `contract/capabilities.md` | `os/hal/lelamp/service/*` |
+| Lives in | `contract/capabilities.md` | `os/hal/drivers/*` |
 | Stability | **frozen** — never renamed/removed in a major version | internal — changes freely |
 | Addressed by | skills and the runtime | nothing above the HAL |
 
@@ -22,9 +22,9 @@ that one rule lets a skill run on Lamp, Intern, or any third-party body.
 
 ```
 motion.move   capability   contract/capabilities.md      frozen
-  └ route      os/hal/lelamp/routes/servo.py             HTTP surface
-    └ driver   os/hal/lelamp/service/motors/*            talks to hardware
-      └ board  platform/board.py                         which bus / pins
+  └ route      os/hal/routes/servo.py             HTTP surface
+    └ driver   os/hal/drivers/motors/*            talks to hardware
+      └ board  os/hal/board/board.py                     which bus / pins
         └ node /dev/ttyACM0                              kernel device node
 ```
 
@@ -44,13 +44,13 @@ only those:
 | undeclared | skip (a different device) |
 
 This is why **Intern is Lamp minus `motion` and `display`** — same image, fewer
-declarations, no fork. *(planner: `os/hal/lelamp/platform/device.py`)*
+declarations, no fork. *(planner: `os/hal/board/device.py`)*
 
 ## Adding a capability
 
 Three existing artifacts, no new file type:
 
-1. **Driver** under `os/hal/lelamp/service/<subsystem>/`, exposing a route.
+1. **Driver** under `os/hal/drivers/<subsystem>/`, exposing a route.
 2. **`contract/capabilities.md`** — add the name to the frozen vocabulary.
 3. **`DEVICE.md`** — declare it on each device that has the hardware.
 

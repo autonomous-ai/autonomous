@@ -30,7 +30,7 @@ ensure_root() {
 
 # Wrapper so a single stage failure doesn't abort the whole script — critical
 # for AP/recovery: stage_ap must always be reached so the device can re-provision
-# via WiFi even if app stages (lelamp/buddy/openclaw) fail.
+# via WiFi even if app stages (hal/buddy/openclaw) fail.
 # Inside `if "$name"` bash suspends `set -e` for the function call, so failures
 # inside a stage propagate up as the function's exit code without aborting.
 FAILED_STAGES=""
@@ -180,8 +180,8 @@ stage_ota_metadata() {
   LAMP_URL=$(jq -r '.lamp.url // empty' "$METADATA_TMP")
   BOOTSTRAP_VERSION=$(jq -r '.bootstrap.version // empty' "$METADATA_TMP")
   BOOTSTRAP_URL=$(jq -r '.bootstrap.url // empty' "$METADATA_TMP")
-  LELAMP_VERSION=$(jq -r '.lelamp.version // empty' "$METADATA_TMP")
-  LELAMP_URL=$(jq -r '.lelamp.url // empty' "$METADATA_TMP")
+  LELAMP_VERSION=$(jq -r '.hal.version // empty' "$METADATA_TMP")
+  LELAMP_URL=$(jq -r '.hal.url // empty' "$METADATA_TMP")
   BUDDY_VERSION=$(jq -r '."claude-desktop-buddy".version // empty' "$METADATA_TMP")
   BUDDY_URL=$(jq -r '."claude-desktop-buddy".url // empty' "$METADATA_TMP")
   rm -f "$METADATA_TMP"
@@ -189,7 +189,7 @@ stage_ota_metadata() {
     echo "ERROR: OTA metadata missing web.url, lamp.url or bootstrap.url. Check $OTA_METADATA_URL"
     exit 1
   fi
-  echo "[stage] OTA versions: web=$WEB_VERSION lamp=$LAMP_VERSION bootstrap=$BOOTSTRAP_VERSION lelamp=$LELAMP_VERSION buddy=$BUDDY_VERSION"
+  echo "[stage] OTA versions: web=$WEB_VERSION lamp=$LAMP_VERSION bootstrap=$BOOTSTRAP_VERSION hal=$LELAMP_VERSION buddy=$BUDDY_VERSION"
 }
 
 # Download zip from URL, unzip, copy single binary to dest path (handles lamp-server, bootstrap-server in zip)
@@ -279,25 +279,25 @@ EOF
   # Do NOT start lamp here — it switches to AP mode when unconfigured, killing internet.
   # Services will start after reboot at the end of setup.
   # /usr/local/bin/software-update is written later by stage_ap (covers
-  # all six components: lamp, openclaw, bootstrap, web, lelamp, claude-desktop-buddy).
+  # all six components: lamp, openclaw, bootstrap, web, hal, claude-desktop-buddy).
 }
 
 # ----------------------------------------------------------
 # Stage 1a: LeLamp (Python hardware runtime)
 # ----------------------------------------------------------
-stage_lelamp() {
+stage_hal() {
   echo "[stage] Install LeLamp (Python hardware drivers)"
 
-  LELAMP_DIR="/opt/lelamp"
+  LELAMP_DIR="/opt/hal"
   mkdir -p "$LELAMP_DIR"
 
   if [ -n "$LELAMP_URL" ]; then
     echo "[stage] Downloading LeLamp from OTA..."
-    retry "curl -fsSL -H \"Cache-Control: no-cache\" -H \"Pragma: no-cache\" -o /tmp/lelamp.zip \"$LELAMP_URL\"" 5
-    unzip -o -q /tmp/lelamp.zip -d "$LELAMP_DIR"
-    rm -f /tmp/lelamp.zip
+    retry "curl -fsSL -H \"Cache-Control: no-cache\" -H \"Pragma: no-cache\" -o /tmp/hal.zip \"$LELAMP_URL\"" 5
+    unzip -o -q /tmp/hal.zip -d "$LELAMP_DIR"
+    rm -f /tmp/hal.zip
   else
-    echo "[stage] WARN: No lelamp URL in OTA metadata, skipping download"
+    echo "[stage] WARN: No hal URL in OTA metadata, skipping download"
   fi
 
   # Install uv + system libs for audio/camera + PulseAudio echo cancellation
@@ -317,21 +317,21 @@ set-default-sink aec_sink
 PULSE_EOF
   fi
 
-  # Anonymous unix socket so the root-owned lamp-lelamp service can reach the
+  # Anonymous unix socket so the root-owned lamp-hal service can reach the
   # uid-1000 PulseAudio daemon (libpulse rejects cookie auth when the socket
   # owner differs from the connecting uid). Pairs with the PULSE_SERVER env
-  # added to the lamp-lelamp.service unit below. Required for Bluetooth
+  # added to the lamp-hal.service unit below. Required for Bluetooth
   # headset routing (pactl set-default-sink to a bluez sink).
   if [ -f "$PULSE_CONF" ] && ! grep -q "pulse-anon-lamp" "$PULSE_CONF"; then
     echo "[stage] Configuring PulseAudio anonymous socket for root access"
     cat >> "$PULSE_CONF" <<'PULSE_EOF'
 
-### Anonymous unix socket so root-owned lamp-lelamp can reach this PA daemon
+### Anonymous unix socket so root-owned lamp-hal can reach this PA daemon
 load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-anon-lamp
 PULSE_EOF
   fi
 
-  # Keep PulseAudio off the lamp speaker codec. lelamp's TTS opens this card
+  # Keep PulseAudio off the lamp speaker codec. hal's TTS opens this card
   # directly via ALSA hw for a persistent low-latency OutputStream, and `aplay`
   # in the music pipeline also writes to it via plug:lamp_speaker. If PA
   # auto-loads module-alsa-card for the same card (which it does once udev
@@ -339,11 +339,11 @@ PULSE_EOF
   # consumer fails open with EBUSY / PaErrorCode -9985.
   # ATTR{id} values: sndi2s4 = OrangePi onboard ES8389 codec; wm8960soundcard
   # = Raspberry Pi (Seeed wm8960 hat).
-  PA_IGNORE_RULE="/etc/udev/rules.d/91-pulseaudio-lelamp-ignore.rules"
+  PA_IGNORE_RULE="/etc/udev/rules.d/91-pulseaudio-hal-ignore.rules"
   if [ ! -f "$PA_IGNORE_RULE" ]; then
     echo "[stage] Adding udev rule so PulseAudio ignores the lamp speaker card"
     cat > "$PA_IGNORE_RULE" <<'UDEV_EOF'
-# Keep PulseAudio away from the lamp speaker codec so lelamp can own it.
+# Keep PulseAudio away from the lamp speaker codec so hal can own it.
 SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
 SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
 UDEV_EOF
@@ -402,7 +402,7 @@ WEBRTCVAD_EOF
   grep -q "^LELAMP_MODE=" "$LELAMP_DIR/.env" \
     || echo "LELAMP_MODE=production" >> "$LELAMP_DIR/.env"
 
-  cat >/etc/systemd/system/lamp-lelamp.service <<EOF
+  cat >/etc/systemd/system/lamp-hal.service <<EOF
 [Unit]
 Description=Lamp LeLamp Hardware Runtime
 After=network.target
@@ -416,20 +416,20 @@ Environment="PYTHONPATH=/opt"
 # Anonymous PulseAudio socket — see /etc/pulse/default.pa. Lets root reach the
 # desktop user's PulseAudio so the Bluetooth headset routing works.
 Environment="PULSE_SERVER=unix:/tmp/pulse-anon-lamp"
-ExecStart=$LELAMP_DIR/.venv/bin/uvicorn lelamp.server:app --host 127.0.0.1 --port 5001
+ExecStart=$LELAMP_DIR/.venv/bin/uvicorn hal.server:app --host 127.0.0.1 --port 5001
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=lamp-lelamp
+SyslogIdentifier=lamp-hal
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
   systemctl daemon-reload
-  systemctl enable lamp-lelamp
-  systemctl restart lamp-lelamp
+  systemctl enable lamp-hal
+  systemctl restart lamp-hal
 }
 
 # ----------------------------------------------------------
@@ -656,7 +656,7 @@ stage_nginx() {
 
   cat >/etc/nginx/conf.d/lamp.conf <<EOF
 upstream backend  { server 127.0.0.1:5000; }
-upstream lelamp   { server 127.0.0.1:5001; }
+upstream hal   { server 127.0.0.1:5001; }
 upstream openclaw { server 127.0.0.1:18789; }
 
 server {
@@ -756,7 +756,7 @@ server {
     allow ::1;
     deny all;
 
-    proxy_pass http://lelamp/;
+    proxy_pass http://hal/;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -1212,8 +1212,8 @@ OTA_METADATA_URL="${OTA_METADATA_URL:-https://storage.googleapis.com/s3-autonomo
 [ $# -ne 1 ] && { echo "Usage: software-update <lamp|openclaw|web>"; exit 1; }
 APP="$1"
 case "$APP" in
-  lamp|openclaw|bootstrap|web|lelamp|claude-desktop-buddy) ;;
-  *) echo "Unknown app: $APP. Use lamp, openclaw, bootstrap, web, lelamp, or claude-desktop-buddy."; exit 1 ;;
+  lamp|openclaw|bootstrap|web|hal|claude-desktop-buddy) ;;
+  *) echo "Unknown app: $APP. Use lamp, openclaw, bootstrap, web, hal, or claude-desktop-buddy."; exit 1 ;;
 esac
 
 METADATA_TMP=$(mktemp)
@@ -1271,18 +1271,18 @@ elif [ "$APP" = "web" ]; then
   cp -a "$DIR_TMP"/* "$WEB_ROOT"
   systemctl restart nginx
   echo "web updated to $VERSION"
-elif [ "$APP" = "lelamp" ]; then
-  [ -z "$URL" ] && { echo "Metadata has no url for lelamp"; exit 1; }
+elif [ "$APP" = "hal" ]; then
+  [ -z "$URL" ] && { echo "Metadata has no url for hal"; exit 1; }
   ZIP_TMP=$(mktemp)
-  curl -fsSL -H "Cache-Control: no-cache" -o "$ZIP_TMP" "$URL" || { echo "Failed to download lelamp"; exit 1; }
-  LELAMP_DIR="/opt/lelamp"
+  curl -fsSL -H "Cache-Control: no-cache" -o "$ZIP_TMP" "$URL" || { echo "Failed to download hal"; exit 1; }
+  LELAMP_DIR="/opt/hal"
   unzip -o -q "$ZIP_TMP" -d "$LELAMP_DIR"
   UV_BIN=$(command -v uv || echo "/root/.local/bin/uv")
   find /root/.cache/uv -name "lerobot.egg-info" -type d 2>/dev/null | xargs rm -rf
   cd "$LELAMP_DIR" && "$UV_BIN" sync --python 3.12 --extra hardware || { echo "uv sync failed"; exit 1; }
   cd /
-  systemctl restart lamp-lelamp
-  echo "lelamp updated to $VERSION"
+  systemctl restart lamp-hal
+  echo "hal updated to $VERSION"
 elif [ "$APP" = "claude-desktop-buddy" ]; then
   [ -z "$URL" ] && { echo "Metadata has no url for claude-desktop-buddy"; exit 1; }
   ZIP_TMP=$(mktemp)
@@ -1319,7 +1319,7 @@ run_stage stage_rpi5_wifi_stability
 run_stage stage_enable_spi
 run_stage stage_ota_metadata
 run_stage stage_backend
-run_stage stage_lelamp
+run_stage stage_hal
 run_stage stage_buddy
 run_stage stage_openclaw
 run_stage stage_nginx
@@ -1335,8 +1335,8 @@ echo "======================================"
 echo "Setup complete!"
 echo "AP SSID: Lamp-XXXX (actual: ${AP_SSID:-unknown — stage_ap may have failed})"
 echo "Setup page: http://192.168.100.1 (AP) — or http://${LAMP_HOSTNAME:-lamp-xxxx}.local once on home Wi-Fi"
-echo "Backends: systemctl status bootstrap lamp lamp-lelamp claude-desktop-buddy"
-echo "Updates:  software-update <bootstrap|lamp|openclaw|lelamp|claude-desktop-buddy|web>"
+echo "Backends: systemctl status bootstrap lamp lamp-hal claude-desktop-buddy"
+echo "Updates:  software-update <bootstrap|lamp|openclaw|hal|claude-desktop-buddy|web>"
 if [ -n "$FAILED_STAGES" ]; then
   echo ""
   echo "WARNING: the following stages FAILED:$FAILED_STAGES"

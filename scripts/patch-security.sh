@@ -5,13 +5,13 @@
 # Safe to run multiple times.
 #
 # PREREQUISITE: run OTA first so the device has the latest code:
-#   sudo software-update lelamp   ← same-origin middleware (server.py)
+#   sudo software-update hal   ← same-origin middleware (server.py)
 #   sudo software-update lamp     ← sameOriginOrLAN guard (/api/sensing/event)
 
 set -euo pipefail
 
-LELAMP_SVC="/etc/systemd/system/lamp-lelamp.service"
-LELAMP_UNIT="lamp-lelamp"
+LELAMP_SVC="/etc/systemd/system/lamp-hal.service"
+LELAMP_UNIT="lamp-hal"
 NGINX_CONF="/etc/nginx/conf.d/lamp.conf"
 
 # Hash watched files before patching so the end-of-script restart only fires
@@ -41,8 +41,8 @@ path = sys.argv[1]
 with open(path) as f:
     content = f.read()
 
-old = "  location /hw/ {\n    proxy_pass http://lelamp/;"
-new = "  location /hw/ {\n    allow 127.0.0.1;\n    allow ::1;\n    deny all;\n    proxy_pass http://lelamp/;"
+old = "  location /hw/ {\n    proxy_pass http://hal/;"
+new = "  location /hw/ {\n    allow 127.0.0.1;\n    allow ::1;\n    deny all;\n    proxy_pass http://hal/;"
 if old in content and new not in content:
     content = content.replace(old, new)
     with open(path, "w") as f:
@@ -320,7 +320,7 @@ print("[patch] nginx security headers: added")
 PYEOF
 
 # 4. Set LELAMP_MODE=production in .env (activates same-origin middleware)
-LELAMP_ENV="/opt/lelamp/.env"
+LELAMP_ENV="/opt/hal/.env"
 touch "$LELAMP_ENV"
 if grep -q "^LELAMP_MODE=" "$LELAMP_ENV" 2>/dev/null; then
   sed -i "s/^LELAMP_MODE=.*/LELAMP_MODE=production/" "$LELAMP_ENV"
@@ -330,9 +330,9 @@ else
   echo "[patch] LELAMP_MODE=production added to .env"
 fi
 
-# 5. Add EnvironmentFile to lelamp unit if missing
+# 5. Add EnvironmentFile to hal unit if missing
 if ! grep -q "^EnvironmentFile=" "$LELAMP_SVC" 2>/dev/null; then
-  sed -i '/^\[Service\]/a EnvironmentFile=\/opt\/lelamp\/.env' "$LELAMP_SVC"
+  sed -i '/^\[Service\]/a EnvironmentFile=\/opt\/hal\/.env' "$LELAMP_SVC"
   systemctl daemon-reload
   echo "[patch] ${LELAMP_UNIT}.service: EnvironmentFile added"
 else

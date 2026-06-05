@@ -1,11 +1,11 @@
 # Autonomous — Makefile
-# 4 components: Go (lamp + bootstrap + buddy), Python (lelamp), TypeScript (web)
+# 4 components: Go (lamp + bootstrap + buddy), Python (hal), TypeScript (web)
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 # Directories
 LAMP_DIR       := os/services
-LELAMP_DIR     := os/hal/lelamp
+LELAMP_DIR     := os/hal
 BUDDY_DIR      := companions/desktop-buddy
 TWITCH_DIR     := chat-hooks/twitch-chat-hook
 AUTONOMOUS_DIR := chat-hooks/autonomous-chat-hook
@@ -48,20 +48,20 @@ lamp-test:
 # LeLamp (Python) — dev | run | test
 # ============================================================================
 
-.PHONY: lelamp lelamp-dev lelamp-run lelamp-test lelamp-clean
+.PHONY: hal hal-dev hal-run hal-test hal-clean
 
-lelamp: lelamp-dev
+hal: hal-dev
 
-lelamp-dev:
-	cd $(LELAMP_DIR) && PYTHONPATH=.. LELAMP_MODE=developer .venv/bin/uvicorn lelamp.server:app --host 0.0.0.0 --port $(LELAMP_PORT) --reload
+hal-dev:
+	cd $(LELAMP_DIR) && PYTHONPATH=.. LELAMP_MODE=developer .venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port $(LELAMP_PORT) --reload
 
-lelamp-run:
-	cd $(LELAMP_DIR) && PYTHONPATH=.. .venv/bin/python -m lelamp.server
+hal-run:
+	cd $(LELAMP_DIR) && PYTHONPATH=.. .venv/bin/python -m hal.server
 
-lelamp-test:
+hal-test:
 	cd $(LELAMP_DIR) && .venv/bin/python -m pytest test/
 
-lelamp-clean:
+hal-clean:
 	rm -rf $(LELAMP_DIR)/.venv $(LELAMP_DIR)/__pycache__
 
 # ============================================================================
@@ -112,7 +112,7 @@ autonomous-build-chat:
 # Upload (OTA to GCS) — unified format: make upload-<component>
 # ============================================================================
 
-.PHONY: upload-lamp upload-bootstrap upload-lelamp upload-claude-desktop-buddy upload-lamp-buddy upload-web upload-skills upload-hooks upload-setup upload-setup-ap upload-openclaw upload-twitch-irc upload-autonomous-chat upload-all
+.PHONY: upload-lamp upload-bootstrap upload-hal upload-claude-desktop-buddy upload-lamp-buddy upload-web upload-skills upload-hooks upload-setup upload-setup-ap upload-openclaw upload-twitch-irc upload-autonomous-chat upload-all
 
 upload-lamp:
 	bash scripts/upload-lamp.sh
@@ -120,8 +120,8 @@ upload-lamp:
 upload-bootstrap:
 	bash scripts/upload-bootstrap.sh
 
-upload-lelamp:
-	bash scripts/upload-lelamp.sh
+upload-hal:
+	bash scripts/upload-hal.sh
 
 upload-claude-desktop-buddy:
 	bash scripts/upload-claude-desktop-buddy.sh
@@ -168,7 +168,7 @@ upload-openclaw:
 
 # upload-openclaw is intentionally NOT in upload-all — bumping the OpenClaw
 # version is an explicit decision, not a side effect of pushing other artifacts.
-upload-all: upload-lamp upload-bootstrap upload-lelamp upload-claude-desktop-buddy upload-web upload-skills upload-hooks
+upload-all: upload-lamp upload-bootstrap upload-hal upload-claude-desktop-buddy upload-web upload-skills upload-hooks
 
 # ============================================================================
 # Release tagging — GPL v3 §6 compliance

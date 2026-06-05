@@ -60,13 +60,13 @@ declares which it has; the runtime mounts only those. *(`contract/` — see [HAL
 ### Drivers
 
 Each talks to one piece of hardware: the feetech servo, ws2812 LED, gc9a01
-display, camera, the audio STT/TTS/VAD pipeline. *(`os/hal/lelamp/service`)*
+display, camera, the audio STT/TTS/VAD pipeline. *(`os/hal/drivers`)*
 
 ### Board Support
 
 Per-board wiring (GPIO lines, PWM-vs-SPI LED, touch) for Raspberry Pi
 4/5 and OrangePi. One profile per board; swapping silicon is a port, not a rewrite.
-*(`os/hal/lelamp/platform/board.py`)*
+*(`os/hal/board/board.py`)*
 
 ### Linux Kernel
 
@@ -107,8 +107,9 @@ skills/           Skills — the apps (SKILL.md)
 os/
   services/       Agentic-runtime bridge + System Services (Go): intent, network, OTA, sensing
     web/          on-device setup + monitor UI (React)
-  hal/lelamp/     HAL implementation (Python): drivers + capability host
-    platform/     Board Support — per-board profiles + declaration-driven mounting
+  hal/            HAL (Python) — the package; capability host + routes
+    drivers/      Drivers — by subsystem (motion, audio, vision, light, display, sensing)
+    board/        Board Support — per-board profiles + declaration-driven mounting
 devices/          reference devices: lamp/, intern/ (DEVICE · SOUL · SAFETY · README · hardware/)
 
 # Supporting
@@ -121,10 +122,8 @@ chat-hooks/       on-device chat bridges (Twitch, web chat)
 dlbackend/        off-device cloud inference service
 ```
 
-> The OS layers `Drivers` and `Board Support` live inside `os/hal/lelamp` rather than as
-> top-level folders, because surfacing them means renaming the `lelamp` package and its
-> deployed identifiers (`/opt/lelamp`, systemd units, `LELAMP_*` env) — a back-compat field
-> migration tracked separately, not done casually while devices are in the field.
+> `Drivers` and `Board Support` are now surfaced as `os/hal/drivers` and `os/hal/board`. The
+> on-device env vars remain `LELAMP_*` as legacy aliases until a field OTA cycle migrates them.
 
 ## Quick start
 
@@ -134,9 +133,9 @@ make lamp-build            # builds the system server (os/services)
 make lamp-test             # go test ./...
 
 # Hardware runtime (runs on the Pi or OrangePi)
-cd os/hal/lelamp && uv sync
-make lelamp-dev            # uvicorn reload on :5001
-make lelamp-test           # pytest
+cd os/hal && uv sync
+make hal-dev               # uvicorn reload on :5001
+make hal-test              # pytest
 
 # Web UI
 make web-install && make web-dev

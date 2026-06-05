@@ -40,10 +40,10 @@
 #         - Generate locale
 #         - stage_rpi5_wifi_stability: disable IPv6 (legacy RPi 5 workaround)
 #         - stage_enable_spi: dtparam=spi=on in config.txt
-#         - stage_backend_units: systemd services (bootstrap, lamp, lamp-lelamp) + software-update
+#         - stage_backend_units: systemd services (bootstrap, lamp, lamp-hal) + software-update
 #         - stage_pulseaudio: PulseAudio echo cancellation (WebRTC AEC for mic/speaker)
-#         - stage_lelamp_uv: install uv (Python package manager for LeLamp)
-#         - stage_nginx: write nginx config with backend/lelamp/openclaw upstreams
+#         - stage_hal_uv: install uv (Python package manager for LeLamp)
+#         - stage_nginx: write nginx config with backend/hal/openclaw upstreams
 #         - stage_ap: hostapd, dnsmasq, dhcpcd, device-ap/sta-mode scripts
 #         - stage_nodejs_openclaw: Node.js 22 + OpenClaw gateway
 #  20.  Install btrfs-resize-once service
@@ -54,7 +54,7 @@
 #   Copy base.img → golden.img, mount, chroot:
 #         - stage_ota_metadata: fetch build versions from GCS
 #         - stage_backend: download bootstrap-server + lamp-server binaries
-#         - stage_lelamp: download LeLamp Python app + uv sync
+#         - stage_hal: download LeLamp Python app + uv sync
 #         - stage_web: download web UI zip
 #   Take initial @factory snapshot (baked into image at build time)
 #   QC checks (verify binaries, configs, services, subvolumes)
@@ -65,7 +65,7 @@
 #   3. btrfs-resize-once.service: resizes partition + Btrfs to full SD (runs once, self-destructs)
 #      @factory is the build-time white board — never overwritten
 #   4. User runs 'sudo device-ap-mode' to start AP hotspot "Lamp-XXXX" at 192.168.100.1
-#   5. nginx serves setup web UI, bootstrap/lamp/lelamp backends running
+#   5. nginx serves setup web UI, bootstrap/lamp/hal backends running
 #
 # BTRFS SUBVOLUME LAYOUT
 #   @               — initial live root
@@ -106,7 +106,7 @@
 #   sudo device-ap-mode           — switch to hotspot mode
 #   sudo device-sta-mode          — switch to station (client) mode
 #   sudo connect-wifi SSID PASS   — connect to WiFi (switches to STA mode)
-#   sudo software-update <bootstrap|lamp|lelamp|openclaw|web>  — OTA update a component
+#   sudo software-update <bootstrap|lamp|hal|openclaw|web>  — OTA update a component
 # =============================================================================
 set -euo pipefail
 
@@ -831,7 +831,7 @@ SyslogIdentifier=lamp
 WantedBy=multi-user.target
 EOF
 
-cat > /etc/systemd/system/lamp-lelamp.service <<'EOF'
+cat > /etc/systemd/system/lamp-hal.service <<'EOF'
 [Unit]
 Description=Lamp LeLamp Hardware Runtime
 After=network.target
@@ -839,22 +839,22 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/lelamp
+WorkingDirectory=/opt/hal
 Environment="PYTHONPATH=/opt"
-ExecStart=/opt/lelamp/.venv/bin/uvicorn lelamp.server:app --host 127.0.0.1 --port 5001
+ExecStart=/opt/hal/.venv/bin/uvicorn hal.server:app --host 127.0.0.1 --port 5001
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=lamp-lelamp
+SyslogIdentifier=lamp-hal
 
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable bootstrap lamp lamp-lelamp
+systemctl enable bootstrap lamp lamp-hal
 
-# software-update: OTA updater for bootstrap, lamp, lelamp, openclaw, and web UI.
-# Usage: software-update <bootstrap|lamp|lelamp|openclaw|web>
+# software-update: OTA updater for bootstrap, lamp, hal, openclaw, and web UI.
+# Usage: software-update <bootstrap|lamp|hal|openclaw|web>
 # Downloads the binary/zip from OTA metadata URL and hot-swaps it.
 cat > /usr/local/bin/software-update <<'SWUPDATE'
 #!/bin/bash
@@ -866,7 +866,7 @@ retry() {
   echo "ERROR: failed \$max attempts"; return 1
 }
 [ "\$(id -u)" -ne 0 ] && { echo "Run as root."; exit 1; }
-[ \$# -lt 1 ] && { echo "Usage: software-update <bootstrap|lamp|lelamp|openclaw|web>"; exit 1; }
+[ \$# -lt 1 ] && { echo "Usage: software-update <bootstrap|lamp|hal|openclaw|web>"; exit 1; }
 
 # Wait for NTP time sync (RPi has no battery-backed RTC; clock may be wrong on boot)
 for i in \$(seq 1 10); do
@@ -875,7 +875,7 @@ for i in \$(seq 1 10); do
   sleep 2
 done
 KIND="\$1"
-case "\$KIND" in bootstrap|lamp|lelamp|openclaw|web) ;; *) echo "Unknown: \$KIND (bootstrap, lamp, lelamp, openclaw, web)"; exit 1 ;; esac
+case "\$KIND" in bootstrap|lamp|hal|openclaw|web) ;; *) echo "Unknown: \$KIND (bootstrap, lamp, hal, openclaw, web)"; exit 1 ;; esac
 META="\$(mktemp)"
 retry "curl -fsSL -H 'Cache-Control: no-cache' -o '\$META' '\$OTA_METADATA_URL'" 5
 URL=\$(jq -r --arg k "\$KIND" '.[\$k].url // empty' "\$META")
@@ -903,17 +903,17 @@ elif [ "\$KIND" = "bootstrap" ]; then
   [ -z "\$b" ] && b=\$(find "\$D" -type f 2>/dev/null | head -1)
   cp -f "\$b" /usr/local/bin/bootstrap-server; chmod +x /usr/local/bin/bootstrap-server; rm -rf "\$D"
   systemctl restart bootstrap 2>/dev/null || true
-elif [ "\$KIND" = "lelamp" ]; then
-  LELAMP_DIR="/opt/lelamp"
-  curl -fsSL -o /tmp/lelamp.zip "\$URL"
-  unzip -o -q /tmp/lelamp.zip -d "\$LELAMP_DIR"
-  rm -f /tmp/lelamp.zip
+elif [ "\$KIND" = "hal" ]; then
+  LELAMP_DIR="/opt/hal"
+  curl -fsSL -o /tmp/hal.zip "\$URL"
+  unzip -o -q /tmp/hal.zip -d "\$LELAMP_DIR"
+  rm -f /tmp/hal.zip
   UV_BIN=\$(command -v uv || echo "/root/.local/bin/uv")
   find /root/.cache/uv -name "lerobot.egg-info" -type d 2>/dev/null | xargs rm -rf
   rm -rf "\$LELAMP_DIR/.venv"
   cd "\$LELAMP_DIR" && "\$UV_BIN" sync --python 3.12 --extra hardware || { echo "uv sync failed"; exit 1; }
   cd /
-  systemctl restart lamp-lelamp 2>/dev/null || true
+  systemctl restart lamp-hal 2>/dev/null || true
 elif [ "\$KIND" = "openclaw" ]; then
   V="\${VER:-latest}"
   npm install -g "openclaw@\${V}" || { echo "npm install openclaw failed"; exit 1; }
@@ -926,7 +926,7 @@ chmod +x /usr/local/bin/software-update
 # ── stage: nginx ──────────────────────────────────────────────────────────────
 # nginx serves two things:
 #   1. Static web UI at / (setup wizard — downloaded from OTA)
-#   2. API proxy at /api/ → localhost:5000 (lamp-server), /hw/ → :5001 (lelamp), /gw/ → :18789 (openclaw)
+#   2. API proxy at /api/ → localhost:5000 (lamp-server), /hw/ → :5001 (hal), /gw/ → :18789 (openclaw)
 # Captive portal detection endpoints return 204 (no content) to prevent
 # the OS from auto-opening a browser when connecting to the AP.
 echo "[stage] Setup nginx"
@@ -936,7 +936,7 @@ mkdir -p /usr/share/nginx/html/setup
 
 cat > /etc/nginx/conf.d/lamp.conf <<'EOF'
 upstream backend  { server 127.0.0.1:5000; }
-upstream lelamp   { server 127.0.0.1:5001; }
+upstream hal   { server 127.0.0.1:5001; }
 upstream openclaw { server 127.0.0.1:18789; }
 
 server {
@@ -1014,7 +1014,7 @@ server {
     allow ::1;
     deny all;
 
-    proxy_pass http://lelamp/;
+    proxy_pass http://hal/;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -1317,15 +1317,15 @@ set-default-sink aec_sink
 PULSE_EOF
 fi
 
-# Keep PulseAudio off the lamp speaker codec. lelamp's TTS opens this card
+# Keep PulseAudio off the lamp speaker codec. hal's TTS opens this card
 # directly via ALSA hw for a persistent low-latency OutputStream, and aplay
 # in the music pipeline also writes to it via plug:lamp_speaker. If PA
 # auto-loads module-alsa-card for the same card, the device becomes
 # exclusively held and every other consumer fails open with EBUSY.
 # ATTR{id} values: sndi2s4 = OrangePi onboard ES8389 codec; wm8960soundcard
 # = Raspberry Pi (Seeed wm8960 hat).
-cat > /etc/udev/rules.d/91-pulseaudio-lelamp-ignore.rules <<'UDEV_EOF'
-# Keep PulseAudio away from the lamp speaker codec so lelamp can own it.
+cat > /etc/udev/rules.d/91-pulseaudio-hal-ignore.rules <<'UDEV_EOF'
+# Keep PulseAudio away from the lamp speaker codec so hal can own it.
 SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
 SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
 UDEV_EOF
@@ -1335,7 +1335,7 @@ UDEV_EOF
 # FastAPI server on port 5001. Uses uv for Python env management.
 # Binary download happens in Phase 2 (overlay) — only uv install is in base.
 echo "[stage] Install uv (Python package manager for LeLamp)"
-mkdir -p /opt/lelamp
+mkdir -p /opt/hal
 if ! command -v uv &>/dev/null; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
   export PATH="/root/.local/bin:\$PATH"
@@ -1798,18 +1798,18 @@ retry "curl -fsSL -H 'Cache-Control: no-cache' -o '\$META' '\$OTA_METADATA_URL'"
 WEB_URL=\$(jq -r '.web.url // empty'         "\$META")
 LAMP_URL=\$(jq -r '.lamp.url // empty'       "\$META")
 BOOTSTRAP_URL=\$(jq -r '.bootstrap.url // empty' "\$META")
-LELAMP_URL=\$(jq -r '.lelamp.url // empty'   "\$META")
+LELAMP_URL=\$(jq -r '.hal.url // empty'   "\$META")
 BUDDY_URL=\$(jq -r '."claude-desktop-buddy".url // empty' "\$META")
 WEB_VER=\$(jq -r '.web.version // empty'     "\$META")
 LAMP_VER=\$(jq -r '.lamp.version // empty'   "\$META")
 BOOTSTRAP_VER=\$(jq -r '.bootstrap.version // empty' "\$META")
-LELAMP_VER=\$(jq -r '.lelamp.version // empty' "\$META")
+LELAMP_VER=\$(jq -r '.hal.version // empty' "\$META")
 BUDDY_VER=\$(jq -r '."claude-desktop-buddy".version // empty' "\$META")
 rm -f "\$META"
 [ -z "\$WEB_URL" ] || [ -z "\$LAMP_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
   echo "ERROR: OTA metadata missing web.url, lamp.url or bootstrap.url"; exit 1
 }
-echo "[overlay] web=\$WEB_VER lamp=\$LAMP_VER bootstrap=\$BOOTSTRAP_VER lelamp=\$LELAMP_VER buddy=\$BUDDY_VER"
+echo "[overlay] web=\$WEB_VER lamp=\$LAMP_VER bootstrap=\$BOOTSTRAP_VER hal=\$LELAMP_VER buddy=\$BUDDY_VER"
 
 # ── stage: backend binaries ──────────────────────────────────────────────────
 echo "[overlay] Install backend binaries"
@@ -1818,14 +1818,14 @@ install_binary_from_zip "\$LAMP_URL"      /usr/local/bin/lamp-server      "lamp"
 
 # ── stage: LeLamp (Python hardware runtime) ──────────────────────────────────
 echo "[overlay] Install LeLamp"
-LELAMP_DIR="/opt/lelamp"
+LELAMP_DIR="/opt/hal"
 mkdir -p "\$LELAMP_DIR"
 if [ -n "\$LELAMP_URL" ]; then
   echo "[overlay] LeLamp: downloading from \$LELAMP_URL"
-  retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/lelamp.zip '\$LELAMP_URL'" 5
+  retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/hal.zip '\$LELAMP_URL'" 5
   echo "[overlay] LeLamp: extracting zip to \$LELAMP_DIR"
-  unzip -o -q /tmp/lelamp.zip -d "\$LELAMP_DIR"
-  rm -f /tmp/lelamp.zip
+  unzip -o -q /tmp/hal.zip -d "\$LELAMP_DIR"
+  rm -f /tmp/hal.zip
   echo "[overlay] LeLamp: zip contents:"
   find "\$LELAMP_DIR" -maxdepth 2 -type f | head -30
 
@@ -1878,7 +1878,7 @@ if [ -n "\$LELAMP_URL" ]; then
   echo "[overlay] LeLamp: uv sync complete"
 
   # Patch webrtcvad: replace pkg_resources import (removed in Python 3.12+).
-  # Without this lelamp crashes on first import of webrtcvad on a fresh Py3.12 venv.
+  # Without this hal crashes on first import of webrtcvad on a fresh Py3.12 venv.
   WEBRTCVAD_PY=\$(find "\$LELAMP_DIR/.venv" -name "webrtcvad.py" -path "*/site-packages/*" 2>/dev/null | head -1)
   if [ -n "\$WEBRTCVAD_PY" ] && grep -q "import pkg_resources" "\$WEBRTCVAD_PY" 2>/dev/null; then
     echo "[overlay] LeLamp: patching webrtcvad for Python 3.12+ (pkg_resources removal)"
@@ -1911,7 +1911,7 @@ WEBRTCVAD_EOF
   fi
   cd /
 else
-  echo "[overlay] WARN: No lelamp URL in OTA metadata, skipping LeLamp download"
+  echo "[overlay] WARN: No hal URL in OTA metadata, skipping LeLamp download"
 fi
 
 # ── stage: web UI ────────────────────────────────────────────────────────────
@@ -2048,7 +2048,7 @@ for CFG in /etc/fstab /etc/hostapd/hostapd.conf /etc/nginx/conf.d/lamp.conf \
 done
 
 # Check systemd services are enabled
-for SVC in bootstrap lamp lamp-lelamp nginx openclaw btrfs-resize-once firstrun-wifi; do
+for SVC in bootstrap lamp lamp-hal nginx openclaw btrfs-resize-once firstrun-wifi; do
   if [ -L "${MNT}/etc/systemd/system/multi-user.target.wants/${SVC}.service" ] || \
      [ -L "${MNT}/etc/systemd/system/sysinit.target.wants/${SVC}.service" ]; then
     echo "  [OK] ${SVC}.service enabled"
@@ -2108,4 +2108,4 @@ echo "      sudo fr-rollback              — restore @factory and reboot"
 echo "      sudo device-ap-mode           — switch to hotspot"
 echo "      sudo device-sta-mode          — switch to WiFi client"
 echo "      sudo connect-wifi SSID PASS   — connect to WiFi"
-echo "      sudo software-update <bootstrap|lamp|lelamp|openclaw|web>  — OTA update"
+echo "      sudo software-update <bootstrap|lamp|hal|openclaw|web>  — OTA update"

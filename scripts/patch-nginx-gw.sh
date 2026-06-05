@@ -15,7 +15,7 @@ if [ ! -f "$CONF" ]; then
 fi
 
 if ! grep -q "upstream openclaw" "$CONF"; then
-  sed -i '/^upstream lelamp/a upstream openclaw { server 127.0.0.1:18789; }' "$CONF"
+  sed -i '/^upstream hal/a upstream openclaw { server 127.0.0.1:18789; }' "$CONF"
   echo "[patch] Added upstream openclaw"
 else
   echo "[skip]  upstream openclaw already present"
