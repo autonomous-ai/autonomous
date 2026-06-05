@@ -39,6 +39,8 @@ jobs:
       - name: unit tests (board + device — no hardware deps)
         working-directory: os/hal
         run: python -m unittest lelamp.test.test_board lelamp.test.test_device -v
+      - name: conformance suite (CTS — devices vs COMPATIBILITY.md)
+        run: python -m unittest discover -s cts -v
       - name: syntax check platform + refactored drivers
         working-directory: os/hal
         run: |
