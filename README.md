@@ -1,6 +1,6 @@
 # Autonomous
 
-**Autonomous is the open-source OS for physical AI agents.** It runs on edge devices
+**Autonomous is the open source operating system for physical AI agents.** It runs on edge devices
 with cameras, microphones, speakers, displays, motors, lights, and sensors, and gives
 an AI agent a body: it sees, hears, speaks, moves, senses, remembers, runs skills, and
 updates itself — locally first.
