@@ -29,7 +29,6 @@ calling `motion.move` runs on it and on Lamp alike — skills address capabiliti
 
 Autonomous is a layered stack: each layer exposes an interface to the one above and
 depends only on the one below, so any layer can be replaced without touching the others.
-(The layering follows Android; the driver/board split follows Linux.)
 
 ![Autonomous architecture](docs/architecture/autonomous-stack.svg)
 
