@@ -63,60 +63,81 @@ Autonomous is an open-source OS for physical AI agents. The Go backend
 channel setup), OTA updates, and agent gateway integration. The brain is a
 swappable agentic runtime (OpenClaw, Hermes, or any LLM + skills + memory).
 
-**Module:** `go-lamp.autonomous.ai` | **Go 1.24** | **Target:** Linux ARM64
+**Go module (`os/services`):** `go.autonomous.ai/os` | **Go 1.24** | **Target:** Linux ARM64
 
 ## Build & Development Commands
 
+All targets run from the repo root via the top-level `Makefile`.
+
 ```bash
-# Build (cross-compiles to linux/arm64)
-make build-lamp
-make build-bootstrap
+# Build Go services (cross-compiles to linux/arm64)
+make lamp-build
+make lamp-build-bootstrap
 
 # Code generation (Google Wire DI)
-make generate
+make lamp-generate
 
-# Lint
-golangci-lint run
+# Lint + tests (Go)
+make lamp-lint
+make lamp-test
 
-# Run tests
-go test ./...
-go test ./internal/led/...
+# HAL (Python hardware runtime, os/hal)
+make hal-dev
+make hal-test
 
-# Web frontend (React/Vite/Tailwind in web/)
-cd web && npm install && npm run dev
-cd web && npm run build
+# Web frontend (React/Vite/Tailwind in os/services/web)
+make web-install
+make web-dev
+make web-build
 ```
 
-Version is injected at build time via ldflags.
+Go version is injected at build time via ldflags. HAL/web versions live in
+`os/services/VERSION_LAMP` and `os/hal/VERSION_LELAMP` and are auto-bumped by the
+`make upload-*` release targets — do not hand-edit for releases.
 
 ## Architecture
 
 ### Two Executables
 
-- `cmd/lamp/main.go` - Main HTTP API server (Gin). Handles device setup,
-  network management, LED control, health checks, and agent gateway
+- `os/services/cmd/lamp/main.go` - Main HTTP API server (Gin). Handles device
+  setup, network management, LED control, health checks, and agent gateway
   integration.
-- `cmd/bootstrap/main.go` - OTA bootstrap worker. Periodically checks for and
-  applies updates.
+- `os/services/cmd/bootstrap/main.go` - OTA bootstrap worker. Periodically
+  checks for and applies updates.
 
 ### Dependency Injection
 
 Uses Google Wire for compile-time DI. After changing provider signatures, run
-`make generate` to regenerate `wire_gen.go` files.
+`make lamp-generate` to regenerate `wire_gen.go` files.
 
 ### Package Layout
 
+**Go backend - `os/services/`:**
+
 - `server/` - HTTP layer: Gin router, route handlers organized by domain.
   Each handler follows the `delivery/http/handler.go` convention.
-- `internal/` - Business logic services (device, network, openclaw, led,
-  resetbutton, beclient, llm).
+- `internal/` - Business logic services (agent, ambient, beclient, buddy,
+  device, healthwatch, intent, monitor, network, openclaw, ota, statusled).
 - `bootstrap/` - OTA worker: metadata fetching, update execution, state
   persistence.
 - `domain/` - Shared data structures.
 - `server/serializers/` - Standard JSON response wrapper.
 - `server/config/` - Config management.
-- `lib/` - Shared libraries (mqtt, core/system).
+- `lib/` - Shared libraries (mqtt, core/system, i18n, logger, lelamp HAL
+  client, safego, ...).
 - `web/` - React 19 + TypeScript + Vite + Tailwind CSS 4 SPA.
+
+**HAL - `os/hal/` (Python hardware runtime, FastAPI on :5001):**
+
+- `drivers/` - Hardware drivers by subsystem (rgb, motors, voice, sensing,
+  display, gpio_button, ...).
+- `board/` - Per-board profiles (pin maps, debounce).
+- `routes/` - FastAPI route modules (servo, led, camera, audio, emotion, ...).
+
+**OS-level dirs (repo root):** `contract/` (device specs), `skills/` (agent
+skills), `devices/` (per-device declarations + docs), `cts/` (compliance
+tests), `imager/` (OrangePi image build), `scripts/` (setup + OTA upload),
+`dlbackend/`, `companions/`.
 
 ### API Response Format
 
@@ -136,9 +157,9 @@ on failure.
 
 ### Configuration
 
-Config lives in `config/config.json` and is managed by
-`server/config/config.go`. It supports a notification channel for config change
-propagation.
+Config lives in `config/config.json` (path relative to the lamp-server working
+dir) and is managed by `os/services/server/config/config.go`. It supports a
+notification channel for config change propagation.
 
 ## Coding Standards
 
@@ -169,7 +190,7 @@ respect `ctx.Done()`.
 Use `go-playground/validator` for struct validation. Validate at the HTTP
 handler level before passing data to services.
 
-### Naming
+### Naming (paths under `os/services/`)
 
 - Handlers: `server/<domain>/delivery/http/handler.go`
 - Services: `internal/<domain>/service.go`
