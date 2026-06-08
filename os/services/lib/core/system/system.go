@@ -58,9 +58,3 @@ func RestartService(ctx context.Context, service string) error {
 	_, err := Run(ctx, "systemctl", "restart", service)
 	return err
 }
-
-// Poweroff runs systemctl poweroff. Requires appropriate privileges.
-func Poweroff(ctx context.Context) error {
-	_, err := Run(ctx, "systemctl", "poweroff")
-	return err
-}
