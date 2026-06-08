@@ -1,12 +1,12 @@
-# OpenClaw compaction summary — cách hoạt động và vì sao có thể đè SKILL.md
+# Agent session compaction — cách hoạt động và vì sao có thể đè SKILL.md
 
-> **Tóm tắt:** OpenClaw tự compact session agent khi context chạm ~80k tokens. Kết quả compact là một chuỗi `summary` — chuỗi này được **chèn đầu mỗi turn kế tiếp** cho đến lần compact sau. Nếu rule vô tình bị copy/generalize vào summary, chúng có thể đè `SKILL.md` đang load — vì summary nằm trước trong prompt và được coi như "context đã chốt."
+> **Tóm tắt:** Agentic runtime tự compact session agent khi context chạm ~80k tokens. Kết quả compact là một chuỗi `summary` — chuỗi này được **chèn đầu mỗi turn kế tiếp** cho đến lần compact sau. Nếu rule vô tình bị copy/generalize vào summary, chúng có thể đè `SKILL.md` đang load — vì summary nằm trước trong prompt và được coi như "context đã chốt."
 >
 > Doc này là reference link từ nút **📋 Summary** ở Flow Monitor (modal: `os/services/web/src/pages/monitor/FlowSection/CompactionModal.tsx`).
 
 ## Vì sao có compact
 
-Agent OpenClaw giữ conversation history dài. Mỗi turn là tập hợp các entry `user event`, `thinking`, `tool_call`, `tool_result`, `assistant reply` — tất cả được ghi trong session `.jsonl`. Sau vài giờ hoạt động, tokens tăng nhanh. Khi tổng context chạm **~80k tokens**, LLM không nhét thêm input được nữa → OpenClaw (hoặc Lamp — xem phần trigger) compact: gộp entry cũ thành 1 đoạn summary, xóa entry gốc, tiếp tục.
+Agentic runtime giữ conversation history dài. Mỗi turn là tập hợp các entry `user event`, `thinking`, `tool_call`, `tool_result`, `assistant reply` — tất cả được ghi trong session `.jsonl`. Sau vài giờ hoạt động, tokens tăng nhanh. Khi tổng context chạm **~80k tokens**, LLM không nhét thêm input được nữa → runtime (hoặc Lamp — xem phần trigger) compact: gộp entry cũ thành 1 đoạn summary, xóa entry gốc, tiếp tục.
 
 ## Record compaction
 
@@ -48,7 +48,7 @@ Field chính:
 ## Quy trình compact
 
 1. Trigger fire (xem phần sau) — `tokens ≥ 80k`.
-2. OpenClaw đọc history gần đây + các file trong `details.readFiles`.
+2. Runtime đọc history gần đây + các file trong `details.readFiles`.
 3. Gọi 1 LLM riêng để tóm tắt input đó thành 1 chuỗi (≤ ~16000 chars — cap cứng quan sát được).
 4. Ghi record compaction vào session `.jsonl` với `type:"compaction"`.
 5. Từ turn kế tiếp, entry trước `firstKeptEntryId` **không** còn gửi lên LLM; `summary` được nhét vào vị trí đó trong prompt.
@@ -109,7 +109,7 @@ Khi Flow Monitor cho thấy Lamp viện rule mà `grep` không tìm thấy trong
 
 **UI.** Flow Monitor header → nút **📋 Summary** → modal show `timestamp`, `summary chars`, `session file`, và toàn văn summary.
 
-**API.** `GET /api/openclaw/compaction-latest?session=<key>` (default: `agent:main:main`). Response schema xem bản [tiếng Anh](../openclaw-compaction.md#inspecting-the-active-summary).
+**API.** `GET /api/openclaw/compaction-latest?session=<key>` (default: `agent:main:main`). Response schema xem bản [tiếng Anh](../agent-compaction.md#inspecting-the-active-summary).
 
 **Trực tiếp (Pi SSH).** Tất cả compaction record nằm trong session `.jsonl`. Pull kèm timestamp + metadata:
 
@@ -133,4 +133,4 @@ for l in sys.stdin:
 | `os/services/web/src/pages/monitor/FlowSection/CompactionModal.tsx` | UI modal — show timestamp, summary chars, session file, toàn văn summary; link về doc này. |
 | `docs/flow-monitor.md` | Doc cha — cross-reference doc này. |
 
-Bản tiếng Anh đầy đủ: [`docs/openclaw-compaction.md`](../openclaw-compaction.md).
+Bản tiếng Anh đầy đủ: [`docs/agent-compaction.md`](../agent-compaction.md).

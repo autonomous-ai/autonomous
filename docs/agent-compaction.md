@@ -1,12 +1,12 @@
-# OpenClaw compaction summary — how it works and why it can override SKILL.md
+# Agent session compaction — how it works and why it can override SKILL.md
 
-> **Short version:** OpenClaw auto-compacts the agent session when conversation tokens approach ~80k. The compaction result (a text `summary`) is then injected at the top of every subsequent turn's prompt until the next compact. If rules are accidentally copied or generalized into that summary, they can override the loaded `SKILL.md` — because the summary sits earlier in the prompt and is framed as "established context."
+> **Short version:** The agentic runtime auto-compacts the agent session when conversation tokens approach ~80k. The compaction result (a text `summary`) is then injected at the top of every subsequent turn's prompt until the next compact. If rules are accidentally copied or generalized into that summary, they can override the loaded `SKILL.md` — because the summary sits earlier in the prompt and is framed as "established context."
 >
 > This doc is the reference linked from the **📋 Summary** button in Flow Monitor (modal: `os/services/web/src/pages/monitor/FlowSection/CompactionModal.tsx`).
 
 ## Why compaction exists
 
-The OpenClaw agent keeps a long conversation history. Each turn is the union of `user event`, `thinking`, `tool_call`, `tool_result`, and `assistant reply` entries — all stored in the session `.jsonl`. Over hours of activity, the tokens balloon. Once total context approaches **~80k tokens**, the LLM cannot fit any more input, so OpenClaw (or Lamp — see triggers below) performs a compaction: condense older entries into a single summary text, drop the originals, keep working.
+The agentic runtime keeps a long conversation history. Each turn is the union of `user event`, `thinking`, `tool_call`, `tool_result`, and `assistant reply` entries — all stored in the session `.jsonl`. Over hours of activity, the tokens balloon. Once total context approaches **~80k tokens**, the LLM cannot fit any more input, so the runtime (or Lamp — see triggers below) performs a compaction: condense older entries into a single summary text, drop the originals, keep working.
 
 ## Compaction record
 
@@ -48,7 +48,7 @@ Notable fields:
 ## Compaction flow
 
 1. Trigger fires (see next section) — `tokens ≥ 80k`.
-2. OpenClaw reads recent conversation history plus the files listed in `details.readFiles`.
+2. The runtime reads recent conversation history plus the files listed in `details.readFiles`.
 3. A separate LLM call summarizes that input into one text string (≤ ~16000 chars observed — hard cap).
 4. The compaction record is appended to the session `.jsonl` with `type:"compaction"`.
 5. From the next turn onward, entries before `firstKeptEntryId` are **not** sent to the LLM anymore; the `summary` is spliced in at that position in the prompt.
@@ -77,11 +77,11 @@ There are at least three ways a compaction can fire:
 
 | Source | Trigger | Side-effects | Observed `fromHook` |
 |---|---|---|---|
-| **OpenClaw internal hook** | tokens ≥ 80k, server-side detection | — | `true` |
-| **Lamp RPC** (`os/services/server/openclaw/delivery/sse/handler_events.go:380-406`) | Lamp sees `u.TotalTokens > 80_000` on a lifecycle event, calls `agentGateway.CompactSession(sessionKey)` | TTS speaks *"Hold on, tidying up a bit."*; 2-minute cooldown via `h.compacting` atomic | unknown — needs verification against OpenClaw source |
+| **Runtime internal hook** | tokens ≥ 80k, server-side detection | — | `true` |
+| **Lamp RPC** (`os/services/server/openclaw/delivery/sse/handler_events.go:380-406`) | Lamp sees `u.TotalTokens > 80_000` on a lifecycle event, calls `agentGateway.CompactSession(sessionKey)` | TTS speaks *"Hold on, tidying up a bit."*; 2-minute cooldown via `h.compacting` atomic | unknown — needs verification against runtime source |
 | **Manual / debug** | Someone invokes `sessions.compact` RPC directly (e.g. from a client tool) | — | likely `false` |
 
-**Heuristic to distinguish on UI today:** if a record's `timestamp` is within a few seconds after a `"sessions.compact sent"` log line in Lamp's journal for the same `sessionKey`, it was Lamp-initiated. Otherwise OpenClaw's internal hook.
+**Heuristic to distinguish on UI today:** if a record's `timestamp` is within a few seconds after a `"sessions.compact sent"` log line in Lamp's journal for the same `sessionKey`, it was Lamp-initiated. Otherwise the runtime's internal hook.
 
 A future enhancement: the compaction modal could correlate the latest compact's timestamp against Lamp's log to label the trigger.
 
@@ -153,4 +153,4 @@ for l in sys.stdin:
 | `os/services/web/src/pages/monitor/FlowSection/CompactionModal.tsx` | UI modal — shows timestamp, summary chars, session file, full summary text; links back to this doc. |
 | `docs/flow-monitor.md` | Parent doc — cross-references this one. |
 
-Vietnamese summary: [`docs/vi/openclaw-compaction_vi.md`](vi/openclaw-compaction_vi.md).
+Vietnamese summary: [`docs/vi/agent-compaction_vi.md`](vi/agent-compaction_vi.md).

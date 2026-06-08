@@ -10,7 +10,7 @@ The Flow Monitor is an observability layer for tracking agent turns end-to-end. 
 HAL (Python)                       Lamp Server (Go)                     Web UI (React)
   sensing event ──POST──→ SensingHandler ──flow.Start/End──→ JSONL file
                             │                                    ↓
-                            └─ agentGateway.SendChat ──→ OpenClaw (WS)
+                            └─ agentGateway.SendChat ──→ Agentic Runtime (WS)
                                                            │
                           SSE Handler ←── WS events ───────┘
                             │
@@ -43,7 +43,7 @@ flow.Log("tool_call", data, payload.RunID)      // each event carries its own ID
 - `Start()`, `End()`, `Log()` accept optional variadic `runID` parameter
 - If provided, overrides the global trace for that event only
 - Global `SetTrace`/`GetTrace` retained for the Telegram-detection heuristic
-- `ClearTrace()` decrements active trace (ref-counted), called after OpenClaw `lifecycle_end`
+- `ClearTrace()` decrements active trace (ref-counted), called after runtime `lifecycle_end`
 
 ### Telegram Detection Heuristic
 
@@ -51,7 +51,7 @@ When `lifecycle_start` arrives without an active device trace (`flow.GetTrace() 
 
 #### Fetching user message content via `chat.history` RPC
 
-OpenClaw's chat stream **never broadcasts `role:"user"` events** — it only emits `role:"assistant"` (delta/final/error). To get the user message text and sender name, Lamp calls the `chat.history` WebSocket RPC on the same WS connection used for events:
+The runtime's chat stream **never broadcasts `role:"user"` events** — it only emits `role:"assistant"` (delta/final/error). To get the user message text and sender name, Lamp calls the `chat.history` WebSocket RPC on the same WS connection used for events:
 
 ```
 →  {"type":"req","id":"history-1","method":"chat.history",
@@ -254,7 +254,7 @@ Node info extracted from turn events:
 
 ### NO_REPLY suppression
 
-OpenClaw agent may respond with `NO_REPLY` (or truncated forms `NO`, `NO_RE`, `NO_...`) when it decides not to respond — typically for passive sensing events like sound/motion. These are suppressed by `isAgentNoReply()` in `handler.go`: no TTS playback, no output display. Matches: exact `"NO"`, or any string starting with `"NO_"` or `"NO_RE"` (case-insensitive after trim). Source: `lifecycle_end` payload if available, otherwise fetched from `chat.history` RPC on `lifecycle_end` (async goroutine, best-effort). OpenClaw `lifecycle_end` currently does not include usage data, so `chat.history` is the primary source.
+The agent may respond with `NO_REPLY` (or truncated forms `NO`, `NO_RE`, `NO_...`) when it decides not to respond — typically for passive sensing events like sound/motion. These are suppressed by `isAgentNoReply()` in `handler.go`: no TTS playback, no output display. Matches: exact `"NO"`, or any string starting with `"NO_"` or `"NO_RE"` (case-insensitive after trim). Source: `lifecycle_end` payload if available, otherwise fetched from `chat.history` RPC on `lifecycle_end` (async goroutine, best-effort). OpenClaw `lifecycle_end` currently does not include usage data, so `chat.history` is the primary source.
 
 ## Stream summary events (`agent_*_token` / `thinking_*_token`)
 
@@ -349,7 +349,7 @@ Observed on multiple Telegram turns: user asks for a device action (e.g. LED col
 
 ## Compaction summary inspector
 
-The OpenClaw agent session auto-compacts when context tokens cross ~80k. Every compaction writes a `type:"compaction"` record into `/root/.openclaw/agents/main/sessions/<sessionId>.jsonl` containing a `summary` string that is then prepended to every subsequent turn's prompt until the next compaction. Rules accidentally copied or generalized into that summary can override SKILL.md (the summary sits earlier in the prompt and is framed as "established context").
+The agent session auto-compacts when context tokens cross ~80k. Every compaction writes a `type:"compaction"` record into `/root/.openclaw/agents/main/sessions/<sessionId>.jsonl` containing a `summary` string that is then prepended to every subsequent turn's prompt until the next compaction. Rules accidentally copied or generalized into that summary can override SKILL.md (the summary sits earlier in the prompt and is framed as "established context").
 
 **UI:** Flow Monitor header exposes a `📋 Summary` button. Click → fetch + render modal showing the latest compaction record: timestamp, `tokensBefore`, `summaryChars`, `compactionCount`, `readFiles` fed into the compaction prompt, and the full `summary` text.
 

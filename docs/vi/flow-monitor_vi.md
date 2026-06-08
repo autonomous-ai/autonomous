@@ -40,7 +40,7 @@ Tối đa 4 dòng JSONL bonus / turn (thực tế 0–2). Stream name từ OpenC
 
 **Khoảng `chat_send → lifecycle_start`** = OpenClaw init (network + load session/context + boot agent), KHÔNG phải LLM. Đo từ `chat_send` (Lamp) tới `lifecycle_start` (OpenClaw event đầu tiên).
 
-**OpenClaw section trên diagram (2026-05-08 redesign):** 3 node cũ (LLM Start / Thinking / Tool Exec) đã được gộp thành 1 **Event Pipeline rect** chạy giữa Agent Call và Response. Rect hiển thị danh sách events do OpenClaw emit, gộp các delta liên tiếp cùng loại thành 1 dòng tóm tắt (`thinking · 5.2s · 200 chunks · ~4k chars`). Edges ra HW (LED/servo/emotion/audio/lamp_gate) anchor từ cạnh phải pipeline. Aggregation rules + lý do redesign: `docs/debug/flow-monitor-pipeline.md`.
+**Agentic Runtime section trên diagram (2026-05-08 redesign):** 3 node cũ (LLM Start / Thinking / Tool Exec) đã được gộp thành 1 **Event Pipeline rect** chạy giữa Agent Call và Response. Rect hiển thị danh sách events do OpenClaw emit, gộp các delta liên tiếp cùng loại thành 1 dòng tóm tắt (`thinking · 5.2s · 200 chunks · ~4k chars`). Edges ra HW (LED/servo/emotion/audio/lamp_gate) anchor từ cạnh phải pipeline. Aggregation rules + lý do redesign: `docs/debug/flow-monitor-pipeline.md`.
 
 ## Sơ đồ Turn Pipeline (SVG)
 
@@ -50,11 +50,11 @@ Component `FlowDiagram` trong `os/services/web/src/pages/Monitor.tsx` vẽ **ba 
 |------|-----|------|
 | **Lamp Server** | Teal | Intent, Local, Cron, Gate |
 | **HAL** | Amber | MIC, CAM, EMO, LED, SERVO, TTS |
-| **OpenClaw** | Blue | Agent, TG In, Tool, Think, Response, TG Out |
+| **Agentic Runtime** | Blue | Agent, TG In, Tool, Think, Response, TG Out |
 
 ### Lamp (hàng trên)
 
-- **Cron** là stage **Lamp** (lịch/timer thuộc Lamp), **không** nằm trong cụm OpenClaw. Trên SVG, Cron cùng hàng với Intent/Local nhưng **`x` trùng cột Agent** để cạnh Cron→Agent là **đường dọc**.
+- **Cron** là stage **Lamp** (lịch/timer thuộc Lamp), **không** nằm trong cụm Agentic Runtime. Trên SVG, Cron cùng hàng với Intent/Local nhưng **`x` trùng cột Agent** để cạnh Cron→Agent là **đường dọc**.
 
 ### HAL
 
@@ -74,7 +74,7 @@ Component `FlowDiagram` trong `os/services/web/src/pages/Monitor.tsx` vẽ **ba 
   - Tool có `/led/*` → pause ambient breathing (không ghi đè màu agent set)
   - Assistant text accumulate → flush sang TTS khi lifecycle_end
 
-### OpenClaw (lưới 3 cột)
+### Agentic Runtime (lưới 3 cột)
 
 - **Cột 1:** Tool + Response (Response dưới Tool).
 - **Cột 2:** Agent + Thinking (Think dưới Agent).
@@ -148,7 +148,7 @@ OUT  🔊 <output text>
 
 - Strip được extract từ marker `[snapshot:]` + `[pose_bucket:]` / `[pose_worst:]` trong `sensing_input`. Click thumbnail mở lightbox inline (giống cũ).
 - Nút **LOAD MORE** mở `PoseBucketModal` → fetch `/api/hardware/sensing/pose-bucket/<id>` (proxy về lelamp) → render bảng từng sample (monospace + cột joint giống Sensing tab). Row có filename trong `worst_snapshots` được highlight (viền đỏ + ⭐) để xem nhanh khung tệ nhất.
-- Khi /dm fire, Lamp tự đính các worst snapshot vào Telegram qua `sendMediaGroup` — caption nằm trên ảnh đầu tiên, agent không cần biết file path. Xem `docs/sensing-behavior.md` mục "/dm auto-attach".
+- Khi /dm fire, Lamp tự đính các worst snapshot vào Telegram qua `sendMediaGroup` — caption nằm trên ảnh đầu tiên, agent không cần biết file path. Xem `devices/lamp/docs/sensing-behavior.md` mục "/dm auto-attach".
 
 ### Clip audio debug trên Turn card
 
@@ -170,7 +170,7 @@ Chi tiết run ID, `runIDMap`, stitching turn, edge case: đọc bản tiếng A
 
 ## Compaction summary inspector
 
-Session OpenClaw agent auto-compact khi context vượt ~80k tokens. Mỗi lần compact ghi 1 record `type:"compaction"` vào `/root/.openclaw/agents/main/sessions/<sessionId>.jsonl`, chứa field `summary` dạng text — text này được **chèn đầu mỗi turn kế tiếp** cho đến lần compact sau. Rule bị copy/generalize nhầm vào summary có thể đè SKILL.md (summary nằm trước trong prompt, đóng vai trò "context đã chốt").
+Session agent auto-compact khi context vượt ~80k tokens. Mỗi lần compact ghi 1 record `type:"compaction"` vào `/root/.openclaw/agents/main/sessions/<sessionId>.jsonl`, chứa field `summary` dạng text — text này được **chèn đầu mỗi turn kế tiếp** cho đến lần compact sau. Rule bị copy/generalize nhầm vào summary có thể đè SKILL.md (summary nằm trước trong prompt, đóng vai trò "context đã chốt").
 
 **UI:** header Flow Monitor có nút `📋 Summary`. Click → fetch + render modal show: `timestamp`, `tokensBefore`, `summaryChars`, `compactionCount`, `readFiles` (file nào được đọc vào compaction prompt), và toàn văn `summary`.
 

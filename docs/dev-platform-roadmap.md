@@ -105,7 +105,7 @@ P2 and P3 can run in parallel after P0 completes — they touch different surfac
 | Skill sandbox is 6–12 months of work if done fully | P3 | Start with curated-only beta (P3a), open marketplace later (P3b) |
 | API freeze slows internal team | P1+ | Strict `/internal/*` vs `/v1/*` split; deprecation policy |
 | No-auth → security exposure when bound to LAN | P0 | Token rotation, optional WireGuard guidance for remote access |
-| OpenClaw compaction warps skill rules | P3 | Skill contract must be code-enforced, not just markdown — see `docs/openclaw-compaction.md` |
+| OpenClaw compaction warps skill rules | P3 | Skill contract must be code-enforced, not just markdown — see `docs/agent-compaction.md` |
 
 ## 7. First sprint scope (proposed)
 

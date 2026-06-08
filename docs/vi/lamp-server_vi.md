@@ -9,7 +9,7 @@
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
 | GET | `/api/health/live` | Liveness probe |
-| GET | `/api/health/readiness` | Readiness probe (OpenClaw connected?) |
+| GET | `/api/health/readiness` | Readiness probe (agent gateway connected?) |
 
 ### System
 
@@ -17,7 +17,7 @@
 |--------|----------|-------|
 | GET | `/api/system/info` | CPU, RAM, temp, uptime, version, trạng thái agent (name/connected/emotion/version/uptime) |
 | GET | `/api/system/network` | WiFi SSID, IP, signal, internet status |
-| GET | `/api/system/dashboard` | Snapshot tổng hợp (OpenClaw + config + HW) |
+| GET | `/api/system/dashboard` | Snapshot tổng hợp (agent + config + HW) |
 
 ### Device Setup
 

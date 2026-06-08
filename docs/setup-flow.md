@@ -15,7 +15,7 @@ When Lamp is not yet configured (`SetUpCompleted = false`), the device runs in A
 6. Lamp Server processes (async):
    a. Connect WiFi (connect-wifi CLI)
    b. Wait for internet (poll 60s)
-   c. Setup OpenClaw agent
+   c. Setup agent gateway
    d. Save config
    e. Wait for agent ready (poll 120s)
    f. Report to backend (MQTT)

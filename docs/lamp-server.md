@@ -9,7 +9,7 @@
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health/live` | Liveness probe |
-| GET | `/api/health/readiness` | Readiness probe (OpenClaw connected?) |
+| GET | `/api/health/readiness` | Readiness probe (agent gateway connected?) |
 
 ### System
 
@@ -17,7 +17,7 @@
 |--------|----------|-------------|
 | GET | `/api/system/info` | CPU, RAM, temp, uptime, version, agent status (name/connected/emotion/version/uptime) |
 | GET | `/api/system/network` | WiFi SSID, IP, signal, internet status |
-| GET | `/api/system/dashboard` | Aggregated snapshot (OpenClaw + config + HW) |
+| GET | `/api/system/dashboard` | Aggregated snapshot (agent + config + HW) |
 
 ### Device Setup
 

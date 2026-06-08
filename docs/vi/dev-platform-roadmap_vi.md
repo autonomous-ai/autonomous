@@ -105,7 +105,7 @@ P2 và P3 chạy song song được sau khi P0 xong vì đụng bề mặt khác
 | Skill sandbox ngốn 6–12 tháng nếu làm đầy đủ | P3 | Bắt đầu beta curated-only (P3a), mở marketplace sau (P3b) |
 | API freeze làm chậm team nội bộ | P1+ | Tách `/internal/*` vs `/v1/*` nghiêm; chính sách deprecation rõ |
 | Không auth → lộ bảo mật khi bind LAN | P0 | Token rotation, hướng dẫn WireGuard cho remote |
-| Compaction OpenClaw làm méo skill rules | P3 | Skill contract phải enforce bằng code, không chỉ markdown — xem `docs/openclaw-compaction.md` |
+| Compaction OpenClaw làm méo skill rules | P3 | Skill contract phải enforce bằng code, không chỉ markdown — xem `docs/agent-compaction.md` |
 
 ## 7. Scope sprint đầu (đề xuất)
 

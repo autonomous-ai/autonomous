@@ -3,12 +3,12 @@
 ## 3-Layer Architecture
 
 ```
-OpenClaw (AI/LLM) → Lamp Server (Go, :5000) → HAL (Python, :5001) → Hardware
+Agentic Runtime (AI/LLM) → Lamp Server (Go, :5000) → HAL (Python, :5001) → Hardware
 ```
 
 | Layer | Language | Port | Role |
 |-------|----------|------|------|
-| OpenClaw | Go | WS | AI brain, LLM, SKILL.md, memory, channels |
+| Agentic Runtime | Go | WS | AI brain, LLM, SKILL.md, memory, channels |
 | Lamp Server | Go | 5000 | System (network, OTA, MQTT, reset), sensing event routing, local intent |
 | HAL | Python | 5001 | Hardware drivers (servo, LED, camera, audio, display), FastAPI |
 
@@ -24,22 +24,22 @@ os/services/
 │   ├── health/delivery/http/     — Health, system info, dashboard
 │   ├── network/delivery/http/    — WiFi scan, connect
 │   ├── device/delivery/          — Setup (HTTP + MQTT handlers)
-│   ├── sensing/delivery/http/    — Sensing event → intent match / OpenClaw
-│   └── openclaw/delivery/sse/    — OpenClaw status, SSE events
+│   ├── sensing/delivery/http/    — Sensing event → intent match / agent gateway
+│   └── openclaw/delivery/sse/    — Agent gateway status, SSE events
 ├── internal/
-│   ├── agent/                    — OpenClaw WebSocket gateway
+│   ├── agent/                    — Agent gateway (WebSocket)
 │   ├── ambient/                  — Idle behaviors (breathing LED, micro-movements)
 │   ├── beclient/                 — Backend status reporting
 │   ├── device/                   — Device setup orchestration
 │   ├── intent/                   — Local intent matching (voice commands)
 │   ├── monitor/                  — Event bus (ring buffer 200 events)
 │   ├── network/                  — WiFi AP/STA management
-│   ├── openclaw/                 — OpenClaw config + SOUL.md
+│   ├── openclaw/                 — Agent runtime config + SOUL.md
 │   └── resetbutton/              — GPIO reset button
 ├── lib/mqtt/                     — MQTT client (Eclipse Paho autopaho)
 ├── domain/                       — Shared structs
 ├── bootstrap/                    — OTA worker
-├── resources/openclaw-hooks/     — OpenClaw hook scripts
+├── resources/openclaw-hooks/     — Agent runtime hook scripts
 └── web/                          — React 19 + Vite + Tailwind CSS 4 SPA
 
 os/hal/
@@ -60,7 +60,7 @@ os/hal/
 └── pyproject.toml                — Python dependencies (opencv-python, insightface)
 
 devices/                          — Per-device configs and overlays
-skills/                           — SKILL.md files for OpenClaw
+skills/                           — SKILL.md files for agent runtime
 companions/                       — Companion apps (e.g. Lamp Buddy)
 contract/                         — Shared API contracts
 cts/                              — Compatibility test suite
@@ -69,7 +69,7 @@ cts/                              — Compatibility test suite
 ## Principles
 
 - **Hardware is a plugin** — plug in and it works, unplug and it's skipped
-- **System layer runs WITHOUT OpenClaw** — device always responds
+- **System layer runs WITHOUT the runtime** — device always responds
 - **Code is the source of truth** — docs reflect code
 - **HAL is the hardware driver** — no AI logic
 - **SKILL.md native** — no MCP, LLM reads skills and calls curl directly

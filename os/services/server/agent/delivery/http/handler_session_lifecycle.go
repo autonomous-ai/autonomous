@@ -41,7 +41,7 @@ const autoNewSessionCooldown = 30 * time.Second
 // Trade-off vs new-session:
 //   - keeps verbatim conversation history via a generated summary
 //   - blocks the agent for 30-60s+ while the summarize LLM call runs
-//   - summary can override SKILL.md (see docs/openclaw-compaction.md)
+//   - summary can override SKILL.md (see docs/agent-compaction.md)
 func (h *AgentHandler) maybeAutoCompact(sessionKey string, totalTokens int, flowRunID string) {
 	if totalTokens <= autoSessionThreshold {
 		return

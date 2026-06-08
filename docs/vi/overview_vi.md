@@ -3,12 +3,12 @@
 ## Kiến Trúc 3 Tầng
 
 ```
-OpenClaw (AI/LLM) → Lamp Server (Go, :5000) → HAL (Python, :5001) → Phần cứng
+Agentic Runtime (AI/LLM) → Lamp Server (Go, :5000) → HAL (Python, :5001) → Phần cứng
 ```
 
 | Tầng | Ngôn ngữ | Port | Vai trò |
 |------|----------|------|---------|
-| OpenClaw | Go | WS | Bộ não AI, LLM, SKILL.md, memory, channels |
+| Agentic Runtime | Go | WS | Bộ não AI, LLM, SKILL.md, memory, channels |
 | Lamp Server | Go | 5000 | Hệ thống (mạng, OTA, MQTT, reset), sensing event routing, local intent |
 | HAL | Python | 5001 | Hardware drivers (servo, LED, camera, audio, display), FastAPI |
 
@@ -24,17 +24,17 @@ os/services/
 │   ├── health/delivery/http/     — Health, system info, dashboard
 │   ├── network/delivery/http/    — WiFi scan, connect
 │   ├── device/delivery/          — Setup (HTTP + MQTT handlers)
-│   ├── sensing/delivery/http/    — Sensing event → intent match / OpenClaw
+│   ├── sensing/delivery/http/    — Sensing event → intent match / agent gateway
 │   └── openclaw/delivery/sse/    — OpenClaw status, SSE events
 ├── internal/
-│   ├── agent/                    — OpenClaw WebSocket gateway
+│   ├── agent/                    — Agent gateway (WebSocket)
 │   ├── ambient/                  — Idle behaviors (breathing LED, micro-movements)
 │   ├── beclient/                 — Backend status reporting
 │   ├── device/                   — Device setup orchestration
 │   ├── intent/                   — Local intent matching (voice commands)
 │   ├── monitor/                  — Event bus (ring buffer 200 events)
 │   ├── network/                  — WiFi AP/STA management
-│   ├── openclaw/                 — OpenClaw config + SOUL.md
+│   ├── openclaw/                 — Agent runtime config + SOUL.md
 │   └── resetbutton/              — GPIO reset button
 ├── lib/mqtt/                     — MQTT client (Eclipse Paho autopaho)
 ├── domain/                       — Shared structs
@@ -61,7 +61,7 @@ os/hal/
 └── pyproject.toml                — Python dependencies (opencv-python, insightface)
 
 devices/                          — Per-device configs and overlays
-skills/                           — SKILL.md files cho OpenClaw
+skills/                           — SKILL.md files cho agent runtime
 companions/                       — Companion apps (e.g. Lamp Buddy)
 contract/                         — Shared API contracts
 cts/                              — Compatibility test suite
@@ -70,7 +70,7 @@ cts/                              — Compatibility test suite
 ## Nguyên Tắc
 
 - **Hardware là plugin** — cắm vào thì play, không cắm thì skip
-- **Tầng hệ thống chạy KHÔNG cần OpenClaw** — thiết bị luôn phản hồi
+- **Tầng hệ thống chạy KHÔNG cần runtime** — thiết bị luôn phản hồi
 - **Code là source of truth** — docs phản ánh code
 - **HAL là hardware driver** — không chứa logic AI
 - **SKILL.md native** — không dùng MCP, LLM tự đọc skill và gọi curl
