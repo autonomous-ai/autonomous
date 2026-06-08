@@ -23,7 +23,7 @@ Work credit: PRs by `31803smith` — #69 (aa98a207), #77 (e9d8a1f1), #79 (039b25
 | F7a | DL backend `DL_API_KEY` mandatory | ✅ | PR #69 — `field_validator` raises when empty. Still applies as a code-level check, deployment-agnostic |
 | F7b | DL backend bind default 127.0.0.1 | ➖ | **Out of scope for this device.** dlbackend deploys on a separate server (GPU box); Lamp/LeLamp reach it through a proxy/LB using `llm_api_key`. The bind default in `dlbackend/Makefile` only affects local dev runs and is unrelated to the device threat model |
 | F8 | OpenClaw `controlUi` tighten | ✅ | 2026-05-19: `setup.sh:586-589` sets `["http://127.0.0.1", "http://localhost"]` + `allowInsecureAuth=false`. `lamp/internal/openclaw/onboarding.go::ensureControlUIConfig()` tightens defaults and migrates existing devices with loose defaults (`["*"]` + `true`) to strict on every boot |
-| F9 | Docs `/hw/*` external | ✅ | PR #69 update docs/architecture-decision.md + bootstrap-ota.md (+vi). Bonus: `253a1e44` made /hw/docs iframe-only |
+| F9 | Docs `/hw/*` external | ✅ | PR #69 update devices/lamp/docs/architecture-decision.md + bootstrap-ota.md (+vi). Bonus: `253a1e44` made /hw/docs iframe-only |
 
 ---
 
