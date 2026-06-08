@@ -204,6 +204,12 @@ def long_press_action(source: str = "button"):
     logger.info("%s long press -- shutting down OS", source)
     logger.info("%s LED: red solid (shutdown armed)", source)
 
+    # Suppress the lifespan-shutdown re-announce — we're about to speak the
+    # PHRASE_SHUTDOWN line, and systemd's SIGTERM will arrive a few seconds
+    # later. Without this flag, server.py lifespan would say "shutting down"
+    # again on top of the cached clip still playing.
+    state._shutdown_announced = True
+
     # Step 1: TTS announce.
     if _tts_available():
         state.tts_service.speak_cached(_phrase(PHRASE_SHUTDOWN))
@@ -248,6 +254,12 @@ def factory_reset_action(source: str = "button"):
     (see lamp server.go adminOrLoopbackAuth)."""
     logger.info("%s factory-reset hold (10s+) -- triggering soft reset", source)
     logger.info("%s LED: red solid (factory-reset armed)", source)
+
+    # Suppress the lifespan-shutdown re-announce — same reason as
+    # long_press_action: lamp-server's reboot ~5s later will SIGTERM lelamp
+    # and the lifespan handler would otherwise speak PHRASE_SHUTDOWN on top
+    # of the factory-reset clip still playing.
+    state._shutdown_announced = True
 
     # Step 1: TTS announce so the user knows the gesture registered. Brief —
     # the reboot lands ~5s after lamp-server accepts the POST, we want the

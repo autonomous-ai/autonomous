@@ -519,7 +519,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
+    # Shutdown — announce + park servos first (only when OS is actually
+    # going down and no button path already announced), so the audible cue
+    # fires while tts_service is still alive.
+    from hal.drivers.os_shutdown import announce_os_shutdown
+    announce_os_shutdown()
+
     state._stop_current_effect()
     if state.display_service:
         state.display_service.stop()

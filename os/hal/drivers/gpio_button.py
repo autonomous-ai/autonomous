@@ -40,14 +40,15 @@ from hal.drivers.button_actions import (
 logger = logging.getLogger(__name__)
 
 # LED feedback during hold (Tier B design from the factory-reset discussion).
-# Amber pulse at 5–10s tells the user "shutdown is armed — releasing now
+# Red blink at 5–10s tells the user "shutdown is armed — releasing now
 # commits". Red solid at 10s+ tells them they've escalated to factory-reset.
 # Both dispatch at HIGH priority so they preempt the current emotion LED.
-LED_SHUTDOWN_WARN = (255, 165, 0)   # amber
-LED_FACTORY_RESET = (255, 0, 0)     # red
+# Same red colour for both stages — blink vs solid is the differentiator.
+LED_SHUTDOWN_WARN = (255, 0, 0)     # red (blinking)
+LED_FACTORY_RESET = (255, 0, 0)     # red (solid)
 LED_OFF = (0, 0, 0)
-# Pulse: 0.5 s on + 0.5 s off = 1 Hz full cycle.
-LED_PULSE_HALF_PERIOD_S = 0.5
+# Blink: 0.5 s on + 0.5 s off = 1 Hz full cycle.
+LED_BLINK_HALF_PERIOD_S = 0.5
 
 # Per-board button wiring (chip / line / debounce_ns) lives in the board
 # platform layer — os/hal/hal/platform/board.py — the single source of truth
@@ -91,6 +92,7 @@ class GPIOButtonHandler:
         if rgb is None:
             return
         try:
+            state._stop_current_effect()
             rgb.dispatch(RGB_CMD_SOLID, color, priority=Priority.HIGH)
         except Exception as e:
             logger.warning("LED dispatch failed: %s", e)
@@ -100,27 +102,27 @@ class GPIOButtonHandler:
         watcher thread per press — release sets stop_event and a new press
         starts a fresh watcher with a new Event so the two never race."""
         last_stage = -1
-        pulse_on = False
+        blink_on = False
         while not stop_event.is_set():
             held = time.monotonic() - self._press_start
             if held >= FACTORY_RESET_DURATION:
                 stage = 2  # red solid — armed for factory-reset
             elif held >= LONG_PRESS_DURATION:
-                stage = 1  # amber pulse 1 Hz — armed for shutdown
+                stage = 1  # red blink 1 Hz — armed for shutdown
             else:
                 stage = 0  # quiet — under shutdown threshold
 
-            # Stage 2 entry: set red solid once (no pulse). Subsequent loops
+            # Stage 2 entry: set red solid once (no blink). Subsequent loops
             # leave it alone so the LED doesn't flicker.
             if stage != last_stage and stage == 2:
                 self._dispatch_led(LED_FACTORY_RESET)
             last_stage = stage
 
             if stage == 1:
-                # Half-period toggle gives a 1 Hz pulse (0.5 s on, 0.5 s off).
-                pulse_on = not pulse_on
-                self._dispatch_led(LED_SHUTDOWN_WARN if pulse_on else LED_OFF)
-                wait = LED_PULSE_HALF_PERIOD_S
+                # Half-period toggle gives a 1 Hz blink (0.5 s on, 0.5 s off).
+                blink_on = not blink_on
+                self._dispatch_led(LED_SHUTDOWN_WARN if blink_on else LED_OFF)
+                wait = LED_BLINK_HALF_PERIOD_S
             else:
                 wait = 0.1
 
@@ -193,7 +195,7 @@ class GPIOButtonHandler:
         # Stop LED watcher. Watcher exits within its current sleep (< 0.5 s).
         # LED stays at whatever colour it last dispatched — destructive
         # branches below reaffirm with a solid colour so it doesn't freeze
-        # mid-pulse.
+        # mid-blink.
         if self._hold_watcher_stop is not None:
             self._hold_watcher_stop.set()
             self._hold_watcher_stop = None
@@ -225,7 +227,7 @@ class GPIOButtonHandler:
             if self._click_timer:
                 self._click_timer.cancel()
                 self._click_timer = None
-            # Freeze LED at amber solid (was pulsing). Confirms the gesture
+            # Freeze LED at red solid (was blinking). Confirms the gesture
             # committed to shutdown, stays on through the 5 s TTS announce.
             self._dispatch_led(LED_SHUTDOWN_WARN)
             # Off-thread: same reasoning as factory-reset above (announce +

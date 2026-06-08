@@ -89,6 +89,12 @@ _mic_muted = False
 _mic_manual_override = False
 _speaker_muted = False
 
+# Set True by destructive button actions (long_press, factory_reset) right
+# before they kick `shutdown`/`reboot`/Lamp-Go reset. The lifespan shutdown
+# handler in server.py checks this flag so it doesn't speak a second
+# "shutting down" when systemd's SIGTERM lands seconds later.
+_shutdown_announced = False
+
 # --- Snapshot state ---
 
 _SNAPSHOT_DIR = os.environ.get(

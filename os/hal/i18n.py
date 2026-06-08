@@ -21,12 +21,20 @@ from hal.presets import LANG_EN, LANG_VI, LANG_ZH_CN, LANG_ZH_TW
 PHRASE_LISTENING = "listening"
 PHRASE_REBOOT = "reboot"
 PHRASE_SHUTDOWN = "shutdown"
+PHRASE_SERVICE_RESTART = "service_restart"
 
 # Localized action announcements. reboot/shutdown phrases stay literal
 # in every language ("rebooting", "shutting down") because the user just
 # triggered a destructive gesture and needs explicit confirmation of
 # which action fired — this is a safety announcement, not a persona
 # moment. Empty/unknown stt_language → DEFAULT_LANG.
+#
+# PHRASE_SERVICE_RESTART fires when only the lelamp process is going
+# down (OTA replace, deploy, manual `systemctl restart`) — OS itself
+# stays up and lelamp will be back in 10-30s. Tone deliberately
+# different from PHRASE_SHUTDOWN/REBOOT so the user can tell at a
+# glance whether the board is going dark for minutes or just blinking
+# during a service reload.
 PHRASES_BY_LANG = {
     PHRASE_LISTENING: {
         LANG_EN:    "I'm listening!",
@@ -45,6 +53,12 @@ PHRASES_BY_LANG = {
         LANG_VI:    "Đang tắt máy.",
         LANG_ZH_CN: "正在关机。",
         LANG_ZH_TW: "正在關機。",
+    },
+    PHRASE_SERVICE_RESTART: {
+        LANG_EN:    "Be right back.",
+        LANG_VI:    "Mình quay lại ngay.",
+        LANG_ZH_CN: "我马上回来。",
+        LANG_ZH_TW: "我馬上回來。",
     },
 }
 
