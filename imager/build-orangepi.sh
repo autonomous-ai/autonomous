@@ -229,6 +229,21 @@ apt-get install -y \\
 apt-get purge -y --auto-remove network-manager network-manager-gnome 2>/dev/null || true
 apt-get clean
 
+# Disable IPv6 — RPi 5 STA-drop workaround; harmless on OrangePi.
+mkdir -p /etc/sysctl.d
+cat > /etc/sysctl.d/99-lamp-wifi.conf <<'SYSCTL'
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+SYSCTL
+
+# resolvconf fallback DNS — ensures /etc/resolv.conf is never empty in AP mode.
+if [ -f /etc/resolvconf.conf ]; then
+  grep -q '^name_servers=' /etc/resolvconf.conf || echo 'name_servers="1.1.1.1 8.8.8.8"' >> /etc/resolvconf.conf
+else
+  echo 'name_servers="1.1.1.1 8.8.8.8"' > /etc/resolvconf.conf
+fi
+
 # ── Node.js 22 + OpenClaw CLI (npm global) ───────────────────────────────────
 echo "[stage] Node.js 22 + OpenClaw \${OPENCLAW_VERSION}"
 if ! command -v node &>/dev/null || ! node -v 2>/dev/null | grep -qE '^v(2[2-9]|[3-9][0-9])'; then
@@ -468,14 +483,21 @@ iw reg set "\$REG" 2>/dev/null || true
 
 ip link set wlan0 down; sleep 1
 iw dev wlan0 set type __ap
-iw dev wlan0 set channel 6
 sleep 1
 ip link set wlan0 up; sleep 1
 ip addr flush dev wlan0
 ip addr add 192.168.100.1/24 dev wlan0
 
+command -v resolvconf >/dev/null 2>&1 && resolvconf -d wlan0.dhcp 2>/dev/null || true
+
+grep -q '^address=/#/' /etc/dnsmasq.d/99-lamp.conf 2>/dev/null || echo 'address=/#/192.168.100.1' >> /etc/dnsmasq.d/99-lamp.conf
+
 systemctl unmask hostapd dnsmasq 2>/dev/null || true
 systemctl enable hostapd dnsmasq
+
+systemctl restart nginx 2>/dev/null || true
+systemctl restart dnsmasq
+
 systemctl restart hostapd; sleep 2
 if ! systemctl is-active --quiet hostapd; then
   echo "hostapd failed. Retrying..."
@@ -486,8 +508,6 @@ if ! systemctl is-active --quiet hostapd; then
   journalctl -u hostapd -n 50 --no-pager || true
   exit 1
 fi
-systemctl restart dnsmasq
-systemctl restart nginx 2>/dev/null || true
 echo "AP MODE ENABLED  SSID=\$AP_SSID  IP=192.168.100.1"
 EOFSCRIPT
 chmod +x /usr/local/bin/device-ap-mode
@@ -510,6 +530,7 @@ iw dev wlan0 set type managed
 ip link set wlan0 up; sleep 1
 ip addr flush dev wlan0
 sed -i '/static ip_address=192.168.100.1\\/24/d;/nohook wpa_supplicant/d' /etc/dhcpcd.conf 2>/dev/null || true
+sed -i '/^address=\\/#\\//d' /etc/dnsmasq.d/99-lamp.conf 2>/dev/null || true
 systemctl unmask wpa_supplicant@wlan0 2>/dev/null || true
 systemctl enable wpa_supplicant@wlan0
 systemctl restart wpa_supplicant@wlan0
@@ -522,6 +543,7 @@ if ip addr show wlan0 | grep -q "inet "; then
 else
   echo "WARNING: wlan0 did not receive an IP address"
 fi
+systemctl restart avahi-daemon 2>/dev/null || true
 echo "STA MODE ENABLED"
 EOFSCRIPT
 chmod +x /usr/local/bin/device-sta-mode
@@ -574,24 +596,90 @@ OTA_METADATA_URL="\${OTA_METADATA_URL:-https://storage.googleapis.com/s3-autonom
 APP="\$1"
 case "\$APP" in
   lamp|openclaw|bootstrap|web|hal|claude-desktop-buddy) ;;
-  *) echo "Unknown app: \$APP"; exit 1 ;;
+  *) echo "Unknown app: \$APP. Use lamp, openclaw, bootstrap, web, hal, or claude-desktop-buddy."; exit 1 ;;
 esac
-META=\$(mktemp); ZIP=\$(mktemp); DIR=\$(mktemp -d)
-trap 'rm -f "\$META" "\$ZIP"; rm -rf "\$DIR"' EXIT
-curl -fsSL -H "Cache-Control: no-cache" -o "\$META" "\$OTA_METADATA_URL"
-KEY="\$APP"
-VERSION=\$(jq -r --arg a "\$KEY" '.[\$a].version // empty' "\$META")
-URL=\$(jq -r --arg a "\$KEY" '.[\$a].url // empty' "\$META")
-[ -z "\$URL" ] && { echo "No URL in metadata for \$APP"; exit 1; }
-curl -fsSL -o "\$ZIP" "\$URL"
-unzip -o -q "\$ZIP" -d "\$DIR"
-case "\$APP" in
-  lamp)      cp -f "\$(find \$DIR -type f -executable | head -1 || find \$DIR -type f | head -1)" /usr/local/bin/lamp-server      && chmod +x /usr/local/bin/lamp-server      && systemctl restart lamp ;;
-  bootstrap) cp -f "\$(find \$DIR -type f -executable | head -1 || find \$DIR -type f | head -1)" /usr/local/bin/bootstrap-server && chmod +x /usr/local/bin/bootstrap-server && systemctl restart bootstrap ;;
-  web)       rm -rf /usr/share/nginx/html/setup/* && cp -a "\$DIR"/* /usr/share/nginx/html/setup/ ;;
-  *)         echo "manual update for \$APP not implemented in this stub" ;;
-esac
-echo "\$APP updated to \$VERSION"
+
+METADATA_TMP=\$(mktemp)
+ZIP_TMP=""
+DIR_TMP=""
+trap 'rm -f "\$METADATA_TMP" "\$ZIP_TMP"; rm -rf "\$DIR_TMP"' EXIT
+curl -fsSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" -o "\$METADATA_TMP" "\$OTA_METADATA_URL" || { echo "Failed to fetch metadata from \$OTA_METADATA_URL"; exit 1; }
+META_KEY="\$APP"
+VERSION=\$(jq -r --arg a "\$META_KEY" '.[\$a].version // empty' "\$METADATA_TMP")
+URL=\$(jq -r --arg a "\$META_KEY" '.[\$a].url // empty' "\$METADATA_TMP")
+[ -z "\$VERSION" ] && { echo "Metadata has no version for \$APP"; exit 1; }
+
+if [ "\$APP" = "lamp" ]; then
+  [ -z "\$URL" ] && { echo "Metadata has no url for lamp"; exit 1; }
+  ZIP_TMP=\$(mktemp)
+  DIR_TMP=\$(mktemp -d)
+  curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download lamp"; exit 1; }
+  unzip -o -q "\$ZIP_TMP" -d "\$DIR_TMP"
+  BIN=\$(find "\$DIR_TMP" -type f -executable 2>/dev/null | head -1)
+  [ -z "\$BIN" ] && BIN=\$(find "\$DIR_TMP" -type f 2>/dev/null | head -1)
+  [ -z "\$BIN" ] || [ ! -f "\$BIN" ] && { echo "No binary in lamp zip"; exit 1; }
+  cp -f "\$BIN" /usr/local/bin/lamp-server
+  chmod +x /usr/local/bin/lamp-server
+  systemctl restart lamp
+  echo "lamp updated to \$VERSION"
+elif [ "\$APP" = "bootstrap" ]; then
+  [ -z "\$URL" ] && { echo "Metadata has no url for bootstrap"; exit 1; }
+  ZIP_TMP=\$(mktemp)
+  DIR_TMP=\$(mktemp -d)
+  curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download bootstrap"; exit 1; }
+  unzip -o -q "\$ZIP_TMP" -d "\$DIR_TMP"
+  BIN=\$(find "\$DIR_TMP" -type f -executable 2>/dev/null | head -1)
+  [ -z "\$BIN" ] && BIN=\$(find "\$DIR_TMP" -type f 2>/dev/null | head -1)
+  [ -z "\$BIN" ] || [ ! -f "\$BIN" ] && { echo "No binary in bootstrap zip"; exit 1; }
+  cp -f "\$BIN" /usr/local/bin/bootstrap-server
+  chmod +x /usr/local/bin/bootstrap-server
+  systemctl restart bootstrap
+  echo "bootstrap updated to \$VERSION"
+elif [ "\$APP" = "openclaw" ]; then
+  VER="\${VERSION:-latest}"
+  npm install -g "openclaw@\${VER}" || { echo "npm install openclaw failed"; exit 1; }
+  openclaw plugins install @openclaw/discord@\${VER} --force 2>&1 || echo "[software-update] WARN: discord plugin install failed (non-fatal)"
+  openclaw plugins install @openclaw/slack@\${VER} --force 2>&1 || echo "[software-update] WARN: slack plugin install failed (non-fatal)"
+  systemctl restart openclaw
+  echo "openclaw updated to \$VER"
+elif [ "\$APP" = "web" ]; then
+  [ -z "\$URL" ] && { echo "Metadata has no url for web"; exit 1; }
+  ZIP_TMP=\$(mktemp)
+  DIR_TMP=\$(mktemp -d)
+  curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download web"; exit 1; }
+  unzip -o -q "\$ZIP_TMP" -d "\$DIR_TMP"
+  echo "\$VERSION" > "\$DIR_TMP/VERSION"
+  WEB_ROOT="/usr/share/nginx/html/setup"
+  rm -rf "\${WEB_ROOT:?}"/*
+  cp -a "\$DIR_TMP"/* "\$WEB_ROOT"
+  systemctl restart nginx
+  echo "web updated to \$VERSION"
+elif [ "\$APP" = "hal" ]; then
+  [ -z "\$URL" ] && { echo "Metadata has no url for hal"; exit 1; }
+  ZIP_TMP=\$(mktemp)
+  curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download hal"; exit 1; }
+  LELAMP_DIR="/opt/hal"
+  unzip -o -q "\$ZIP_TMP" -d "\$LELAMP_DIR"
+  UV_BIN=\$(command -v uv || echo "/root/.local/bin/uv")
+  find /root/.cache/uv -name "lerobot.egg-info" -type d 2>/dev/null | xargs rm -rf
+  cd "\$LELAMP_DIR" && "\$UV_BIN" sync --python 3.12 --extra hardware || { echo "uv sync failed"; exit 1; }
+  cd /
+  systemctl restart lamp-hal
+  echo "hal updated to \$VERSION"
+elif [ "\$APP" = "claude-desktop-buddy" ]; then
+  [ -z "\$URL" ] && { echo "Metadata has no url for claude-desktop-buddy"; exit 1; }
+  ZIP_TMP=\$(mktemp)
+  DIR_TMP=\$(mktemp -d)
+  curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download claude-desktop-buddy"; exit 1; }
+  BUDDY_DIR="/opt/claude-desktop-buddy"
+  mkdir -p "\$BUDDY_DIR"
+  unzip -o -q "\$ZIP_TMP" -d "\$DIR_TMP"
+  [ -f "\$DIR_TMP/buddy-plugin" ] && cp -f "\$DIR_TMP/buddy-plugin" "\$BUDDY_DIR/buddy-plugin" && chmod +x "\$BUDDY_DIR/buddy-plugin"
+  [ ! -f "/root/config/buddy.json" ] && [ -f "\$DIR_TMP/config/buddy.json" ] && mkdir -p /root/config && cp -f "\$DIR_TMP/config/buddy.json" /root/config/buddy.json
+  echo "\$VERSION" > "\$BUDDY_DIR/VERSION_BUDDY"
+  systemctl restart claude-desktop-buddy
+  echo "claude-desktop-buddy updated to \$VERSION"
+fi
 EOFSCRIPT
 chmod +x /usr/local/bin/software-update
 
@@ -687,6 +775,16 @@ server {
   }
 
   location = /openapi.json {
+    proxy_pass http://backend;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+  }
+
+  location = /api/system/exec {
+    allow 127.0.0.1;
+    allow ::1;
+    deny all;
     proxy_pass http://backend;
     proxy_set_header Host \$host;
     proxy_set_header X-Real-IP \$remote_addr;

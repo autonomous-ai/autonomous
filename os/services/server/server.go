@@ -890,10 +890,10 @@ func (s *Server) handleSetUpCompleteChange(setupCompleted bool) {
 			} else {
 				slog.Warn("agent gateway ready timeout", "component", "server")
 			}
-			// Restart lamp-lelamp so it picks up the fresh config written during setup.
-			exec.Command("systemctl", "restart", "lamp-lelamp").Run()
+			// Restart lamp-hal so it picks up the fresh config written during setup.
+			exec.Command("systemctl", "restart", "lamp-hal").Run()
 			// Start voice pipeline on LeLamp (if Deepgram key configured)
-			// Retry because lamp-lelamp may not be running yet at setup time.
+			// Retry because lamp-hal may not be running yet at setup time.
 			if s.config.DeepgramAPIKey != "" {
 				for attempt := 1; attempt <= 10; attempt++ {
 					err := s.agentGateway.StartLeLampVoice(s.config.DeepgramAPIKey, s.config.LLMAPIKey, s.config.GetSTTAPIKey(), s.config.GetTTSAPIKey(), s.config.LLMBaseURL, s.config.GetSTTBaseURL(), s.config.GetTTSBaseURL(), s.config.TTSVoice, s.config.TTSInstructions, s.config.TTSProvider)
@@ -1016,7 +1016,7 @@ func (s *Server) voicePreview(c *gin.Context) {
 // allowedLogs maps source names to their log file paths (supports glob patterns).
 // Entries prefixed with "journal:" use journalctl instead of file reading.
 var allowedLogs = map[string]string{
-	"lelamp":           "/var/log/lelamp/server.log",
+	"lelamp":           "/var/log/hal/server.log",
 	"lamp":             "/var/log/lamp.log",
 	"openclaw":         "/var/log/openclaw/lamp.log",
 	"openclaw-service": "journal:openclaw.service",
@@ -1319,10 +1319,10 @@ var (
 const softwareUpdateMinInterval = 30 * time.Second
 
 // softwareUpdate triggers an OTA update for a single named component via the bootstrap worker.
-// POST /api/system/software-update/:target  (target: lamp | web | lelamp)
+// POST /api/system/software-update/:target  (target: lamp | web | hal)
 func (s *Server) softwareUpdate(c *gin.Context) {
 	target := c.Param("target")
-	allowed := map[string]bool{"lamp": true, "web": true, "lelamp": true}
+	allowed := map[string]bool{"lamp": true, "web": true, "hal": true}
 	if !allowed[target] {
 		c.JSON(http.StatusBadRequest, serializers.ResponseError("unknown target: "+target))
 		return

@@ -422,8 +422,8 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 	if err := s.config.WithLockSave(func(c *config.Config) {
 		prevModel := c.LLMModel
 		prevLang = c.STTLanguage
-		// Snapshot voice-pipeline fields lelamp reads at boot (lelamp/server.py
-		// :317-388 + lelamp/config.py:103-104). Used to gate lamp-lelamp restart
+		// Snapshot voice-pipeline fields hal reads at boot (hal/server.py
+		// :317-388 + hal/config.py:103-104). Used to gate lamp-hal restart
 		// so wifi/channel/MQTT/admin-only saves don't bounce TTS.
 		prevLLMAPIKey := c.LLMAPIKey
 		prevLLMBaseURL := c.LLMBaseURL
@@ -616,7 +616,7 @@ func (s *Service) UpdateConfig(data domain.UpdateConfigRequest) error {
 			}()
 		}
 	}
-	// Restart lamp-lelamp only when a field it reads at boot actually changed.
+	// Restart lamp-hal only when a field it reads at boot actually changed.
 	// stt_language is covered by langChanged (lelamp reads it via stt_language /
 	// derived stt_model). Wifi/channel/MQTT/admin saves skip the restart.
 	if voiceChanged || langChanged {
@@ -656,15 +656,15 @@ func (s *Service) UpdateVoiceConfig(provider, voice, language string) error {
 	return nil
 }
 
-// RePushVoiceConfig restarts lamp-lelamp so it picks up new TTS config from config.json.
+// RePushVoiceConfig restarts lamp-hal so it picks up new TTS config from config.json.
 func (s *Service) RePushVoiceConfig() {
 	go func() {
-		slog.Info("restarting lamp-lelamp for TTS config change", "component", "device", "voice", s.config.TTSVoice, "provider", s.config.TTSProvider)
-		out, err := exec.Command("systemctl", "restart", "lamp-lelamp").CombinedOutput()
+		slog.Info("restarting lamp-hal for TTS config change", "component", "device", "voice", s.config.TTSVoice, "provider", s.config.TTSProvider)
+		out, err := exec.Command("systemctl", "restart", "lamp-hal").CombinedOutput()
 		if err != nil {
-			slog.Warn("lamp-lelamp restart failed", "component", "device", "error", err, "output", string(out))
+			slog.Warn("lamp-hal restart failed", "component", "device", "error", err, "output", string(out))
 		} else {
-			slog.Info("lamp-lelamp restarted for TTS config", "component", "device", "voice", s.config.TTSVoice, "provider", s.config.TTSProvider)
+			slog.Info("lamp-hal restarted for TTS config", "component", "device", "voice", s.config.TTSVoice, "provider", s.config.TTSProvider)
 		}
 	}()
 }

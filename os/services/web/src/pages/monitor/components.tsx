@@ -18,7 +18,7 @@ export function StatusDot({ ok }: { ok: boolean }) {
   );
 }
 
-export function SoftwareUpdateButton({ target, label }: { target: "lamp" | "web" | "lelamp"; label: string }) {
+export function SoftwareUpdateButton({ target, label }: { target: "lamp" | "web" | "hal"; label: string }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const trigger = async () => {
@@ -64,7 +64,7 @@ export function SoftwareUpdateButtons() {
     <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 2 }}>
       <SoftwareUpdateButton target="web" label="software-update web" />
       <SoftwareUpdateButton target="lamp" label="software-update lamp" />
-      <SoftwareUpdateButton target="lelamp" label="software-update lelamp" />
+      <SoftwareUpdateButton target="hal" label="software-update hal" />
     </div>
   );
 }

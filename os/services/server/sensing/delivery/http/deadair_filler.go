@@ -196,7 +196,7 @@ func pickFrom(pool []string, lastSpoken string) string {
 // PrewarmFillers asks lelamp to render+save WAV for every filler phrase
 // in the active STT language (read from i18n.Lang()) so the first runtime
 // fire is a cache hit (no ElevenLabs roundtrip). Polls lelamp /health
-// until it answers (lamp.service starts before lamp-lelamp.service is
+// until it answers (lamp.service starts before lamp-hal.service is
 // ready -- without this guard every prerender races and all phrases
 // fail with connection refused). Then prerenders serially. Logs failures
 // but never panics; cache misses fall back to live speak at fire time.
@@ -205,7 +205,7 @@ func pickFrom(pool []string, lastSpoken string) string {
 // else falls back to English. intent.CacheableReplies is always English
 // (intent rules only match English keywords) so it's prewarmed regardless
 // of language. Switching language at runtime causes a one-time miss on
-// the first filler — acceptable since lamp-lelamp restarts on EditConfig
+// the first filler — acceptable since lamp-hal restarts on EditConfig
 // anyway.
 func PrewarmFillers() {
 	lang := i18n.Lang()

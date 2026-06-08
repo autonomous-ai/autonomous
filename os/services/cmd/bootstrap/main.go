@@ -25,7 +25,7 @@ func main() {
 
 	// Load shared env file before logger init (so GELF_* env vars are visible).
 	// Missing file is non-fatal — env may also be supplied by systemd.
-	_ = godotenv.Load("/opt/lelamp/.env")
+	_ = godotenv.Load("/opt/hal/.env")
 
 	cleanup := logger.Init(slog.LevelDebug, "/var/log/lamp-bootstrap.log")
 	defer cleanup()

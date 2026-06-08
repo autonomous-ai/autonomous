@@ -271,7 +271,7 @@ func (b *Bootstrap) detectVersion(ctx context.Context, key string) string {
 		}
 		return strings.TrimSpace(string(data))
 	case domain.OTAKeyLeLamp:
-		path := filepath.Join("/opt/lelamp", "VERSION_LELAMP")
+		path := filepath.Join("/opt/hal", "VERSION_LELAMP")
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return ""

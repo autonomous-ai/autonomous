@@ -527,7 +527,7 @@ export function OverviewSection({
             <VersionRow name="Host"   color="var(--lm-text)"   version={null}                    uptime={sys?.uptime ?? null}                                   updateTarget={null} />
             <VersionRow name="Web"    color="var(--lm-teal)"   version={webVersion}              uptime={null}                                                  updateTarget={isDebug ? "web" : null} />
             <VersionRow name="Lamp"   color="var(--lm-amber)"  version={sys?.version ?? null}    uptime={sys?.serviceUptime ?? null}                            updateTarget={isDebug ? "lamp" : null} />
-            <VersionRow name="LeLamp" color="var(--lm-blue)"   version={lelampVersion}           uptime={sys?.lelampUptime ?? null}                             updateTarget={isDebug ? "lelamp" : null} />
+            <VersionRow name="LeLamp" color="var(--lm-blue)"   version={lelampVersion}           uptime={sys?.lelampUptime ?? null}                             updateTarget={isDebug ? "hal" : null} />
             <VersionRow name="Agent"  color="var(--lm-purple)" version={oc?.version ?? null}     uptime={oc?.connected ? (oc?.agentUptime ?? null) : null}      updateTarget={null} />
           </div>
         </div>
@@ -543,7 +543,7 @@ function VersionRow({ name, color, version, uptime, updateTarget }: {
   color: string;
   version: string | null;
   uptime: number | null;
-  updateTarget: "lamp" | "web" | "lelamp" | null;
+  updateTarget: "lamp" | "web" | "hal" | null;
 }) {
   // 4-column grid keeps name/version/uptime/button vertically aligned across rows.
   return (
