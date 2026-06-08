@@ -15,7 +15,7 @@ Build output (`dist/`) is served by nginx at root `/` on the device.
 
 ### 1.1 Browser Tab Title
 
-The browser tab title (`document.title`) reflects the focused page/tab so multiple Lamp tabs are distinguishable. Driven by the shared `useDocumentTitle` hook (`lamp/web/src/hooks/useDocumentTitle.ts`); format is `Lamp · <segment>[· <sub-segment>]`.
+The browser tab title (`document.title`) reflects the focused page/tab so multiple Lamp tabs are distinguishable. Driven by the shared `useDocumentTitle` hook (`os/services/web/src/hooks/useDocumentTitle.ts`); format is `Lamp · <segment>[· <sub-segment>]`.
 
 | Route / state | Title |
 |---------------|-------|
@@ -31,7 +31,7 @@ The static `<title>Lamp Setup</title>` in `index.html` is the pre-mount fallback
 ## 2. Directory Structure
 
 ```
-lamp/web/
+os/services/web/
 ├── src/
 │   ├── pages/
 │   │   ├── Monitor.tsx        # Dashboard monitor (main file)
@@ -112,7 +112,7 @@ Monitor polls system/HW APIs every **3 seconds**. Flow uses file-backed hybrid m
 
 > **Note on format**: Lamp API returns `{ status: 1, data: <payload>, message: null }` on success.
 
-### 4.2 LeLamp (Python/FastAPI, port 5001, prefix `/hw`)
+### 4.2 HAL (Python/FastAPI, port 5001, prefix `/hw`)
 
 | Endpoint | Data |
 |----------|------|
@@ -187,7 +187,7 @@ Cards included:
 Below the nav items and OpenClaw status, the sidebar shows versions for all three repos:
 - **Web** (teal): injected at build time from `package.json` via Vite `define` (`__WEB_VERSION__`)
 - **Lamp** (amber): from `GET /api/system/info` → `version` field (Go ldflags)
-- **LeLamp** (blue): from `GET /api/system/info` → `lelampVersion` field. Lamp calls LeLamp `:5001/version` on the loopback once per minute (cached) and re-exposes it through the lamp API, so the browser doesn't need direct access to `/hw/*` (nginx gates `/hw/` to loopback only).
+- **HAL** (blue): from `GET /api/system/info` → `lelampVersion` field. Lamp calls HAL `:5001/version` on the loopback once per minute (cached) and re-exposes it through the lamp API, so the browser doesn't need direct access to `/hw/*` (nginx gates `/hw/` to loopback only).
 - **Force Update** button: triggers `POST /api/system/force-update` → bootstrap OTA check. Shows "Checking…" while busy, then "Triggered"/"Failed" feedback for 3 seconds.
 
 ### 5.2 System Section
@@ -223,7 +223,7 @@ Each event displays: type badge, phase (if any), runId (first 8 chars), timestam
 - Fallback polling (2s) is used only if live stream disconnects.
 - Displayed turns/events are fully derived from JSONL flow logs.
 
-**Turn Pipeline (SVG)** — Implemented by `FlowDiagram` in `lamp/web/src/pages/Monitor.tsx`. Full layout (three clusters: Lamp / LeLamp / OpenClaw, column grid, Cron vs OpenClaw, LeLamp row aligned with Tool, approximate coordinates) is documented in **`docs/flow-monitor.md`**; Vietnamese summary in **`docs/vi/flow-monitor_vi.md`**.
+**Turn Pipeline (SVG)** — Implemented by `FlowDiagram` in `os/services/web/src/pages/Monitor.tsx`. Full layout (three clusters: Lamp / HAL / OpenClaw, column grid, Cron vs OpenClaw, HAL row aligned with Tool, approximate coordinates) is documented in **`docs/flow-monitor.md`**; Vietnamese summary in **`docs/vi/flow-monitor_vi.md`**.
 
 Turn Pipeline grouping behavior:
 - Turns are still started by input/trigger events (`sensing_input`, `chat_input`, `schedule_trigger`, etc.).
@@ -254,7 +254,7 @@ Turn Pipeline grouping behavior:
 
 ### 5.5 Logs Section
 
-- Dedicated runtime log panels for LeLamp, Lamp, and OpenClaw service logs.
+- Dedicated runtime log panels for HAL, Lamp, and OpenClaw service logs.
 - Each panel streams via SSE (`GET /api/logs/stream?source=<source>`) with fallback polling.
 - Supports level filtering (ALL/DEBUG/INFO/WARN/ERROR) and text/regex search.
 
@@ -305,7 +305,7 @@ Chat UI → POST /api/sensing/event → SensingHandler
 Original `GET /hw/led` only returned `{ led_count: 64 }` — no current color info.
 
 ### Solution
-Added `GET /hw/led/color` to `lelamp/server.py`:
+Added `GET /hw/led/color` to `os/hal/server.py`:
 
 ```python
 @app.get("/led/color", response_model=LEDColorResponse, tags=["LED"])
@@ -341,11 +341,11 @@ def get_led_color():
 
 ## 8. Global Source Footer (GPL v3 §6 Compliance)
 
-`lamp/web/src/components/SourceFooter.tsx` is a tiny `position: fixed` link mounted at the App root (`App.tsx`, outside `<Routes>`), so it appears on every page — Setup, Login, Monitor, EditConfig, GwConfig.
+`os/services/web/src/components/SourceFooter.tsx` is a tiny `position: fixed` link mounted at the App root (`App.tsx`, outside `<Routes>`), so it appears on every page — Setup, Login, Monitor, EditConfig, GwConfig.
 
 Renders at `bottom: 6px, right: 8px` with monospace 10px text and opacity `0.7` — visible to anyone who looks for it without blocking form action buttons (Back / Next / Setup / Save) or scroll. Link target: `https://github.com/autonomous-ai/lamp`.
 
-Reason it exists: LeLamp Python (`lelamp/`) ships GPL v3, baked into the board image. GPL §6 requires recipients of the binary to be informed where corresponding source lives. The footer satisfies the "written offer" alternative by exposing the public repo URL on the device itself. See also `scripts/tag-release.sh` + `Makefile:tag-release` for the version → commit traceability piece.
+Reason it exists: HAL Python (`os/hal/`) ships GPL v3, baked into the board image. GPL §6 requires recipients of the binary to be informed where corresponding source lives. The footer satisfies the "written offer" alternative by exposing the public repo URL on the device itself. See also `scripts/tag-release.sh` + `Makefile:tag-release` for the version → commit traceability piece.
 
 ---
 
@@ -353,13 +353,13 @@ Reason it exists: LeLamp Python (`lelamp/`) ships GPL v3, baked into the board i
 
 ```bash
 # Build production
-make web-build        # tsc + vite build → lamp/web/dist/
+make web-build        # tsc + vite build → os/services/web/dist/
 
 # Deploy to Pi
 make web-deploy       # web-build + rsync dist/ → /usr/share/nginx/html/setup/
 
-# Deploy LeLamp (when server.py changes)
-make lelamp-deploy    # rsync + pip install + systemctl restart lamp-lelamp.service
+# Deploy HAL (when server.py changes)
+make hal-deploy       # rsync + pip install + systemctl restart lamp-lelamp.service
 ```
 
 > Deploy uses `PI_HOST=lamp.local` (mDNS). If it doesn't resolve, use IP directly:

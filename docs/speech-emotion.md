@@ -48,14 +48,14 @@ flush:
     ⑤ POST Lamp /api/sensing/event with type="speech_emotion.detected"
 ```
 
-LeLamp's voice pipeline **only calls `submit()`**. All HTTP I/O to dlbackend, buffering, bucketing, dedup, retry, and Lamp POST are contained inside the `speech_emotion/` module — they never block the STT path.
+HAL's voice pipeline **only calls `submit()`**. All HTTP I/O to dlbackend, buffering, bucketing, dedup, retry, and Lamp POST are contained inside the `speech_emotion/` module — they never block the STT path.
 
 ---
 
 ## File Layout
 
 ```
-lelamp/service/voice/speech_emotion/
+os/hal/service/voice/speech_emotion/
 ├── __init__.py        # public API: SpeechEmotionService + ABC + engine + result type
 ├── constants.py       # defaults, label vocabulary, bucket map, event type
 ├── base.py            # BaseSpeechEmotionRecognizer (ABC), SpeechEmotionResult dataclass
@@ -64,7 +64,7 @@ lelamp/service/voice/speech_emotion/
 └── service.py         # SpeechEmotionService — queue + worker + flush + dedup + send-to-lamp
 ```
 
-Adding a new engine: subclass `BaseSpeechEmotionRecognizer` (one method: `recognize(wav_bytes) -> SpeechEmotionResult | None`) and swap it in via `SpeechEmotionService(recognizer=...)` at construction time. Default factory builds `Emotion2VecRecognizer` from `lelamp.config.SPEECH_EMOTION_API_URL`.
+Adding a new engine: subclass `BaseSpeechEmotionRecognizer` (one method: `recognize(wav_bytes) -> SpeechEmotionResult | None`) and swap it in via `SpeechEmotionService(recognizer=...)` at construction time. Default factory builds `Emotion2VecRecognizer` from `config.SPEECH_EMOTION_API_URL`.
 
 ---
 
@@ -146,17 +146,17 @@ Retry policy: 3 attempts with 2 s back-off on `ConnectionError` or HTTP `503`. O
 
 To make noisy SER reads debuggable, the service persists the WAV clip behind each event and surfaces it in the Flow Monitor UI as a click-to-play player. **This is a debug aid only — the audio is never sent to the LLM.**
 
-### Write side (LeLamp)
+### Write side (HAL)
 
 In `_process_job`, every inference that clears the per-label confidence gate is written to disk by `_persist_wav()` before it lands in the buffer:
 
-- **Directory:** `SPEECH_EMOTION_AUDIO_DIR` (config in `lelamp/config.py`, env `LELAMP_SPEECH_EMOTION_AUDIO_DIR`), default `<tempdir>/lamp-speech-emotion` (i.e. `/tmp/lamp-speech-emotion`). Created with `os.makedirs(exist_ok=True)` at init; if creation fails the directory is disabled and every POST carries an empty `audio` field (graceful degradation — SER keeps working).
+- **Directory:** `SPEECH_EMOTION_AUDIO_DIR` (config in `os/hal/config.py`, env `LELAMP_SPEECH_EMOTION_AUDIO_DIR`), default `<tempdir>/lamp-speech-emotion` (i.e. `/tmp/lamp-speech-emotion`). Created with `os.makedirs(exist_ok=True)` at init; if creation fails the directory is disabled and every POST carries an empty `audio` field (graceful degradation — SER keeps working).
 - **Filename:** `<ms>_<user>_<label>.wav`, where `<ms>` is the inference timestamp in milliseconds and `<user>`/`<label>` are sanitized to `[a-zA-Z0-9_-]` (anything else collapsed to `_`).
 - **Flush selection:** when a user's flush emits the dominant non-neutral label, it attaches the **latest** clip among the dominant-label inferences — `max(dom_inferences, key=lambda i: i.ts).audio_path` — as the `audio` field in the POST.
 
 ### Serve side (Lamp)
 
-The Lamp backend exposes the clip to the Flow Monitor UI **only** via a new route `GET /api/sensing/audio/:name` (`SensingHandler.GetAudio`). It serves the WAV by **basename** (the full path never leaves the Pi) from one of:
+The Lamp backend exposes the clip to the Flow Monitor UI **only** via a new route `GET /api/sensing/audio/:name` (`SensingHandler.GetAudio`). It serves the WAV by **basename** (the full path never leaves the device) from one of:
 
 ```
 /var/lib/lelamp/speech-emotion
@@ -203,7 +203,7 @@ Each bucket keeps its own independent TTL entry in `_last_sent_by_key`. Sending 
 
 ## Configuration
 
-All knobs live in `lelamp/config.py` as `SPEECH_EMOTION_*`, overridable via env vars. Defaults mirror `EMOTION_*` so the two modalities behave identically out of the box.
+All knobs live in `os/hal/config.py` as `SPEECH_EMOTION_*`, overridable via env vars. Defaults mirror `EMOTION_*` so the two modalities behave identically out of the box.
 
 | Constant | Env var | Default | Purpose |
 |----------|---------|---------|---------|
@@ -216,7 +216,7 @@ All knobs live in `lelamp/config.py` as `SPEECH_EMOTION_*`, overridable via env 
 | `SPEECH_EMOTION_API_URL` | — | derived | `DL_BACKEND_URL` + `DL_SER_ENDPOINT` |
 | `SPEECH_EMOTION_API_KEY` | — | mirrors `DL_API_KEY` | Sent as `X-API-Key` |
 
-Label vocabulary, bucket map, and **per-label confidence thresholds** are declared in `lelamp/service/voice/speech_emotion/constants.py` (not env-overridable — touching these requires a code change). The threshold dict:
+Label vocabulary, bucket map, and **per-label confidence thresholds** are declared in `os/hal/service/voice/speech_emotion/constants.py` (not env-overridable — touching these requires a code change). The threshold dict:
 
 ```python
 # constants.py
@@ -315,7 +315,7 @@ This is the reason the finally block ordering is: wake-word split → `_identify
 | Lamp sensing endpoint down | 3 retries with 2 s back-off, then sample dropped | Buffer continues filling for next flush |
 | `duration_s < MIN_AUDIO_S` | Dropped in `submit()` with debug log | Expected — short utterances aren't worth classifying |
 
-Nothing here blocks the STT path or speaker recognition — SER failures are silent at the user level and visible only in `/var/log/lelamp/server.log`.
+Nothing here blocks the STT path or speaker recognition — SER failures are silent at the user level and visible only in the HAL server log.
 
 ---
 

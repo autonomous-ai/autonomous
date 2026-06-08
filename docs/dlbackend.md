@@ -7,12 +7,12 @@ GPU-accelerated backend service for:
 - optional person detection for action recognition preprocessing (YOLO12),
 - speaker enrollment/recognition via HTTP APIs (AudioRecognizer).
 
-LeLamp Pi streams camera frames to DL backend for action and emotion analysis, forwards end-of-utterance WAV blobs for speech emotion, and clients can register/recognize speakers through authenticated `/api/dl/audio-recognizer/*` endpoints.
+The device streams camera frames to DL backend for action and emotion analysis, forwards end-of-utterance WAV blobs for speech emotion, and clients can register/recognize speakers through authenticated `/api/dl/audio-recognizer/*` endpoints.
 
 ## Architecture
 
 ```
-Pi (LeLamp) / Clients             Load Balancer (:7999)      DL Backend (nginx :8888 → uvicorn :8001)
+Device (HAL) / Clients             Load Balancer (:7999)      DL Backend (nginx :8888 → uvicorn :8001)
 ┌──────────────────────┐         ┌─────────────────┐        ┌──────────────────────────────────────┐
 │ Camera 640x480       │ WS/HTTP │ RSA+AES-GCM     │  HTTP  │ /api/dl/action-analysis/ws            │
 │ frame_b64 every tick │────────→│ decrypt/encrypt  │───────→│ Action model (X3D/UniformerV2) ONNX  │
@@ -55,7 +55,7 @@ Selectable via `EMOTION_RECOGNITION_MODEL` env var:
 | **EmoNet-8** | `emonet_8` | `emonet_8.onnx` | 256×256 | 8 emotions (Neutral, Happy, Sad, Surprise, Fear, Disgust, Anger, Contempt) + valence + arousal |
 | **EmoNet-5** | `emonet_5` | `emonet_5.onnx` | 256×256 | 5 emotions (Neutral, Happy, Sad, Surprise, Anger) + valence + arousal |
 
-Face detection for emotion uses **YuNet** (`face_detection_yunet_2023mar.onnx`) to crop faces before classification. This is separate from LeLamp's InsightFace (used for identity recognition on-device).
+Face detection for emotion uses **YuNet** (`face_detection_yunet_2023mar.onnx`) to crop faces before classification. This is separate from HAL's InsightFace (used for identity recognition on-device).
 
 ### Speech Emotion Recognition (SER)
 
@@ -67,7 +67,7 @@ Selectable via `SER_RECOGNITION_MODEL` env var:
 
 The engine loads once at startup. Cold-start path: if no `.onnx` is cached locally, the engine downloads the FunASR checkpoint, exports ONNX into `models/<engine>/emotion2vec.onnx`, and writes `labels.txt` from the snapshot's `tokens.txt`. After the first build, only `onnxruntime` is needed at serve time — `torch` and `funasr` can be uninstalled.
 
-LeLamp's `SpeechEmotionService` is the only known caller in this monorepo. After each mic session ends (independent of STT transcript), `VoiceService._submit_speech_emotion_from_session` builds a mono 16 kHz WAV from the session buffer and POSTs it to `/api/dl/ser/recognize`. Speaker recognition is invoked inline to populate the `user` field but does not gate SER.
+HAL's `SpeechEmotionService` is the only known caller in this monorepo. After each mic session ends (independent of STT transcript), `VoiceService._submit_speech_emotion_from_session` builds a mono 16 kHz WAV from the session buffer and POSTs it to `/api/dl/ser/recognize`. Speaker recognition is invoked inline to populate the `user` field but does not gate SER.
 
 ### Person Detection (Optional)
 
@@ -142,7 +142,7 @@ POST /api/dl/emotion-recognize
 {"detections": [{"emotion": "Happy", "confidence": 0.82, "face_confidence": 1.0, "bbox": [0,0,W,H]}]}
 ```
 
-> **Note:** LeLamp currently uses the HTTP endpoint (not WebSocket) for emotion. Face crops are produced by InsightFace on-device, then sent to dlbackend for emotion classification only.
+> **Note:** HAL currently uses the HTTP endpoint (not WebSocket) for emotion. Face crops are produced by InsightFace on-device, then sent to dlbackend for emotion classification only.
 
 ### Speech Emotion Recognition (HTTP)
 
@@ -151,7 +151,7 @@ POST /api/dl/ser/recognize
 GET  /api/dl/ser/labels
 ```
 
-Three accepted body formats (`multipart/form-data` upload, base64 JSON, or remote URL JSON). LeLamp uses the base64 JSON form so it can reuse the WAV bytes already in memory from speaker ID:
+Three accepted body formats (`multipart/form-data` upload, base64 JSON, or remote URL JSON). HAL uses the base64 JSON form so it can reuse the WAV bytes already in memory from speaker ID:
 
 **Request (base64):**
 ```json
@@ -195,7 +195,7 @@ GET /api/dl/health
 6. **RunPod**: Preprocesses (BGR→RGB, center crop, normalization), runs softmax over whitelisted actions
 7. **WebSocket**: Returns `{"detected_classes": [["walking", 0.87], ["reading book", 0.42]]}`
 8. **Pi**: Buffers actions + snapshots for `MOTION_FLUSH_S`, then sends aggregated event
-9. **Pi → Lamp**: `POST /api/sensing/event` with `type: "motion.activity"` or `type: "motion"`
+9. **Device → Lamp**: `POST /api/sensing/event` with `type: "motion.activity"` or `type: "motion"`
 10. **Lamp → OpenClaw**: Agent receives event, responds based on detected activity
 
 ### Emotion Analysis
@@ -206,7 +206,7 @@ GET /api/dl/health
 4. **RunPod**: YuNet re-detects face in crop (optional), POSTER V2 / EmoNet-8 / EmoNet-5 classifies emotion
 5. **HTTP**: Returns `{"detections": [{"emotion": "Happy", "confidence": 0.82}]}`
 6. **Pi**: Buffers, applies polarity-bucket dedup, fires `emotion.detected` event
-7. **Pi → Lamp**: `POST /api/sensing/event` with `type: "emotion.detected"`
+7. **Device → Lamp**: `POST /api/sensing/event` with `type: "emotion.detected"`
 
 ### Speech Emotion Recognition
 
@@ -216,7 +216,7 @@ GET /api/dl/health
 4. **RunPod**: `emotion2vec_plus_large` runs softmax over 9 classes
 5. **HTTP**: Returns `{"label": "sad", "confidence": 0.72}`
 6. **Pi**: Buffers per user, every `SPEECH_EMOTION_FLUSH_S` (default 10 s) computes mode + bucket, applies `(user, bucket)` TTL dedup
-7. **Pi → Lamp**: `POST /api/sensing/event` with `type: "speech_emotion.detected"` and `current_user` set
+7. **Device → Lamp**: `POST /api/sensing/event` with `type: "speech_emotion.detected"` and `current_user` set
 
 ## Configuration
 
@@ -269,7 +269,7 @@ DL_API_KEY=<shared secret>
 LELAMP_MOTION_ENABLED=true
 ```
 
-### Thresholds (lelamp/config.py)
+### Thresholds (os/hal/config.py)
 
 | Parameter | Default | Purpose |
 |---|---|---|
@@ -282,7 +282,7 @@ LELAMP_MOTION_ENABLED=true
 | `SPEECH_EMOTION_FLUSH_S` | 10.0 | Per-user buffer drain cadence |
 | `SPEECH_EMOTION_DEDUP_WINDOW_S` | 300.0 | `(user, bucket)` TTL (5 min) |
 | `SPEECH_EMOTION_MIN_AUDIO_S` | 0.8 | Min utterance length |
-| `DL_SER_ENDPOINT` | `/lelamp/api/dl/ser/recognize` | Path suffix on `DL_BACKEND_URL` |
+| `DL_SER_ENDPOINT` | `/lelamp/api/dl/ser/recognize` | Path suffix on `DL_BACKEND_URL` (URL path, not repo path) |
 | `DL_ENCRYPTION_ENABLED` | `false` | Enable client-side encryption for DL backend |
 | `DL_ENCRYPTION_REQUIRED` | `false` | Fail if encryption setup fails (no plaintext fallback) |
 
@@ -322,11 +322,11 @@ LELAMP_MOTION_ENABLED=true
 | `src/lbserver/app.py` | Load balancer — round-robin HTTP/WS proxy with encryption |
 | `src/lbserver/models.py` | Pydantic wire-format models (`CipherHTTPRequest`, `WSCipherMessage`, etc.) |
 | `src/lbserver/utils/crypto.py` | HTTP decrypt/encrypt helpers for the LB proxy |
-| `nginx.conf` | Reverse proxy :8888 → :8001, `/lelamp/` prefix strip, WS upgrade |
+| `nginx.conf` | Reverse proxy :8888 → :8001, `/lelamp/` prefix strip (URL path), WS upgrade |
 | `Dockerfile` | CUDA 12.4 PyTorch + nginx + uvicorn |
 | `start.sh` | RunPod startup: nginx + uvicorn |
 
-### lelamp/ (Pi side)
+### os/hal/ (device side)
 
 | File | Purpose |
 |---|---|
@@ -349,7 +349,7 @@ LELAMP_MOTION_ENABLED=true
 └── /lelamp/       → 127.0.0.1:8001  (strips /lelamp/ prefix, WS upgrade enabled)
 ```
 
-All LeLamp traffic goes through `/lelamp/` → port 8001 (FastAPI). Routes are prefixed `/api/dl/` on the FastAPI side.
+All device traffic goes through `/lelamp/` → port 8001 (FastAPI). Routes are prefixed `/api/dl/` on the FastAPI side.
 
 Full URL examples:
 ```
@@ -374,7 +374,7 @@ Optional hybrid encryption handled at the **load balancer** layer. DL server (dl
 ### Architecture
 
 ```
-LeLamp (client)                          Load Balancer (:7999)                    DL Server (:8001)
+HAL (client)                             Load Balancer (:7999)                    DL Server (:8001)
 ┌──────────────┐   encrypted traffic    ┌──────────────────────┐   plaintext     ┌──────────────┐
 │ CryptoSession │ ────────────────────→ │ RSAAESCrypto         │ ─────────────→  │ FastAPI       │
 │ (AES-256-GCM) │ ←──────────────────── │ decrypt → forward    │ ←─────────────  │ (no crypto)   │
@@ -398,7 +398,7 @@ GET /api/crypto/public-key
 → 404 if crypto is disabled
 ```
 
-LeLamp fetches this at startup to encrypt session keys. Alternatively, the key can be loaded from a local PEM file via `DL_PUBLIC_KEY_FILE` (skips the fetch).
+HAL fetches this at startup to encrypt session keys. Alternatively, the key can be loaded from a local PEM file via `DL_PUBLIC_KEY_FILE` (skips the fetch).
 
 ### HTTP Encryption
 
@@ -455,7 +455,7 @@ If key exchange is skipped and `CRYPTO__REQUIRE_ENCRYPTION=false`, messages pass
 | `CRYPTO__KEY_SIZE` | `2048` | RSA key size in bits |
 | `CRYPTO__REQUIRE_ENCRYPTION` | `false` | Reject plaintext requests/connections |
 
-#### LeLamp Client (lelamp/.env)
+#### HAL Client (os/hal/.env)
 
 | Variable | Default | Description |
 |---|---|---|
@@ -473,7 +473,7 @@ If key exchange is skipped and `CRYPTO__REQUIRE_ENCRYPTION=false`, messages pass
 | `dlbackend/src/lbserver/models.py` | Pydantic wire-format models (`CipherHTTPRequest`, `CipherHTTPResponse`, `WSKeyExchangeRequest`, `WSCipherMessage`) |
 | `dlbackend/src/lbserver/utils/crypto.py` | HTTP decrypt/encrypt helpers (`try_decrypt_http_body`, `encrypt_http_response`) |
 | `dlbackend/src/lbserver/app.py` | LB integration (HTTP proxy + WS proxy with crypto) |
-| `lelamp/service/sensing/crypto.py` | Client-side `CryptoSession`, wire-format models, public key resolution |
+| `os/hal/service/sensing/crypto.py` | Client-side `CryptoSession`, wire-format models, public key resolution |
 
 ## Deployment
 

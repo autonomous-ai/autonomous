@@ -59,11 +59,11 @@ Config field: `guard_mode` in `config/config.json` (bool, default `false`). The 
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/sensing/event` | Receive sensing event from LeLamp |
+| POST | `/api/sensing/event` | Receive sensing event from HAL |
 | POST | `/api/mood/log` | Log user mood (called by agent via Mood skill) |
-| POST | `/api/monitor/event` | Push an event directly to the monitor bus (used by LeLamp for sound tracker state) |
+| POST | `/api/monitor/event` | Push an event directly to the monitor bus (used by HAL for sound tracker state) |
 
-> **Note:** Stranger visit tracking (stats, persistence) is handled by **LeLamp** (port 5001) at `GET /face/stranger-stats`. See [sensing-behavior.md](sensing-behavior.md#stranger-visit-tracking) for details.
+> **Note:** Stranger visit tracking (stats, persistence) is handled by **HAL** (port 5001) at `GET /face/stranger-stats`. See [sensing-behavior.md](sensing-behavior.md#stranger-visit-tracking) for details.
 
 **Request body:**
 ```json
@@ -104,7 +104,7 @@ Config field: `guard_mode` in `config/config.json` (bool, default `false`). The 
 
 ---
 
-## LeLamp Endpoints (Python FastAPI, :5001)
+## HAL Endpoints (Python FastAPI, :5001)
 
 Accessed via nginx proxy: `/hw/*` → `127.0.0.1:5001`
 
@@ -184,7 +184,7 @@ Accessed via nginx proxy: `/hw/*` → `127.0.0.1:5001`
 
 ### Face (friend enrollment)
 
-Requires sensing with camera (InsightFace). Enrolled person JPEGs persist under `/root/local/users/{label}/` by default, or under `LELAMP_USERS_DIR` if set. Each person's folder contains a `metadata.json` with `telegram_username` and `telegram_id` for DM targeting.
+Requires sensing with camera (InsightFace). Enrolled person JPEGs persist under `/root/local/users/{label}/` by default, or under `HAL_USERS_DIR` if set. Each person's folder contains a `metadata.json` with `telegram_username` and `telegram_id` for DM targeting.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -199,7 +199,7 @@ Requires sensing with camera (InsightFace). Enrolled person JPEGs persist under 
 |--------|----------|-------------|
 | GET | `/user/info?name=X` | User metadata: `name`, `is_friend`, `telegram_id`, `telegram_username`. Defaults to `"unknown"` if name omitted. Auto-creates folder. |
 
-> Wellbeing activity history lives on the Lamp HTTP API (port 5000). See `POST /api/wellbeing/log` and `GET /api/openclaw/wellbeing-history` — entries are JSONL under `/root/local/users/{user}/wellbeing/YYYY-MM-DD.jsonl` with schema `{ts, seq, hour, action, notes}` (action ∈ `drink`/`break`/`sedentary`/`emotional`). LeLamp no longer hosts wellbeing endpoints.
+> Wellbeing activity history lives on the Lamp HTTP API (port 5000). See `POST /api/wellbeing/log` and `GET /api/openclaw/wellbeing-history` — entries are JSONL under `/root/local/users/{user}/wellbeing/YYYY-MM-DD.jsonl` with schema `{ts, seq, hour, action, notes}` (action ∈ `drink`/`break`/`sedentary`/`emotional`). HAL no longer hosts wellbeing endpoints.
 
 ### Display (GC9A01 1.28" round LCD)
 
@@ -238,7 +238,7 @@ Lamp Server (Go):
 {"status": 0, "data": null, "message": "error"}  // failure
 ```
 
-LeLamp (Python): FastAPI standard JSON responses.
+HAL (Python): FastAPI standard JSON responses.
 
 ## Startup
 

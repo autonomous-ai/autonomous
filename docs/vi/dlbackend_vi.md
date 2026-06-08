@@ -7,12 +7,12 @@ Dịch vụ backend tăng tốc GPU cho:
 - phát hiện người tùy chọn cho tiền xử lý nhận dạng hành động (YOLO12),
 - đăng ký/nhận dạng người nói qua HTTP APIs (AudioRecognizer).
 
-LeLamp Pi truyền camera frame đến DL backend để phân tích hành động và cảm xúc, chuyển tiếp WAV cuối phát ngôn cho cảm xúc giọng nói, và client có thể đăng ký/nhận dạng người nói qua các endpoint `/api/dl/audio-recognizer/*` có xác thực.
+Thiết bị truyền camera frame đến DL backend để phân tích hành động và cảm xúc, chuyển tiếp WAV cuối phát ngôn cho cảm xúc giọng nói, và client có thể đăng ký/nhận dạng người nói qua các endpoint `/api/dl/audio-recognizer/*` có xác thực.
 
 ## Kiến trúc
 
 ```
-Pi (LeLamp) / Clients             Load Balancer (:7999)      DL Backend (nginx :8888 → uvicorn :8001)
+Device (HAL) / Clients             Load Balancer (:7999)      DL Backend (nginx :8888 → uvicorn :8001)
 ┌──────────────────────┐         ┌─────────────────┐        ┌──────────────────────────────────────┐
 │ Camera 640x480       │ WS/HTTP │ RSA+AES-GCM     │  HTTP  │ /api/dl/action-analysis/ws            │
 │ frame_b64 every tick │────────→│ decrypt/encrypt  │───────→│ Action model (X3D/UniformerV2) ONNX  │
@@ -55,7 +55,7 @@ Chọn qua biến `EMOTION_RECOGNITION_MODEL`:
 | **EmoNet-8** | `emonet_8` | `emonet_8.onnx` | 256×256 | 8 cảm xúc + valence + arousal |
 | **EmoNet-5** | `emonet_5` | `emonet_5.onnx` | 256×256 | 5 cảm xúc + valence + arousal |
 
-Phát hiện khuôn mặt cho cảm xúc dùng **YuNet** (`face_detection_yunet_2023mar.onnx`). Tách biệt với InsightFace của LeLamp (dùng cho nhận dạng danh tính trên thiết bị).
+Phát hiện khuôn mặt cho cảm xúc dùng **YuNet** (`face_detection_yunet_2023mar.onnx`). Tách biệt với InsightFace của HAL (dùng cho nhận dạng danh tính trên thiết bị).
 
 ### Nhận dạng Cảm xúc Giọng nói (SER)
 
@@ -204,7 +204,7 @@ DL_API_KEY=<shared secret>
 LELAMP_MOTION_ENABLED=true
 ```
 
-### Ngưỡng (lelamp/config.py)
+### Ngưỡng (os/hal/config.py)
 
 | Tham số | Mặc định | Mục đích |
 |---|---|---|
@@ -228,7 +228,7 @@ Mã hóa hybrid tùy chọn được xử lý tại tầng **load balancer**. DL
 ### Kiến trúc
 
 ```
-LeLamp (client)                          Load Balancer (:7999)                    DL Server (:8001)
+HAL (client)                             Load Balancer (:7999)                    DL Server (:8001)
 ┌──────────────┐   traffic mã hóa      ┌──────────────────────┐   plaintext     ┌──────────────┐
 │ CryptoSession │ ────────────────────→ │ RSAAESCrypto         │ ─────────────→  │ FastAPI       │
 │ (AES-256-GCM) │ ←──────────────────── │ giải mã → chuyển tiếp│ ←─────────────  │ (không crypto)│
@@ -252,7 +252,7 @@ GET /api/crypto/public-key
 → 404 nếu crypto bị tắt
 ```
 
-LeLamp lấy key này khi khởi động để mã hóa session keys. Hoặc có thể load từ file PEM local qua biến `DL_PUBLIC_KEY_FILE` (bỏ qua việc fetch).
+HAL lấy key này khi khởi động để mã hóa session keys. Hoặc có thể load từ file PEM local qua biến `DL_PUBLIC_KEY_FILE` (bỏ qua việc fetch).
 
 ### Mã hóa HTTP
 
@@ -309,7 +309,7 @@ Nếu bỏ qua trao đổi khóa và `CRYPTO__REQUIRE_ENCRYPTION=false`, message
 | `CRYPTO__KEY_SIZE` | `2048` | Kích thước RSA key (bits) |
 | `CRYPTO__REQUIRE_ENCRYPTION` | `false` | Từ chối request plaintext |
 
-#### LeLamp Client (lelamp/.env)
+#### HAL Client (os/hal/.env)
 
 | Biến | Mặc định | Mô tả |
 |---|---|---|
@@ -365,9 +365,9 @@ docker run --gpus all -p 8888:8888 dlbackend
 | `src/lbserver/app.py` | Load balancer — round-robin HTTP/WS proxy với mã hóa |
 | `src/lbserver/models.py` | Pydantic wire-format models (`CipherHTTPRequest`, `WSCipherMessage`, v.v.) |
 | `src/lbserver/utils/crypto.py` | Helper giải mã/mã hóa HTTP cho LB proxy |
-| `nginx.conf` | Reverse proxy :8888 → :8001, strip prefix `/lelamp/`, WS upgrade |
+| `nginx.conf` | Reverse proxy :8888 → :8001, strip prefix `/lelamp/` (URL path), WS upgrade |
 
-### lelamp/ (phía Pi)
+### os/hal/ (phía thiết bị)
 
 | File | Mục đích |
 |---|---|
@@ -386,4 +386,4 @@ docker run --gpus all -p 8888:8888 dlbackend
 └── /lelamp/       → 127.0.0.1:8001  (strip prefix /lelamp/, bật WS upgrade)
 ```
 
-Tất cả traffic LeLamp đi qua `/lelamp/` → port 8001 (FastAPI). Routes có prefix `/api/dl/` trên FastAPI.
+Tất cả traffic thiết bị đi qua `/lelamp/` → port 8001 (FastAPI). Routes có prefix `/api/dl/` trên FastAPI.

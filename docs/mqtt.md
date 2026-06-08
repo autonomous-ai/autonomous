@@ -209,7 +209,7 @@ falls back to its zero value on failure.
 `system.version` returns just the `versions` block as `data`; `system.network`
 returns just the `network` block. Version probes: `lamp` from the ldflags build
 var, `bootstrap` via `bootstrap-server --version`, `lelamp` over HTTP from the
-local LeLamp `/version` endpoint, `openclaw` from the agent monitor's cached probe
+local HAL `/version` endpoint, `openclaw` from the agent monitor's cached probe
 (`openclaw_detected` distinguishes "not installed" from "installed but unparseable").
 
 An unrecognized `kind` replies with `status:"failure"` and `error:"unknown kind: <kind>"`.
@@ -247,22 +247,22 @@ Handled by bootstrap worker, not through MQTT handler directly.
 
 | File | Role |
 |------|------|
-| `lamp/lib/mqtt/client.go` | MQTT client (connect, subscribe, publish) |
-| `lamp/lib/mqtt/config.go` | Config struct |
-| `lamp/lib/mqtt/options.go` | Connection options |
-| `lamp/lib/mqtt/factory.go` | Factory to create client with unique ID |
-| `lamp/server/device/delivery/mqtt/handler.go` | Command dispatcher |
-| `lamp/server/device/delivery/mqtt/info_handler.go` | Handle `info` command |
-| `lamp/server/device/delivery/mqtt/add_channel_hander.go` | Handle `add_channel` command (streams pairing events for WhatsApp) |
-| `lamp/server/device/delivery/mqtt/slack_event_handler.go` | Handle `slack_event` command (forwards Slack HTTP-mode events to local gateway) |
-| `lamp/server/device/delivery/mqtt/data_handler.go` | Handle `data` command kinds `oauth.set`/`oauth.remove` (+ access-token store) |
-| `lamp/server/device/delivery/mqtt/connector_handler.go` | Handle `connector.set.<code>`/`connector.remove.<code>` (async, writer dispatch) |
-| `lamp/server/device/delivery/mqtt/connector_writer.go` | `ConnectorWriter` interface, writer registry, generic `connectors.json` writer, shared file helpers |
-| `lamp/server/device/delivery/mqtt/mcp_connector_writer.go` | Remote-MCP connector writer (`notion`/`figma`/…): token file + `openclaw.json` MCP entry |
-| `lamp/server/device/delivery/mqtt/oauth_connector_writer.go` | Google OAuth connector writer (`gmail`/`google_calendar`/`google_drive`): token file only, no MCP entry |
-| `lamp/server/device/delivery/mqtt/connector_refresh.go` | Connector token refresh loop (`/connector/refresh-token`) |
-| `lamp/server/device/delivery/mqtt/system_info_handler.go` | Handle `data` kinds `system.info`/`system.version`/`system.network` |
-| `lamp/server/device/delivery/mqtt/whatsapp_pair_handler.go` | Handle `whatsapp_pair` re-pair command |
-| `lamp/internal/openclaw/pairing.go` | WhatsApp Baileys QR pairing subprocess driver |
-| `lamp/domain/device.go` | MQTTMessage, command constants |
-| `lamp/domain/pairing.go` | PairingEvent + status enum |
+| `os/services/lib/mqtt/client.go` | MQTT client (connect, subscribe, publish) |
+| `os/services/lib/mqtt/config.go` | Config struct |
+| `os/services/lib/mqtt/options.go` | Connection options |
+| `os/services/lib/mqtt/factory.go` | Factory to create client with unique ID |
+| `os/services/server/device/delivery/mqtt/handler.go` | Command dispatcher |
+| `os/services/server/device/delivery/mqtt/info_handler.go` | Handle `info` command |
+| `os/services/server/device/delivery/mqtt/add_channel_hander.go` | Handle `add_channel` command (streams pairing events for WhatsApp) |
+| `os/services/server/device/delivery/mqtt/slack_event_handler.go` | Handle `slack_event` command (forwards Slack HTTP-mode events to local gateway) |
+| `os/services/server/device/delivery/mqtt/data_handler.go` | Handle `data` command kinds `oauth.set`/`oauth.remove` (+ access-token store) |
+| `os/services/server/device/delivery/mqtt/connector_handler.go` | Handle `connector.set.<code>`/`connector.remove.<code>` (async, writer dispatch) |
+| `os/services/server/device/delivery/mqtt/connector_writer.go` | `ConnectorWriter` interface, writer registry, generic `connectors.json` writer, shared file helpers |
+| `os/services/server/device/delivery/mqtt/mcp_connector_writer.go` | Remote-MCP connector writer (`notion`/`figma`/…): token file + `openclaw.json` MCP entry |
+| `os/services/server/device/delivery/mqtt/oauth_connector_writer.go` | Google OAuth connector writer (`gmail`/`google_calendar`/`google_drive`): token file only, no MCP entry |
+| `os/services/server/device/delivery/mqtt/connector_refresh.go` | Connector token refresh loop (`/connector/refresh-token`) |
+| `os/services/server/device/delivery/mqtt/system_info_handler.go` | Handle `data` kinds `system.info`/`system.version`/`system.network` |
+| `os/services/server/device/delivery/mqtt/whatsapp_pair_handler.go` | Handle `whatsapp_pair` re-pair command |
+| `os/services/internal/openclaw/pairing.go` | WhatsApp Baileys QR pairing subprocess driver |
+| `os/services/domain/device.go` | MQTTMessage, command constants |
+| `os/services/domain/pairing.go` | PairingEvent + status enum |

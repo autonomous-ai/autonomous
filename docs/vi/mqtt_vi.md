@@ -207,7 +207,7 @@ probe lỗi sẽ rơi về zero value của nó.
 
 `system.version` chỉ trả về block `versions` trong `data`; `system.network` chỉ trả
 về block `network`. Cách probe version: `lamp` từ biến ldflags lúc build, `bootstrap`
-qua `bootstrap-server --version`, `lelamp` qua HTTP từ endpoint `/version` của LeLamp
+qua `bootstrap-server --version`, `lelamp` qua HTTP từ endpoint `/version` của HAL
 local, `openclaw` từ probe cache của agent monitor (`openclaw_detected` phân biệt
 "chưa cài" với "đã cài nhưng không parse được").
 
@@ -246,22 +246,22 @@ Xử lý bởi bootstrap worker, không qua MQTT handler trực tiếp.
 
 | File | Vai trò |
 |------|---------|
-| `lamp/lib/mqtt/client.go` | MQTT client (connect, subscribe, publish) |
-| `lamp/lib/mqtt/config.go` | Config struct |
-| `lamp/lib/mqtt/options.go` | Connection options |
-| `lamp/lib/mqtt/factory.go` | Factory tạo client với unique ID |
-| `lamp/server/device/delivery/mqtt/handler.go` | Command dispatcher |
-| `lamp/server/device/delivery/mqtt/info_handler.go` | Handle `info` command |
-| `lamp/server/device/delivery/mqtt/add_channel_hander.go` | Handle `add_channel` command (stream pairing events cho WhatsApp) |
-| `lamp/server/device/delivery/mqtt/slack_event_handler.go` | Handle `slack_event` command (forward Slack HTTP-mode events tới gateway local) |
-| `lamp/server/device/delivery/mqtt/data_handler.go` | Handle `data` command kinds `oauth.set`/`oauth.remove` (+ access-token store) |
-| `lamp/server/device/delivery/mqtt/connector_handler.go` | Handle `connector.set.<code>`/`connector.remove.<code>` (bất đồng bộ, dispatch writer) |
-| `lamp/server/device/delivery/mqtt/connector_writer.go` | Interface `ConnectorWriter`, registry writer, writer `connectors.json` chung, file helpers dùng chung |
-| `lamp/server/device/delivery/mqtt/mcp_connector_writer.go` | Writer connector remote-MCP (`notion`/`figma`/…): token file + entry MCP trong `openclaw.json` |
-| `lamp/server/device/delivery/mqtt/oauth_connector_writer.go` | Writer Google OAuth connector (`gmail`/`google_calendar`/`google_drive`): chỉ token file, không entry MCP |
-| `lamp/server/device/delivery/mqtt/connector_refresh.go` | Loop refresh token connector (`/connector/refresh-token`) |
-| `lamp/server/device/delivery/mqtt/system_info_handler.go` | Handle `data` kinds `system.info`/`system.version`/`system.network` |
-| `lamp/server/device/delivery/mqtt/whatsapp_pair_handler.go` | Handle `whatsapp_pair` re-pair command |
-| `lamp/internal/openclaw/pairing.go` | WhatsApp Baileys QR pairing subprocess driver |
-| `lamp/domain/device.go` | MQTTMessage, command constants |
-| `lamp/domain/pairing.go` | PairingEvent + status enum |
+| `os/services/lib/mqtt/client.go` | MQTT client (connect, subscribe, publish) |
+| `os/services/lib/mqtt/config.go` | Config struct |
+| `os/services/lib/mqtt/options.go` | Connection options |
+| `os/services/lib/mqtt/factory.go` | Factory tạo client với unique ID |
+| `os/services/server/device/delivery/mqtt/handler.go` | Command dispatcher |
+| `os/services/server/device/delivery/mqtt/info_handler.go` | Handle `info` command |
+| `os/services/server/device/delivery/mqtt/add_channel_hander.go` | Handle `add_channel` command (stream pairing events cho WhatsApp) |
+| `os/services/server/device/delivery/mqtt/slack_event_handler.go` | Handle `slack_event` command (forward Slack HTTP-mode events tới gateway local) |
+| `os/services/server/device/delivery/mqtt/data_handler.go` | Handle `data` command kinds `oauth.set`/`oauth.remove` (+ access-token store) |
+| `os/services/server/device/delivery/mqtt/connector_handler.go` | Handle `connector.set.<code>`/`connector.remove.<code>` (bất đồng bộ, dispatch writer) |
+| `os/services/server/device/delivery/mqtt/connector_writer.go` | Interface `ConnectorWriter`, registry writer, writer `connectors.json` chung, file helpers dùng chung |
+| `os/services/server/device/delivery/mqtt/mcp_connector_writer.go` | Writer connector remote-MCP (`notion`/`figma`/…): token file + entry MCP trong `openclaw.json` |
+| `os/services/server/device/delivery/mqtt/oauth_connector_writer.go` | Writer Google OAuth connector (`gmail`/`google_calendar`/`google_drive`): chỉ token file, không entry MCP |
+| `os/services/server/device/delivery/mqtt/connector_refresh.go` | Loop refresh token connector (`/connector/refresh-token`) |
+| `os/services/server/device/delivery/mqtt/system_info_handler.go` | Handle `data` kinds `system.info`/`system.version`/`system.network` |
+| `os/services/server/device/delivery/mqtt/whatsapp_pair_handler.go` | Handle `whatsapp_pair` re-pair command |
+| `os/services/internal/openclaw/pairing.go` | WhatsApp Baileys QR pairing subprocess driver |
+| `os/services/domain/device.go` | MQTTMessage, command constants |
+| `os/services/domain/pairing.go` | PairingEvent + status enum |

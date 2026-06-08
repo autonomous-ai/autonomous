@@ -7,7 +7,7 @@ The Flow Monitor is an observability layer for tracking agent turns end-to-end. 
 ## Architecture
 
 ```
-LeLamp (Python)                    Lamp Server (Go)                     Web UI (React)
+HAL (Python)                       Lamp Server (Go)                     Web UI (React)
   sensing event ──POST──→ SensingHandler ──flow.Start/End──→ JSONL file
                             │                                    ↓
                             └─ agentGateway.SendChat ──→ OpenClaw (WS)
@@ -16,7 +16,7 @@ LeLamp (Python)                    Lamp Server (Go)                     Web UI (
                             │
                             ├─ flow.Log("lifecycle_*") ──→ JSONL file ──→ /flow-stream (SSE)
                             ├─ flow.Log("tool_call")                         ↓
-                            ├─ flow.Log("tts_send")                    lamp/web/.../Monitor.tsx
+                            ├─ flow.Log("tts_send")                    os/services/web/.../Monitor.tsx
                             └─ monitorBus.Push() ──→ /openclaw/events (SSE)  └─ groupIntoTurns()
 ```
 
@@ -131,12 +131,12 @@ Structured `slog.Info` lines for end-to-end ID alignment (device idempotency key
 
 ## Turn Pipeline (SVG `FlowDiagram`)
 
-Rendered by `FlowDiagram` in `lamp/web/src/pages/Monitor.tsx`. The diagram is **observational only** (zoom/pan, node highlights from recent events). Three **tinted cluster** regions group nodes:
+Rendered by `FlowDiagram` in `os/services/web/src/pages/Monitor.tsx`. The diagram is **observational only** (zoom/pan, node highlights from recent events). Three **tinted cluster** regions group nodes:
 
 | Region | Color (theme) | Stages |
 |--------|----------------|--------|
 | **Lamp Server** | Teal (`--lm-teal`) | `intent_check`, `local_match`, `schedule_trigger`, `lamp_gate` |
-| **LeLamp** | Amber (`--lm-amber`) | `mic_input`, `cam_input`, `hw_emotion`, `hw_led`, `hw_servo`, `tts_speak` |
+| **HAL** | Amber (`--lm-amber`) | `mic_input`, `cam_input`, `hw_emotion`, `hw_led`, `hw_servo`, `tts_speak` |
 | **OpenClaw** | Blue (`--lm-blue`) | `agent_call`, `telegram_input`, `tool_exec`, `agent_thinking`, `agent_response`, `tg_out` |
 
 ### Lamp Server (top band)
@@ -145,9 +145,9 @@ Rendered by `FlowDiagram` in `lamp/web/src/pages/Monitor.tsx`. The diagram is **
 - **Cron** (`schedule_trigger`) is a **Lamp** stage (timer owned by Lamp, not OpenClaw). It shares the **same top `y`** as Intent / Local but uses **`x` aligned with `agent_call`** so Cron → Agent reads as a **vertical column** in the SVG.
 - Cron is **not** inside the OpenClaw cluster; only the shared `x` is for layout.
 
-### LeLamp (left column)
+### HAL (left column)
 
-- **MIC** and **CAM** are input nodes (top of LeLamp section).
+- **MIC** and **CAM** are input nodes (top of HAL section).
 - Output nodes are stacked vertically in a single column:
   - **EMO** (`hw_emotion`) — `/emotion` calls (coordinated LED + servo + display eyes)
   - **LED** (`hw_led`) — `/led/solid`, `/led/effect`, `/scene`, `/led/off`
@@ -197,13 +197,13 @@ Values are the **node center** `(x, y)` in the SVG view box (see `positions` in 
 | `intent_check` | `(80, 50)` | Lamp top |
 | `local_match` | `(200, 50)` | Lamp top |
 | `schedule_trigger` | `(800, 50)` | Lamp top; `x` = Agent column |
-| `lamp_gate` | `(400, 570)` | Lamp; between LeLamp and OpenClaw |
-| `mic_input` | `(-40, 240)` | LeLamp input |
-| `cam_input` | `(80, 240)` | LeLamp input |
-| `hw_emotion` | `(200, 390)` | LeLamp output; emotion calls |
-| `hw_led` | `(200, 510)` | LeLamp output; LED control |
-| `hw_servo` | `(200, 630)` | LeLamp output; servo motor |
-| `tts_speak` | `(200, 750)` | LeLamp output; TTS |
+| `lamp_gate` | `(400, 570)` | Lamp; between HAL and OpenClaw |
+| `mic_input` | `(-40, 240)` | HAL input |
+| `cam_input` | `(80, 240)` | HAL input |
+| `hw_emotion` | `(200, 390)` | HAL output; emotion calls |
+| `hw_led` | `(200, 510)` | HAL output; LED control |
+| `hw_servo` | `(200, 630)` | HAL output; servo motor |
+| `tts_speak` | `(200, 750)` | HAL output; TTS |
 | `agent_call` | `(800, 240)` | OpenClaw row 1 |
 | `telegram_input` | `(1000, 240)` | OpenClaw row 1 |
 | `tool_exec` | `(600, 390)` | OpenClaw row 2, col 1 |
@@ -219,14 +219,14 @@ cam_input → intent_check → agent_call
 schedule_trigger → agent_call
 telegram_input → agent_call
 agent_call → [Event Pipeline rect — thinking/assistant/tool rows] → agent_response
-tool_exec → hw_emotion         (OpenClaw /emotion call → LeLamp)
-tool_exec → hw_led             (OpenClaw /led/* or /scene call → LeLamp)
-tool_exec → hw_servo           (OpenClaw /servo/* call → LeLamp)
+tool_exec → hw_emotion         (OpenClaw /emotion call → HAL)
+tool_exec → hw_led             (OpenClaw /led/* or /scene call → HAL)
+tool_exec → hw_servo           (OpenClaw /servo/* call → HAL)
 tool_exec → lamp_gate          (Lamp listens: suppress TTS if music, pause ambient if LED)
 agent_response → lamp_gate     (Lamp accumulates assistant text for TTS)
-agent_response → tts_speak     (Direct TTS from response)
+agent_response → tts_speak     (Direct TTS from response to HAL)
 agent_response → tg_out        (Telegram/Slack output)
-lamp_gate → tts_speak          (Gate passes if not suppressed → LeLamp TTS)
+lamp_gate → tts_speak          (Gate passes if not suppressed → HAL TTS)
 ```
 
 **Elbow routing**: Edges from `local_match` to output nodes (hw_emotion, hw_led, hw_servo, tts_speak) use elbow paths routed to the **left** of the output column to avoid crossing intermediate nodes.
@@ -236,7 +236,7 @@ lamp_gate → tts_speak          (Gate passes if not suppressed → LeLamp TTS)
 Node info extracted from turn events:
 - `sensing_input` → Sensing node (type + message). Detail: `{ type }`.
 - `chat_send` → outbound `chat.send` from Lamp. Detail: `{ type, run_id, has_session, has_image, image_bytes, message }`. `type` is `"user"` for real user / sensing-driven input, or `"system"` for internal notifications (skill watcher, wake greeting). The WS RPC payload sent to OpenClaw is identical in both cases — `type` only labels the flow event so the UI can distinguish them. Auto-compact does **not** emit a `chat_send`; it calls the `sessions.compact` RPC directly via `CompactSession`.
-- `sound_tracker` → pushed by LeLamp Python directly via `POST /api/monitor/event`. Appears alongside `sensing_input` turns to show escalation state:
+- `sound_tracker` → pushed by HAL Python directly via `POST /api/monitor/event`. Appears alongside `sensing_input` turns to show escalation state:
   - `{ action: "silent", occurrence: 1 }` — forwarded, agent stays silent
   - `{ action: "persistent", occurrence: 3 }` — forwarded, agent will speak
   - `{ action: "drop" }` — dropped by dedup or suppression window
@@ -249,7 +249,7 @@ Node info extracted from turn events:
   lamp_gate) anchor at the pipeline's right edge.
 - `lifecycle_end` → Response node + final row in the Event Pipeline.
 - `tts_send` → TTS Speak + Output nodes (text from `detail.data.text`)
-- `tts_suppressed` → 🔇 marker in Lamp gate column. `data.reason` discriminates: `channel_run` (real Telegram user turn — detected by `tg-` runID prefix synthesised in the `session.message` handler, or `channelRuns` map mark from chat.history fallback; reply fans out via OpenClaw session instead of the lamp speaker), `music_playing` (audio shares the speaker), `already_spoken` (built-in tts tool already routed), `web_chat` (Flow Monitor chat — reply shown in web UI only). Emitted *instead of* `tts_send` when the actual `SendToLeLampTTS` call is skipped — prevents the UI from misleadingly claiming TTS happened. Classifier uses positive evidence only: UUID runs from OpenClaw steer-mode self-fire, cron fires, and heartbeats are NOT `channel_run` and DO speak on the lamp.
+- `tts_suppressed` → 🔇 marker in Lamp gate column. `data.reason` discriminates: `channel_run` (real Telegram user turn — detected by `tg-` runID prefix synthesised in the `session.message` handler, or `channelRuns` map mark from chat.history fallback; reply fans out via OpenClaw session instead of the lamp speaker), `music_playing` (audio shares the speaker), `already_spoken` (built-in tts tool already routed), `web_chat` (Flow Monitor chat — reply shown in web UI only). Emitted *instead of* `tts_send` when the actual `SendToHalTTS` call is skipped — prevents the UI from misleadingly claiming TTS happened. Classifier uses positive evidence only: UUID runs from OpenClaw steer-mode self-fire, cron fires, and heartbeats are NOT `channel_run` and DO speak on the lamp.
 - `token_usage` → Response node (token counts).
 
 ### NO_REPLY suppression
@@ -296,7 +296,7 @@ N events
 - **⚡ TTFT** (time-to-first-token): `turn.startTime → first thinking/assistant_delta`. Matches the chat page Lamp-bubble stamp — the moment the user *sees* a reply begin. Gap between ⚡ and ⏱ = tail streaming + lifecycle close. Green ≤3s, amber ≤8s, red >8s. Hidden when no LLM stream (e.g., local intent match).
 - **Snapshot strip**: extracted from `[snapshot:]` markers in `sensing_input`. For `motion.activity` with a pose bucket, the strip is capped at 3 tiles (the activity snapshot + two worst pose snapshots). Clicking a tile opens the inline lightbox.
 - **Pose bucket popup**: when `[pose_bucket:]` is present, a `LOAD MORE` button surfaces `PoseBucketModal`, which fetches `/api/hardware/sensing/pose-bucket/<id>` (proxied to lelamp) and renders the full per-sample table — same monospace grid + click-thumbnail-to-lightbox as the live Sensing tab. Rows whose filename is in `worst_snapshots` are highlighted (red border, ⭐).
-- **Debug audio clip** (`speech_emotion.detected`): a click-to-play `<audio controls>` player labeled `🎙 debug` is rendered for each audio URL, so you can listen to the exact clip that produced the detected emotion. The clip's on-Pi path arrives as the optional `audio` field in the `POST /api/sensing/event` body. `lamp/server/sensing/delivery/http/handler.go` converts the path's basename into a servable URL (`audioURLForPath` → `/api/sensing/audio/<file>.wav`) and stores it in the monitor event `Detail` under key `audio` — **only the basename URL, never the raw path**. The frontend `turnIO()` (`helpers.ts`) pulls these into `audioUrls` from the `sensing_input` event's `detail.audio`; `TurnBadge.tsx` renders the players. **This is a DEBUG-ONLY affordance — the audio is NEVER sent to the LLM.** The path lives in a separate JSON field, never in the chat message text, so it is naturally excluded from what the agent sees — mirroring how `motion.activity` snapshots are surfaced in the UI but stripped before the LLM.
+- **Debug audio clip** (`speech_emotion.detected`): a click-to-play `<audio controls>` player labeled `🎙 debug` is rendered for each audio URL, so you can listen to the exact clip that produced the detected emotion. The clip's on-Pi path arrives as the optional `audio` field in the `POST /api/sensing/event` body. `os/services/server/sensing/delivery/http/handler.go` converts the path's basename into a servable URL (`audioURLForPath` → `/api/sensing/audio/<file>.wav`) and stores it in the monitor event `Detail` under key `audio` — **only the basename URL, never the raw path**. The frontend `turnIO()` (`helpers.ts`) pulls these into `audioUrls` from the `sensing_input` event's `detail.audio`; `TurnBadge.tsx` renders the players. **This is a DEBUG-ONLY affordance — the audio is NEVER sent to the LLM.** The path lives in a separate JSON field, never in the chat message text, so it is naturally excluded from what the agent sees — mirroring how `motion.activity` snapshots are surfaced in the UI but stripped before the LLM.
   - **Route**: `GET /api/sensing/audio/:name` (`SensingHandler.GetAudio`) serves the `.wav` by basename from `/var/lib/lelamp/speech-emotion` or `/tmp/lamp-speech-emotion`, with strict basename validation — the name must end in `.wav` and contain no `/`, `\`, or `..` (otherwise `404`).
 
 The two badges are meant to be read together: ⚡ is *perceived* latency (what the user feels), ⏱ is *server* latency (what ops sees). Big gap = lots of tail streaming; small gap = short reply or fast lifecycle close.
@@ -334,10 +334,10 @@ WebSocket reconnects cause process-level restarts (seq counter resets). This is 
 - **Impact**: Trace lost mid-turn, events split across restarts.
 - **Mitigation**: Per-event runID + frontend stitching handles most cases.
 
-### 6. OpenClaw built-in `tts` tool bypasses LeLamp speaker (FIXED)
-Agent called OpenClaw's built-in `tts` tool instead of responding with assistant text. OpenClaw generated audio server-side (`"Generated audio reply."`) but never routed it to the physical speaker (`/voice/speak` on LeLamp). Agent then returned `NO_REPLY`, so Lamp had no assistant text to flush → silent.
-- **Root cause**: OpenClaw provides a built-in `tts` tool when `tools.profile = "full"`. The sensing SKILL.md instructed the agent to call `/voice/speak`, which the agent mapped to the built-in `tts` tool instead of using `curl` to LeLamp.
-- **Fix**: (1) Deny OpenClaw built-in `tts` tool via `tools.deny: ["tts"]` in config (`service.go`). `tools.disabled` is NOT a valid OpenClaw key — use `tools.deny` (deny wins over `tools.profile`). (2) Intercept fallback in handler.go: if agent still calls `tts` tool, extract text and route to `SendToLeLampTTS()`. (3) Updated sensing SKILL.md and SOUL.md to instruct the agent to respond with plain text — Lamp's assistant-delta accumulation pipeline routes it to LeLamp TTS automatically.
+### 6. OpenClaw built-in `tts` tool bypasses HAL speaker (FIXED)
+Agent called OpenClaw's built-in `tts` tool instead of responding with assistant text. OpenClaw generated audio server-side (`"Generated audio reply."`) but never routed it to the physical speaker (`/voice/speak` on HAL). Agent then returned `NO_REPLY`, so Lamp had no assistant text to flush → silent.
+- **Root cause**: OpenClaw provides a built-in `tts` tool when `tools.profile = "full"`. The sensing SKILL.md instructed the agent to call `/voice/speak`, which the agent mapped to the built-in `tts` tool instead of using `curl` to HAL.
+- **Fix**: (1) Deny OpenClaw built-in `tts` tool via `tools.deny: ["tts"]` in config (`service.go`). `tools.disabled` is NOT a valid OpenClaw key — use `tools.deny` (deny wins over `tools.profile`). (2) Intercept fallback in handler.go: if agent still calls `tts` tool, extract text and route to `SendToHalTTS()`. (3) Updated sensing SKILL.md and SOUL.md to instruct the agent to respond with plain text — Lamp's assistant-delta accumulation pipeline routes it to HAL TTS automatically.
 - **Status**: Fixed in v0.0.138.
 
 ### 7. OpenClaw tool-call visibility gap (action without `tool_call`)
@@ -375,7 +375,7 @@ The OpenClaw agent session auto-compacts when context tokens cross ~80k. Every c
 }
 ```
 
-Use when Lamp cites rules that cannot be found in any `lamp/resources/openclaw-skills/**/SKILL.md` — the source is almost always the compaction summary, not the loaded skill. Handler: `lamp/server/openclaw/delivery/sse/handler_api_compaction.go`.
+Use when Lamp cites rules that cannot be found in any `skills/**/SKILL.md` — the source is almost always the compaction summary, not the loaded skill. Handler: `os/services/server/openclaw/delivery/sse/handler_api_compaction.go`.
 
 ## Turns list vs downloaded log
 
@@ -391,10 +391,10 @@ Turns now show every turn derivable from the fetched events. Comparing server to
 
 | File | Role |
 |---|---|
-| `lamp/lib/flow/flow.go` | Flow event emission, JSONL persistence, per-event runID API |
-| `lamp/server/sensing/delivery/http/handler.go` | Sensing input → flow.Start/End with runID |
-| `lamp/server/openclaw/delivery/sse/handler.go` | Agent events → flow.Log with payload.RunID, turn detection |
-| `lamp/internal/openclaw/service.go` | sendChat returns idempotencyKey as runID |
-| `lamp/web/src/pages/Monitor.tsx` | `groupIntoTurns`, `turnIO`, `extractNodeInfo`, `FlowDiagram` |
+| `os/services/lib/flow/flow.go` | Flow event emission, JSONL persistence, per-event runID API |
+| `os/services/server/sensing/delivery/http/handler.go` | Sensing input → flow.Start/End with runID |
+| `os/services/server/openclaw/delivery/sse/handler.go` | Agent events → flow.Log with payload.RunID, turn detection |
+| `os/services/internal/openclaw/service.go` | sendChat returns idempotencyKey as runID |
+| `os/services/web/src/pages/Monitor.tsx` | `groupIntoTurns`, `turnIO`, `extractNodeInfo`, `FlowDiagram` |
 
 Vietnamese summary: `docs/vi/flow-monitor_vi.md`.

@@ -1,8 +1,8 @@
-# Bootstrap & OTA System — AI Lamp
+# Bootstrap & OTA System
 
 ## 1. Overview
 
-The AI Lamp device runs **5 software components** on a Raspberry Pi 4. All components are installed via an initial setup script and kept up-to-date by a background OTA worker.
+The device runs **5 software components** on a supported board (Raspberry Pi 4, Pi 5, or OrangePi). All components are installed via an initial setup script and kept up-to-date by a background OTA worker.
 
 | Component | Type | Install Method | Service Name | Install Path |
 |---|---|---|---|---|
@@ -10,7 +10,7 @@ The AI Lamp device runs **5 software components** on a Raspberry Pi 4. All compo
 | **Bootstrap Server** | Go binary (ARM64) | Download zip from OTA | `bootstrap.service` | `/usr/local/bin/bootstrap-server` |
 | **Web (Setup SPA)** | React/Vite bundle | Download zip from OTA | nginx serves static | `/usr/share/nginx/html/setup/` |
 | **OpenClaw** | Node.js package | `npm install -g` | `openclaw.service` | Global npm |
-| **LeLamp Runtime** | Python package | Download zip from OTA | `lamp-lelamp.service` | `/opt/lelamp/` |
+| **HAL** | Python package | Download zip from OTA | `lamp-hal.service` | `/opt/hal/` |
 
 ### Architecture Diagram
 
@@ -22,7 +22,7 @@ The AI Lamp device runs **5 software components** on a Raspberry Pi 4. All compo
                     │  bootstrap: {version, url}     │
                     │  web:       {version, url}     │
                     │  openclaw:  {version}          │
-                    │  lelamp:    {version, url}     │
+                    │  hal:       {version, url}     │
                     └───────────────┬────────────────┘
                                     │ poll every 5m
                                     ▼
@@ -66,9 +66,9 @@ Single JSON file hosted on GCS. All components reference this file.
   "openclaw": {
     "version": "2026.5.27"
   },
-  "lelamp": {
+  "hal": {
     "version": "1.0.0",
-    "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/lelamp/1.0.0/lelamp-1.0.0.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/hal/1.0.0/hal-1.0.0.zip"
   }
 }
 ```
@@ -81,7 +81,7 @@ const (
     OTAKeyBootstrap = "bootstrap"
     OTAKeyWeb       = "web"
     OTAKeyOpenClaw  = "openclaw"
-    // OTAKeyLeLamp will be added when LeLamp OTA is implemented
+    // OTAKeyHAL will be added when HAL OTA is implemented
 )
 
 type OTAMetadata map[string]OTAComponent
@@ -114,47 +114,47 @@ curl -fsSL https://cdn.autonomous.ai/lamp/install.sh | sudo bash
 | 1 | Fetch OTA metadata | Download metadata.json, extract versions and URLs |
 | 1b | Install binaries | Download + install lamp-server, bootstrap-server, create systemd services |
 | 2 | Install OpenClaw | `npm install -g openclaw`, create config, create systemd service |
-| **2b** | **Install LeLamp** | **Download + install LeLamp Python runtime, create systemd service** (NEW) |
+| **2b** | **Install HAL** | **Download + install HAL Python runtime, create systemd service** (NEW) |
 | 3 | Setup nginx | Download web bundle, configure reverse proxy + captive portal |
 | 4 | Setup WiFi AP | Configure hostapd, dnsmasq, start AP mode for provisioning |
 
-### Stage 2b: Install LeLamp Runtime (NEW)
+### Stage 2b: Install HAL Runtime (NEW)
 
-This stage installs the LeLamp Python runtime that provides hardware drivers for servos, LEDs, and audio.
+This stage installs the HAL Python runtime that provides hardware drivers for servos, LEDs, and audio.
 
 ```bash
-stage_install_lelamp() {
-    echo "=== Stage 2b: Install LeLamp Runtime ==="
+stage_install_hal() {
+    echo "=== Stage 2b: Install HAL Runtime ==="
 
     # 1. Install Python dependencies
     apt-get install -y python3 python3-pip python3-venv
 
     # 2. Create install directory
-    mkdir -p /opt/lelamp
+    mkdir -p /opt/hal
 
     # 3. Download from OTA metadata
-    LELAMP_URL=$(echo "$OTA_JSON" | jq -r '.lelamp.url')
-    LELAMP_VERSION=$(echo "$OTA_JSON" | jq -r '.lelamp.version')
+    HAL_URL=$(echo "$OTA_JSON" | jq -r '.hal.url')
+    HAL_VERSION=$(echo "$OTA_JSON" | jq -r '.hal.version')
 
-    curl -fsSL "$LELAMP_URL" -o /tmp/lelamp.zip
-    unzip -o /tmp/lelamp.zip -d /opt/lelamp/
-    rm /tmp/lelamp.zip
+    curl -fsSL "$HAL_URL" -o /tmp/hal.zip
+    unzip -o /tmp/hal.zip -d /opt/hal/
+    rm /tmp/hal.zip
 
     # 4. Install Python dependencies in venv
-    python3 -m venv /opt/lelamp/venv
-    /opt/lelamp/venv/bin/pip install -r /opt/lelamp/requirements.txt
+    python3 -m venv /opt/hal/venv
+    /opt/hal/venv/bin/pip install -r /opt/hal/requirements.txt
 
     # 5. Create systemd service
-    cat > /etc/systemd/system/lamp-lelamp.service << 'UNIT'
+    cat > /etc/systemd/system/lamp-hal.service << 'UNIT'
 [Unit]
-Description=LeLamp Python Runtime — Hardware Drivers
+Description=HAL Python Runtime — Hardware Drivers
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/lelamp
-ExecStart=/opt/lelamp/venv/bin/python -m lelamp.server
+WorkingDirectory=/opt/hal
+ExecStart=/opt/hal/venv/bin/python -m hal.server
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -165,10 +165,10 @@ WantedBy=multi-user.target
 UNIT
 
     systemctl daemon-reload
-    systemctl enable lamp-lelamp.service
-    systemctl start lamp-lelamp.service
+    systemctl enable lamp-hal.service
+    systemctl start lamp-hal.service
 
-    echo "LeLamp $LELAMP_VERSION installed at /opt/lelamp/"
+    echo "HAL $HAL_VERSION installed at /opt/hal/"
 }
 ```
 
@@ -179,8 +179,8 @@ UNIT
 | `lamp.service` | `/usr/local/bin/lamp-server` | 5000 | Main HTTP API, always running |
 | `bootstrap.service` | `/usr/local/bin/bootstrap-server` | 8080 | OTA worker, polls for updates. Exposes `POST /force-check` to trigger immediate OTA check |
 | `openclaw.service` | `xvfb-run ... openclaw gateway run` | — | AI brain, memory limit 1500M |
-| `lamp-lelamp.service` | `uvicorn lelamp.server:app --host 127.0.0.1 --port 5001` | 5001 | Hardware drivers (servo, LED, camera, audio) |
-| nginx | `nginx` | 80 | Setup SPA + reverse proxy (`/api/` → Lamp 5000, `/hw/` → LeLamp 5001) |
+| `lamp-hal.service` | `uvicorn hal.server:app --host 127.0.0.1 --port 5001` | 5001 | Hardware drivers (servo, LED, camera, audio) |
+| nginx | `nginx` | 80 | Setup SPA + reverse proxy (`/api/` → Lamp 5000, `/hw/` → HAL 5001) |
 
 ### Service Dependency Order
 
@@ -188,7 +188,7 @@ UNIT
 boot
   → lamp.service      (system layer, LED boot animation)
   → bootstrap.service   (starts polling for updates)
-  → lamp-lelamp.service      (hardware drivers ready)
+  → lamp-hal.service          (hardware drivers ready)
   → openclaw.service    (AI brain, connects to lamp via HTTP)
   → nginx               (web UI for setup)
 ```
@@ -221,7 +221,7 @@ Tracks last known installed version per component:
     "bootstrap": "1.0.5",
     "web": "0.9.0",
     "openclaw": "2026.5.27",
-    "lelamp": "1.0.0"
+    "hal": "1.0.0"
   }
 }
 ```
@@ -236,7 +236,7 @@ checkLoop():
 
 checkOnce():
   1. Fetch OTA metadata JSON
-  2. For each key [lamp, bootstrap, web, lelamp]:
+  2. For each key [lamp, bootstrap, web, hal]:
      → reconcile(key, metadata[key])
   NOTE: OpenClaw OTA is temporarily disabled (reconcileOpenClawFromNpm commented out)
   3. Save state
@@ -253,7 +253,7 @@ reconcile(key, target):
 
 ### OTA LED Feedback
 
-Bootstrap uses `lib/lelamp` to show update status on LEDs. See [status-led.md](status-led.md) for full spec.
+Bootstrap uses `lib/hal` to show update status on LEDs. See [status-led.md](status-led.md) for full spec.
 
 | Phase | LED |
 |-------|-----|
@@ -269,7 +269,7 @@ Bootstrap uses `lib/lelamp` to show update status on LEDs. See [status-led.md](s
 | `bootstrap` | Compiled-in constant `config.BootstrapVersion` (ldflags) |
 | `web` | Read file `/usr/share/nginx/html/setup/VERSION` |
 | `openclaw` | Run `openclaw --version`, extract semver with regex |
-| `lelamp` | Run `/opt/lelamp/venv/bin/python -m lelamp --version` OR read `/opt/lelamp/VERSION` file |
+| `hal` | Run `/opt/hal/venv/bin/python -m hal --version` OR read `/opt/hal/VERSION` file |
 
 ### Update Application Per Component
 
@@ -279,7 +279,7 @@ Bootstrap uses `lib/lelamp` to show update status on LEDs. See [status-led.md](s
 | `bootstrap` | Spawn detached `software-update bootstrap` (self-update, survives restart) |
 | `web` | Run `software-update web` |
 | `openclaw` | ~~Run `npm install -g openclaw@{version}` → `systemctl restart openclaw`~~ (temporarily disabled) |
-| `lelamp` | Run `software-update lelamp` → `systemctl restart lamp-lelamp` |
+| `hal` | Run `software-update hal` → `systemctl restart lamp-hal` |
 
 ---
 
@@ -287,45 +287,45 @@ Bootstrap uses `lib/lelamp` to show update status on LEDs. See [status-led.md](s
 
 Bash script installed by setup.sh. Called by bootstrap worker to apply updates.
 
-### LeLamp Case (NEW)
+### HAL Case (NEW)
 
 ```bash
-"lelamp")
-    echo "Updating LeLamp to $VERSION..."
+"hal")
+    echo "Updating HAL to $VERSION..."
 
     # Download
-    curl -fsSL "$URL" -o /tmp/lelamp-update.zip
+    curl -fsSL "$URL" -o /tmp/hal-update.zip
 
     # Stop service before updating
-    systemctl stop lamp-lelamp.service
+    systemctl stop lamp-hal.service
 
     # Backup current
-    cp -r /opt/lelamp /opt/lelamp.bak 2>/dev/null || true
+    cp -r /opt/hal /opt/hal.bak 2>/dev/null || true
 
     # Extract (preserve venv if only code changed, or rebuild)
-    unzip -o /tmp/lelamp-update.zip -d /opt/lelamp/
+    unzip -o /tmp/hal-update.zip -d /opt/hal/
 
     # Reinstall dependencies if requirements.txt changed
-    /opt/lelamp/venv/bin/pip install -r /opt/lelamp/requirements.txt --quiet
+    /opt/hal/venv/bin/pip install -r /opt/hal/requirements.txt --quiet
 
     # Restart
-    systemctl start lamp-lelamp.service
+    systemctl start lamp-hal.service
 
     # Cleanup
-    rm -f /tmp/lelamp-update.zip
-    rm -rf /opt/lelamp.bak
+    rm -f /tmp/hal-update.zip
+    rm -rf /opt/hal.bak
 
-    echo "LeLamp updated to $VERSION"
+    echo "HAL updated to $VERSION"
     ;;
 ```
 
 ---
 
-## 6. LeLamp Runtime — Source & Integration
+## 6. HAL Runtime — Source & Integration
 
 ### Source Strategy: Copy + Track Manually
 
-LeLamp runtime code is **copied** from the upstream open-source project into this mono-repo, then modified heavily.
+HAL runtime code is **copied** from the upstream open-source project into this mono-repo, then modified heavily.
 
 **Why copy, not submodule/subtree:**
 - We need to **remove** LiveKit/OpenAI integration (replaced by OpenClaw)
@@ -336,34 +336,34 @@ LeLamp runtime code is **copied** from the upstream open-source project into thi
 
 **Upstream tracking:**
 - Source: `https://github.com/humancomputerlab/lelamp_runtime`
-- Record the upstream commit hash in `lelamp/UPSTREAM.md` when copying
+- Record the upstream commit hash in `os/hal/UPSTREAM.md` when copying
 - Periodically check upstream for driver-level fixes (servo protocol, LED timing, etc.)
 - Cherry-pick relevant driver changes manually
 - Ignore upstream AI/LiveKit changes (we replaced that entirely)
 
 **Implementation steps:**
 1. Clone `humancomputerlab/lelamp_runtime` to a temp directory
-2. Copy driver code (`services/motors.py`, `services/rgb.py`, `services/audio.py`, `services/service_base.py`) into `lelamp/services/`
+2. Copy driver code (`services/motors.py`, `services/rgb.py`, `services/audio.py`, `services/service_base.py`) into `os/hal/services/`
 3. Remove all LiveKit, OpenAI, and conversation code
-4. Add `lelamp/server.py` — new HTTP API server (FastAPI)
-5. Add `lelamp/services/display.py` — new DisplayService for GC9A01
-6. Create `lelamp/UPSTREAM.md` with source commit hash and date
-7. Test on Pi 4 with actual hardware
+4. Add `os/hal/server.py` — new HTTP API server (FastAPI)
+5. Add `os/hal/services/display.py` — new DisplayService for GC9A01
+6. Create `os/hal/UPSTREAM.md` with source commit hash and date
+7. Test on device with actual hardware
 
 ### Mono-repo Layout
 
-LeLamp lives inside this repo as a Python subfolder alongside Go and TypeScript:
+HAL lives inside this repo as a Python subfolder alongside Go and TypeScript:
 
 ```
-ai-lamp-openclaw/
-├── lamp/                 # Go code (forked from lobster)
+autonomous/
+├── os/services/          # Go code (forked from lobster)
 │   ├── cmd/              # Go entrypoints
 │   ├── server/           # Go HTTP layer
 │   ├── internal/         # Go business logic
 │   ├── bootstrap/        # Go OTA worker
 │   └── domain/           # Shared structs
-├── web/                  # TypeScript/React SPA (copied from lobster, renamed intern→lamp)
-├── lelamp/               # Python hardware drivers (NEW)
+├── os/services/web/      # TypeScript/React SPA (copied from lobster, renamed intern→lamp)
+├── os/hal/               # Python hardware drivers (NEW)
 │   ├── __init__.py       # Package init, exposes __version__
 │   ├── server.py         # HTTP API server (FastAPI) — NEW, not from upstream
 │   ├── services/
@@ -387,23 +387,23 @@ ai-lamp-openclaw/
 
 3 languages (Go, Python, TypeScript), 3 folders, 1 repo. Each has its own build, but managed together.
 
-### LeLamp OTA Package
+### HAL OTA Package
 
-For OTA distribution, LeLamp is zipped from the `lelamp/` folder:
+For OTA distribution, HAL is zipped from the `os/hal/` folder:
 
 ```
-lelamp-{version}.zip
-├── lelamp/               # Full Python package
+hal-{version}.zip
+├── hal/                  # Full Python package
 ├── requirements.txt
 └── VERSION
 ```
 
-### LeLamp HTTP API (FastAPI on port 5001)
+### HAL HTTP API (FastAPI on port 5001)
 
-The LeLamp Python runtime exposes its own HTTP API on `127.0.0.1:5001`. Lamp Server (Go, port 5000) bridges OpenClaw skill requests to this API. Nginx proxies `/hw/*` for same-machine callers only — external clients receive 403. Swagger UI at `/hw/docs` is not accessible from LAN.
+The HAL Python runtime exposes its own HTTP API on `127.0.0.1:5001`. Lamp Server (Go, port 5000) bridges OpenClaw skill requests to this API. Nginx proxies `/hw/*` for same-machine callers only — external clients receive 403. Swagger UI at `/hw/docs` is not accessible from LAN.
 
 ```
-OpenClaw LLM → curl 127.0.0.1:5000/api/servo → Lamp Server → http://127.0.0.1:5001/servo → LeLamp Python → Hardware
+OpenClaw LLM → curl 127.0.0.1:5000/api/servo → Lamp Server → http://127.0.0.1:5001/servo → HAL Python → Hardware
 External     → http://<device-ip>/hw/docs    → nginx → 403 Forbidden
 ```
 
@@ -431,17 +431,17 @@ External     → http://<device-ip>/hw/docs    → nginx → 403 Forbidden
 
 ## 7. Upload / Publish Scripts
 
-### `scripts/upload-lelamp.sh` (NEW)
+### `scripts/upload-hal.sh` (NEW)
 
 ```bash
 #!/usr/bin/env bash
-# Upload LeLamp runtime to OTA
+# Upload HAL runtime to OTA
 
 set -euo pipefail
 
-VERSION_FILE="VERSION_LELAMP"
+VERSION_FILE="VERSION_HAL"
 BUCKET="s3-autonomous-upgrade-3"
-OTA_PATH="lamp/ota/lelamp"
+OTA_PATH="lamp/ota/hal"
 METADATA_PATH="lamp/ota/metadata.json"
 
 # Auto-increment patch version
@@ -453,23 +453,23 @@ NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
 echo "$NEW_VERSION" > "$VERSION_FILE"
 
 # Package
-echo "Packaging LeLamp $NEW_VERSION..."
-cd path/to/lelamp-source
+echo "Packaging HAL $NEW_VERSION..."
+cd path/to/hal-source
 echo "$NEW_VERSION" > VERSION
-zip -r "/tmp/lelamp-${NEW_VERSION}.zip" lelamp/ requirements.txt VERSION
+zip -r "/tmp/hal-${NEW_VERSION}.zip" hal/ requirements.txt VERSION
 
 # Upload zip
-gsutil cp "/tmp/lelamp-${NEW_VERSION}.zip" \
-    "gs://${BUCKET}/${OTA_PATH}/${NEW_VERSION}/lelamp-${NEW_VERSION}.zip"
+gsutil cp "/tmp/hal-${NEW_VERSION}.zip" \
+    "gs://${BUCKET}/${OTA_PATH}/${NEW_VERSION}/hal-${NEW_VERSION}.zip"
 
 # Update metadata
-DOWNLOAD_URL="https://storage.googleapis.com/${BUCKET}/${OTA_PATH}/${NEW_VERSION}/lelamp-${NEW_VERSION}.zip"
+DOWNLOAD_URL="https://storage.googleapis.com/${BUCKET}/${OTA_PATH}/${NEW_VERSION}/hal-${NEW_VERSION}.zip"
 gsutil cp "gs://${BUCKET}/${METADATA_PATH}" /tmp/metadata.json
 jq --arg v "$NEW_VERSION" --arg u "$DOWNLOAD_URL" \
-    '.lelamp = {"version": $v, "url": $u}' /tmp/metadata.json > /tmp/metadata-updated.json
+    '.hal = {"version": $v, "url": $u}' /tmp/metadata.json > /tmp/metadata-updated.json
 gsutil cp /tmp/metadata-updated.json "gs://${BUCKET}/${METADATA_PATH}"
 
-echo "LeLamp $NEW_VERSION published."
+echo "HAL $NEW_VERSION published."
 ```
 
 ### All Upload Scripts
@@ -479,7 +479,7 @@ echo "LeLamp $NEW_VERSION published."
 | `scripts/upload-lamp.sh` | Lamp Server binary | Build → zip → GCS → update metadata |
 | `scripts/upload-bootstrap.sh` | Bootstrap Server binary | Build → zip → GCS → update metadata |
 | `scripts/upload-web.sh` | Web SPA bundle | Build → zip → GCS → update metadata |
-| `scripts/upload-lelamp.sh` | LeLamp Python runtime (NEW) | Package → zip → GCS → update metadata |
+| `scripts/upload-hal.sh` | HAL Python runtime (NEW) | Package → zip → GCS → update metadata |
 | `scripts/upload-setup.sh` | Setup script | Upload to GCS |
 | `scripts/upload-setup-ap.sh` | AP setup script | Upload to GCS |
 | `scripts/upload-skills.sh` | OpenClaw skill files | Upload to GCS |
@@ -488,7 +488,7 @@ echo "LeLamp $NEW_VERSION published."
 
 ### `scripts/tag-release.sh` — GPL v3 §6 traceability
 
-After component uploads succeed (`make upload-lamp upload-lelamp upload-web ...`), this script anchors the resulting OTA metadata snapshot to a single git tag:
+After component uploads succeed (`make upload-lamp upload-hal upload-web ...`), this script anchors the resulting OTA metadata snapshot to a single git tag:
 
 ```bash
 make tag-release v0.0.8
@@ -497,7 +497,7 @@ make tag-release v0.0.8
 # → git push origin v0.0.8
 ```
 
-Buyers run `lamp-server --version` on the device — value comes from `git describe --tags --always --dirty` at build time (`Makefile:VERSION`), so it resolves to the closest tag. They then open the public repo (`github.com/autonomous-ai/lamp`), find the matching tag, read the annotation for the exact `lamp`/`lelamp`/`web`/`bootstrap` versions baked at release time, and checkout that commit for corresponding source.
+Buyers run `lamp-server --version` on the device — value comes from `git describe --tags --always --dirty` at build time (`Makefile:VERSION`), so it resolves to the closest tag. They then open the public repo (`github.com/autonomous-ai/lamp`), find the matching tag, read the annotation for the exact `lamp`/`hal`/`web`/`bootstrap` versions baked at release time, and checkout that commit for corresponding source.
 
 Guards in the script: refuses if tag already exists locally or on remote, refuses if metadata fetch fails or JSON is invalid (`set -euo pipefail` + `jq .`). Overrides via env vars: `OTA_METADATA_URL` (default: `https://cdn.autonomous.ai/lamp/ota/metadata.json`), `TAG_REMOTE` (default: `origin`).
 
@@ -520,35 +520,35 @@ build-lamp:
 	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_LAMP)" -o lamp-server ./cmd/lamp
 ```
 
-### LeLamp (VERSION file)
+### HAL (VERSION file)
 
-LeLamp version is a plain text `VERSION` file in the package root. Read by bootstrap via file or `python -m lelamp --version`.
+HAL version is a plain text `VERSION` file in the package root. Read by bootstrap via file or `python -m hal --version`.
 
 ---
 
 ## 9. Key Differences from Lobster
 
-| Aspect | Lobster (original) | AI Lamp (this project) |
+| Aspect | Lobster (original) | Autonomous (this project) |
 |---|---|---|
-| Components | 4 (lamp, bootstrap, web, openclaw) | **5** (+ lelamp) |
-| OTA keys | lamp, bootstrap, web, openclaw | + **lelamp** |
-| Setup stages | 7 (stages -1 to 4) | **8** (+ stage 2b: LeLamp) |
-| Systemd services | 4 | **5** (+ lamp-lelamp.service) |
-| Python runtime | None | **LeLamp** at /opt/lelamp/ with venv |
-| Hardware bridge | N/A | Lamp HTTP → LeLamp HTTP (localhost proxy) |
+| Components | 4 (lamp, bootstrap, web, openclaw) | **5** (+ hal) |
+| OTA keys | lamp, bootstrap, web, openclaw | + **hal** |
+| Setup stages | 7 (stages -1 to 4) | **8** (+ stage 2b: HAL) |
+| Systemd services | 4 | **5** (+ lamp-hal.service) |
+| Python runtime | None | **HAL** at /opt/hal/ with venv |
+| Hardware bridge | N/A | Lamp HTTP → HAL HTTP (localhost proxy) |
 | SPI usage | LED only | LED + **Display (GC9A01)** |
 
 ---
 
 ## 10. Open Questions
 
-- [x] **LeLamp source**: Mono-repo. Driver code copied from `humancomputerlab/lelamp_runtime` into `lelamp/`, with LiveKit/OpenAI removed and HTTP API + DisplayService added. Upstream tracked manually via `lelamp/UPSTREAM.md`.
-- [x] **LeLamp HTTP port**: `5001` (Lamp Server is `5000`).
-- [x] **Bridge protocol**: Simple HTTP proxy. LeLamp runs FastAPI on `127.0.0.1:5001`, Lamp Server proxies from port 5000.
+- [x] **HAL source**: Mono-repo. Driver code copied from `humancomputerlab/lelamp_runtime` into `os/hal/`, with LiveKit/OpenAI removed and HTTP API + DisplayService added. Upstream tracked manually via `os/hal/UPSTREAM.md`.
+- [x] **HAL HTTP port**: `5001` (Lamp Server is `5000`).
+- [x] **Bridge protocol**: Simple HTTP proxy. HAL runs FastAPI on `127.0.0.1:5001`, Lamp Server proxies from port 5000.
 - [x] **Python version**: Pinned to Python 3.12+ (`pyproject.toml`, `.python-version`, `setup.sh` uses `uv sync --python 3.12`).
-- [x] **LeLamp packaging**: On-device venv via `uv sync --python 3.12 --extra hardware` at `/opt/lelamp/.venv`. OTA preserves venv, reinstalls only on requirements change.
-- [x] **Display driver**: DisplayService (GC9A01) is part of LeLamp Python at `lelamp/service/display/display_service.py`.
-- [x] **LeLamp config**: Environment variable-based (`config.py` reads from env vars). `.env` file support via `python-dotenv`. No separate config file needed.
+- [x] **HAL packaging**: On-device venv via `uv sync --python 3.12 --extra hardware` at `/opt/hal/.venv`. OTA preserves venv, reinstalls only on requirements change.
+- [x] **Display driver**: DisplayService (GC9A01) is part of HAL Python at `os/hal/service/display/display_service.py`.
+- [x] **HAL config**: Environment variable-based (`config.py` reads from env vars). `.env` file support via `python-dotenv`. No separate config file needed.
 
 ---
 

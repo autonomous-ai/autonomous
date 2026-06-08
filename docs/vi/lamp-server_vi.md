@@ -59,11 +59,11 @@ Config field: `guard_mode` trong `config/config.json` (bool, mặc định `fals
 
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
-| POST | `/api/sensing/event` | Nhận sensing event từ LeLamp |
+| POST | `/api/sensing/event` | Nhận sensing event từ HAL |
 | POST | `/api/mood/log` | Ghi mood user (agent gọi qua Mood skill) |
-| POST | `/api/monitor/event` | Push event trực tiếp vào monitor bus (dùng bởi LeLamp để gửi trạng thái sound tracker) |
+| POST | `/api/monitor/event` | Push event trực tiếp vào monitor bus (dùng bởi HAL để gửi trạng thái sound tracker) |
 
-> **Ghi chú:** Theo dõi stranger (stats, lưu trữ) được xử lý bởi **LeLamp** (port 5001) tại `GET /face/stranger-stats`. Xem [sensing-behavior_vi.md](sensing-behavior_vi.md#theo-dõi-người-lạ-stranger-visit-tracking) để biết chi tiết.
+> **Ghi chú:** Theo dõi stranger (stats, lưu trữ) được xử lý bởi **HAL** (port 5001) tại `GET /face/stranger-stats`. Xem [sensing-behavior_vi.md](sensing-behavior_vi.md#theo-dõi-người-lạ-stranger-visit-tracking) để biết chi tiết.
 
 **Request body:**
 ```json
@@ -104,7 +104,7 @@ Config field: `guard_mode` trong `config/config.json` (bool, mặc định `fals
 
 ---
 
-## LeLamp Endpoints (Python FastAPI, :5001)
+## HAL Endpoints (Python FastAPI, :5001)
 
 Truy cập qua nginx proxy: `/hw/*` → `127.0.0.1:5001`
 
@@ -184,7 +184,7 @@ Truy cập qua nginx proxy: `/hw/*` → `127.0.0.1:5001`
 
 ### Face (đăng ký người quen / friend)
 
-Cần sensing có camera (InsightFace). Mặc định ảnh người đã đăng ký lưu tại `/root/local/users/{label}/`; có thể ghi đè bằng `LELAMP_USERS_DIR`. Mỗi thư mục người dùng chứa `metadata.json` với `telegram_username` và `telegram_id` để gửi DM.
+Cần sensing có camera (InsightFace). Mặc định ảnh người đã đăng ký lưu tại `/root/local/users/{label}/`; có thể ghi đè bằng `HAL_USERS_DIR`. Mỗi thư mục người dùng chứa `metadata.json` với `telegram_username` và `telegram_id` để gửi DM.
 
 | Method | Endpoint | Mô tả |
 |--------|----------|-------|
@@ -199,7 +199,7 @@ Cần sensing có camera (InsightFace). Mặc định ảnh người đã đăng
 |--------|----------|-------|
 | GET | `/user/info?name=X` | Metadata user: `name`, `is_friend`, `telegram_id`, `telegram_username`. Mặc định `"unknown"` nếu thiếu name. Tự tạo folder. |
 
-> Wellbeing activity history giờ nằm trên Lamp HTTP API (port 5000). Xem `POST /api/wellbeing/log` và `GET /api/openclaw/wellbeing-history` — entries ghi JSONL tại `/root/local/users/{user}/wellbeing/YYYY-MM-DD.jsonl` với schema `{ts, seq, hour, action, notes}` (action ∈ `drink`/`break`/`sedentary`/`emotional`). LeLamp không còn host endpoint wellbeing.
+> Wellbeing activity history giờ nằm trên Lamp HTTP API (port 5000). Xem `POST /api/wellbeing/log` và `GET /api/openclaw/wellbeing-history` — entries ghi JSONL tại `/root/local/users/{user}/wellbeing/YYYY-MM-DD.jsonl` với schema `{ts, seq, hour, action, notes}` (action ∈ `drink`/`break`/`sedentary`/`emotional`). HAL không còn host endpoint wellbeing.
 
 ### Display (GC9A01 1.28" LCD tròn)
 
@@ -238,7 +238,7 @@ Lamp Server (Go):
 {"status": 0, "data": null, "message": "error"}  // failure
 ```
 
-LeLamp (Python): FastAPI standard JSON responses.
+HAL (Python): FastAPI standard JSON responses.
 
 ## Startup
 

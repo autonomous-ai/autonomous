@@ -1,6 +1,6 @@
 # Nhận Diện Cảm Xúc Giọng Nói (SER)
 
-LeLamp phân tích cảm xúc từ giọng nói **sau mỗi phiên mic** (VAD trigger → im lặng ~2.5 s đóng phiên), độc lập với việc STT có trả transcript hay không. Nhờ vậy, tiếng cười, thở dài, "ờ ờ" và các tín hiệu phi-lời nói (vốn để lại transcript rỗng) vẫn được phân loại. Kết quả được gom theo người dùng, lọc trùng theo bucket cảm xúc, rồi gửi sự kiện `speech_emotion.detected` tới Lamp để OpenClaw phản ứng. Speaker recognition vẫn được gọi nội bộ để xác định trường `user` (rơi về `unknown` khi không nhận diện được); nó **không còn là cổng chặn** trước SER.
+HAL phân tích cảm xúc từ giọng nói **sau mỗi phiên mic** (VAD trigger → im lặng ~2.5 s đóng phiên), độc lập với việc STT có trả transcript hay không. Nhờ vậy, tiếng cười, thở dài, "ờ ờ" và các tín hiệu phi-lời nói (vốn để lại transcript rỗng) vẫn được phân loại. Kết quả được gom theo người dùng, lọc trùng theo bucket cảm xúc, rồi gửi sự kiện `speech_emotion.detected` tới Lamp để OpenClaw phản ứng. Speaker recognition vẫn được gọi nội bộ để xác định trường `user` (rơi về `unknown` khi không nhận diện được); nó **không còn là cổng chặn** trước SER.
 
 **Tài liệu liên quan:** [Tuning sensing (SER)](../sensing-tuning.md#speech-emotion-recognition-ser) · [dlbackend](../dlbackend.md) · [Sensing behavior](sensing-behavior_vi.md)
 
@@ -132,17 +132,17 @@ OpenClaw / sensing pipeline xử lý như sự kiện sensing khác (xem [sensin
 
 Để debug các lần đọc SER nhiễu, service lưu lại clip WAV đứng sau mỗi event và hiển thị nó trong Flow Monitor UI dưới dạng trình phát bấm-để-nghe. **Đây chỉ là công cụ gỡ lỗi — audio không bao giờ được gửi tới LLM.**
 
-### Phía ghi (LeLamp)
+### Phía ghi (HAL)
 
 Trong `_process_job`, mọi inference vượt qua ngưỡng confidence theo label đều được ghi ra đĩa bởi `_persist_wav()` trước khi vào buffer:
 
-- **Thư mục:** `SPEECH_EMOTION_AUDIO_DIR` (cấu hình trong `lelamp/config.py`, env `LELAMP_SPEECH_EMOTION_AUDIO_DIR`), mặc định `<tempdir>/lamp-speech-emotion` (tức `/tmp/lamp-speech-emotion`). Tạo bằng `os.makedirs(exist_ok=True)` lúc khởi tạo; nếu tạo thất bại thì thư mục bị tắt và mọi POST mang trường `audio` rỗng (graceful degradation — SER vẫn chạy bình thường).
+- **Thư mục:** `SPEECH_EMOTION_AUDIO_DIR` (cấu hình trong `os/hal/config.py`, env `LELAMP_SPEECH_EMOTION_AUDIO_DIR`), mặc định `<tempdir>/lamp-speech-emotion` (tức `/tmp/lamp-speech-emotion`). Tạo bằng `os.makedirs(exist_ok=True)` lúc khởi tạo; nếu tạo thất bại thì thư mục bị tắt và mọi POST mang trường `audio` rỗng (graceful degradation — SER vẫn chạy bình thường).
 - **Tên file:** `<ms>_<user>_<label>.wav`, trong đó `<ms>` là timestamp inference tính bằng mili-giây, còn `<user>`/`<label>` được sanitize về `[a-zA-Z0-9_-]` (ký tự khác gộp thành `_`).
 - **Chọn lúc flush:** khi flush của một user phát ra label dominant non-neutral, nó đính kèm clip **mới nhất** trong nhóm inference cùng label dominant — `max(dom_inferences, key=lambda i: i.ts).audio_path` — làm trường `audio` trong POST.
 
 ### Phía phục vụ (Lamp)
 
-Lamp backend chỉ expose clip cho Flow Monitor UI qua route mới `GET /api/sensing/audio/:name` (`SensingHandler.GetAudio`). Nó phục vụ WAV theo **basename** (đường dẫn đầy đủ không bao giờ rời khỏi Pi) từ một trong:
+Lamp backend chỉ expose clip cho Flow Monitor UI qua route mới `GET /api/sensing/audio/:name` (`SensingHandler.GetAudio`). Nó phục vụ WAV theo **basename** (đường dẫn đầy đủ không bao giờ rời khỏi thiết bị) từ một trong:
 
 ```
 /var/lib/lelamp/speech-emotion
@@ -157,7 +157,7 @@ Mọi inference đạt ngưỡng đều được lưu WAV — kể cả clip neu
 
 ---
 
-## Cấu Hình (`lelamp/config.py`)
+## Cấu Hình (`os/hal/config.py`)
 
 | Hằng số | Mặc định | Ý nghĩa |
 |---------|----------|---------|
@@ -168,7 +168,7 @@ Mọi inference đạt ngưỡng đều được lưu WAV — kể cả clip neu
 | `SPEECH_EMOTION_API_TIMEOUT_S` | `15` | Timeout HTTP dlbackend |
 | `DL_SER_ENDPOINT` | `/lelamp/api/dl/ser/recognize` | Path SER |
 
-**Ngưỡng confidence theo từng label** không lấy từ env nữa — khai báo cố định trong `lelamp/service/voice/speech_emotion/constants.py`:
+**Ngưỡng confidence theo từng label** không lấy từ env nữa — khai báo cố định trong `os/hal/service/voice/speech_emotion/constants.py`:
 
 ```python
 CONFIDENCE_THRESHOLD_BY_LABEL: dict[str, float] = {

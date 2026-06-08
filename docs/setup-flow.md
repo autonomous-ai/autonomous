@@ -71,7 +71,7 @@ Change messaging channel after setup is complete. Accepts `telegram`, `slack`, `
 - Device broadcasts WiFi hotspot
 - Web UI serves setup page
 - `SwitchToAPMode()` in `internal/network/service.go`
-- **LED indicator:** once HTTP server is listening, if `SetUpCompleted == false` lamp spawns a background goroutine (`waitAndPaintSetupReady` in `server/server.go`) that polls LeLamp `GET /health` once per second up to 30s. As soon as `health.led == true`, it fires `POST /led/solid` with `{"color":[255,255,255]}` to paint the strip solid white. The poll exists because lamp-server typically binds :5000 before LeLamp's FastAPI is up on :5001 (Python loads `rpi_ws281x`, SPI, audio, camera) — a fire-and-forget paint would silently drop on `connection refused`. White stays on until setup completes (agent flash + ambient repaint it). The booting blue-breathing still shows during init.
+- **LED indicator:** once HTTP server is listening, if `SetUpCompleted == false` lamp spawns a background goroutine (`waitAndPaintSetupReady` in `server/server.go`) that polls HAL `GET /health` once per second up to 30s. As soon as `health.led == true`, it fires `POST /led/solid` with `{"color":[255,255,255]}` to paint the strip solid white. The poll exists because lamp-server typically binds :5000 before HAL's FastAPI is up on :5001 (Python loads `rpi_ws281x`, SPI, audio, camera) — a fire-and-forget paint would silently drop on `connection refused`. White stays on until setup completes (agent flash + ambient repaint it). The booting blue-breathing still shows during init.
 - **AP-mode LED suppression:** the openclaw WS reconnect loop (`internal/openclaw/service_ws.go`) skips `StateAgentDown` Set/Clear while `config.SetUpCompleted == false`, so the cyan disconnect overlay doesn't fight the setup-needed white during provisioning. WS still runs (`device.Setup` needs it ready to satisfy `WaitForAgentReady` before flipping `SetUpCompleted=true`), only the LED side-effect is gated.
 
 ## Post-Setup
@@ -110,7 +110,7 @@ Config stored at `config/config.json`. Managed by `server/config/config.go`.
 
 | File | Role |
 |------|------|
-| `lamp/internal/device/service.go` | Setup orchestration |
-| `lamp/internal/network/service.go` | WiFi connect, AP mode |
-| `lamp/server/device/delivery/http/handler.go` | HTTP setup handler |
-| `lamp/server/config/config.go` | Config load/save |
+| `os/services/internal/device/service.go` | Setup orchestration |
+| `os/services/internal/network/service.go` | WiFi connect, AP mode |
+| `os/services/server/device/delivery/http/handler.go` | HTTP setup handler |
+| `os/services/server/config/config.go` | Config load/save |

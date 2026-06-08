@@ -2,7 +2,7 @@
 
 > **Tóm tắt:** OpenClaw tự compact session agent khi context chạm ~80k tokens. Kết quả compact là một chuỗi `summary` — chuỗi này được **chèn đầu mỗi turn kế tiếp** cho đến lần compact sau. Nếu rule vô tình bị copy/generalize vào summary, chúng có thể đè `SKILL.md` đang load — vì summary nằm trước trong prompt và được coi như "context đã chốt."
 >
-> Doc này là reference link từ nút **📋 Summary** ở Flow Monitor (modal: `lamp/web/src/pages/monitor/FlowSection/CompactionModal.tsx`).
+> Doc này là reference link từ nút **📋 Summary** ở Flow Monitor (modal: `os/services/web/src/pages/monitor/FlowSection/CompactionModal.tsx`).
 
 ## Vì sao có compact
 
@@ -78,7 +78,7 @@ Có ít nhất 3 cách 1 compaction có thể fire:
 | Nguồn | Trigger | Side-effects | `fromHook` quan sát |
 |---|---|---|---|
 | **Hook nội bộ OpenClaw** | tokens ≥ 80k, detect server-side | — | `true` |
-| **Lamp RPC** (`lamp/server/openclaw/delivery/sse/handler_events.go:380-406`) | Lamp thấy `u.TotalTokens > 80_000` trên lifecycle event, gọi `agentGateway.CompactSession(sessionKey)` | TTS nói *"Hold on, tidying up a bit."*; cooldown 2 phút qua `h.compacting` atomic | chưa rõ — cần verify từ source OpenClaw |
+| **Lamp RPC** (`os/services/server/openclaw/delivery/sse/handler_events.go:380-406`) | Lamp thấy `u.TotalTokens > 80_000` trên lifecycle event, gọi `agentGateway.CompactSession(sessionKey)` | TTS nói *"Hold on, tidying up a bit."*; cooldown 2 phút qua `h.compacting` atomic | chưa rõ — cần verify từ source OpenClaw |
 | **Manual / debug** | Ai đó gọi `sessions.compact` RPC trực tiếp | — | nhiều khả năng `false` |
 
 **Heuristic tạm để phân biệt:** nếu `timestamp` record cách vài giây sau log `"sessions.compact sent"` của Lamp cho cùng `sessionKey` → Lamp initiate. Ngược lại → hook nội bộ OpenClaw.
@@ -103,7 +103,7 @@ Burst bất thường chưa rõ nguyên nhân — có thể session restart / ch
 4. **Generational loss.** Mỗi compaction đọc summary *trước đó* như input. Rule méo bị summarize lại → drift dồn, kiểu JPEG-save-JPEG.
 5. **Hard cap.** Summary cap quanh 16000 chars (quan sát: 3 record riêng biệt đều chạm đúng số này). Nội dung bị drop không xác định được khi đụng cap.
 
-Khi Flow Monitor cho thấy Lamp viện rule mà `grep` không tìm thấy trong bất kỳ `lamp/resources/openclaw-skills/**/SKILL.md` → nguồn gần như luôn là compaction summary, không phải skill đang load.
+Khi Flow Monitor cho thấy Lamp viện rule mà `grep` không tìm thấy trong bất kỳ `skills/**/SKILL.md` → nguồn gần như luôn là compaction summary, không phải skill đang load.
 
 ## Cách xem summary đang active
 
@@ -126,11 +126,11 @@ for l in sys.stdin:
 
 | File | Vai trò |
 |---|---|
-| `lamp/server/openclaw/delivery/sse/handler_api_compaction.go` | HTTP handler: đọc `sessions.json`, scan session `.jsonl` tìm `type:"compaction"` mới nhất. |
-| `lamp/server/openclaw/delivery/sse/handler_events.go` | Lamp-side RPC trigger (auto-compact khi `TotalTokens > 80_000`, TTS notice, cooldown 2 phút). |
-| `lamp/internal/openclaw/service_chat.go` | `CompactSession(sessionKey)` — sender của `sessions.compact` RPC. |
-| `lamp/domain/agent.go` | Interface `AgentGateway.CompactSession`. |
-| `lamp/web/src/pages/monitor/FlowSection/CompactionModal.tsx` | UI modal — show timestamp, summary chars, session file, toàn văn summary; link về doc này. |
+| `os/services/server/openclaw/delivery/sse/handler_api_compaction.go` | HTTP handler: đọc `sessions.json`, scan session `.jsonl` tìm `type:"compaction"` mới nhất. |
+| `os/services/server/openclaw/delivery/sse/handler_events.go` | Lamp-side RPC trigger (auto-compact khi `TotalTokens > 80_000`, TTS notice, cooldown 2 phút). |
+| `os/services/internal/openclaw/service_chat.go` | `CompactSession(sessionKey)` — sender của `sessions.compact` RPC. |
+| `os/services/domain/agent.go` | Interface `AgentGateway.CompactSession`. |
+| `os/services/web/src/pages/monitor/FlowSection/CompactionModal.tsx` | UI modal — show timestamp, summary chars, session file, toàn văn summary; link về doc này. |
 | `docs/flow-monitor.md` | Doc cha — cross-reference doc này. |
 
 Bản tiếng Anh đầy đủ: [`docs/openclaw-compaction.md`](../openclaw-compaction.md).

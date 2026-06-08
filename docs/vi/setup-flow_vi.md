@@ -71,7 +71,7 @@ Thay đổi messaging channel sau khi đã setup. Chấp nhận `telegram`, `sla
 - Thiết bị phát WiFi hotspot
 - Web UI phục vụ trang setup
 - `SwitchToAPMode()` trong `internal/network/service.go`
-- **Tín hiệu LED:** ngay khi HTTP server bắt đầu listen, nếu `SetUpCompleted == false` thì lamp spawn goroutine background (`waitAndPaintSetupReady` trong `server/server.go`) poll `GET /health` của LeLamp mỗi giây tối đa 30s. Khi `health.led == true` thì fire `POST /led/solid` với `{"color":[255,255,255]}` paint strip trắng solid. Poll vì lamp-server bind :5000 thường nhanh hơn LeLamp FastAPI bind :5001 trên cold boot (Python load `rpi_ws281x`, SPI, audio, camera) — fire-and-forget paint sẽ rớt im lặng với `connection refused`. Trắng giữ đến khi setup xong (agent flash + ambient paint đè lên). Blue-breathing booting vẫn show trong lúc init.
+- **Tín hiệu LED:** ngay khi HTTP server bắt đầu listen, nếu `SetUpCompleted == false` thì lamp spawn goroutine background (`waitAndPaintSetupReady` trong `server/server.go`) poll `GET /health` của HAL mỗi giây tối đa 30s. Khi `health.led == true` thì fire `POST /led/solid` với `{"color":[255,255,255]}` paint strip trắng solid. Poll vì lamp-server bind :5000 thường nhanh hơn HAL FastAPI bind :5001 trên cold boot (Python load `rpi_ws281x`, SPI, audio, camera) — fire-and-forget paint sẽ rớt im lặng với `connection refused`. Trắng giữ đến khi setup xong (agent flash + ambient paint đè lên). Blue-breathing booting vẫn show trong lúc init.
 - **Khử nhiễu LED trong AP mode:** openclaw WS reconnect loop (`internal/openclaw/service_ws.go`) skip Set/Clear `StateAgentDown` khi `config.SetUpCompleted == false`, để overlay cyan disconnect không đè lên trắng setup-needed lúc provisioning. WS vẫn chạy (`device.Setup` cần nó ready để `WaitForAgentReady` pass trước khi flip `SetUpCompleted=true`), chỉ gate side-effect LED thôi.
 
 ## Post-Setup
@@ -110,7 +110,7 @@ Config lưu tại `config/config.json`. Managed bởi `server/config/config.go`.
 
 | File | Vai trò |
 |------|---------|
-| `lamp/internal/device/service.go` | Setup orchestration |
-| `lamp/internal/network/service.go` | WiFi connect, AP mode |
-| `lamp/server/device/delivery/http/handler.go` | HTTP setup handler |
-| `lamp/server/config/config.go` | Config load/save |
+| `os/services/internal/device/service.go` | Setup orchestration |
+| `os/services/internal/network/service.go` | WiFi connect, AP mode |
+| `os/services/server/device/delivery/http/handler.go` | HTTP setup handler |
+| `os/services/server/config/config.go` | Config load/save |

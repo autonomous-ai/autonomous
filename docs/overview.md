@@ -1,21 +1,21 @@
-# Architecture Overview — Lamp AI Lamp
+# Architecture Overview — Autonomous
 
 ## 3-Layer Architecture
 
 ```
-OpenClaw (AI/LLM) → Lamp Server (Go, :5000) → LeLamp Runtime (Python, :5001) → Hardware
+OpenClaw (AI/LLM) → Lamp Server (Go, :5000) → HAL (Python, :5001) → Hardware
 ```
 
 | Layer | Language | Port | Role |
 |-------|----------|------|------|
 | OpenClaw | Go | WS | AI brain, LLM, SKILL.md, memory, channels |
 | Lamp Server | Go | 5000 | System (network, OTA, MQTT, reset), sensing event routing, local intent |
-| LeLamp Runtime | Python | 5001 | Hardware drivers (servo, LED, camera, audio, display), FastAPI |
+| HAL | Python | 5001 | Hardware drivers (servo, LED, camera, audio, display), FastAPI |
 
 ## Project Directory
 
 ```
-lamp/
+os/services/
 ├── cmd/lamp/main.go              — Lamp Server entry point
 ├── cmd/bootstrap/main.go         — OTA bootstrap worker
 ├── server/
@@ -39,9 +39,10 @@ lamp/
 ├── lib/mqtt/                     — MQTT client (Eclipse Paho autopaho)
 ├── domain/                       — Shared structs
 ├── bootstrap/                    — OTA worker
-└── resources/openclaw-skills/    — 10 SKILL.md files for OpenClaw
+├── resources/openclaw-hooks/     — OpenClaw hook scripts
+└── web/                          — React 19 + Vite + Tailwind CSS 4 SPA
 
-lelamp/
+os/hal/
 ├── server.py                     — FastAPI server (38 endpoints)
 ├── config.py                     — Runtime constants (sensing thresholds, timeouts, URLs)
 ├── devices/                      — Camera device abstraction (LocalVideoCaptureDevice)
@@ -58,7 +59,11 @@ lelamp/
 │   └── display/                  — GC9A01 LCD eyes + info
 └── pyproject.toml                — Python dependencies (opencv-python, insightface)
 
-web/                              — React 19 + Vite + Tailwind CSS 4 SPA
+devices/                          — Per-device configs and overlays
+skills/                           — SKILL.md files for OpenClaw
+companions/                       — Companion apps (e.g. Lamp Buddy)
+contract/                         — Shared API contracts
+cts/                              — Compatibility test suite
 ```
 
 ## Principles
@@ -66,7 +71,7 @@ web/                              — React 19 + Vite + Tailwind CSS 4 SPA
 - **Hardware is a plugin** — plug in and it works, unplug and it's skipped
 - **System layer runs WITHOUT OpenClaw** — device always responds
 - **Code is the source of truth** — docs reflect code
-- **LeLamp is the hardware driver** — no AI logic
+- **HAL is the hardware driver** — no AI logic
 - **SKILL.md native** — no MCP, LLM reads skills and calls curl directly
 
 ## Voice Pipeline
@@ -82,7 +87,7 @@ Mic (always on) → Local VAD (RMS energy, free)
 ## Sensing Flow
 
 ```
-LeLamp sensing loop (every 2s) → Read 1 camera frame, run all detectors:
+HAL sensing loop (every 2s) → Read 1 camera frame, run all detectors:
     ├─ Motion detection (frame diff) → event if >8% pixels changed
     ├─ Face recognition (InsightFace buffalo_sc) → friend/stranger classification
     │     → presence.enter (annotated JPEG with colored bboxes: green=friend, red=stranger)

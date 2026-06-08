@@ -44,21 +44,21 @@ Tối đa 4 dòng JSONL bonus / turn (thực tế 0–2). Stream name từ OpenC
 
 ## Sơ đồ Turn Pipeline (SVG)
 
-Component `FlowDiagram` trong `lamp/web/src/pages/Monitor.tsx` vẽ **ba vùng** (màu viền nền):
+Component `FlowDiagram` trong `os/services/web/src/pages/Monitor.tsx` vẽ **ba vùng** (màu viền nền):
 
 | Vùng | Màu | Node |
 |------|-----|------|
 | **Lamp Server** | Teal | Intent, Local, Cron, Gate |
-| **LeLamp** | Amber | MIC, CAM, EMO, LED, SERVO, TTS |
+| **HAL** | Amber | MIC, CAM, EMO, LED, SERVO, TTS |
 | **OpenClaw** | Blue | Agent, TG In, Tool, Think, Response, TG Out |
 
 ### Lamp (hàng trên)
 
 - **Cron** là stage **Lamp** (lịch/timer thuộc Lamp), **không** nằm trong cụm OpenClaw. Trên SVG, Cron cùng hàng với Intent/Local nhưng **`x` trùng cột Agent** để cạnh Cron→Agent là **đường dọc**.
 
-### LeLamp
+### HAL
 
-- **MIC** và **CAM** là input nodes (hàng trên LeLamp).
+- **MIC** và **CAM** là input nodes (hàng trên HAL).
 - Output nodes xếp dọc trong 1 cột:
   - **EMO** (`hw_emotion`) — `/emotion` (phối hợp LED + servo + display eyes)
   - **LED** (`hw_led`) — `/led/solid`, `/led/effect`, `/scene`, `/led/off`
@@ -69,7 +69,7 @@ Component `FlowDiagram` trong `lamp/web/src/pages/Monitor.tsx` vẽ **ba vùng**
 
 ### Lamp Gate
 
-- **Lamp Gate** nằm giữa OpenClaw output và LeLamp TTS. Lamp listen WS events để phối hợp:
+- **Lamp Gate** nằm giữa OpenClaw output và HAL TTS. Lamp listen WS events để phối hợp:
   - Tool có `/audio/play` → suppress TTS (không speak chồng nhạc)
   - Tool có `/led/*` → pause ambient breathing (không ghi đè màu agent set)
   - Assistant text accumulate → flush sang TTS khi lifecycle_end
@@ -89,11 +89,11 @@ Bảng tọa độ gần đúng và ASCII grid: xem mục *Turn Pipeline* và *A
 
 | File | Vai trò |
 |------|---------|
-| `lamp/lib/flow/flow.go` | Emit flow, JSONL, API runID từng event |
-| `lamp/server/sensing/delivery/http/handler.go` | Sensing → flow.Start/End |
-| `lamp/server/openclaw/delivery/sse/handler.go` | Agent → flow.Log, map runID |
-| `lamp/internal/openclaw/service.go` | sendChat / idempotencyKey |
-| `lamp/web/src/pages/Monitor.tsx` | `groupIntoTurns`, `FlowDiagram`, v.v. |
+| `os/services/lib/flow/flow.go` | Emit flow, JSONL, API runID từng event |
+| `os/services/server/sensing/delivery/http/handler.go` | Sensing → flow.Start/End |
+| `os/services/server/openclaw/delivery/sse/handler.go` | Agent → flow.Log, map runID |
+| `os/services/internal/openclaw/service.go` | sendChat / idempotencyKey |
+| `os/services/web/src/pages/Monitor.tsx` | `groupIntoTurns`, `FlowDiagram`, v.v. |
 
 **Tải để so sánh:** nút **↓ Bundle** trên Flow Panel tải cùng lúc JSONL tail server, snapshot UI và OpenClaw debug payload (xem bảng *Turns list vs downloaded log* trong `docs/flow-monitor.md`).
 
@@ -129,7 +129,7 @@ OpenClaw agent trả `NO_REPLY` (hoặc dạng cắt ngắn `NO`, `NO_RE`, `NO_.
 
 ### TTS suppress event
 
-Khi `SendToLeLampTTS` thật sự bị skip (loa không phát), Lamp emit `tts_suppressed` thay vì `tts_send`. Field `data.reason` discriminate: `channel_run` (real Telegram user turn — detect qua runID có prefix `tg-` Lamp tự sinh trong `session.message` handler, hoặc `channelRuns` map mark từ chat.history fallback; reply đi qua OpenClaw session fan-out thay vì loa lamp), `music_playing` (audio đang chiếm loa), `already_spoken` (built-in tts tool đã route trước), `web_chat` (Flow Monitor chat — reply chỉ hiện trên web UI). UI hiển thị 🔇 ở Lamp Gate column thay vì 🔊 — tránh case trước đây log nói "TTS" nhưng loa im. Classifier chỉ dùng positive evidence: UUID runs từ OpenClaw steer-mode self-fire, cron fire, heartbeat KHÔNG bị coi là `channel_run` và VẪN phát loa.
+Khi `SendToHalTTS` thật sự bị skip (loa không phát), Lamp emit `tts_suppressed` thay vì `tts_send`. Field `data.reason` discriminate: `channel_run` (real Telegram user turn — detect qua runID có prefix `tg-` Lamp tự sinh trong `session.message` handler, hoặc `channelRuns` map mark từ chat.history fallback; reply đi qua OpenClaw session fan-out thay vì loa lamp), `music_playing` (audio đang chiếm loa), `already_spoken` (built-in tts tool đã route trước), `web_chat` (Flow Monitor chat — reply chỉ hiện trên web UI). UI hiển thị 🔇 ở Lamp Gate column thay vì 🔊 — tránh case trước đây log nói "TTS" nhưng loa im. Classifier chỉ dùng positive evidence: UUID runs từ OpenClaw steer-mode self-fire, cron fire, heartbeat KHÔNG bị coi là `channel_run` và VẪN phát loa.
 
 ### Cron-fire auto-force TTS
 
@@ -154,7 +154,7 @@ OUT  🔊 <output text>
 
 Với `speech_emotion.detected`, turn card hiển thị một player `<audio controls>` click-to-play gắn nhãn `🎙 debug` cho mỗi audio URL, để nghe chính xác clip đã tạo ra emotion được detect.
 
-- Đường dẫn clip trên Pi tới qua field `audio` (tùy chọn) trong body `POST /api/sensing/event`. `lamp/server/sensing/delivery/http/handler.go` chuyển basename của path thành URL servable (`audioURLForPath` → `/api/sensing/audio/<file>.wav`) và lưu vào `Detail` của monitor event ở key `audio` — **chỉ URL basename, không bao giờ là raw path**.
+- Đường dẫn clip trên Pi tới qua field `audio` (tùy chọn) trong body `POST /api/sensing/event`. `os/services/server/sensing/delivery/http/handler.go` chuyển basename của path thành URL servable (`audioURLForPath` → `/api/sensing/audio/<file>.wav`) và lưu vào `Detail` của monitor event ở key `audio` — **chỉ URL basename, không bao giờ là raw path**.
 - Frontend `turnIO()` (`helpers.ts`) rút các URL này vào `audioUrls` từ `detail.audio` của event `sensing_input`; `TurnBadge.tsx` render player.
 - **Đây là affordance CHỈ-ĐỂ-DEBUG — audio KHÔNG BAO GIỜ gửi cho LLM.** Path nằm trong field JSON riêng, không nằm trong text tin nhắn chat, nên tự nhiên bị loại khỏi những gì agent thấy — giống cách snapshot `motion.activity` được hiện trên UI nhưng strip trước khi tới LLM.
 - **Route**: `GET /api/sensing/audio/:name` (`SensingHandler.GetAudio`) serve file `.wav` theo basename từ `/var/lib/lelamp/speech-emotion` hoặc `/tmp/lamp-speech-emotion`, với validation basename nghiêm ngặt — tên phải kết thúc `.wav` và không chứa `/`, `\`, hay `..` (nếu không → `404`).
@@ -176,14 +176,14 @@ Session OpenClaw agent auto-compact khi context vượt ~80k tokens. Mỗi lần
 
 **Endpoint:** `GET /api/openclaw/compaction-latest?session=<key>` (mặc định `agent:main:main`). Response format: `{status:1, data:{found, sessionFile, timestamp, tokensBefore, summary, details:{readFiles}, ...}}`.
 
-Dùng khi Lamp viện rule mà grep không thấy trong bất kỳ `lamp/resources/openclaw-skills/**/SKILL.md` — gần như 100% nguồn là compaction summary, không phải skill đang load. Handler: `lamp/server/openclaw/delivery/sse/handler_api_compaction.go`.
+Dùng khi Lamp viện rule mà grep không thấy trong bất kỳ `skills/**/SKILL.md` — gần như 100% nguồn là compaction summary, không phải skill đang load. Handler: `os/services/server/openclaw/delivery/sse/handler_api_compaction.go`.
 
 ## Issue đang mở
 
-### OpenClaw built-in `tts` tool bypass speaker LeLamp (ĐÃ FIX)
-Agent gọi `tts` built-in tool của OpenClaw thay vì trả assistant text. OpenClaw generate audio phía server (`"Generated audio reply."`) nhưng không route tới speaker LeLamp (`/voice/speak`). Agent trả `NO_REPLY` → Lamp không có text → im lặng.
-- **Nguyên nhân**: OpenClaw cung cấp `tts` tool khi `tools.profile = "full"`. Sensing SKILL.md hướng dẫn gọi `/voice/speak`, agent map nhầm sang built-in `tts` tool thay vì `curl` tới LeLamp.
-- **Fix**: (1) Deny `tts` tool qua `tools.deny: ["tts"]` trong config (`service.go`). `tools.disabled` KHÔNG hợp lệ — dùng `tools.deny` (deny thắng `tools.profile`). (2) Intercept fallback trong handler.go: nếu agent vẫn gọi `tts` tool, extract text và route sang `SendToLeLampTTS()`. (3) Cập nhật sensing SKILL.md và SOUL.md — agent trả text bình thường, Lamp pipeline tự TTS qua LeLamp.
+### OpenClaw built-in `tts` tool bypass speaker HAL (ĐÃ FIX)
+Agent gọi `tts` built-in tool của OpenClaw thay vì trả assistant text. OpenClaw generate audio phía server (`"Generated audio reply."`) nhưng không route tới speaker HAL (`/voice/speak`). Agent trả `NO_REPLY` → Lamp không có text → im lặng.
+- **Nguyên nhân**: OpenClaw cung cấp `tts` tool khi `tools.profile = "full"`. Sensing SKILL.md hướng dẫn gọi `/voice/speak`, agent map nhầm sang built-in `tts` tool thay vì `curl` tới HAL.
+- **Fix**: (1) Deny `tts` tool qua `tools.deny: ["tts"]` trong config (`service.go`). `tools.disabled` KHÔNG hợp lệ — dùng `tools.deny` (deny thắng `tools.profile`). (2) Intercept fallback trong handler.go: nếu agent vẫn gọi `tts` tool, extract text và route sang `SendToHalTTS()`. (3) Cập nhật sensing SKILL.md và SOUL.md — agent trả text bình thường, Lamp pipeline tự TTS qua HAL.
 - **Trạng thái**: Đã fix v0.0.138.
 
 ### OpenClaw không thấy `tool_call` dù có action

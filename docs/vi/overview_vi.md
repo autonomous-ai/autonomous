@@ -1,21 +1,21 @@
-# Tổng Quan Kiến Trúc — Lamp AI Lamp
+# Tổng Quan Kiến Trúc — Autonomous
 
 ## Kiến Trúc 3 Tầng
 
 ```
-OpenClaw (AI/LLM) → Lamp Server (Go, :5000) → LeLamp Runtime (Python, :5001) → Phần cứng
+OpenClaw (AI/LLM) → Lamp Server (Go, :5000) → HAL (Python, :5001) → Phần cứng
 ```
 
 | Tầng | Ngôn ngữ | Port | Vai trò |
 |------|----------|------|---------|
 | OpenClaw | Go | WS | Bộ não AI, LLM, SKILL.md, memory, channels |
 | Lamp Server | Go | 5000 | Hệ thống (mạng, OTA, MQTT, reset), sensing event routing, local intent |
-| LeLamp Runtime | Python | 5001 | Hardware drivers (servo, LED, camera, audio, display), FastAPI |
+| HAL | Python | 5001 | Hardware drivers (servo, LED, camera, audio, display), FastAPI |
 
 ## Thư Mục Dự Án
 
 ```
-lamp/
+os/services/
 ├── cmd/lamp/main.go              — Entry point Lamp Server
 ├── cmd/bootstrap/main.go         — OTA bootstrap worker
 ├── server/
@@ -39,9 +39,10 @@ lamp/
 ├── lib/mqtt/                     — MQTT client (Eclipse Paho autopaho)
 ├── domain/                       — Shared structs
 ├── bootstrap/                    — OTA worker
-└── resources/openclaw-skills/    — 10 SKILL.md files cho OpenClaw
+├── resources/openclaw-hooks/     — OpenClaw hook scripts
+└── web/                          — React 19 + Vite + Tailwind CSS 4 SPA
 
-lelamp/
+os/hal/
 ├── server.py                     — FastAPI server (38 endpoints)
 ├── config.py                     — Hằng số runtime (ngưỡng sensing, timeout, URL)
 ├── devices/                      — Camera device abstraction (LocalVideoCaptureDevice)
@@ -59,7 +60,11 @@ lelamp/
 │   └── display/                  — GC9A01 LCD eyes + info
 └── pyproject.toml                — Python dependencies (opencv-python, insightface)
 
-web/                              — React 19 + Vite + Tailwind CSS 4 SPA
+devices/                          — Per-device configs and overlays
+skills/                           — SKILL.md files cho OpenClaw
+companions/                       — Companion apps (e.g. Lamp Buddy)
+contract/                         — Shared API contracts
+cts/                              — Compatibility test suite
 ```
 
 ## Nguyên Tắc
@@ -67,7 +72,7 @@ web/                              — React 19 + Vite + Tailwind CSS 4 SPA
 - **Hardware là plugin** — cắm vào thì play, không cắm thì skip
 - **Tầng hệ thống chạy KHÔNG cần OpenClaw** — thiết bị luôn phản hồi
 - **Code là source of truth** — docs phản ánh code
-- **LeLamp là hardware driver** — không chứa logic AI
+- **HAL là hardware driver** — không chứa logic AI
 - **SKILL.md native** — không dùng MCP, LLM tự đọc skill và gọi curl
 
 ## Voice Pipeline
@@ -87,7 +92,7 @@ Chi tiết SER: [speech-emotion_vi.md](speech-emotion_vi.md).
 ## Sensing Flow
 
 ```
-LeLamp sensing loop (mỗi 2s) → Đọc 1 frame camera, chạy tất cả detectors:
+HAL sensing loop (mỗi 2s) → Đọc 1 frame camera, chạy tất cả detectors:
     ├─ Motion detection (frame diff) → event nếu >8% pixel thay đổi
     ├─ Face recognition (InsightFace buffalo_sc) → phân loại friend/stranger
     │     → presence.enter (JPEG được annotate bbox: xanh=friend, đỏ=stranger)
