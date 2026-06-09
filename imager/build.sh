@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# build.sh — Golden Image Builder for Raspberry Pi 5
+# build.sh — Golden Image Builder for Raspberry Pi 4B / Pi 5
 # =============================================================================
 #
 # PURPOSE
@@ -111,6 +111,7 @@
 set -euo pipefail
 
 # ── config — edit before building ────────────────────────────────────────────
+RPI_MODEL="${RPI_MODEL:-5}"  # Target board: 5 = Raspberry Pi 5, 4 = Raspberry Pi 4B
 WIFI_COUNTRY="US"           # Wi-Fi regulatory country code
 PI_HOSTNAME="autonomous"    # Hostname of the Pi
 PI_TIMEZONE="America/New_York"
@@ -124,8 +125,15 @@ COUNTRY_CODE="US"           # Regulatory country code for hostapd
 # ─────────────────────────────────────────────────────────────────────────────
 
 MNT="/mnt/pi"
-RPI_IMG_URL="https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-12-04/2025-12-04-raspios-trixie-arm64-lite.img.xz"
-RPI_IMG_XZ="/input/raspios.img.xz"   # cached download location (mounted volume)
+# Pi 5 uses Trixie (Debian 13); Pi 4 uses Bookworm (Debian 12) for broader compatibility.
+# Cache files are named per-OS so Pi 4 and Pi 5 builds don't collide in /input/.
+if [ "${RPI_MODEL}" = "4" ]; then
+  RPI_IMG_URL="https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2024-11-19/2024-11-19-raspios-bookworm-arm64-lite.img.xz"
+  RPI_IMG_XZ="/input/raspios-bookworm.img.xz"
+else
+  RPI_IMG_URL="https://downloads.raspberrypi.com/raspios_lite_arm64/images/raspios_lite_arm64-2025-12-04/2025-12-04-raspios-trixie-arm64-lite.img.xz"
+  RPI_IMG_XZ="/input/raspios.img.xz"
+fi
 RPI_IMG="/work/raspios.img"           # extracted source image (temp)
 OUT_IMG="/output/golden.img"          # final output image (Phase 2 applies overlay on copy of base)
 BASE_IMG="/output/base.img"           # cached base image (Phase 1 output, kept clean for rebuilds)
@@ -746,6 +754,7 @@ install_binary_from_zip() {
 
 # ── stage: NTP + fake-hwclock ────────────────────────────────────────────────
 # RPi 5 has no battery-backed RTC — clock resets to 1970 on every boot.
+# RPi 4 has an RTC but fake-hwclock is still useful as a fallback.
 # Without a valid clock, TLS cert validation fails ("not yet valid").
 #
 # fake-hwclock: saves the clock to /etc/fake-hwclock.data on shutdown and
@@ -759,10 +768,11 @@ systemctl enable systemd-timesyncd
 # fake-hwclock uses a SysV init script (auto-enabled on install) — no systemctl enable needed.
 date -u '+%Y-%m-%d %H:%M:%S' > /etc/fake-hwclock.data
 
-# ── stage: WiFi stability (RPi 5 specific) ───────────────────────────────────
+# ── stage: WiFi stability (RPi 5 only) ───────────────────────────────────────
 # Legacy RPi 5 workaround: disable IPv6 globally to avoid duplicate address
-# detection delays. Harmless on OrangePi.
-echo "[stage] WiFi stability (IPv6 off)"
+# detection delays on the Pi 5 WiFi chip. Not needed on Pi 4.
+if [ "${RPI_MODEL}" = "5" ]; then
+echo "[stage] WiFi stability (IPv6 off, Pi 5 only)"
 mkdir -p /etc/sysctl.d
 cat > /etc/sysctl.d/99-lamp-wifi.conf <<'EOF'
 net.ipv6.conf.all.disable_ipv6 = 1
@@ -770,6 +780,7 @@ net.ipv6.conf.default.disable_ipv6 = 1
 net.ipv6.conf.lo.disable_ipv6 = 1
 EOF
 sysctl -p /etc/sysctl.d/99-lamp-wifi.conf 2>/dev/null || true
+fi
 
 # ── stage: SPI ────────────────────────────────────────────────────────────────
 # Enable the SPI bus in firmware config for hardware peripherals.
