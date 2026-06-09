@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
+
 TWITCH_IRC_BIN="${ROOT_DIR}/chat-hooks/twitch-chat-hook/twitch-irc"
 VERSION_FILE="${ROOT_DIR}/chat-hooks/twitch-chat-hook/${VERSION_FILE:-VERSION_TWITCH_IRC}"
 
 # Bucket and path: ${BUCKET_PREFIX}/ota/twitch-irc/[semver].zip
-source "${SCRIPT_DIR}/ota-config.sh"
 
 # Auto-increment semver (patch) before build
 if [[ -f "$VERSION_FILE" ]]; then

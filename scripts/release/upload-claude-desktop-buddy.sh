@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
+
 BUDDY_DIR="${ROOT_DIR}/companions/claude-desktop-buddy"
 VERSION_FILE="${BUDDY_DIR}/VERSION_BUDDY"
 
 # Bucket and path: ${BUCKET_PREFIX}/ota/claude-desktop-buddy/[semver].zip
-source "${SCRIPT_DIR}/ota-config.sh"
 
 # Build for linux/arm64
 echo "========== Building buddy-plugin (linux/arm64) =========="

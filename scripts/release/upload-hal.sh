@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
+
 HAL_DIR="${ROOT_DIR}/os/hal"
 VERSION_FILE="${ROOT_DIR}/os/hal/${VERSION_FILE:-VERSION_LELAMP}"
 
 # Bucket and path: ${BUCKET_PREFIX}/ota/hal/[semver].zip
-source "${SCRIPT_DIR}/ota-config.sh"
 
 # Auto-increment semver (patch) before upload
 if [[ -f "$VERSION_FILE" ]]; then

@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-HOOKS_DIR="${ROOT_DIR}/hooks"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
 
-source "${SCRIPT_DIR}/ota-config.sh"
+HOOKS_DIR="${ROOT_DIR}/hooks"
 GCS_PREFIX="${GCS_PREFIX:-${BUCKET_PREFIX}/hooks}"
 
 if [[ ! -d "$HOOKS_DIR" ]]; then

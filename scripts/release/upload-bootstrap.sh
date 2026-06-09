@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
+
 BOOTSTRAP_BIN="${ROOT_DIR}/os/services/bootstrap-server"
 VERSION_FILE="${ROOT_DIR}/os/services/${VERSION_FILE:-VERSION_BOOTSTRAP}"
 
 # Bucket and path: ${BUCKET_PREFIX}/ota/bootstrap/[semver].zip
-source "${SCRIPT_DIR}/ota-config.sh"
 
 # Auto-increment semver (patch) before build
 if [[ -f "$VERSION_FILE" ]]; then

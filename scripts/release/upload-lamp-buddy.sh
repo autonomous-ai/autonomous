@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
+
 BUDDY_DIR="${ROOT_DIR}/companions/lamp-buddy"
 VERSION_FILE="${BUDDY_DIR}/VERSION_LAMP_BUDDY"
 DIST_DIR="${BUDDY_DIR}/dist"
 
 # Bucket and path: ${BUCKET_PREFIX}/ota/lamp-buddy/[semver].dmg
-source "${SCRIPT_DIR}/ota-config.sh"
 
 # Build target — `dmg` (unsigned, default) or `dmg-signed` (Developer ID + notarized).
 # Override via env: BUDDY_DMG_TARGET=dmg-signed scripts/release/upload-lamp-buddy.sh

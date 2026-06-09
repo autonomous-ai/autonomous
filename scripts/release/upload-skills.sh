@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SKILLS_DIR="${ROOT_DIR}/skills"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
 
-source "${SCRIPT_DIR}/ota-config.sh"
+SKILLS_DIR="${ROOT_DIR}/skills"
 GCS_PREFIX="${GCS_PREFIX:-${BUCKET_PREFIX}/skills}"
 
 if [[ ! -d "$SKILLS_DIR" ]]; then
@@ -14,7 +12,7 @@ if [[ ! -d "$SKILLS_DIR" ]]; then
 fi
 
 # Local hash cache to skip unchanged skills (whole folder).
-HASH_CACHE="${SCRIPT_DIR}/.skill-hashes"
+HASH_CACHE="${RELEASE_DIR}/.skill-hashes"
 touch "$HASH_CACHE"
 
 WORK_DIR="$(mktemp -d)"
