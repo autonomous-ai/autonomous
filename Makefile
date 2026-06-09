@@ -113,7 +113,7 @@ autonomous-build-chat:
 # Upload (OTA to GCS) — unified format: make upload-<component>
 # ============================================================================
 
-.PHONY: upload-os-server upload-bootstrap upload-hal upload-claude-desktop-buddy upload-lamp-buddy upload-web upload-skills upload-hooks upload-setup upload-setup-ap upload-openclaw upload-twitch-irc upload-autonomous-chat upload-all
+.PHONY: upload-os-server upload-bootstrap upload-hal upload-claude-desktop-buddy upload-autonomous-buddy upload-web upload-skills upload-hooks upload-setup upload-setup-ap upload-openclaw upload-twitch-irc upload-autonomous-chat upload-all
 
 upload-os-server:
 	bash scripts/release/upload-os-server.sh
@@ -127,8 +127,8 @@ upload-hal:
 upload-claude-desktop-buddy:
 	bash scripts/release/upload-claude-desktop-buddy.sh
 
-upload-lamp-buddy:
-	bash scripts/release/upload-lamp-buddy.sh
+upload-autonomous-buddy:
+	bash scripts/release/upload-autonomous-buddy.sh
 
 upload-web:
 	bash scripts/release/upload-web.sh
