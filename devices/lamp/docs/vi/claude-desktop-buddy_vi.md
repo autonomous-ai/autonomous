@@ -657,7 +657,7 @@ nhưng phần còn lại của integration giống hệt.
 ```ini
 [Unit]
 Description=Lamp Claude Desktop Buddy
-After=bluetooth.target lamp.service
+After=bluetooth.target os-server.service
 Wants=bluetooth.target
 
 [Service]

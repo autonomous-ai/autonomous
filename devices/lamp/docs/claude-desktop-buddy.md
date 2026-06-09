@@ -670,7 +670,7 @@ factory MAC, but the rest of the integration is identical.
 ```ini
 [Unit]
 Description=Lamp Claude Desktop Buddy
-After=bluetooth.target lamp.service
+After=bluetooth.target os-server.service
 Wants=bluetooth.target
 
 [Service]
