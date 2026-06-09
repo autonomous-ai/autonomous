@@ -51,7 +51,7 @@ make upload-claude-desktop-buddy     # scripts/release/upload-claude-desktop-bud
 ```ini
 [Unit]
 Description=Lamp Claude Desktop Buddy (BLE)
-After=bluetooth.target lamp.service
+After=bluetooth.target os-server.service
 Wants=bluetooth.target
 
 [Service]
@@ -65,7 +65,7 @@ SyslogIdentifier=claude-desktop-buddy
 ```
 
 Runs as **root** (needs the system D-Bus for the BlueZ agent and the debugfs knobs
-for advertising tuning). Starts after `bluetooth.target` and `lamp.service`.
+for advertising tuning). Starts after `bluetooth.target` and `os-server.service`.
 
 ```bash
 sudo systemctl enable  claude-desktop-buddy
@@ -171,7 +171,7 @@ re-sent).
 
 `WARN: failed to fetch mac ...` or `mac is empty` means Lamp's
 `/api/system/network` wasn't reachable/ready (Buddy retries ~15× / 2 s). The
-device still runs, advertising as `Claude-lamp-unk`. Ensure `lamp.service` is up.
+device still runs, advertising as `Claude-lamp-unk`. Ensure `os-server.service` is up.
 
 ### Useful checks
 

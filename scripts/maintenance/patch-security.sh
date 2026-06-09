@@ -6,7 +6,7 @@
 #
 # PREREQUISITE: run OTA first so the device has the latest code:
 #   sudo software-update hal   ← same-origin middleware (server.py)
-#   sudo software-update lamp     ← sameOriginOrLAN guard (/api/sensing/event)
+#   sudo software-update os-server  ← sameOriginOrLAN guard (/api/sensing/event)
 
 set -euo pipefail
 

@@ -51,7 +51,7 @@ make upload-claude-desktop-buddy     # scripts/release/upload-claude-desktop-bud
 ```ini
 [Unit]
 Description=Lamp Claude Desktop Buddy (BLE)
-After=bluetooth.target lamp.service
+After=bluetooth.target os-server.service
 Wants=bluetooth.target
 
 [Service]
@@ -65,7 +65,7 @@ SyslogIdentifier=claude-desktop-buddy
 ```
 
 Chạy với quyền **root** (cần system D-Bus cho BlueZ agent và các tham số debugfs
-để tinh chỉnh advertising). Khởi động sau `bluetooth.target` và `lamp.service`.
+để tinh chỉnh advertising). Khởi động sau `bluetooth.target` và `os-server.service`.
 
 ```bash
 sudo systemctl enable  claude-desktop-buddy
@@ -170,7 +170,7 @@ vô hại; nhưng nếu rớt giữa chừng một lần truyền thì việc đ
 
 `WARN: failed to fetch mac ...` hoặc `mac is empty` nghĩa là `/api/system/network` của Lamp
 không truy cập được/chưa sẵn sàng (Buddy thử lại ~15 lần / mỗi 2 s). Thiết bị
-vẫn chạy, advertising với tên `Claude-lamp-unk`. Hãy đảm bảo `lamp.service` đang hoạt động.
+vẫn chạy, advertising với tên `Claude-lamp-unk`. Hãy đảm bảo `os-server.service` đang hoạt động.
 
 ### Các lệnh kiểm tra hữu ích
 
