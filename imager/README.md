@@ -66,7 +66,7 @@ Phase 3  OTA bake from metadata.json:
            (with webrtcvad pkg_resources shim for Py 3.12+ where the symbol was removed)
          - Web UI to /usr/share/nginx/html/setup
          - Claude Desktop Buddy BLE plugin (optional, if `claude-desktop-buddy.url` in metadata)
-         - Writes /tmp/ota-versions.env (web/lamp/bootstrap/hal/buddy versions baked in)
+         - Writes /tmp/ota-versions.env (web/os-server/bootstrap/hal/buddy versions baked in)
 Phase 4  lamp-resize-once.service installed
          - oneshot, first-boot only, self-destructing
          - growpart + resize2fs to fill the actual SD card (image is 14 GB, SD likely larger)
