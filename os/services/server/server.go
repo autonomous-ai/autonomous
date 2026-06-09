@@ -605,7 +605,7 @@ func (s *Server) Serve(closeFn func()) error {
 	monitor := api.Group("monitor")
 	monitor.POST("event", sameOriginOrLAN(), s.sensingHandler.PostMonitorEvent)
 
-	// Lamp Buddy (macOS companion app for remote computer use):
+	// Autonomous Buddy (macOS companion app for remote computer use):
 	//   - /pair/start, /status, /command, DELETE admin-gated
 	//   - /pair/confirm anonymous (code-based)
 	//   - /ws bearer-token gated (validated in handler against buddies.json)

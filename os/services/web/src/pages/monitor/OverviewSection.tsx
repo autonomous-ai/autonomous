@@ -518,7 +518,7 @@ export function OverviewSection({
         ) : <span style={{ color: "var(--lm-text-muted)" }}>Loading…</span>}
       </div>
 
-      {/* Versions + Lamp Buddy pairing.
+      {/* Versions + Autonomous Buddy pairing.
           OS uptime sits in the host row; detailed CPU/RAM/Disk live in System tab. */}
       <div className="lm-grid-4">
         <div style={S.card}>

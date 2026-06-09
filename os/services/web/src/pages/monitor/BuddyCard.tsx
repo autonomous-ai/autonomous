@@ -135,7 +135,7 @@ export function BuddyCard() {
   return (
     <div style={S.card}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={S.cardLabel}>Lamp Buddy (Mac)</div>
+        <div style={S.cardLabel}>Autonomous Buddy (Mac)</div>
         <span
           style={{
             fontSize: 10,
@@ -214,7 +214,7 @@ export function BuddyCard() {
       {status && !status.paired && !code && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span style={{ fontSize: 12, color: "var(--lm-text-dim)" }}>
-            No Mac paired. Install Lamp Buddy on your Mac then click below to start pairing.
+            No Mac paired. Install Autonomous Buddy on your Mac then click below to start pairing.
           </span>
           <button
             type="button"
@@ -239,7 +239,7 @@ export function BuddyCard() {
       {code && (
         <div ref={codeBox} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <span style={{ fontSize: 11, color: "var(--lm-text-dim)" }}>
-            Enter this code in Lamp Buddy → <em>Pair with Lamp…</em>
+            Enter this code in Autonomous Buddy → <em>Pair with device…</em>
           </span>
           <button
             type="button"

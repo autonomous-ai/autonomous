@@ -1,4 +1,4 @@
-// Package buddy implements the lamp-side coordinator for the Lamp Buddy macOS
+// Package buddy implements the device-side coordinator for the Autonomous Buddy macOS
 // companion app. It owns:
 //   - pairing flow (6-digit code → long-lived token)
 //   - persistent pairing record (config/buddies.json)
@@ -15,7 +15,7 @@ import (
 )
 
 // Command matches the JSON shape the buddy expects on its WebSocket.
-// Mirrors lamp-buddy/mock-lamp/command.go.
+// Mirrors autonomous-buddy/mock-device/command.go.
 type Command struct {
 	ID        string         `json:"id"`
 	Action    string         `json:"action"`
