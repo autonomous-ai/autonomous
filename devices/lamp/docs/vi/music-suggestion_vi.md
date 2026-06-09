@@ -236,5 +236,5 @@ Monitor page → Users section → click vào user → xem `music-suggestions/` 
 ### Logs
 
 ```bash
-journalctl -u lamp-server | grep -i "suggestion\|music"
+journalctl -u os-server | grep -i "suggestion\|music"
 ```

@@ -107,7 +107,7 @@ Bootstrap's OTA LED writes bypass this priority queue — they run while bootstr
 
 ## Architecture
 
-### Lamp (lamp-server)
+### Lamp (os-server)
 
 `internal/statusled/Service` manages active states with a priority map. Callers `Set` and `Clear` named states; the service applies the LED effect for the highest-priority active state.
 

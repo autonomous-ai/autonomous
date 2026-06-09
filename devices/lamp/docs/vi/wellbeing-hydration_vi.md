@@ -312,7 +312,7 @@ Sau vài session, AI sẽ override bằng dữ liệu thực từ wellbeing note
 **Verify:**
 ```bash
 # Xem agent log
-journalctl -u lamp-server | grep -i "caring\|hydration\|water"
+journalctl -u os-server | grep -i "caring\|hydration\|water"
 ```
 
 ### Test 3: Hydration cron fire → user đang uống → skip
@@ -453,7 +453,7 @@ cat /root/local/users/<name>/wellbeing.md
 
 ```bash
 # Xem wellbeing-related logs
-journalctl -u lamp-server | grep -i "wellbeing\|caring\|broadcast\|cron"
+journalctl -u os-server | grep -i "wellbeing\|caring\|broadcast\|cron"
 ```
 
 | Log message | Ý nghĩa |

@@ -97,7 +97,7 @@ Net effect: at peak, 4–6 `chat.send` can be in flight within a single turn's d
 
 | Source | What it proves |
 |---|---|
-| `journalctl -u lamp` filtered by runId | Lamp's `chat.send` payload (intended input) + the UUID→device runId mapping line (`mapped OpenClaw runId to device trace`) |
+| `journalctl -u os-server` filtered by runId | Lamp's `chat.send` payload (intended input) + the UUID→device runId mapping line (`mapped OpenClaw runId to device trace`) |
 | `/root/local/flow_events_YYYY-MM-DD.jsonl` | What actually fired under that runId: `tts_send`, `agent_thinking`, `tool_call`, `token_usage`. Content often does not match the `chat_send.message` on the same `trace_id` |
 | **`/root/.openclaw/agents/main/sessions/<sessionId>.jsonl`** | Ground truth: every user + assistant entry with UTC timestamps and `thinking` blocks + signatures. Use this to confirm which message the turn actually processed |
 | `journalctl -u openclaw` | Session lane diagnostics (e.g. `lane wait exceeded waitedMs=…`), chat.send / chat.history ACKs, connId |
@@ -121,7 +121,7 @@ RUN=lamp-chat-<N>-<ms>
 
 ```bash
 # What Lamp intended to send under this runId
-$SSH "sudo journalctl -u lamp --no-pager | grep '\[chat.send\] full payload' | grep '$RUN'"
+$SSH "sudo journalctl -u os-server --no-pager | grep '\[chat.send\] full payload' | grep '$RUN'"
 
 # What actually came back under this runId
 $SSH "sudo grep '$RUN' /root/local/flow_events_$(date +%F).jsonl \
@@ -134,7 +134,7 @@ If the `tts_send.text` / `agent_thinking.text` is semantically unrelated to the 
 
 ```bash
 # All Lamp chat.sends in a window — run id + first 100 chars of message
-$SSH "sudo journalctl -u lamp --since '<START>' --until '<END>' --no-pager \
+$SSH "sudo journalctl -u os-server --since '<START>' --until '<END>' --no-pager \
       | grep '\[chat.send\] full payload' \
       | sed -E 's/.*idempotencyKey\":\"([^\"]+)\",\"message\":\"([^\"]{0,100}).*/\\1  →  \\2/'"
 ```
@@ -248,6 +248,6 @@ Two ways to close this:
 - **Detected**: 2026-04-21 — `lamp-chat-26`, `lamp-chat-201`, `lamp-chat-203`, `lamp-chat-337/339` (session `agent:main:main`).
 - **Root cause**: Lamp `pendingChatTrace` single-slot overwrite, introduced by commit `64571f7b` on 2026-04-14. Precondition (low sensing burst rate) broke between 14/4 and 21/4 as sensing pipeline gained ambient voice, sound events, tool-calling emotion/motion skills.
 - **Fix landed**: FIFO queue + TTL head-drop in `lamp/internal/openclaw/service.go` + interface doc refresh in `lamp/domain/agent.go`. Public API unchanged. `GOOS=linux GOARCH=arm64 go build ./...` clean.
-- **Deploy**: not yet. `make build-lamp` → scp `lamp-server` to Pi → `sudo systemctl restart lamp`.
+- **Deploy**: not yet. `make os-build` → scp `os-server` to Pi → `sudo systemctl restart os-server`.
 - **Post-deploy verification**: re-run §4.1 / §4.2 on a fresh burst window; expect `tts_send.text` to align with `chat_send.message` under the same `trace_id`.
 - **Follow-up**: Telegram-interleave variant still open — see §5. Consider upstream openclaw change to echo UUID in `chat.send` response.

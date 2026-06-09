@@ -16,7 +16,7 @@ SSH="sshpass -p $PASS ssh -o StrictHostKeyChecking=no $PI"
 ```
 
 Pi services:
-- `lamp-server` on `:5000` (Go backend — event ingress, mood/wellbeing APIs, flow monitor)
+- `os-server` on `:5000` (Go backend — event ingress, mood/wellbeing APIs, flow monitor)
 - `nginx` on `:80` (proxy for browser UI at `http://<IP>/monitor`)
 - `lelamp` on `:5001` (Python sensing + face recognition)
 
@@ -250,8 +250,8 @@ $SSH "curl -s -X POST http://127.0.0.1:5000/api/openclaw/cron -d '{\"action\":\"
 # Clear mood for a user (manual — no API, just truncate)
 $SSH "echo $PASS | sudo -S truncate -s 0 /root/local/users/<user>/mood/$(date +%Y-%m-%d).jsonl"
 
-# Restart lamp-server (picks up new binary after OTA deploy)
-$SSH "echo $PASS | sudo -S systemctl restart lamp"
+# Restart os-server (picks up new binary after OTA deploy)
+$SSH "echo $PASS | sudo -S systemctl restart os-server"
 ```
 
 ---

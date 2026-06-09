@@ -36,10 +36,10 @@ PI=orangepi@<IP>; PASS=<pass>
 SSH="sshpass -p $PASS ssh -o StrictHostKeyChecking=no $PI"
 
 # 1. Last lifecycle event Lamp saw (should be old):
-$SSH "sudo journalctl -u lamp.service --since '20 min ago' --no-pager | grep 'lifecycle event' | tail -3"
+$SSH "sudo journalctl -u os-server.service --since '20 min ago' --no-pager | grep 'lifecycle event' | tail -3"
 
 # 2. Last /api/openclaw/busy POST (should be after #1):
-$SSH "sudo journalctl -u lamp.service --since '20 min ago' --no-pager | grep '/api/openclaw/busy' | tail -3"
+$SSH "sudo journalctl -u os-server.service --since '20 min ago' --no-pager | grep '/api/openclaw/busy' | tail -3"
 
 # 3. OpenClaw heartbeat / memoryFlush near #2's timestamp:
 $SSH "sudo grep -E 'isHeartbeat=true|before_agent_reply' /var/log/openclaw/lamp.log | tail -10"
@@ -53,7 +53,7 @@ Wedged when:
 ## Workarounds
 
 - **Wait ≤5 min** — auto-clear fires (`stuck_for_s` in the WARN line tells you how long).
-- **Restart Lamp** if urgent: `sudo systemctl restart lamp`. There is no idle endpoint — POSTing `/api/openclaw/busy` only sets `busy=true` again.
+- **Restart Lamp** if urgent: `sudo systemctl restart os-server`. There is no idle endpoint — POSTing `/api/openclaw/busy` only sets `busy=true` again.
 
 ## Real fix paths
 

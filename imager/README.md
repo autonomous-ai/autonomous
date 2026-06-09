@@ -61,7 +61,7 @@ Phase 2  chroot qemu-arm64:
          - SPI3 overlay baked into orangepiEnv.txt for WS2812 LED ring (/dev/spidev3.0)
          - mask orangepi-firstrun-config.service (vendor wizard would conflict)
 Phase 3  OTA bake from metadata.json:
-         - bootstrap-server + lamp-server binaries
+         - bootstrap-server + os-server binaries
          - LeLamp Python app + `uv sync --python 3.12 --extra hardware`
            (with webrtcvad pkg_resources shim for Py 3.12+ where the symbol was removed)
          - Web UI to /usr/share/nginx/html/setup
@@ -181,7 +181,7 @@ SSH in (`ssh system@lamp-xxxx.local`, password `12345`) and verify:
 
 ```bash
 systemctl is-enabled lamp lamp-hal openclaw avahi-daemon
-ls /usr/local/bin/{lamp-server,bootstrap-server,device-ap-mode,connect-wifi,software-update}
+ls /usr/local/bin/{os-server,bootstrap-server,device-ap-mode,connect-wifi,software-update}
 ls /opt/hal/.venv/bin/uvicorn       # LeLamp uv sync succeeded
 openclaw --version                       # OpenClaw npm global installed
 ls /etc/asound.conf /etc/udev/rules.d/91-pulseaudio-hal-ignore.rules

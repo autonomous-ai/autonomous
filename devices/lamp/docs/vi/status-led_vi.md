@@ -107,7 +107,7 @@ LED OTA của bootstrap không qua priority queue — nó chạy khi bootstrap s
 
 ## Kiến Trúc
 
-### Lamp (lamp-server)
+### Lamp (os-server)
 
 `internal/statusled/Service` quản lý các state active với priority map. Caller `Set` và `Clear` các named state; service apply LED effect cho state có priority cao nhất.
 
