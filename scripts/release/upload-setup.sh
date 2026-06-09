@@ -2,7 +2,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SETUP_FILE="${SCRIPT_DIR}/setup.sh"
+SETUP_FILE="${SCRIPT_DIR}/../provision/setup.sh"
 
 # Bucket and path matching https://storage.googleapis.com/s3-autonomous-upgrade-3/${BUCKET_PREFIX}/setup.sh
 source "${SCRIPT_DIR}/ota-config.sh"

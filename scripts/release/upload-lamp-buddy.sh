@@ -11,7 +11,7 @@ DIST_DIR="${BUDDY_DIR}/dist"
 source "${SCRIPT_DIR}/ota-config.sh"
 
 # Build target — `dmg` (unsigned, default) or `dmg-signed` (Developer ID + notarized).
-# Override via env: BUDDY_DMG_TARGET=dmg-signed scripts/upload-lamp-buddy.sh
+# Override via env: BUDDY_DMG_TARGET=dmg-signed scripts/release/upload-lamp-buddy.sh
 DMG_TARGET="${BUDDY_DMG_TARGET:-dmg}"
 
 # Auto-increment semver (patch) before build

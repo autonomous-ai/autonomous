@@ -2,11 +2,11 @@
 # Upload a CAD file to Mega.nz and print a public share link.
 #
 # Usage:
-#   scripts/upload-cad.sh <local-file> [remote-dir]
+#   scripts/release/upload-cad.sh <local-file> [remote-dir]
 #
 # Examples:
-#   scripts/upload-cad.sh devices/lamp/hardware/cad/lamp-v3.stp
-#   scripts/upload-cad.sh devices/lamp/hardware/cad/lamp-v3.stp /lamp-cad
+#   scripts/release/upload-cad.sh devices/lamp/hardware/cad/lamp-v3.stp
+#   scripts/release/upload-cad.sh devices/lamp/hardware/cad/lamp-v3.stp /lamp-cad
 #
 # Requirements:
 #   - MEGAcmd installed (brew install --cask megacmd)

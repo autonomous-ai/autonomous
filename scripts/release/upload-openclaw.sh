@@ -7,10 +7,10 @@ set -e
 # updates the metadata field — it doesn't touch GCS otherwise.
 #
 # Usage:
-#   ./scripts/upload-openclaw.sh <version_str>
+#   ./scripts/release/upload-openclaw.sh <version_str>
 #
 # Example:
-#   ./scripts/upload-openclaw.sh 1.2.3
+#   ./scripts/release/upload-openclaw.sh 1.2.3
 #
 # Other keys in metadata.json (skills, etc.) are preserved.
 

@@ -5,7 +5,7 @@
 # component version set in the public repo (GPL v3 §6 compliance).
 #
 # Usage:
-#   scripts/tag-release.sh v0.0.8
+#   scripts/release/tag-release.sh v0.0.8
 set -euo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
@@ -15,7 +15,7 @@ OTA_METADATA_URL="${OTA_METADATA_URL:-https://cdn.autonomous.ai/${BUCKET_PREFIX}
 REMOTE="${TAG_REMOTE:-origin}"
 
 if [[ -z "$VERSION" ]]; then
-  echo "Usage: scripts/tag-release.sh v0.0.X" >&2
+  echo "Usage: scripts/release/tag-release.sh v0.0.X" >&2
   exit 1
 fi
 
