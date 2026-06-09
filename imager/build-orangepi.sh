@@ -292,7 +292,7 @@ mkdir -p /opt/hal
 # ── systemd units ────────────────────────────────────────────────────────────
 echo "[stage] systemd units"
 
-cat > /etc/systemd/system/lamp.service <<'UNIT'
+cat > /etc/systemd/system/os-server.service <<'UNIT'
 [Unit]
 Description=Lamp Backend
 After=network-online.target
@@ -300,12 +300,12 @@ After=network-online.target
 [Service]
 User=root
 WorkingDirectory=/root
-ExecStart=/usr/local/bin/lamp-server
+ExecStart=/usr/local/bin/os-server
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=lamp
+SyslogIdentifier=os-server
 
 [Install]
 WantedBy=multi-user.target
@@ -620,11 +620,11 @@ if [ -z "\$OTA_METADATA_URL" ]; then
 fi
 echo "[software-update] OTA metadata: \$OTA_METADATA_URL"
 [ "\$(id -u)" -ne 0 ] && { echo "Run as root."; exit 1; }
-[ \$# -ne 1 ] && { echo "Usage: software-update <lamp|openclaw|bootstrap|web|hal|claude-desktop-buddy>"; exit 1; }
+[ \$# -ne 1 ] && { echo "Usage: software-update <os-server|openclaw|bootstrap|web|hal|claude-desktop-buddy>"; exit 1; }
 APP="\$1"
 case "\$APP" in
-  lamp|openclaw|bootstrap|web|hal|claude-desktop-buddy) ;;
-  *) echo "Unknown app: \$APP. Use lamp, openclaw, bootstrap, web, hal, or claude-desktop-buddy."; exit 1 ;;
+  os-server|openclaw|bootstrap|web|hal|claude-desktop-buddy) ;;
+  *) echo "Unknown app: \$APP. Use os-server, openclaw, bootstrap, web, hal, or claude-desktop-buddy."; exit 1 ;;
 esac
 
 METADATA_TMP=\$(mktemp)
@@ -637,19 +637,19 @@ VERSION=\$(jq -r --arg a "\$META_KEY" '.[\$a].version // empty' "\$METADATA_TMP"
 URL=\$(jq -r --arg a "\$META_KEY" '.[\$a].url // empty' "\$METADATA_TMP")
 [ -z "\$VERSION" ] && { echo "Metadata has no version for \$APP"; exit 1; }
 
-if [ "\$APP" = "lamp" ]; then
-  [ -z "\$URL" ] && { echo "Metadata has no url for lamp"; exit 1; }
+if [ "\$APP" = "os-server" ]; then
+  [ -z "\$URL" ] && { echo "Metadata has no url for os-server"; exit 1; }
   ZIP_TMP=\$(mktemp)
   DIR_TMP=\$(mktemp -d)
-  curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download lamp"; exit 1; }
+  curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download os-server"; exit 1; }
   unzip -o -q "\$ZIP_TMP" -d "\$DIR_TMP"
   BIN=\$(find "\$DIR_TMP" -type f -executable 2>/dev/null | head -1)
   [ -z "\$BIN" ] && BIN=\$(find "\$DIR_TMP" -type f 2>/dev/null | head -1)
-  [ -z "\$BIN" ] || [ ! -f "\$BIN" ] && { echo "No binary in lamp zip"; exit 1; }
-  cp -f "\$BIN" /usr/local/bin/lamp-server
-  chmod +x /usr/local/bin/lamp-server
-  systemctl restart lamp
-  echo "lamp updated to \$VERSION"
+  [ -z "\$BIN" ] || [ ! -f "\$BIN" ] && { echo "No binary in os-server zip"; exit 1; }
+  cp -f "\$BIN" /usr/local/bin/os-server
+  chmod +x /usr/local/bin/os-server
+  systemctl restart os-server
+  echo "os-server updated to \$VERSION"
 elif [ "\$APP" = "bootstrap" ]; then
   [ -z "\$URL" ] && { echo "Metadata has no url for bootstrap"; exit 1; }
   ZIP_TMP=\$(mktemp)
@@ -988,24 +988,24 @@ echo "[overlay] fetch OTA metadata"
 META=\$(mktemp)
 retry "curl -fsSL -H 'Cache-Control: no-cache' -o '\$META' '${OTA_METADATA_URL}'" 5
 WEB_URL=\$(jq -r '.web.url // empty'               "\$META")
-LAMP_URL=\$(jq -r '.lamp.url // empty'             "\$META")
+OS_SERVER_URL=\$(jq -r '."os-server".url // empty'             "\$META")
 BOOTSTRAP_URL=\$(jq -r '.bootstrap.url // empty'   "\$META")
 LELAMP_URL=\$(jq -r '.hal.url // empty'         "\$META")
 BUDDY_URL=\$(jq -r '."claude-desktop-buddy".url // empty' "\$META")
 WEB_VER=\$(jq -r '.web.version // empty'           "\$META")
-LAMP_VER=\$(jq -r '.lamp.version // empty'         "\$META")
+OS_SERVER_VER=\$(jq -r '."os-server".version // empty'         "\$META")
 BOOTSTRAP_VER=\$(jq -r '.bootstrap.version // empty' "\$META")
 LELAMP_VER=\$(jq -r '.hal.version // empty'     "\$META")
 BUDDY_VER=\$(jq -r '."claude-desktop-buddy".version // empty' "\$META")
 rm -f "\$META"
-[ -z "\$WEB_URL" ] || [ -z "\$LAMP_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
-  echo "ERROR: OTA metadata missing web.url / lamp.url / bootstrap.url"; exit 1
+[ -z "\$WEB_URL" ] || [ -z "\$OS_SERVER_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
+  echo "ERROR: OTA metadata missing web.url / os-server.url / bootstrap.url"; exit 1
 }
-echo "[overlay] web=\$WEB_VER lamp=\$LAMP_VER bootstrap=\$BOOTSTRAP_VER hal=\$LELAMP_VER buddy=\$BUDDY_VER"
+echo "[overlay] web=\$WEB_VER os-server=\$OS_SERVER_VER bootstrap=\$BOOTSTRAP_VER hal=\$LELAMP_VER buddy=\$BUDDY_VER"
 
 echo "[overlay] backend binaries"
 install_binary_from_zip "\$BOOTSTRAP_URL" /usr/local/bin/bootstrap-server "bootstrap"
-install_binary_from_zip "\$LAMP_URL"      /usr/local/bin/lamp-server      "lamp"
+install_binary_from_zip "\$OS_SERVER_URL"      /usr/local/bin/os-server      "os-server"
 
 echo "[overlay] LeLamp"
 LELAMP_DIR="/opt/hal"
@@ -1082,7 +1082,7 @@ if [ -n "\$BUDDY_URL" ]; then
   cat > /etc/systemd/system/claude-desktop-buddy.service <<'UNIT'
 [Unit]
 Description=Lamp Claude Desktop Buddy (BLE)
-After=bluetooth.target lamp.service
+After=bluetooth.target os-server.service
 Wants=bluetooth.target
 
 [Service]

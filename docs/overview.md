@@ -3,20 +3,20 @@
 ## 3-Layer Architecture
 
 ```
-Agentic Runtime (AI/LLM) → Lamp Server (Go, :5000) → HAL (Python, :5001) → Hardware
+Agentic Runtime (AI/LLM) → OS Server (Go, :5000) → HAL (Python, :5001) → Hardware
 ```
 
 | Layer | Language | Port | Role |
 |-------|----------|------|------|
 | Agentic Runtime | Go | WS | AI brain, LLM, SKILL.md, memory, channels |
-| Lamp Server | Go | 5000 | System (network, OTA, MQTT, reset), sensing event routing, local intent |
+| OS Server | Go | 5000 | System (network, OTA, MQTT, reset), sensing event routing, local intent |
 | HAL | Python | 5001 | Hardware drivers (servo, LED, camera, audio, display), FastAPI |
 
 ## Project Directory
 
 ```
 os/services/
-├── cmd/lamp/main.go              — Lamp Server entry point
+├── cmd/os-server/main.go              — OS Server entry point
 ├── cmd/bootstrap/main.go         — OTA bootstrap worker
 ├── server/
 │   ├── server.go                 — Gin HTTP server, route setup

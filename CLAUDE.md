@@ -12,7 +12,7 @@ This repo is developed in both **Cursor** and **Claude Code**. The following rul
 
    | Code area | English doc | Vietnamese doc |
    |-----------|-------------|----------------|
-   | lamp-server, API, startup | `docs/lamp-server.md` | `docs/vi/lamp-server_vi.md` |
+   | os-server, API, startup | `docs/os-server.md` | `docs/vi/os-server_vi.md` |
    | Setup flow, provisioning | `docs/setup-flow.md` | `docs/vi/setup-flow_vi.md` |
    | Web UI, configuration pages | `docs/web-ui.md` | `docs/vi/web-ui_vi.md` |
    | Flow Monitor (turn pipeline, JSONL, SSE) | `docs/flow-monitor.md` | `docs/vi/flow-monitor_vi.md` |
@@ -74,15 +74,15 @@ All targets run from the repo root via the top-level `Makefile`.
 
 ```bash
 # Build Go services (cross-compiles to linux/arm64)
-make lamp-build              # Builds lamp-server binary
-make lamp-build-bootstrap    # Builds bootstrap-server binary
+make os-build                # Builds os-server binary
+make os-build-bootstrap      # Builds bootstrap-server binary
 
 # Code generation (Google Wire DI)
-make lamp-generate           # Runs: cd os/services && GOFLAGS=-mod=mod go generate ./...
+make os-generate             # Runs: cd os/services && GOFLAGS=-mod=mod go generate ./...
 
 # Lint + tests (Go)
-make lamp-lint               # cd os/services && golangci-lint run
-make lamp-test               # cd os/services && go test ./...
+make os-lint                 # cd os/services && golangci-lint run
+make os-test                 # cd os/services && go test ./...
 
 # HAL (Python hardware runtime, os/hal)
 make hal-dev                 # Install deps + run hal locally
@@ -95,19 +95,19 @@ make web-build               # Production build → dist/
 ```
 
 Go version is injected at build time via ldflags. HAL/web versions live in
-`os/services/VERSION_LAMP` and `os/hal/VERSION_LELAMP` and are auto-bumped by the
+`os/services/VERSION_OS_SERVER` and `os/hal/VERSION_LELAMP` and are auto-bumped by the
 `make upload-*` release targets — do not hand-edit for releases.
 
 ## Architecture
 
 ### Two Executables
 
-- **`os/services/cmd/lamp/main.go`** — Main HTTP API server (Gin). Handles device setup, network management, LED control, health checks, and agent gateway integration.
+- **`os/services/cmd/os-server/main.go`** — Main HTTP API server (Gin). Handles device setup, network management, LED control, health checks, and agent gateway integration.
 - **`os/services/cmd/bootstrap/main.go`** — OTA bootstrap worker. Periodically checks for and applies updates.
 
 ### Dependency Injection
 
-Uses **Google Wire** for compile-time DI. After changing provider signatures, run `make lamp-generate` to regenerate `wire_gen.go` files.
+Uses **Google Wire** for compile-time DI. After changing provider signatures, run `make os-generate` to regenerate `wire_gen.go` files.
 
 ### Package Layout
 
@@ -136,7 +136,7 @@ All HTTP endpoints return: `{"status": 1, "data": <payload>, "message": null}` o
 
 ### Configuration
 
-Config lives in `config/config.json` (path relative to the lamp-server working dir). Managed by `os/services/server/config/config.go`. Supports notification channel for config change propagation.
+Config lives in `config/config.json` (path relative to the os-server working dir). Managed by `os/services/server/config/config.go`. Supports notification channel for config change propagation.
 
 ## Coding Standards
 

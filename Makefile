@@ -1,19 +1,20 @@
 # Autonomous — Makefile
-# 4 components: Go (lamp + bootstrap + buddy), Python (hal), TypeScript (web)
+# 4 components: Go (os + bootstrap + buddy), Python (hal), TypeScript (web)
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
 # Directories
-LAMP_DIR       := os/services
+OS_DIR         := os/services
 LELAMP_DIR     := os/hal
 BUDDY_DIR      := companions/claude-desktop-buddy
 TWITCH_DIR     := chat-hooks/twitch-chat-hook
 AUTONOMOUS_DIR := chat-hooks/autonomous-chat-hook
-WEB_DIR        := $(LAMP_DIR)/web
+WEB_DIR        := $(OS_DIR)/web
 
 # Go build
 MODULE         := go.autonomous.ai/os
-LDFLAGS_LAMP   := -X $(MODULE)/server/config.LampVersion=$(VERSION)
+# Go symbol stays config.LampVersion (internal, not part of deploy identity).
+LDFLAGS_OS     := -X $(MODULE)/server/config.LampVersion=$(VERSION)
 LDFLAGS_BOOT   := -X $(MODULE)/bootstrap/config.BootstrapVersion=$(VERSION)
 LDFLAGS_IRC    := -X main.Version=$(VERSION)
 LDFLAGS_AUTONOMOUS_CHAT := -X main.Version=$(VERSION)
@@ -22,27 +23,27 @@ LDFLAGS_AUTONOMOUS_CHAT := -X main.Version=$(VERSION)
 LELAMP_PORT    := 5001
 
 # ============================================================================
-# Lamp (Go) — build | generate | lint | test
+# OS services (Go) — build | generate | lint | test
 # ============================================================================
 
-.PHONY: lamp-build lamp-build-bootstrap lamp-generate lamp-lint lamp-test
+.PHONY: os-build os-build-bootstrap os-generate os-lint os-test
 
-lamp-build:
-	cd $(LAMP_DIR) && GOOS=linux GOARCH=arm64 go build -ldflags "-s -w $(LDFLAGS_LAMP)" -o lamp-server ./cmd/lamp
-
-
-lamp-build-bootstrap:
-	cd $(LAMP_DIR) && GOOS=linux GOARCH=arm64 go build -ldflags "-s -w $(LDFLAGS_BOOT)" -o bootstrap-server ./cmd/bootstrap
+os-build:
+	cd $(OS_DIR) && GOOS=linux GOARCH=arm64 go build -ldflags "-s -w $(LDFLAGS_OS)" -o os-server ./cmd/os-server
 
 
-lamp-generate:
-	cd $(LAMP_DIR) && GOFLAGS=-mod=mod go generate ./...
+os-build-bootstrap:
+	cd $(OS_DIR) && GOOS=linux GOARCH=arm64 go build -ldflags "-s -w $(LDFLAGS_BOOT)" -o bootstrap-server ./cmd/bootstrap
 
-lamp-lint:
-	cd $(LAMP_DIR) && golangci-lint run
 
-lamp-test:
-	cd $(LAMP_DIR) && go test ./...
+os-generate:
+	cd $(OS_DIR) && GOFLAGS=-mod=mod go generate ./...
+
+os-lint:
+	cd $(OS_DIR) && golangci-lint run
+
+os-test:
+	cd $(OS_DIR) && go test ./...
 
 # ============================================================================
 # LeLamp (Python) — dev | run | test
@@ -112,10 +113,10 @@ autonomous-build-chat:
 # Upload (OTA to GCS) — unified format: make upload-<component>
 # ============================================================================
 
-.PHONY: upload-lamp upload-bootstrap upload-hal upload-claude-desktop-buddy upload-lamp-buddy upload-web upload-skills upload-hooks upload-setup upload-setup-ap upload-openclaw upload-twitch-irc upload-autonomous-chat upload-all
+.PHONY: upload-os-server upload-bootstrap upload-hal upload-claude-desktop-buddy upload-lamp-buddy upload-web upload-skills upload-hooks upload-setup upload-setup-ap upload-openclaw upload-twitch-irc upload-autonomous-chat upload-all
 
-upload-lamp:
-	bash scripts/release/upload-lamp.sh
+upload-os-server:
+	bash scripts/release/upload-os-server.sh
 
 upload-bootstrap:
 	bash scripts/release/upload-bootstrap.sh
@@ -168,13 +169,13 @@ upload-openclaw:
 
 # upload-openclaw is intentionally NOT in upload-all — bumping the OpenClaw
 # version is an explicit decision, not a side effect of pushing other artifacts.
-upload-all: upload-lamp upload-bootstrap upload-hal upload-claude-desktop-buddy upload-web upload-skills upload-hooks
+upload-all: upload-os-server upload-bootstrap upload-hal upload-claude-desktop-buddy upload-web upload-skills upload-hooks
 
 # ============================================================================
 # Release tagging — GPL v3 §6 compliance
 # ============================================================================
 # Annotated git tag with current OTA metadata.json embedded as message, then
-# pushed. Lets buyers map "lamp-server --version" on the board back to a
+# pushed. Lets buyers map "os-server --version" on the board back to a
 # specific commit + component version set in the public repo.
 #
 # Usage: make tag-release v0.0.8       # after all upload-* targets succeed
@@ -198,7 +199,7 @@ tag-release:
 .PHONY: clean
 
 clean:
-	rm -f $(LAMP_DIR)/lamp-server $(LAMP_DIR)/bootstrap-server
+	rm -f $(OS_DIR)/os-server $(OS_DIR)/bootstrap-server
 	rm -f $(BUDDY_DIR)/buddy-plugin $(BUDDY_DIR)/claude-desktop-buddy
 	rm -f $(TWITCH_DIR)/twitch-irc
 	rm -rf $(LELAMP_DIR)/.venv $(LELAMP_DIR)/__pycache__

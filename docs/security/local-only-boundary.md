@@ -1083,7 +1083,7 @@ Even if code is fixed, docs telling engineers that external `/hw/docs` is expect
 Update docs to say:
 
 ```md
-LeLamp Python runtime exposes HTTP API on `127.0.0.1:5001` only. Lamp Server (Go) and OpenClaw on the same device may call this API. LAN/Internet clients must not reach hardware endpoints directly. Nginx denies external `/hw/*` access.
+LeLamp Python runtime exposes HTTP API on `127.0.0.1:5001` only. OS Server (Go) and OpenClaw on the same device may call this API. LAN/Internet clients must not reach hardware endpoints directly. Nginx denies external `/hw/*` access.
 ```
 
 Replace diagrams like:

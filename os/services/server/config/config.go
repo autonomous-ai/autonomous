@@ -14,7 +14,7 @@ import (
 
 // bootstrapConfigPath is the OTA worker's config file. The device-wide OTA
 // metadata URL is seeded there at provisioning (single source of truth);
-// lamp-server's OTA-derived features (skill watcher, onboarding skills/hooks,
+// os-server's OTA-derived features (skill watcher, onboarding skills/hooks,
 // OTA poller) read it from the same file rather than duplicating it here.
 const bootstrapConfigPath = "/root/config/bootstrap.json"
 

@@ -50,7 +50,7 @@ var openclawStatePaths = []string{
 
 // lumiWipePaths are Lumi-specific state files not managed by the openclaw CLI.
 var lumiWipePaths = []string{
-	"/root/config",                                  // lamp-server config.json (API keys, channel tokens, MQTT creds)
+	"/root/config",                                  // os-server config.json (API keys, channel tokens, MQTT creds)
 	"/root/local/users",                             // face + voice enrollments (owner)
 	"/root/local/strangers",                         // face + voice enrollments (stranger)
 	"/var/lib/lelamp/snapshots",                     // persistent camera snapshots (sensing_face / motion / emotion, 72h TTL)

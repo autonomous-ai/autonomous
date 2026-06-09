@@ -1,8 +1,8 @@
-# Lamp Server API — Tài Liệu
+# OS Server API — Tài Liệu
 
-> Lamp Server (Go, Gin framework) chạy trên port 5000.
+> OS Server (Go, Gin framework) chạy trên port 5000.
 
-## Lamp Server Endpoints (Go, :5000)
+## OS Server Endpoints (Go, :5000)
 
 ### Health
 
@@ -232,7 +232,7 @@ Cần sensing có camera (InsightFace). Mặc định ảnh người đã đăng
 
 ## Response Format
 
-Lamp Server (Go):
+OS Server (Go):
 ```json
 {"status": 1, "data": {...}, "message": null}   // success
 {"status": 0, "data": null, "message": "error"}  // failure
@@ -242,7 +242,7 @@ HAL (Python): FastAPI standard JSON responses.
 
 ## Startup
 
-1. Lamp Server khởi động Gin trên :5000
+1. OS Server khởi động Gin trên :5000
 2. Đọc `config/config.json`
 3. Nếu `SetUpCompleted`:
    - Kết nối OpenClaw WebSocket

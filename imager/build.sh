@@ -53,7 +53,7 @@
 # PHASE 2 — OVERLAY (always runs — fast)
 #   Copy base.img → golden.img, mount, chroot:
 #         - stage_ota_metadata: fetch build versions from GCS
-#         - stage_backend: download bootstrap-server + lamp-server binaries
+#         - stage_backend: download bootstrap-server + os-server binaries
 #         - stage_hal: download LeLamp Python app + uv sync
 #         - stage_web: download web UI zip
 #   Take initial @factory snapshot (baked into image at build time)
@@ -106,7 +106,7 @@
 #   sudo device-ap-mode           — switch to hotspot mode
 #   sudo device-sta-mode          — switch to station (client) mode
 #   sudo connect-wifi SSID PASS   — connect to WiFi (switches to STA mode)
-#   sudo software-update <bootstrap|lamp|hal|openclaw|web>  — OTA update a component
+#   sudo software-update <bootstrap|os-server|hal|openclaw|web>  — OTA update a component
 # =============================================================================
 set -euo pipefail
 
@@ -741,7 +741,7 @@ retry() {
 
 # install_binary_from_zip(url, dest, name)
 # Downloads a zip, finds the executable inside, installs to dest.
-# Used for bootstrap-server and lamp-server OTA binaries.
+# Used for bootstrap-server and os-server OTA binaries.
 install_binary_from_zip() {
   local url="\$1" dest="\$2" name="\$3"
   local ztmp="/tmp/\${name}-zip.$$" dtmp="/tmp/\${name}-dir.$$"
@@ -826,7 +826,7 @@ SyslogIdentifier=bootstrap
 WantedBy=multi-user.target
 EOF
 
-cat > /etc/systemd/system/lamp.service <<'EOF'
+cat > /etc/systemd/system/os-server.service <<'EOF'
 [Unit]
 Description=Lamp Backend
 After=network.target
@@ -834,12 +834,12 @@ After=network.target
 [Service]
 User=root
 WorkingDirectory=/root
-ExecStart=/usr/local/bin/lamp-server
+ExecStart=/usr/local/bin/os-server
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=lamp
+SyslogIdentifier=os-server
 
 [Install]
 WantedBy=multi-user.target
@@ -865,7 +865,7 @@ SyslogIdentifier=lamp-hal
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable bootstrap lamp lamp-hal
+systemctl enable bootstrap os-server lamp-hal
 
 # Seed the bootstrap worker config so the OTA metadata URL comes from
 # /root/config/bootstrap.json at runtime (single source of truth). The bootstrap
@@ -881,8 +881,8 @@ cat > /root/config/bootstrap.json <<BSJSON
 }
 BSJSON
 
-# software-update: OTA updater for bootstrap, lamp, hal, openclaw, and web UI.
-# Usage: software-update <bootstrap|lamp|hal|openclaw|web>
+# software-update: OTA updater for bootstrap, os-server, hal, openclaw, and web UI.
+# Usage: software-update <bootstrap|os-server|hal|openclaw|web>
 # Downloads the binary/zip from OTA metadata URL and hot-swaps it.
 cat > /usr/local/bin/software-update <<'SWUPDATE'
 #!/bin/bash
@@ -905,7 +905,7 @@ retry() {
   echo "ERROR: failed \$max attempts"; return 1
 }
 [ "\$(id -u)" -ne 0 ] && { echo "Run as root."; exit 1; }
-[ \$# -lt 1 ] && { echo "Usage: software-update <bootstrap|lamp|hal|openclaw|web>"; exit 1; }
+[ \$# -lt 1 ] && { echo "Usage: software-update <bootstrap|os-server|hal|openclaw|web>"; exit 1; }
 
 # Wait for NTP time sync (RPi has no battery-backed RTC; clock may be wrong on boot)
 for i in \$(seq 1 10); do
@@ -914,7 +914,7 @@ for i in \$(seq 1 10); do
   sleep 2
 done
 KIND="\$1"
-case "\$KIND" in bootstrap|lamp|hal|openclaw|web) ;; *) echo "Unknown: \$KIND (bootstrap, lamp, hal, openclaw, web)"; exit 1 ;; esac
+case "\$KIND" in bootstrap|os-server|hal|openclaw|web) ;; *) echo "Unknown: \$KIND (bootstrap, os-server, hal, openclaw, web)"; exit 1 ;; esac
 META="\$(mktemp)"
 retry "curl -fsSL -H 'Cache-Control: no-cache' -o '\$META' '\$OTA_METADATA_URL'" 5
 URL=\$(jq -r --arg k "\$KIND" '.[\$k].url // empty' "\$META")
@@ -928,13 +928,13 @@ if [ "\$KIND" = "web" ]; then
   unzip -o -q /tmp/web.zip -d /usr/share/nginx/html/setup
   rm -f /tmp/web.zip
   systemctl reload nginx 2>/dev/null || systemctl restart nginx 2>/dev/null || true
-elif [ "\$KIND" = "lamp" ]; then
+elif [ "\$KIND" = "os-server" ]; then
   Z="\$(mktemp)"; D="\$(mktemp -d)"
   curl -fsSL -o "\$Z" "\$URL"; unzip -o -q "\$Z" -d "\$D"; rm -f "\$Z"
   b=\$(find "\$D" -type f -executable 2>/dev/null | head -1)
   [ -z "\$b" ] && b=\$(find "\$D" -type f 2>/dev/null | head -1)
-  cp -f "\$b" /usr/local/bin/lamp-server; chmod +x /usr/local/bin/lamp-server; rm -rf "\$D"
-  systemctl restart lamp 2>/dev/null || true
+  cp -f "\$b" /usr/local/bin/os-server; chmod +x /usr/local/bin/os-server; rm -rf "\$D"
+  systemctl restart os-server 2>/dev/null || true
 elif [ "\$KIND" = "bootstrap" ]; then
   Z="\$(mktemp)"; D="\$(mktemp -d)"
   curl -fsSL -o "\$Z" "\$URL"; unzip -o -q "\$Z" -d "\$D"; rm -f "\$Z"
@@ -965,7 +965,7 @@ chmod +x /usr/local/bin/software-update
 # ── stage: nginx ──────────────────────────────────────────────────────────────
 # nginx serves two things:
 #   1. Static web UI at / (setup wizard — downloaded from OTA)
-#   2. API proxy at /api/ → localhost:5000 (lamp-server), /hw/ → :5001 (hal), /gw/ → :18789 (openclaw)
+#   2. API proxy at /api/ → localhost:5000 (os-server), /hw/ → :5001 (hal), /gw/ → :18789 (openclaw)
 # Captive portal detection endpoints return 204 (no content) to prevent
 # the OS from auto-opening a browser when connecting to the AP.
 echo "[stage] Setup nginx"
@@ -1191,7 +1191,7 @@ nohook wpa_supplicant
 EOF
 
 # device-ap-mode: switches wlan0 to Access Point mode
-# Called by btrfs-resize-once on first boot and by lamp-server on demand
+# Called by btrfs-resize-once on first boot and by os-server on demand
 cat > /usr/local/bin/device-ap-mode <<'EOF'
 #!/bin/bash
 set -e
@@ -1297,7 +1297,7 @@ chmod +x /usr/local/bin/device-sta-mode
 
 # connect-wifi: writes wpa_supplicant config then switches to STA mode
 # Usage: connect-wifi SSID PASSWORD  (or  connect-wifi SSID  for open networks)
-# Called by lamp-server API endpoint /api/network/setup
+# Called by os-server API endpoint /api/network/setup
 cat > /usr/local/bin/connect-wifi <<'EOF'
 #!/bin/bash
 set -e
@@ -1835,25 +1835,25 @@ echo "[overlay] Fetch OTA metadata"
 META="\$(mktemp)"
 retry "curl -fsSL -H 'Cache-Control: no-cache' -o '\$META' '\$OTA_METADATA_URL'" 5
 WEB_URL=\$(jq -r '.web.url // empty'         "\$META")
-LAMP_URL=\$(jq -r '.lamp.url // empty'       "\$META")
+OS_SERVER_URL=\$(jq -r '."os-server".url // empty'       "\$META")
 BOOTSTRAP_URL=\$(jq -r '.bootstrap.url // empty' "\$META")
 LELAMP_URL=\$(jq -r '.hal.url // empty'   "\$META")
 BUDDY_URL=\$(jq -r '."claude-desktop-buddy".url // empty' "\$META")
 WEB_VER=\$(jq -r '.web.version // empty'     "\$META")
-LAMP_VER=\$(jq -r '.lamp.version // empty'   "\$META")
+OS_SERVER_VER=\$(jq -r '."os-server".version // empty'   "\$META")
 BOOTSTRAP_VER=\$(jq -r '.bootstrap.version // empty' "\$META")
 LELAMP_VER=\$(jq -r '.hal.version // empty' "\$META")
 BUDDY_VER=\$(jq -r '."claude-desktop-buddy".version // empty' "\$META")
 rm -f "\$META"
-[ -z "\$WEB_URL" ] || [ -z "\$LAMP_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
-  echo "ERROR: OTA metadata missing web.url, lamp.url or bootstrap.url"; exit 1
+[ -z "\$WEB_URL" ] || [ -z "\$OS_SERVER_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
+  echo "ERROR: OTA metadata missing web.url, os-server.url or bootstrap.url"; exit 1
 }
-echo "[overlay] web=\$WEB_VER lamp=\$LAMP_VER bootstrap=\$BOOTSTRAP_VER hal=\$LELAMP_VER buddy=\$BUDDY_VER"
+echo "[overlay] web=\$WEB_VER os-server=\$OS_SERVER_VER bootstrap=\$BOOTSTRAP_VER hal=\$LELAMP_VER buddy=\$BUDDY_VER"
 
 # ── stage: backend binaries ──────────────────────────────────────────────────
 echo "[overlay] Install backend binaries"
 install_binary_from_zip "\$BOOTSTRAP_URL" /usr/local/bin/bootstrap-server "bootstrap"
-install_binary_from_zip "\$LAMP_URL"      /usr/local/bin/lamp-server      "lamp"
+install_binary_from_zip "\$OS_SERVER_URL"      /usr/local/bin/os-server      "os-server"
 
 # ── stage: LeLamp (Python hardware runtime) ──────────────────────────────────
 echo "[overlay] Install LeLamp"
@@ -1982,7 +1982,7 @@ if [ -n "\$BUDDY_URL" ]; then
   cat > /etc/systemd/system/claude-desktop-buddy.service <<UNIT
 [Unit]
 Description=Lamp Claude Desktop Buddy (BLE)
-After=bluetooth.target lamp.service
+After=bluetooth.target os-server.service
 Wants=bluetooth.target
 
 [Service]
@@ -2064,7 +2064,7 @@ mount ${OUT_LOOP_BOOT} ${MNT}/boot/firmware
 
 # Check critical binaries
 for BIN in /sbin/init \
-           /usr/local/bin/lamp-server /usr/local/bin/bootstrap-server \
+           /usr/local/bin/os-server /usr/local/bin/bootstrap-server \
            /usr/local/bin/fr-snapshot /usr/local/bin/fr-rollback \
            /usr/local/bin/device-ap-mode /usr/local/bin/device-sta-mode \
            /usr/local/bin/connect-wifi /usr/local/bin/software-update \

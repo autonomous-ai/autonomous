@@ -78,7 +78,7 @@ Systemd unit (suggested, not yet baked into imager):
 ```ini
 [Unit]
 Description=Autonomous chat MQTT bridge → lamp sensing
-After=network-online.target lamp.service
+After=network-online.target os-server.service
 Wants=network-online.target
 
 [Service]

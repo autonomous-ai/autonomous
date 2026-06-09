@@ -28,7 +28,7 @@ ZIP_PATH="${ROOT_DIR}/${ZIP_NAME}"
 GCS_PATH="${GCS_PATH:-${BUCKET_PREFIX}/ota/bootstrap/${new_version}.zip}"
 
 echo "========== Build bootstrap binary (VERSION=${new_version}) =========="
-(cd "$ROOT_DIR" && make lamp-build-bootstrap VERSION="$new_version")
+(cd "$ROOT_DIR" && make os-build-bootstrap VERSION="$new_version")
 
 if [[ ! -f "$BOOTSTRAP_BIN" ]]; then
   echo "Error: bootstrap binary not found at $BOOTSTRAP_BIN after make build-bootstrap"

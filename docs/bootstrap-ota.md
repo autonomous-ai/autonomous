@@ -6,7 +6,7 @@ The device runs **5 software components** on a supported board (Raspberry Pi 4, 
 
 | Component | Type | Install Method | Service Name | Install Path |
 |---|---|---|---|---|
-| **Lamp Server** | Go binary (ARM64) | Download zip from OTA | `lamp.service` | `/usr/local/bin/lamp-server` |
+| **OS Server** | Go binary (ARM64) | Download zip from OTA | `os-server.service` | `/usr/local/bin/os-server` |
 | **Bootstrap Server** | Go binary (ARM64) | Download zip from OTA | `bootstrap.service` | `/usr/local/bin/bootstrap-server` |
 | **Web (Setup SPA)** | React/Vite bundle | Download zip from OTA | nginx serves static | `/usr/share/nginx/html/setup/` |
 | **OpenClaw** | Node.js package | `npm install -g` | `openclaw.service` | Global npm |
@@ -18,7 +18,7 @@ The device runs **5 software components** on a supported board (Raspberry Pi 4, 
                     ┌──────────────────────────────┐
                     │   OTA Metadata (GCS JSON)     │
                     │                                │
-                    │  lamp:      {version, url}     │
+                    │  os-server: {version, url}     │
                     │  bootstrap: {version, url}     │
                     │  web:       {version, url}     │
                     │  openclaw:  {version}          │
@@ -56,9 +56,9 @@ Single JSON file hosted on GCS. All components reference this file.
 
 ```json
 {
-  "lamp": {
+  "os-server": {
     "version": "1.2.3",
-    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/lamp/1.2.3/lamp-1.2.3.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/os-server/1.2.3/os-server-1.2.3.zip"
   },
   "bootstrap": {
     "version": "1.0.5",
@@ -82,11 +82,11 @@ Single JSON file hosted on GCS. All components reference this file.
 
 ```go
 const (
-    OTAKeyLamp      = "lamp"
+    OTAKeyOSServer  = "os-server"
     OTAKeyBootstrap = "bootstrap"
     OTAKeyWeb       = "web"
     OTAKeyOpenClaw  = "openclaw"
-    // OTAKeyHAL will be added when HAL OTA is implemented
+    // OTAKeyLeLamp's value is "hal" — the HAL OTA metadata key
 )
 
 type OTAMetadata map[string]OTAComponent
@@ -117,7 +117,7 @@ curl -fsSL https://cdn.autonomous.ai/os/install.sh | sudo bash
 | 0a | WiFi stability | Disable IPv6, WiFi power saving (RPi5) |
 | 0b | Enable SPI | For WS2812 LED driver |
 | 1 | Fetch OTA metadata | Download metadata.json, extract versions and URLs |
-| 1b | Install binaries | Download + install lamp-server, bootstrap-server, create systemd services |
+| 1b | Install binaries | Download + install os-server, bootstrap-server, create systemd services |
 | 2 | Install OpenClaw | `npm install -g openclaw`, create config, create systemd service |
 | **2b** | **Install HAL** | **Download + install HAL Python runtime, create systemd service** (NEW) |
 | 3 | Setup nginx | Download web bundle, configure reverse proxy + captive portal |
@@ -181,20 +181,20 @@ UNIT
 
 | Service | ExecStart | Port | Notes |
 |---|---|---|---|
-| `lamp.service` | `/usr/local/bin/lamp-server` | 5000 | Main HTTP API, always running |
+| `os-server.service` | `/usr/local/bin/os-server` | 5000 | Main HTTP API, always running |
 | `bootstrap.service` | `/usr/local/bin/bootstrap-server` | 8080 | OTA worker, polls for updates. Exposes `POST /force-check` to trigger immediate OTA check |
 | `openclaw.service` | `xvfb-run ... openclaw gateway run` | — | AI brain, memory limit 1500M |
 | `lamp-hal.service` | `uvicorn hal.server:app --host 127.0.0.1 --port 5001` | 5001 | Hardware drivers (servo, LED, camera, audio) |
-| nginx | `nginx` | 80 | Setup SPA + reverse proxy (`/api/` → Lamp 5000, `/hw/` → HAL 5001) |
+| nginx | `nginx` | 80 | Setup SPA + reverse proxy (`/api/` → OS Server 5000, `/hw/` → HAL 5001) |
 
 ### Service Dependency Order
 
 ```
 boot
-  → lamp.service      (system layer, LED boot animation)
+  → os-server.service   (system layer, LED boot animation)
   → bootstrap.service   (starts polling for updates)
   → lamp-hal.service          (hardware drivers ready)
-  → openclaw.service    (AI brain, connects to lamp via HTTP)
+  → openclaw.service    (AI brain, connects to os-server via HTTP)
   → nginx               (web UI for setup)
 ```
 
@@ -204,7 +204,7 @@ boot
 
 ### Config (`/root/config/bootstrap.json`)
 
-The bootstrap worker keeps its own config file, separate from lamp-server's
+The bootstrap worker keeps its own config file, separate from os-server's
 `config.json`, but it lives in the same `/root/config/` directory.
 
 ```json
@@ -235,7 +235,7 @@ Tracks last known installed version per component:
 ```json
 {
   "components": {
-    "lamp": "1.2.3",
+    "os-server": "1.2.3",
     "bootstrap": "1.0.5",
     "web": "0.9.0",
     "openclaw": "2026.5.27",
@@ -254,7 +254,7 @@ checkLoop():
 
 checkOnce():
   1. Fetch OTA metadata JSON
-  2. For each key [lamp, bootstrap, web, hal]:
+  2. For each key [os-server, bootstrap, web, hal]:
      → reconcile(key, metadata[key])
   NOTE: OpenClaw OTA is temporarily disabled (reconcileOpenClawFromNpm commented out)
   3. Save state
@@ -283,7 +283,7 @@ Bootstrap uses `lib/hal` to show update status on LEDs. See [status-led.md](stat
 
 | Component | How to Detect Current Version |
 |---|---|
-| `lamp` | Run `lamp-server --version`, parse output |
+| `os-server` | Run `os-server --version`, parse output |
 | `bootstrap` | Compiled-in constant `config.BootstrapVersion` (ldflags) |
 | `web` | Read file `/usr/share/nginx/html/setup/VERSION` |
 | `openclaw` | Run `openclaw --version`, extract semver with regex |
@@ -293,7 +293,7 @@ Bootstrap uses `lib/hal` to show update status on LEDs. See [status-led.md](stat
 
 | Component | Update Steps |
 |---|---|
-| `lamp` | Run `software-update lamp` (blocks up to 10 min) |
+| `os-server` | Run `software-update os-server` (blocks up to 10 min) |
 | `bootstrap` | Spawn detached `software-update bootstrap` (self-update, survives restart) |
 | `web` | Run `software-update web` |
 | `openclaw` | ~~Run `npm install -g openclaw@{version}` → `systemctl restart openclaw`~~ (temporarily disabled) |
@@ -352,7 +352,7 @@ HAL runtime code is **copied** from the upstream open-source project into this m
 
 **Why copy, not submodule/subtree:**
 - We need to **remove** LiveKit/OpenAI integration (replaced by OpenClaw)
-- We need to **add** HTTP API server (Flask/FastAPI) for Lamp Server to bridge to
+- We need to **add** HTTP API server (Flask/FastAPI) for OS Server to bridge to
 - We need to **add** DisplayService (GC9A01 eyes + info, not in original)
 - We need to **modify** services to work with our architecture
 - The overlap is drivers only (~30-40% of their code), the rest is rewritten
@@ -423,10 +423,10 @@ hal-{version}.zip
 
 ### HAL HTTP API (FastAPI on port 5001)
 
-The HAL Python runtime exposes its own HTTP API on `127.0.0.1:5001`. Lamp Server (Go, port 5000) bridges OpenClaw skill requests to this API. Nginx proxies `/hw/*` for same-machine callers only — external clients receive 403. Swagger UI at `/hw/docs` is not accessible from LAN.
+The HAL Python runtime exposes its own HTTP API on `127.0.0.1:5001`. OS Server (Go, port 5000) bridges OpenClaw skill requests to this API. Nginx proxies `/hw/*` for same-machine callers only — external clients receive 403. Swagger UI at `/hw/docs` is not accessible from LAN.
 
 ```
-OpenClaw LLM → curl 127.0.0.1:5000/api/servo → Lamp Server → http://127.0.0.1:5001/servo → HAL Python → Hardware
+OpenClaw LLM → curl 127.0.0.1:5000/api/servo → OS Server → http://127.0.0.1:5001/servo → HAL Python → Hardware
 External     → http://<device-ip>/hw/docs    → nginx → 403 Forbidden
 ```
 
@@ -499,7 +499,7 @@ echo "HAL $NEW_VERSION published."
 
 | Script | Component | Pattern |
 |---|---|---|
-| `scripts/release/upload-lamp.sh` | Lamp Server binary | Build → zip → GCS → update metadata |
+| `scripts/release/upload-os-server.sh` | OS Server binary | Build → zip → GCS → update metadata |
 | `scripts/release/upload-bootstrap.sh` | Bootstrap Server binary | Build → zip → GCS → update metadata |
 | `scripts/release/upload-web.sh` | Web SPA bundle | Build → zip → GCS → update metadata |
 | `scripts/release/upload-hal.sh` | HAL Python runtime (NEW) | Package → zip → GCS → update metadata |
@@ -511,7 +511,7 @@ echo "HAL $NEW_VERSION published."
 
 ### `scripts/release/tag-release.sh` — GPL v3 §6 traceability
 
-After component uploads succeed (`make upload-lamp upload-hal upload-web ...`), this script anchors the resulting OTA metadata snapshot to a single git tag:
+After component uploads succeed (`make upload-os-server upload-hal upload-web ...`), this script anchors the resulting OTA metadata snapshot to a single git tag:
 
 ```bash
 make tag-release v0.0.8
@@ -520,7 +520,7 @@ make tag-release v0.0.8
 # → git push origin v0.0.8
 ```
 
-Buyers run `lamp-server --version` on the device — value comes from `git describe --tags --always --dirty` at build time (`Makefile:VERSION`), so it resolves to the closest tag. They then open the public repo (`github.com/autonomous-ai/lamp`), find the matching tag, read the annotation for the exact `lamp`/`hal`/`web`/`bootstrap` versions baked at release time, and checkout that commit for corresponding source.
+Buyers run `os-server --version` on the device — value comes from `git describe --tags --always --dirty` at build time (`Makefile:VERSION`), so it resolves to the closest tag. They then open the public repo (`github.com/autonomous-ai/lamp`), find the matching tag, read the annotation for the exact `os-server`/`hal`/`web`/`bootstrap` versions baked at release time, and checkout that commit for corresponding source.
 
 Guards in the script: refuses if tag already exists locally or on remote, refuses if metadata fetch fails or JSON is invalid (`set -euo pipefail` + `jq .`). Overrides via env vars: `OTA_METADATA_URL` (default: `https://cdn.autonomous.ai/os/ota/metadata.json`), `TAG_REMOTE` (default: `origin`).
 
@@ -533,14 +533,15 @@ Guards in the script: refuses if tag already exists locally or on remote, refuse
 ```makefile
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-LDFLAGS_BOOTSTRAP := -X go-lamp.autonomous.ai/bootstrap/config.BootstrapVersion=$(VERSION)
-LDFLAGS_LAMP    := -X go-lamp.autonomous.ai/server/config.LampVersion=$(VERSION)
+# Go symbol stays config.LampVersion (internal, not part of deploy identity).
+LDFLAGS_BOOT := -X go.autonomous.ai/os/bootstrap/config.BootstrapVersion=$(VERSION)
+LDFLAGS_OS   := -X go.autonomous.ai/os/server/config.LampVersion=$(VERSION)
 
-build-bootstrap:
-	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_BOOTSTRAP)" -o bootstrap-server ./cmd/bootstrap
+os-build-bootstrap:
+	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_BOOT)" -o bootstrap-server ./cmd/bootstrap
 
-build-lamp:
-	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_LAMP)" -o lamp-server ./cmd/lamp
+os-build:
+	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_OS)" -o os-server ./cmd/os-server
 ```
 
 ### HAL (VERSION file)
@@ -566,8 +567,8 @@ HAL version is a plain text `VERSION` file in the package root. Read by bootstra
 ## 10. Open Questions
 
 - [x] **HAL source**: Mono-repo. Driver code copied from `humancomputerlab/lelamp_runtime` into `os/hal/`, with LiveKit/OpenAI removed and HTTP API + DisplayService added. Upstream tracked manually via `os/hal/UPSTREAM.md`.
-- [x] **HAL HTTP port**: `5001` (Lamp Server is `5000`).
-- [x] **Bridge protocol**: Simple HTTP proxy. HAL runs FastAPI on `127.0.0.1:5001`, Lamp Server proxies from port 5000.
+- [x] **HAL HTTP port**: `5001` (OS Server is `5000`).
+- [x] **Bridge protocol**: Simple HTTP proxy. HAL runs FastAPI on `127.0.0.1:5001`, OS Server proxies from port 5000.
 - [x] **Python version**: Pinned to Python 3.12+ (`pyproject.toml`, `.python-version`, `setup.sh` uses `uv sync --python 3.12`).
 - [x] **HAL packaging**: On-device venv via `uv sync --python 3.12 --extra hardware` at `/opt/hal/.venv`. OTA preserves venv, reinstalls only on requirements change.
 - [x] **Display driver**: DisplayService (GC9A01) is part of HAL Python at `os/hal/service/display/display_service.py`.

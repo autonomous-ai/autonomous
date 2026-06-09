@@ -18,7 +18,7 @@ rules apply to all code changes:
 
    | Code area | English doc | Vietnamese doc |
    |-----------|-------------|----------------|
-   | lamp-server, API, startup | `docs/lamp-server.md` | `docs/vi/lamp-server_vi.md` |
+   | os-server, API, startup | `docs/os-server.md` | `docs/vi/os-server_vi.md` |
    | Setup flow, provisioning | `docs/setup-flow.md` | `docs/vi/setup-flow_vi.md` |
    | Web UI, configuration pages | `docs/web-ui.md` | `docs/vi/web-ui_vi.md` |
    | Flow Monitor (turn pipeline, JSONL, SSE) | `docs/flow-monitor.md` | `docs/vi/flow-monitor_vi.md` |
@@ -71,15 +71,15 @@ All targets run from the repo root via the top-level `Makefile`.
 
 ```bash
 # Build Go services (cross-compiles to linux/arm64)
-make lamp-build
-make lamp-build-bootstrap
+make os-build
+make os-build-bootstrap
 
 # Code generation (Google Wire DI)
-make lamp-generate
+make os-generate
 
 # Lint + tests (Go)
-make lamp-lint
-make lamp-test
+make os-lint
+make os-test
 
 # HAL (Python hardware runtime, os/hal)
 make hal-dev
@@ -92,14 +92,14 @@ make web-build
 ```
 
 Go version is injected at build time via ldflags. HAL/web versions live in
-`os/services/VERSION_LAMP` and `os/hal/VERSION_LELAMP` and are auto-bumped by the
+`os/services/VERSION_OS_SERVER` and `os/hal/VERSION_LELAMP` and are auto-bumped by the
 `make upload-*` release targets — do not hand-edit for releases.
 
 ## Architecture
 
 ### Two Executables
 
-- `os/services/cmd/lamp/main.go` - Main HTTP API server (Gin). Handles device
+- `os/services/cmd/os-server/main.go` - Main HTTP API server (Gin). Handles device
   setup, network management, LED control, health checks, and agent gateway
   integration.
 - `os/services/cmd/bootstrap/main.go` - OTA bootstrap worker. Periodically
@@ -108,7 +108,7 @@ Go version is injected at build time via ldflags. HAL/web versions live in
 ### Dependency Injection
 
 Uses Google Wire for compile-time DI. After changing provider signatures, run
-`make lamp-generate` to regenerate `wire_gen.go` files.
+`make os-generate` to regenerate `wire_gen.go` files.
 
 ### Package Layout
 
@@ -157,7 +157,7 @@ on failure.
 
 ### Configuration
 
-Config lives in `config/config.json` (path relative to the lamp-server working
+Config lives in `config/config.json` (path relative to the os-server working
 dir) and is managed by `os/services/server/config/config.go`. It supports a
 notification channel for config change propagation.
 

@@ -3,20 +3,20 @@
 ## Kiến Trúc 3 Tầng
 
 ```
-Agentic Runtime (AI/LLM) → Lamp Server (Go, :5000) → HAL (Python, :5001) → Phần cứng
+Agentic Runtime (AI/LLM) → OS Server (Go, :5000) → HAL (Python, :5001) → Phần cứng
 ```
 
 | Tầng | Ngôn ngữ | Port | Vai trò |
 |------|----------|------|---------|
 | Agentic Runtime | Go | WS | Bộ não AI, LLM, SKILL.md, memory, channels |
-| Lamp Server | Go | 5000 | Hệ thống (mạng, OTA, MQTT, reset), sensing event routing, local intent |
+| OS Server | Go | 5000 | Hệ thống (mạng, OTA, MQTT, reset), sensing event routing, local intent |
 | HAL | Python | 5001 | Hardware drivers (servo, LED, camera, audio, display), FastAPI |
 
 ## Thư Mục Dự Án
 
 ```
 os/services/
-├── cmd/lamp/main.go              — Entry point Lamp Server
+├── cmd/os-server/main.go              — Entry point OS Server
 ├── cmd/bootstrap/main.go         — OTA bootstrap worker
 ├── server/
 │   ├── server.go                 — Gin HTTP server, route setup

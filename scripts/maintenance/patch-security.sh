@@ -339,18 +339,18 @@ else
   echo "[patch] ${LELAMP_UNIT}.service: EnvironmentFile already present, skipping"
 fi
 
-# 6. Bind lamp-server to 127.0.0.1 (defense-in-depth: port 5000 unreachable from LAN
+# 6. Bind os-server to 127.0.0.1 (defense-in-depth: port 5000 unreachable from LAN
 #    even if nginx config is wrong). Only needed on devices deployed before 2026-05-19.
-LAMP_SVC="/etc/systemd/system/lamp.service"
-LAMP_BIN="/usr/local/bin/lamp-server"
+OS_SVC="/etc/systemd/system/os-server.service"
+OS_BIN="/usr/local/bin/os-server"
 
 # Detect if the installed binary still binds 0.0.0.0 by checking its help/version
 # output — there is no config knob for this; it is baked into the binary.
 # New binaries (post-2026-05-19 OTA) bind 127.0.0.1 by default; old ones bind :5000.
 # The reliable signal is the OTA version. If lamp OTA is up-to-date, skip.
-LAMP_VERSION=$("$LAMP_BIN" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
-echo "[patch] lamp-server version: ${LAMP_VERSION:-unknown}"
-echo "[patch] To close port 5000 on LAN: run 'sudo software-update lamp' to get the latest binary."
+LAMP_VERSION=$("$OS_BIN" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+echo "[patch] os-server version: ${LAMP_VERSION:-unknown}"
+echo "[patch] To close port 5000 on LAN: run 'sudo software-update os-server' to get the latest binary."
 
 # 7. Apply — only reload/restart when files actually changed. Avoids the
 # unnecessary 502 window on idempotent re-runs.

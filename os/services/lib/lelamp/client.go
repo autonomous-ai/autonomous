@@ -1,5 +1,5 @@
 // Package lelamp provides a lightweight HTTP client for the LeLamp hardware API.
-// Both lamp-server and bootstrap-server use this to control the lamp on port 5001.
+// Both os-server and bootstrap-server use this to control the lamp on port 5001.
 package lelamp
 
 import (

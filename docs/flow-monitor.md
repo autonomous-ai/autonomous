@@ -7,7 +7,7 @@ The Flow Monitor is an observability layer for tracking agent turns end-to-end. 
 ## Architecture
 
 ```
-HAL (Python)                       Lamp Server (Go)                     Web UI (React)
+HAL (Python)                       OS Server (Go)                     Web UI (React)
   sensing event ──POST──→ SensingHandler ──flow.Start/End──→ JSONL file
                             │                                    ↓
                             └─ agentGateway.SendChat ──→ Agentic Runtime (WS)
@@ -135,11 +135,11 @@ Rendered by `FlowDiagram` in `os/services/web/src/pages/Monitor.tsx`. The diagra
 
 | Region | Color (theme) | Stages |
 |--------|----------------|--------|
-| **Lamp Server** | Teal (`--lm-teal`) | `intent_check`, `local_match`, `schedule_trigger`, `lamp_gate` |
+| **OS Server** | Teal (`--lm-teal`) | `intent_check`, `local_match`, `schedule_trigger`, `lamp_gate` |
 | **HAL** | Amber (`--lm-amber`) | `mic_input`, `cam_input`, `hw_emotion`, `hw_led`, `hw_servo`, `tts_speak` |
 | **OpenClaw** | Blue (`--lm-blue`) | `agent_call`, `telegram_input`, `tool_exec`, `agent_thinking`, `agent_response`, `tg_out` |
 
-### Lamp Server (top band)
+### OS Server (top band)
 
 - **Intent** and **Local** sit on the **same top row** (left to right).
 - **Cron** (`schedule_trigger`) is a **Lamp** stage (timer owned by Lamp, not OpenClaw). It shares the **same top `y`** as Intent / Local but uses **`x` aligned with `agent_call`** so Cron → Agent reads as a **vertical column** in the SVG.

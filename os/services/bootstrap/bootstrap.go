@@ -108,7 +108,7 @@ func (b *Bootstrap) Serve() error {
 	})
 	r.POST("/force-check/:target", func(c *gin.Context) {
 		target := c.Param("target")
-		allowed := map[string]bool{domain.OTAKeyLamp: true, domain.OTAKeyWeb: true, domain.OTAKeyLeLamp: true}
+		allowed := map[string]bool{domain.OTAKeyOSServer: true, domain.OTAKeyWeb: true, domain.OTAKeyLeLamp: true}
 		if !allowed[target] {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "unknown target: " + target})
 			return
@@ -194,7 +194,7 @@ func (b *Bootstrap) checkOnce(ctx context.Context) error {
 	// detectVersion / applyUpdate already handle OTAKeyOpenClaw (npm install +
 	// systemctl restart openclaw); the old reconcileOpenClawFromNpm() pulled
 	// "latest" from `npm view` instead and is no longer needed.
-	for _, key := range []string{domain.OTAKeyLamp, domain.OTAKeyBootstrap, domain.OTAKeyWeb, domain.OTAKeyLeLamp, domain.OTAKeyBuddy, domain.OTAKeyOpenClaw} {
+	for _, key := range []string{domain.OTAKeyOSServer, domain.OTAKeyBootstrap, domain.OTAKeyWeb, domain.OTAKeyLeLamp, domain.OTAKeyBuddy, domain.OTAKeyOpenClaw} {
 		component, ok := meta[key]
 		if !ok {
 			continue
@@ -281,8 +281,8 @@ func (b *Bootstrap) detectVersion(ctx context.Context, key string) string {
 	defer cancel()
 
 	switch key {
-	case domain.OTAKeyLamp:
-		out, err := system.Run(runCtx, "lamp-server", "--version")
+	case domain.OTAKeyOSServer:
+		out, err := system.Run(runCtx, "os-server", "--version")
 		if err != nil {
 			return ""
 		}
@@ -324,7 +324,7 @@ func (b *Bootstrap) detectVersion(ctx context.Context, key string) string {
 // applyUpdate runs the appropriate update command for the given component.
 func (b *Bootstrap) applyUpdate(ctx context.Context, key string, component domain.OTAComponent) error {
 	switch key {
-	case domain.OTAKeyLamp, domain.OTAKeyWeb, domain.OTAKeyLeLamp, domain.OTAKeyBuddy, domain.OTAKeyOpenClaw:
+	case domain.OTAKeyOSServer, domain.OTAKeyWeb, domain.OTAKeyLeLamp, domain.OTAKeyBuddy, domain.OTAKeyOpenClaw:
 		// All non-bootstrap components delegate to the on-device
 		// `software-update <key>` script (installed by setup.sh) so the
 		// install logic lives in one place — the script self-fetches
@@ -365,8 +365,8 @@ func openclawNormalizeVersion(raw string) string {
 	return ""
 }
 
-// normalizeVersion extracts a semver-like version from command output (e.g. "1.0.83" or "lamp-server 1.0.83" -> "1.0.83").
-// Used for OTAKeyLamp and bootstrap-style version output (lamp-server --version, bootstrap-server --version).
+// normalizeVersion extracts a semver-like version from command output (e.g. "1.0.83" or "os-server 1.0.83" -> "1.0.83").
+// Used for OTAKeyOSServer and bootstrap-style version output (os-server --version, bootstrap-server --version).
 func normalizeVersion(raw string) string {
 	line := strings.TrimSpace(strings.TrimRight(raw, "\r\n"))
 	if line == "" {

@@ -7,7 +7,7 @@ type OTAComponent struct {
 }
 
 const (
-	OTAKeyLamp      = "lamp"
+	OTAKeyOSServer  = "os-server"
 	OTAKeyBootstrap = "bootstrap"
 	OTAKeyOpenClaw  = "openclaw"
 	OTAKeyWeb       = "web"

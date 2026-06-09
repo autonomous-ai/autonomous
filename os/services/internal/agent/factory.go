@@ -14,7 +14,7 @@ import (
 // ProvideGateway returns the AgentGateway implementation based on config.AgentRuntime.
 //
 // "openclaw" (default): persistent WebSocket to the OpenClaw daemon at
-// 127.0.0.1:18789. See internal/openclaw and docs/lamp-server.md.
+// 127.0.0.1:18789. See internal/openclaw and docs/os-server.md.
 //
 // "hermes": HTTP+SSE client against the Hermes API server (default
 // 127.0.0.1:8642). See internal/hermes and hermes.md at the repo root.

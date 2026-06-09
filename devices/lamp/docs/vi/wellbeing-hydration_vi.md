@@ -2,7 +2,7 @@
 
 > Lamp chủ động nhắc uống nước và nghỉ ngơi — AI tự schedule, tự quan sát qua camera, tự học thói quen từng người.
 
-> **⚠️ 2026-04-17 — Storage đã đổi.** File này còn đúng về cơ chế cron + flow agent. Nhưng chi tiết về `wellbeing.md` summary và `wellbeing/YYYY-MM-DD.md` daily log đã **deprecated** — giờ dùng JSONL schema `{ts, seq, hour, action, notes}` mirror mood. Xem `docs/vi/sensing-behavior_vi.md` và `docs/vi/lamp-server_vi.md` cho đúng endpoint. Endpoint `POST /user/wellbeing/log`, `/summary`, `/today` trên LeLamp đã bị gỡ — thay bằng `POST http://127.0.0.1:5000/api/wellbeing/log` + `GET /api/openclaw/wellbeing-history` trên Lamp.
+> **⚠️ 2026-04-17 — Storage đã đổi.** File này còn đúng về cơ chế cron + flow agent. Nhưng chi tiết về `wellbeing.md` summary và `wellbeing/YYYY-MM-DD.md` daily log đã **deprecated** — giờ dùng JSONL schema `{ts, seq, hour, action, notes}` mirror mood. Xem `docs/vi/sensing-behavior_vi.md` và `docs/vi/os-server_vi.md` cho đúng endpoint. Endpoint `POST /user/wellbeing/log`, `/summary`, `/today` trên LeLamp đã bị gỡ — thay bằng `POST http://127.0.0.1:5000/api/wellbeing/log` + `GET /api/openclaw/wellbeing-history` trên Lamp.
 
 ---
 

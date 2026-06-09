@@ -175,11 +175,11 @@ stage_ota_metadata() {
   echo "[stage] Fetch OTA metadata"
   METADATA_TMP="/tmp/ota-metadata.$$.json"
   retry "curl -fsSL -H \"Cache-Control: no-cache\" -H \"Pragma: no-cache\" -o \"$METADATA_TMP\" \"$OTA_METADATA_URL\"" 5
-  export WEB_VERSION WEB_URL LAMP_VERSION LAMP_URL BOOTSTRAP_VERSION BOOTSTRAP_URL
+  export WEB_VERSION WEB_URL OS_SERVER_VERSION OS_SERVER_URL BOOTSTRAP_VERSION BOOTSTRAP_URL
   WEB_VERSION=$(jq -r '.web.version // empty' "$METADATA_TMP")
   WEB_URL=$(jq -r '.web.url // empty' "$METADATA_TMP")
-  LAMP_VERSION=$(jq -r '.lamp.version // empty' "$METADATA_TMP")
-  LAMP_URL=$(jq -r '.lamp.url // empty' "$METADATA_TMP")
+  OS_SERVER_VERSION=$(jq -r '."os-server".version // empty' "$METADATA_TMP")
+  OS_SERVER_URL=$(jq -r '."os-server".url // empty' "$METADATA_TMP")
   BOOTSTRAP_VERSION=$(jq -r '.bootstrap.version // empty' "$METADATA_TMP")
   BOOTSTRAP_URL=$(jq -r '.bootstrap.url // empty' "$METADATA_TMP")
   LELAMP_VERSION=$(jq -r '.hal.version // empty' "$METADATA_TMP")
@@ -187,11 +187,11 @@ stage_ota_metadata() {
   BUDDY_VERSION=$(jq -r '."claude-desktop-buddy".version // empty' "$METADATA_TMP")
   BUDDY_URL=$(jq -r '."claude-desktop-buddy".url // empty' "$METADATA_TMP")
   rm -f "$METADATA_TMP"
-  if [ -z "$WEB_URL" ] || [ -z "$LAMP_URL" ] || [ -z "$BOOTSTRAP_URL" ]; then
-    echo "ERROR: OTA metadata missing web.url, lamp.url or bootstrap.url. Check $OTA_METADATA_URL"
+  if [ -z "$WEB_URL" ] || [ -z "$OS_SERVER_URL" ] || [ -z "$BOOTSTRAP_URL" ]; then
+    echo "ERROR: OTA metadata missing web.url, os-server.url or bootstrap.url. Check $OTA_METADATA_URL"
     exit 1
   fi
-  echo "[stage] OTA versions: web=$WEB_VERSION lamp=$LAMP_VERSION bootstrap=$BOOTSTRAP_VERSION hal=$LELAMP_VERSION buddy=$BUDDY_VERSION"
+  echo "[stage] OTA versions: web=$WEB_VERSION os-server=$OS_SERVER_VERSION bootstrap=$BOOTSTRAP_VERSION hal=$LELAMP_VERSION buddy=$BUDDY_VERSION"
 
   # Seed metadata_url into the bootstrap worker's config so the OTA metadata URL
   # comes from /root/config/bootstrap.json (a per-deployment value) instead of a
@@ -217,7 +217,7 @@ stage_ota_metadata() {
   echo "[stage] Seeded metadata_url=$OTA_METADATA_URL into $bs_json"
 }
 
-# Download zip from URL, unzip, copy single binary to dest path (handles lamp-server, bootstrap-server in zip)
+# Download zip from URL, unzip, copy single binary to dest path (handles os-server, bootstrap-server in zip)
 install_binary_from_zip() {
   local url="$1"
   local dest_binary="$2"
@@ -228,7 +228,7 @@ install_binary_from_zip() {
   retry "curl -fsSL -H \"Cache-Control: no-cache\" -H \"Pragma: no-cache\" -o \"$zip_tmp\" \"$url\"" 5
   unzip -o -q "$zip_tmp" -d "$dir_tmp"
   rm -f "$zip_tmp"
-  # Zip may contain lamp-server, bootstrap-server or bare binary (at root or in subdir)
+  # Zip may contain os-server, bootstrap-server or bare binary (at root or in subdir)
   local bin_file
   bin_file=$(find "$dir_tmp" -type f -executable 2>/dev/null | head -1)
   [ -z "$bin_file" ] && bin_file=$(find "$dir_tmp" -type f 2>/dev/null | head -1)
@@ -260,7 +260,7 @@ stage_backend() {
   fi
 
   install_binary_from_zip "$BOOTSTRAP_URL" /usr/local/bin/bootstrap-server "bootstrap"
-  install_binary_from_zip "$LAMP_URL" /usr/local/bin/lamp-server "lamp"
+  install_binary_from_zip "$OS_SERVER_URL" /usr/local/bin/os-server "os-server"
 
   cat >/etc/systemd/system/bootstrap.service <<EOF
 [Unit]
@@ -280,7 +280,7 @@ SyslogIdentifier=bootstrap
 WantedBy=multi-user.target
 EOF
 
-  cat >/etc/systemd/system/lamp.service <<EOF
+  cat >/etc/systemd/system/os-server.service <<EOF
 [Unit]
 Description=Lamp Backend
 After=network-online.target
@@ -288,19 +288,19 @@ After=network-online.target
 [Service]
 User=root
 WorkingDirectory=/root
-ExecStart=/usr/local/bin/lamp-server
+ExecStart=/usr/local/bin/os-server
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=lamp
+SyslogIdentifier=os-server
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
   systemctl daemon-reload
-  systemctl enable bootstrap lamp
+  systemctl enable bootstrap os-server
   # Do NOT start lamp here — it switches to AP mode when unconfigured, killing internet.
   # Services will start after reboot at the end of setup.
   # /usr/local/bin/software-update is written later by stage_ap (covers
@@ -499,7 +499,7 @@ stage_buddy() {
   cat >/etc/systemd/system/claude-desktop-buddy.service <<EOF
 [Unit]
 Description=Lamp Claude Desktop Buddy (BLE)
-After=bluetooth.target lamp.service
+After=bluetooth.target os-server.service
 Wants=bluetooth.target
 
 [Service]
@@ -1247,11 +1247,11 @@ if [ -z "$OTA_METADATA_URL" ]; then
 fi
 echo "[software-update] OTA metadata: $OTA_METADATA_URL"
 [ "$(id -u)" -ne 0 ] && { echo "Run as root."; exit 1; }
-[ $# -ne 1 ] && { echo "Usage: software-update <lamp|openclaw|web>"; exit 1; }
+[ $# -ne 1 ] && { echo "Usage: software-update <os-server|openclaw|web>"; exit 1; }
 APP="$1"
 case "$APP" in
-  lamp|openclaw|bootstrap|web|hal|claude-desktop-buddy) ;;
-  *) echo "Unknown app: $APP. Use lamp, openclaw, bootstrap, web, hal, or claude-desktop-buddy."; exit 1 ;;
+  os-server|openclaw|bootstrap|web|hal|claude-desktop-buddy) ;;
+  *) echo "Unknown app: $APP. Use os-server, openclaw, bootstrap, web, hal, or claude-desktop-buddy."; exit 1 ;;
 esac
 
 METADATA_TMP=$(mktemp)
@@ -1264,19 +1264,19 @@ VERSION=$(jq -r --arg a "$META_KEY" '.[$a].version // empty' "$METADATA_TMP")
 URL=$(jq -r --arg a "$META_KEY" '.[$a].url // empty' "$METADATA_TMP")
 [ -z "$VERSION" ] && { echo "Metadata has no version for $APP"; exit 1; }
 
-if [ "$APP" = "lamp" ]; then
-  [ -z "$URL" ] && { echo "Metadata has no url for lamp"; exit 1; }
+if [ "$APP" = "os-server" ]; then
+  [ -z "$URL" ] && { echo "Metadata has no url for os-server"; exit 1; }
   ZIP_TMP=$(mktemp)
   DIR_TMP=$(mktemp -d)
-  curl -fsSL -H "Cache-Control: no-cache" -o "$ZIP_TMP" "$URL" || { echo "Failed to download lamp"; exit 1; }
+  curl -fsSL -H "Cache-Control: no-cache" -o "$ZIP_TMP" "$URL" || { echo "Failed to download os-server"; exit 1; }
   unzip -o -q "$ZIP_TMP" -d "$DIR_TMP"
   BIN=$(find "$DIR_TMP" -type f -executable 2>/dev/null | head -1)
   [ -z "$BIN" ] && BIN=$(find "$DIR_TMP" -type f 2>/dev/null | head -1)
-  [ -z "$BIN" ] || [ ! -f "$BIN" ] && { echo "No binary in lamp zip"; exit 1; }
-  cp -f "$BIN" /usr/local/bin/lamp-server
-  chmod +x /usr/local/bin/lamp-server
-  systemctl restart lamp
-  echo "lamp updated to $VERSION"
+  [ -z "$BIN" ] || [ ! -f "$BIN" ] && { echo "No binary in os-server zip"; exit 1; }
+  cp -f "$BIN" /usr/local/bin/os-server
+  chmod +x /usr/local/bin/os-server
+  systemctl restart os-server
+  echo "os-server updated to $VERSION"
 elif [ "$APP" = "bootstrap" ]; then
   [ -z "$URL" ] && { echo "Metadata has no url for bootstrap"; exit 1; }
   ZIP_TMP=$(mktemp)
@@ -1348,8 +1348,8 @@ SOFTWAREUPDATE
 ensure_root
 
 # Stop lamp if running from a previous setup — it switches to AP mode when unconfigured, killing internet.
-systemctl stop lamp.service 2>/dev/null || true
-systemctl disable lamp.service 2>/dev/null || true
+systemctl stop os-server.service 2>/dev/null || true
+systemctl disable os-server.service 2>/dev/null || true
 
 run_stage stage_locale
 run_stage stage_prerequisites
@@ -1374,7 +1374,7 @@ echo "Setup complete!"
 echo "AP SSID: Lamp-XXXX (actual: ${AP_SSID:-unknown — stage_ap may have failed})"
 echo "Setup page: http://192.168.100.1 (AP) — or http://${LAMP_HOSTNAME:-lamp-xxxx}.local once on home Wi-Fi"
 echo "Backends: systemctl status bootstrap lamp lamp-hal claude-desktop-buddy"
-echo "Updates:  software-update <bootstrap|lamp|openclaw|hal|claude-desktop-buddy|web>"
+echo "Updates:  software-update <bootstrap|os-server|openclaw|hal|claude-desktop-buddy|web>"
 if [ -n "$FAILED_STAGES" ]; then
   echo ""
   echo "WARNING: the following stages FAILED:$FAILED_STAGES"

@@ -97,7 +97,7 @@ Góc dưới sidebar hiển thị trạng thái OpenClaw (online/offline) và th
 
 Monitor poll API system/HW mỗi **3 giây**. Flow dùng hybrid theo file: REST seed + stream live.
 
-### 4.1 Lamp Server (Go, port 5000, prefix `/api`)
+### 4.1 OS Server (Go, port 5000, prefix `/api`)
 
 | Endpoint | Dữ liệu |
 |----------|---------|

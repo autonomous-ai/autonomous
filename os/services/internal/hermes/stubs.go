@@ -56,7 +56,7 @@ func (s *Service) RefreshModelsConfig() error {
 }
 
 // EnsureOnboarding — user has confirmed Hermes is provisioned with skills and
-// soul. No-op so the lamp-server boot path stays generic.
+// soul. No-op so the os-server boot path stays generic.
 func (s *Service) EnsureOnboarding() error {
 	return nil
 }

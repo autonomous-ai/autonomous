@@ -165,7 +165,7 @@ func (s *Server) startMQTT() {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	client := s.mqttFactory.GetClient("lamp-server-" + s.config.DeviceID)
+	client := s.mqttFactory.GetClient("os-server-" + s.config.DeviceID)
 	slog.Info("subscribing to FA channel", "component", "mqtt", "topic", s.config.FAChannel)
 	client.Subscribe(s.config.FAChannel, 1, func(topic string, payload []byte) {
 		slog.Debug("message received", "component", "mqtt", "topic", topic, "payload", string(payload))
@@ -813,7 +813,7 @@ func (s *Server) handleMQTTEndpointChange(endpoint string) {
 // over the post-setup user/agent LED state. Best-effort — silent when LeLamp
 // never reports LED ready within budget (logs a warning).
 //
-// Why this is a poll loop and not a single SetSolid call: lamp-server binds
+// Why this is a poll loop and not a single SetSolid call: os-server binds
 // :5000 faster than LeLamp's FastAPI binds :5001 on cold boot, so a fire-
 // and-forget paint at L<see Serve> would silently drop on connection refused
 // and leave the strip dark — exactly when the user needs the "ready for AP"
@@ -1311,7 +1311,7 @@ func (s *Server) streamJournal(c *gin.Context, unit string) {
 
 // softwareUpdateLastFire tracks the last time each OTA target was triggered, so
 // a stuck/looping caller can't kick off back-to-back force-checks. Bootstrap's
-// downloader is idempotent but the resulting service restarts (lamp-server +
+// downloader is idempotent but the resulting service restarts (os-server +
 // systemd reload + journal noise) are not free; 30 s is enough to absorb a
 // double-click without hiding genuine retries.
 var (
@@ -1322,10 +1322,10 @@ var (
 const softwareUpdateMinInterval = 30 * time.Second
 
 // softwareUpdate triggers an OTA update for a single named component via the bootstrap worker.
-// POST /api/system/software-update/:target  (target: lamp | web | hal)
+// POST /api/system/software-update/:target  (target: os-server | web | hal)
 func (s *Server) softwareUpdate(c *gin.Context) {
 	target := c.Param("target")
-	allowed := map[string]bool{"lamp": true, "web": true, "hal": true}
+	allowed := map[string]bool{"os-server": true, "web": true, "hal": true}
 	if !allowed[target] {
 		c.JSON(http.StatusBadRequest, serializers.ResponseError("unknown target: "+target))
 		return

@@ -3,10 +3,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LAMP_BIN="${ROOT_DIR}/os/services/lamp-server"
-VERSION_FILE="${ROOT_DIR}/os/services/${VERSION_FILE:-VERSION_LAMP}"
+OS_BIN="${ROOT_DIR}/os/services/os-server"
+VERSION_FILE="${ROOT_DIR}/os/services/${VERSION_FILE:-VERSION_OS_SERVER}"
 
-# Bucket and path: ${BUCKET_PREFIX}/ota/lamp/[semver].zip
+# Bucket and path: ${BUCKET_PREFIX}/ota/os-server/[semver].zip
 source "${SCRIPT_DIR}/ota-config.sh"
 
 # Auto-increment semver (patch) before build
@@ -23,21 +23,21 @@ else
   echo "========== Version initialized: ${new_version} =========="
 fi
 
-ZIP_NAME="lamp-${new_version}.zip"
+ZIP_NAME="os-server-${new_version}.zip"
 ZIP_PATH="${ROOT_DIR}/${ZIP_NAME}"
-GCS_PATH="${GCS_PATH:-${BUCKET_PREFIX}/ota/lamp/${new_version}.zip}"
+GCS_PATH="${GCS_PATH:-${BUCKET_PREFIX}/ota/os-server/${new_version}.zip}"
 
-echo "========== Build lamp binary (VERSION=${new_version}) =========="
-(cd "$ROOT_DIR" && make lamp-build VERSION="$new_version")
+echo "========== Build os-server binary (VERSION=${new_version}) =========="
+(cd "$ROOT_DIR" && make os-build VERSION="$new_version")
 
-if [[ ! -f "$LAMP_BIN" ]]; then
-  echo "Error: lamp binary not found at $LAMP_BIN after make lamp-build"
+if [[ ! -f "$OS_BIN" ]]; then
+  echo "Error: os-server binary not found at $OS_BIN after make os-build"
   exit 1
 fi
 
-echo "========== Zipping lamp binary to ${ZIP_NAME} =========="
+echo "========== Zipping os-server binary to ${ZIP_NAME} =========="
 rm -f "$ZIP_PATH"
-(cd "$ROOT_DIR" && zip "$ZIP_PATH" "$LAMP_BIN")
+(cd "$ROOT_DIR" && zip "$ZIP_PATH" "$OS_BIN")
 
 echo "========== Upload ${ZIP_NAME} to Google Cloud Storage (no-cache) =========="
 gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$ZIP_PATH" "gs://${GCS_BUCKET}/${GCS_PATH}"
@@ -65,7 +65,7 @@ try:
     data = json.loads(raw) if raw.strip() else {}
 except json.JSONDecodeError:
     data = {}
-data['lamp'] = {'version': sys.argv[1], 'url': sys.argv[2], 'updated_at': sys.argv[3]}
+data['os-server'] = {'version': sys.argv[1], 'url': sys.argv[2], 'updated_at': sys.argv[3]}
 print(json.dumps(data, indent=2))
 " "$new_version" "$BACKEND_URL" "$(date '+%Y-%m-%d %H:%M:%S %z')")
 
@@ -74,5 +74,5 @@ echo "========== Upload metadata (backend: v${new_version}) =========="
 gsutil -h "Content-Type:application/json" -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$METADATA_TMP" "gs://${GCS_BUCKET}/${METADATA_PATH}"
 rm -f "$METADATA_TMP"
 
-rm -f "$ZIP_PATH" "$LAMP_BIN"
+rm -f "$ZIP_PATH" "$OS_BIN"
 echo "Done: gs://${GCS_BUCKET}/${GCS_PATH} (v${new_version})"

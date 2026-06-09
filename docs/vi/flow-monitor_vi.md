@@ -48,7 +48,7 @@ Component `FlowDiagram` trong `os/services/web/src/pages/Monitor.tsx` vẽ **ba 
 
 | Vùng | Màu | Node |
 |------|-----|------|
-| **Lamp Server** | Teal | Intent, Local, Cron, Gate |
+| **OS Server** | Teal | Intent, Local, Cron, Gate |
 | **HAL** | Amber | MIC, CAM, EMO, LED, SERVO, TTS |
 | **Agentic Runtime** | Blue | Agent, TG In, Tool, Think, Response, TG Out |
 

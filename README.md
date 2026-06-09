@@ -120,8 +120,8 @@ dlbackend/        off-device cloud inference service
 
 ```bash
 # Go system services (cross-compiled to linux/arm64 — Pi or OrangePi)
-make lamp-build            # builds the system server (os/services)
-make lamp-test             # go test ./...
+make os-build              # builds the system server (os/services)
+make os-test               # go test ./...
 
 # Hardware runtime (runs on the Pi or OrangePi)
 cd os/hal && uv sync

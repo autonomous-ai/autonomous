@@ -6,7 +6,7 @@ Thiết bị chạy **5 thành phần phần mềm** trên board được hỗ t
 
 | Thành phần | Loại | Cách cài | Service | Đường dẫn |
 |---|---|---|---|---|
-| **Lamp Server** | Go binary (ARM64) | Tải zip từ OTA | `lamp.service` | `/usr/local/bin/lamp-server` |
+| **OS Server** | Go binary (ARM64) | Tải zip từ OTA | `os-server.service` | `/usr/local/bin/os-server` |
 | **Bootstrap Server** | Go binary (ARM64) | Tải zip từ OTA | `bootstrap.service` | `/usr/local/bin/bootstrap-server` |
 | **Web (Setup SPA)** | React/Vite | Tải zip từ OTA | nginx serve static | `/usr/share/nginx/html/setup/` |
 | **OpenClaw** | Node.js package | `npm install -g` | `openclaw.service` | Global npm |
@@ -18,7 +18,7 @@ Thiết bị chạy **5 thành phần phần mềm** trên board được hỗ t
                     ┌──────────────────────────────┐
                     │   OTA Metadata (GCS JSON)     │
                     │                                │
-                    │  lamp:    {version, url}     │
+                    │  os-server: {version, url}     │
                     │  bootstrap: {version, url}     │
                     │  web:       {version, url}     │
                     │  openclaw:  {version}          │
@@ -56,9 +56,9 @@ File JSON duy nhất trên GCS. Tất cả thành phần tham chiếu file này.
 
 ```json
 {
-  "lamp": {
+  "os-server": {
     "version": "1.2.3",
-    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/lamp/1.2.3/lamp-1.2.3.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/os-server/1.2.3/os-server-1.2.3.zip"
   },
   "bootstrap": {
     "version": "1.0.5",
@@ -82,11 +82,11 @@ File JSON duy nhất trên GCS. Tất cả thành phần tham chiếu file này.
 
 ```go
 const (
-    OTAKeyLamp      = "lamp"
+    OTAKeyOSServer  = "os-server"
     OTAKeyBootstrap = "bootstrap"
     OTAKeyWeb       = "web"
     OTAKeyOpenClaw  = "openclaw"
-    // OTAKeyHAL sẽ được thêm khi HAL OTA được triển khai
+    // OTAKeyLeLamp's value is "hal" — the HAL OTA metadata key
 )
 
 type OTAMetadata map[string]OTAComponent
@@ -117,7 +117,7 @@ curl -fsSL https://cdn.autonomous.ai/os/install.sh | sudo bash
 | 0a | WiFi stability | Tắt IPv6, WiFi power saving (RPi5) |
 | 0b | Enable SPI | Cho WS2812 LED driver + GC9A01 display |
 | 1 | Fetch OTA metadata | Tải metadata.json, trích xuất versions và URLs |
-| 1b | Install binaries | Tải + cài lamp-server, bootstrap-server, tạo systemd services |
+| 1b | Install binaries | Tải + cài os-server, bootstrap-server, tạo systemd services |
 | 2 | Install OpenClaw | `npm install -g openclaw`, tạo config, systemd service |
 | **2b** | **Install HAL** | **Tải + cài HAL Python runtime, tạo systemd service** (MỚI) |
 | 3 | Setup nginx | Tải web bundle, cấu hình reverse proxy + captive portal |
@@ -179,20 +179,20 @@ UNIT
 
 | Service | Lệnh chạy | Port | Ghi chú |
 |---|---|---|---|
-| `lamp.service` | `/usr/local/bin/lamp-server` | 5000 | HTTP API chính, luôn chạy |
+| `os-server.service` | `/usr/local/bin/os-server` | 5000 | HTTP API chính, luôn chạy |
 | `bootstrap.service` | `/usr/local/bin/bootstrap-server` | 8080 | OTA worker, poll cập nhật. Expose `POST /force-check` để kích hoạt kiểm tra OTA ngay lập tức |
 | `openclaw.service` | `xvfb-run ... openclaw gateway run` | — | AI brain, memory limit 1500M |
 | `lamp-hal.service` | `uvicorn hal.server:app --host 127.0.0.1 --port 5001` | 5001 | Hardware drivers (servo, LED, camera, audio) |
-| nginx | `nginx` | 80 | Setup SPA + reverse proxy (`/api/` → Lamp 5000, `/hw/` → HAL 5001) |
+| nginx | `nginx` | 80 | Setup SPA + reverse proxy (`/api/` → OS Server 5000, `/hw/` → HAL 5001) |
 
 ### Thứ tự khởi động
 
 ```
 boot
-  → lamp.service      (tầng hệ thống, LED boot animation)
+  → os-server.service   (tầng hệ thống, LED boot animation)
   → bootstrap.service   (bắt đầu poll cập nhật)
   → lamp-hal.service          (hardware drivers sẵn sàng)
-  → openclaw.service    (AI brain, kết nối lamp qua HTTP)
+  → openclaw.service    (AI brain, kết nối os-server qua HTTP)
   → nginx               (web UI cho setup)
 ```
 
@@ -202,7 +202,7 @@ boot
 
 ### Config (`/root/config/bootstrap.json`)
 
-Bootstrap worker giữ file config riêng, tách khỏi `config.json` của lamp-server,
+Bootstrap worker giữ file config riêng, tách khỏi `config.json` của os-server,
 nhưng nằm cùng thư mục `/root/config/`.
 
 ```json
@@ -233,7 +233,7 @@ Lưu version đã cài của mỗi thành phần:
 ```json
 {
   "components": {
-    "lamp": "1.2.3",
+    "os-server": "1.2.3",
     "bootstrap": "1.0.5",
     "web": "0.9.0",
     "openclaw": "2026.5.27",
@@ -252,7 +252,7 @@ checkLoop():
 
 checkOnce():
   1. Tải OTA metadata JSON
-  2. Với mỗi key [lamp, bootstrap, web, hal]:
+  2. Với mỗi key [os-server, bootstrap, web, hal]:
      → reconcile(key, metadata[key])
   GHI CHÚ: OpenClaw OTA tạm thời bị tắt (reconcileOpenClawFromNpm đã comment out)
   3. Lưu state
@@ -281,7 +281,7 @@ Bootstrap dùng `lib/hal` để báo trạng thái update qua LED. Xem chi tiế
 
 | Thành phần | Cách phát hiện |
 |---|---|
-| `lamp` | Chạy `lamp-server --version`, parse output |
+| `os-server` | Chạy `os-server --version`, parse output |
 | `bootstrap` | Hằng số compile-time `config.BootstrapVersion` (ldflags) |
 | `web` | Đọc file `/usr/share/nginx/html/setup/VERSION` |
 | `openclaw` | Chạy `openclaw --version`, trích xuất semver bằng regex |
@@ -291,7 +291,7 @@ Bootstrap dùng `lib/hal` để báo trạng thái update qua LED. Xem chi tiế
 
 | Thành phần | Các bước |
 |---|---|
-| `lamp` | Chạy `software-update lamp` (block tối đa 10 phút) |
+| `os-server` | Chạy `software-update os-server` (block tối đa 10 phút) |
 | `bootstrap` | Spawn detached `software-update bootstrap` (tự cập nhật, sống sót sau restart) |
 | `web` | Chạy `software-update web` |
 | `openclaw` | ~~Chạy `npm install -g openclaw@{version}` → `systemctl restart openclaw`~~ (tạm thời tắt) |
@@ -350,7 +350,7 @@ Code HAL runtime được **copy** từ project upstream open-source vào mono-r
 
 **Tại sao copy, không dùng submodule/subtree:**
 - Cần **bỏ** phần LiveKit/OpenAI (thay bằng OpenClaw)
-- Cần **thêm** HTTP API server (FastAPI) để Lamp Server bridge đến
+- Cần **thêm** HTTP API server (FastAPI) để OS Server bridge đến
 - Cần **thêm** DisplayService (GC9A01 eyes + info, không có trong upstream)
 - Cần **sửa** services cho phù hợp kiến trúc mới
 - Phần overlap chỉ là drivers (~30-40% code upstream), phần còn lại viết lại
@@ -421,10 +421,10 @@ hal-{version}.zip
 
 ### HAL HTTP API (FastAPI trên port 5001)
 
-HAL Python runtime expose HTTP API trên `127.0.0.1:5001`. Lamp Server (Go, port 5000) bridge request từ OpenClaw skills đến API này. Nginx proxy `/hw/*` chỉ cho caller trên cùng máy — client bên ngoài nhận 403. Swagger UI tại `/hw/docs` không truy cập được từ LAN.
+HAL Python runtime expose HTTP API trên `127.0.0.1:5001`. OS Server (Go, port 5000) bridge request từ OpenClaw skills đến API này. Nginx proxy `/hw/*` chỉ cho caller trên cùng máy — client bên ngoài nhận 403. Swagger UI tại `/hw/docs` không truy cập được từ LAN.
 
 ```
-OpenClaw LLM → curl 127.0.0.1:5000/api/servo → Lamp Server → http://127.0.0.1:5001/servo → HAL Python → Phần cứng
+OpenClaw LLM → curl 127.0.0.1:5000/api/servo → OS Server → http://127.0.0.1:5001/servo → HAL Python → Phần cứng
 Bên ngoài    → http://<device-ip>/hw/docs    → nginx → 403 Forbidden
 ```
 
@@ -497,7 +497,7 @@ echo "HAL $NEW_VERSION published."
 
 | Script | Thành phần | Pattern |
 |---|---|---|
-| `scripts/release/upload-lamp.sh` | Lamp Server binary | Build → zip → GCS → update metadata |
+| `scripts/release/upload-os-server.sh` | OS Server binary | Build → zip → GCS → update metadata |
 | `scripts/release/upload-bootstrap.sh` | Bootstrap Server binary | Build → zip → GCS → update metadata |
 | `scripts/release/upload-web.sh` | Web SPA bundle | Build → zip → GCS → update metadata |
 | `scripts/release/upload-hal.sh` | HAL Python runtime (MỚI) | Package → zip → GCS → update metadata |
@@ -509,7 +509,7 @@ echo "HAL $NEW_VERSION published."
 
 ### `scripts/release/tag-release.sh` — Truy nguồn theo GPL v3 §6
 
-Sau khi các upload component xong (`make upload-lamp upload-hal upload-web ...`), script này neo OTA metadata snapshot vào một git tag duy nhất:
+Sau khi các upload component xong (`make upload-os-server upload-hal upload-web ...`), script này neo OTA metadata snapshot vào một git tag duy nhất:
 
 ```bash
 make tag-release v0.0.8
@@ -518,7 +518,7 @@ make tag-release v0.0.8
 # → git push origin v0.0.8
 ```
 
-Người mua chạy `lamp-server --version` trên thiết bị — giá trị lấy từ `git describe --tags --always --dirty` lúc build (`Makefile:VERSION`), nên resolve về tag gần nhất. Họ mở repo public (`github.com/autonomous-ai/lamp`), tìm tag đúng, đọc annotation để xem chính xác version `lamp`/`hal`/`web`/`bootstrap` đã bake vào release đó, rồi checkout commit tương ứng để có source.
+Người mua chạy `os-server --version` trên thiết bị — giá trị lấy từ `git describe --tags --always --dirty` lúc build (`Makefile:VERSION`), nên resolve về tag gần nhất. Họ mở repo public (`github.com/autonomous-ai/lamp`), tìm tag đúng, đọc annotation để xem chính xác version `os-server`/`hal`/`web`/`bootstrap` đã bake vào release đó, rồi checkout commit tương ứng để có source.
 
 Guards trong script: từ chối nếu tag đã tồn tại local hoặc trên remote, từ chối nếu fetch metadata fail hoặc JSON invalid (`set -euo pipefail` + `jq .`). Override qua env: `OTA_METADATA_URL` (mặc định: `https://cdn.autonomous.ai/os/ota/metadata.json`), `TAG_REMOTE` (mặc định: `origin`).
 
@@ -531,14 +531,15 @@ Guards trong script: từ chối nếu tag đã tồn tại local hoặc trên r
 ```makefile
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 
-LDFLAGS_BOOTSTRAP := -X go-lamp.autonomous.ai/bootstrap/config.BootstrapVersion=$(VERSION)
-LDFLAGS_LAMP    := -X go-lamp.autonomous.ai/server/config.LampVersion=$(VERSION)
+# Go symbol giữ config.LampVersion (nội bộ, không thuộc deploy identity).
+LDFLAGS_BOOT := -X go.autonomous.ai/os/bootstrap/config.BootstrapVersion=$(VERSION)
+LDFLAGS_OS   := -X go.autonomous.ai/os/server/config.LampVersion=$(VERSION)
 
-build-bootstrap:
-	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_BOOTSTRAP)" -o bootstrap-server ./cmd/bootstrap
+os-build-bootstrap:
+	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_BOOT)" -o bootstrap-server ./cmd/bootstrap
 
-build-lamp:
-	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_LAMP)" -o lamp-server ./cmd/lamp
+os-build:
+	GOOS=linux GOARCH=arm64 go build -ldflags "$(LDFLAGS_OS)" -o os-server ./cmd/os-server
 ```
 
 ### HAL (VERSION file)
@@ -564,12 +565,12 @@ Version của HAL là file text `VERSION` trong thư mục gốc package. Bootst
 ## 10. Câu Hỏi Mở
 
 - [x] **HAL source**: Mono-repo. Driver code copy từ `humancomputerlab/lelamp_runtime` vào `os/hal/`, bỏ LiveKit/OpenAI, thêm HTTP API + DisplayService. Track upstream thủ công qua `os/hal/UPSTREAM.md`.
-- [x] **HAL HTTP port**: `5001` (Lamp Server là `5000`).
-- [x] **Bridge protocol**: HTTP proxy đơn giản. HAL chạy FastAPI trên `127.0.0.1:5001`, Lamp Server proxy từ port 5000.
+- [x] **HAL HTTP port**: `5001` (OS Server là `5000`).
+- [x] **Bridge protocol**: HTTP proxy đơn giản. HAL chạy FastAPI trên `127.0.0.1:5001`, OS Server proxy từ port 5000.
 - [ ] **Python version**: Pin Python 3.11+? Yêu cầu Python hiện tại của HAL?
 - [ ] **Đóng gói HAL**: Include venv sẵn? Hay cài deps trên thiết bị? (Pi resources hạn chế cho `pip install`)
 - [ ] **Display driver**: DisplayService (GC9A01) — nằm trong HAL Python? Hay module mới?
-- [ ] **HAL config**: HAL cần config file riêng? Hay cấu hình qua Lamp Server?
+- [ ] **HAL config**: HAL cần config file riêng? Hay cấu hình qua OS Server?
 
 ---
 

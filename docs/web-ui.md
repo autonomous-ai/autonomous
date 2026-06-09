@@ -97,7 +97,7 @@ Defined at `.lm-root` in `index.css`:
 
 Monitor polls system/HW APIs every **3 seconds**. Flow uses file-backed hybrid mode: REST seed + live stream.
 
-### 4.1 Lamp Server (Go, port 5000, prefix `/api`)
+### 4.1 OS Server (Go, port 5000, prefix `/api`)
 
 | Endpoint | Data |
 |----------|------|

@@ -213,7 +213,7 @@ Mỗi phase ship & review độc lập được.
 - Update `CLAUDE.md` root: row doc table cho lamp-buddy
 - Update `Makefile` top-level: target `build-buddy`
 - Thêm file `VERSION_BUDDY` ở root → `0.0.1`
-- Bump `VERSION_LAMP`, `VERSION_WEB` nếu cần
+- Bump `VERSION_OS_SERVER`, `VERSION_WEB` nếu cần
 
 **Acceptance:**
 - Dev mới clone về có thể `cd lamp-buddy/macos && swift run` và follow README để pair với lamp
@@ -346,7 +346,7 @@ lamp/web/src/
 - [ ] **Pairing model** — 1 lamp ↔ 1 buddy (MVP). Confirm? (reply của Leo gợi ý yes nhưng nên confirm)
 - [ ] **"Join Google Meet" — URL cố định hay nhớ link gần nhất?** — MVP đề xuất URL config trong preferences của buddy (user set room họp định kỳ)
 - [ ] **Vị trí skill directory của OpenClaw** — cần tìm xem skill hiện sống ở đâu trong repo này
-- [ ] **Versioning** — `VERSION_BUDDY` follow scheme `VERSION_LAMP`?
+- [ ] **Versioning** — `VERSION_BUDDY` follow scheme `VERSION_OS_SERVER`?
 
 ---
 

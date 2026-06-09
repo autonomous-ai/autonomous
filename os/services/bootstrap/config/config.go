@@ -8,7 +8,7 @@ import (
 )
 
 // configPath is the bootstrap worker's own config file. It lives next to
-// lamp-server's config.json under /root/config so all device config sits in one
+// os-server's config.json under /root/config so all device config sits in one
 // place — but the bootstrap worker keeps a file separate from config.json.
 const configPath = "/root/config/bootstrap.json"
 
