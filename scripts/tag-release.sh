@@ -8,8 +8,10 @@
 #   scripts/tag-release.sh v0.0.8
 set -euo pipefail
 
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
+
 VERSION="${1:-}"
-OTA_METADATA_URL="${OTA_METADATA_URL:-https://cdn.autonomous.ai/lamp/ota/metadata.json}"
+OTA_METADATA_URL="${OTA_METADATA_URL:-https://cdn.autonomous.ai/${BUCKET_PREFIX}/ota/metadata.json}"
 REMOTE="${TAG_REMOTE:-origin}"
 
 if [[ -z "$VERSION" ]]; then

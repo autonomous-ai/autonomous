@@ -9,7 +9,7 @@ ZIP_PATH="${PROJECT_ROOT}/${ZIP_NAME}"
 VERSION_FILE="${PROJECT_ROOT}/os/services/VERSION_WEB"
 
 # Bucket for web bundle
-GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
+source "${SCRIPT_DIR}/ota-config.sh"
 
 echo "========== npm install =========="
 (cd "$PROJECT_ROOT/os/services/web" && npm install)
@@ -28,7 +28,7 @@ else
   echo "========== Version initialized: ${new_version} =========="
 fi
 
-GCS_PATH="${GCS_PATH:-lamp/ota/web/${new_version}.zip}"
+GCS_PATH="${GCS_PATH:-${BUCKET_PREFIX}/ota/web/${new_version}.zip}"
 
 echo "========== npm run build =========="
 (cd "$PROJECT_ROOT/os/services/web" && npm run build)
@@ -47,8 +47,8 @@ rm -f "$ZIP_PATH"
 echo "========== Upload ${ZIP_NAME} to Google Cloud Storage (no-cache) =========="
 gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$ZIP_PATH" "gs://${GCS_BUCKET}/${GCS_PATH}"
 
-# Update metadata.json (lamp/ota/metadata.json) - web key
-METADATA_PATH="lamp/ota/metadata.json"
+# Update metadata.json (${BUCKET_PREFIX}/ota/metadata.json) - web key
+METADATA_PATH="${BUCKET_PREFIX}/ota/metadata.json"
 METADATA_TMP=$(mktemp)
 WEB_URL="${WEB_URL:-https://storage.googleapis.com/${GCS_BUCKET}/${GCS_PATH}}"
 

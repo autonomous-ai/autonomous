@@ -21,8 +21,8 @@ if [[ -z "${1:-}" ]]; then
 fi
 VERSION="$1"
 
-GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
-METADATA_GCS="gs://${GCS_BUCKET}/lamp/ota/metadata.json"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
+METADATA_GCS="gs://${GCS_BUCKET}/${BUCKET_PREFIX}/ota/metadata.json"
 
 METADATA_TMP=$(mktemp)
 trap 'rm -f "$METADATA_TMP"' EXIT

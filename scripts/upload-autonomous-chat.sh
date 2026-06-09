@@ -6,8 +6,8 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 AUTONOMOUS_CHAT_BIN="${ROOT_DIR}/chat-hooks/autonomous-chat-hook/autonomous-chat"
 VERSION_FILE="${ROOT_DIR}/chat-hooks/autonomous-chat-hook/${VERSION_FILE:-VERSION_AUTONOMOUS_CHAT}"
 
-# Bucket and path: lamp/ota/autonomous-chat/[semver].zip
-GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
+# Bucket and path: ${BUCKET_PREFIX}/ota/autonomous-chat/[semver].zip
+source "${SCRIPT_DIR}/ota-config.sh"
 
 # Auto-increment semver (patch) before build
 if [[ -f "$VERSION_FILE" ]]; then
@@ -25,7 +25,7 @@ fi
 
 ZIP_NAME="autonomous-chat-${new_version}.zip"
 ZIP_PATH="${ROOT_DIR}/${ZIP_NAME}"
-GCS_PATH="${GCS_PATH:-lamp/ota/autonomous-chat/${new_version}.zip}"
+GCS_PATH="${GCS_PATH:-${BUCKET_PREFIX}/ota/autonomous-chat/${new_version}.zip}"
 
 echo "========== Build autonomous-chat binary (VERSION=${new_version}) =========="
 (cd "$ROOT_DIR" && make autonomous-build-chat VERSION="$new_version")
@@ -42,8 +42,8 @@ rm -f "$ZIP_PATH"
 echo "========== Upload ${ZIP_NAME} to Google Cloud Storage (no-cache) =========="
 gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$ZIP_PATH" "gs://${GCS_BUCKET}/${GCS_PATH}"
 
-# Update metadata.json (lamp/ota/metadata.json) - backend key
-METADATA_PATH="lamp/ota/metadata.json"
+# Update metadata.json (${BUCKET_PREFIX}/ota/metadata.json) - backend key
+METADATA_PATH="${BUCKET_PREFIX}/ota/metadata.json"
 METADATA_TMP=$(mktemp)
 BACKEND_URL="${BACKEND_URL:-https://storage.googleapis.com/${GCS_BUCKET}/${GCS_PATH}}"
 

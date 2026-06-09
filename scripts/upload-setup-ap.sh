@@ -4,9 +4,9 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SETUP_FILE="${SCRIPT_DIR}/setup-ap.sh"
 
-# Bucket and path matching https://storage.googleapis.com/s3-autonomous-upgrade-3/lamp/setup-ap.sh
-GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
-GCS_PATH="${GCS_PATH:-lamp/setup-ap.sh}"
+# Bucket and path matching https://storage.googleapis.com/s3-autonomous-upgrade-3/${BUCKET_PREFIX}/setup-ap.sh
+source "${SCRIPT_DIR}/ota-config.sh"
+GCS_PATH="${GCS_PATH:-${BUCKET_PREFIX}/setup-ap.sh}"
 
 if [[ ! -f "$SETUP_FILE" ]]; then
   echo "Error: setup-ap.sh not found at $SETUP_FILE"

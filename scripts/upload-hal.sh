@@ -6,8 +6,8 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 HAL_DIR="${ROOT_DIR}/os/hal"
 VERSION_FILE="${ROOT_DIR}/os/hal/${VERSION_FILE:-VERSION_LELAMP}"
 
-# Bucket and path: lamp/ota/hal/[semver].zip
-GCS_BUCKET="${GCS_BUCKET:-s3-autonomous-upgrade-3}"
+# Bucket and path: ${BUCKET_PREFIX}/ota/hal/[semver].zip
+source "${SCRIPT_DIR}/ota-config.sh"
 
 # Auto-increment semver (patch) before upload
 if [[ -f "$VERSION_FILE" ]]; then
@@ -25,7 +25,7 @@ fi
 
 ZIP_NAME="hal-${new_version}.zip"
 ZIP_PATH="${ROOT_DIR}/${ZIP_NAME}"
-GCS_PATH="${GCS_PATH:-lamp/ota/hal/${new_version}.zip}"
+GCS_PATH="${GCS_PATH:-${BUCKET_PREFIX}/ota/hal/${new_version}.zip}"
 
 if [[ ! -d "$HAL_DIR" ]]; then
   echo "Error: hal directory not found at $HAL_DIR"
@@ -41,8 +41,8 @@ rm -f "$ZIP_PATH"
 echo "========== Upload ${ZIP_NAME} to Google Cloud Storage (no-cache) =========="
 gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$ZIP_PATH" "gs://${GCS_BUCKET}/${GCS_PATH}"
 
-# Update metadata.json (lamp/ota/metadata.json) - hal key
-METADATA_PATH="lamp/ota/metadata.json"
+# Update metadata.json (${BUCKET_PREFIX}/ota/metadata.json) - hal key
+METADATA_PATH="${BUCKET_PREFIX}/ota/metadata.json"
 METADATA_TMP=$(mktemp)
 LELAMP_URL="${LELAMP_URL:-https://storage.googleapis.com/${GCS_BUCKET}/${GCS_PATH}}"
 
