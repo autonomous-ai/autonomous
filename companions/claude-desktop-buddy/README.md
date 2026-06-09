@@ -11,7 +11,7 @@ onto the lamp's **LED, display, and voice**. It also exposes a small HTTP API so
 the on-device agent (OpenClaw) can read Desktop status and approve/deny tool calls
 by voice.
 
-> **Not to be confused with `lamp-buddy/`** — that is the *macOS* companion app
+> **Not to be confused with `autonomous-buddy/`** — that is the *macOS* companion app
 > (Swift) for remote computer use. **`claude-desktop-buddy/`** is the *device-side*
 > Go plugin that pairs with Anthropic's Claude Desktop app over BLE.
 

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>AutonomousBuddy</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
+    <key>CFBundleIdentifier</key>
+    <string>network.autonomous.ai.buddy</string>
+    <key>CFBundleName</key>
+    <string>Autonomous Buddy</string>
+    <key>CFBundleDisplayName</key>
+    <string>Autonomous Buddy</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleVersion</key>
+    <string>0.0.1</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.0.1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>13.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Autonomous Buddy uses Apple Events to quit applications when your Autonomous device issues a close-app command.</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>© Autonomous</string>
+</dict>
+</plist>
