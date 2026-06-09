@@ -1,13 +1,13 @@
 ---
 name: computer-use
-description: Control the user's Mac via the paired Lamp Buddy companion app — open/close apps, navigate URLs in Chrome, type text into focused fields, fire keyboard shortcuts, show desktop notifications, write to clipboard, click named UI buttons via macOS Accessibility. Also covers vision-driven tasks (screenshot, find/click unlabelled UI, read text off the screen, drag) — those load `reference/vision.md` for the synchronous see-think-act loop. Use when the user explicitly asks Lamp to do something on their COMPUTER (e.g. "open Chrome", "go to Gmail", "join Meet", "close Slack", "type … into my Mac", "copy … to clipboard", "click the blue button on my screen", "what's on my Mac right now?"). Do NOT use for hardware control of the lamp itself (LED, scene, emotion, music, servo) — those are separate skills. Do NOT use if no Mac is paired (the lamp web UI shows pairing status under the Buddy card).
+description: Control the user's Mac via the paired Autonomous Buddy companion app — open/close apps, navigate URLs in Chrome, type text into focused fields, fire keyboard shortcuts, show desktop notifications, write to clipboard, click named UI buttons via macOS Accessibility. Also covers vision-driven tasks (screenshot, find/click unlabelled UI, read text off the screen, drag) — those load `reference/vision.md` for the synchronous see-think-act loop. Use when the user explicitly asks Lamp to do something on their COMPUTER (e.g. "open Chrome", "go to Gmail", "join Meet", "close Slack", "type … into my Mac", "copy … to clipboard", "click the blue button on my screen", "what's on my Mac right now?"). Do NOT use for hardware control of the lamp itself (LED, scene, emotion, music, servo) — those are separate skills. Do NOT use if no Mac is paired (the lamp web UI shows pairing status under the Buddy card).
 ---
 
-# Computer Use (Mac via Lamp Buddy)
+# Computer Use (Mac via Autonomous Buddy)
 
 ## Quick Start
 
-Lamp Buddy is a small macOS app the user installs on their Mac. Once paired with the lamp via the Buddy card on the Monitor web UI, it lets Lamp launch apps, open URLs, type text, fire keyboard shortcuts, and click UI elements **on the user's actual Mac**.
+Autonomous Buddy is a small macOS app the user installs on their Mac. Once paired with the lamp via the Buddy card on the Monitor web UI, it lets Lamp launch apps, open URLs, type text, fire keyboard shortcuts, and click UI elements **on the user's actual Mac**.
 
 This skill emits inline markers that Lamp fires asynchronously while TTS speaks the confirmation:
 
