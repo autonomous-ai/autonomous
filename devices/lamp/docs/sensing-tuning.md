@@ -9,7 +9,7 @@ SSH into the Pi, then:
 
 ```bash
 # HAL log (motion, sound, light events all here)
-tail -f /var/log/lelamp/server.log
+tail -f /var/log/hal/server.log
 
 # Lamp log (confirms event received + forwarded to OpenClaw)
 journalctl -fu lamp -f
@@ -254,7 +254,7 @@ After editing `lelamp/config.py` or `voice_service.py` on the Pi:
 
 ```bash
 sudo systemctl restart lelamp
-tail -f /var/log/lelamp/server.log
+tail -f /var/log/hal/server.log
 ```
 
 No reboot needed — just restart the service.
