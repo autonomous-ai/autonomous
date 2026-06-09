@@ -4,7 +4,7 @@ set -e
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ota-config.sh"
 
 HAL_DIR="${ROOT_DIR}/os/hal"
-VERSION_FILE="${ROOT_DIR}/os/hal/${VERSION_FILE:-VERSION_LELAMP}"
+VERSION_FILE="${ROOT_DIR}/os/hal/${VERSION_FILE:-VERSION_HAL}"
 
 # Bucket and path: ${BUCKET_PREFIX}/ota/hal/[semver].zip
 
@@ -43,7 +43,7 @@ gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$ZIP_PATH" "gs
 # Update metadata.json (${BUCKET_PREFIX}/ota/metadata.json) - hal key
 METADATA_PATH="${BUCKET_PREFIX}/ota/metadata.json"
 METADATA_TMP=$(mktemp)
-LELAMP_URL="${LELAMP_URL:-https://storage.googleapis.com/${GCS_BUCKET}/${GCS_PATH}}"
+HAL_URL="${HAL_URL:-https://storage.googleapis.com/${GCS_BUCKET}/${GCS_PATH}}"
 
 echo "========== Fetch metadata from gs://${GCS_BUCKET}/${METADATA_PATH} =========="
 if gsutil cp "gs://${GCS_BUCKET}/${METADATA_PATH}" "$METADATA_TMP" 2>/dev/null; then
@@ -65,7 +65,7 @@ except json.JSONDecodeError:
     data = {}
 data['hal'] = {'version': sys.argv[1], 'url': sys.argv[2], 'updated_at': sys.argv[3]}
 print(json.dumps(data, indent=2))
-" "$new_version" "$LELAMP_URL" "$(date '+%Y-%m-%d %H:%M:%S %z')")
+" "$new_version" "$HAL_URL" "$(date '+%Y-%m-%d %H:%M:%S %z')")
 
 echo "$updated_metadata" > "$METADATA_TMP"
 echo "========== Upload metadata (hal: v${new_version}) =========="

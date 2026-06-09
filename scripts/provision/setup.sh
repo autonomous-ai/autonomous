@@ -182,8 +182,8 @@ stage_ota_metadata() {
   OS_SERVER_URL=$(jq -r '."os-server".url // empty' "$METADATA_TMP")
   BOOTSTRAP_VERSION=$(jq -r '.bootstrap.version // empty' "$METADATA_TMP")
   BOOTSTRAP_URL=$(jq -r '.bootstrap.url // empty' "$METADATA_TMP")
-  LELAMP_VERSION=$(jq -r '.hal.version // empty' "$METADATA_TMP")
-  LELAMP_URL=$(jq -r '.hal.url // empty' "$METADATA_TMP")
+  HAL_VERSION=$(jq -r '.hal.version // empty' "$METADATA_TMP")
+  HAL_URL=$(jq -r '.hal.url // empty' "$METADATA_TMP")
   BUDDY_VERSION=$(jq -r '."claude-desktop-buddy".version // empty' "$METADATA_TMP")
   BUDDY_URL=$(jq -r '."claude-desktop-buddy".url // empty' "$METADATA_TMP")
   rm -f "$METADATA_TMP"
@@ -191,7 +191,7 @@ stage_ota_metadata() {
     echo "ERROR: OTA metadata missing web.url, os-server.url or bootstrap.url. Check $OTA_METADATA_URL"
     exit 1
   fi
-  echo "[stage] OTA versions: web=$WEB_VERSION os-server=$OS_SERVER_VERSION bootstrap=$BOOTSTRAP_VERSION hal=$LELAMP_VERSION buddy=$BUDDY_VERSION"
+  echo "[stage] OTA versions: web=$WEB_VERSION os-server=$OS_SERVER_VERSION bootstrap=$BOOTSTRAP_VERSION hal=$HAL_VERSION buddy=$BUDDY_VERSION"
 
   # Seed metadata_url into the bootstrap worker's config so the OTA metadata URL
   # comes from /root/config/bootstrap.json (a per-deployment value) instead of a
@@ -313,13 +313,13 @@ EOF
 stage_hal() {
   echo "[stage] Install LeLamp (Python hardware drivers)"
 
-  LELAMP_DIR="/opt/hal"
-  mkdir -p "$LELAMP_DIR"
+  HAL_DIR="/opt/hal"
+  mkdir -p "$HAL_DIR"
 
-  if [ -n "$LELAMP_URL" ]; then
+  if [ -n "$HAL_URL" ]; then
     echo "[stage] Downloading LeLamp from OTA..."
-    retry "curl -fsSL -H \"Cache-Control: no-cache\" -H \"Pragma: no-cache\" -o /tmp/hal.zip \"$LELAMP_URL\"" 5
-    unzip -o -q /tmp/hal.zip -d "$LELAMP_DIR"
+    retry "curl -fsSL -H \"Cache-Control: no-cache\" -H \"Pragma: no-cache\" -o /tmp/hal.zip \"$HAL_URL\"" 5
+    unzip -o -q /tmp/hal.zip -d "$HAL_DIR"
     rm -f /tmp/hal.zip
   else
     echo "[stage] WARN: No hal URL in OTA metadata, skipping download"
@@ -383,15 +383,15 @@ UDEV_EOF
 
   # Clean stale lerobot distutils egg-info that blocks uv uninstall, then recreate venv
   find /root/.cache/uv -name 'lerobot.egg-info' -type d 2>/dev/null | xargs rm -rf
-  rm -rf "$LELAMP_DIR/.venv"
+  rm -rf "$HAL_DIR/.venv"
 
   # uv sync downloads Python 3.12 standalone (includes Python.h) + all deps
-  cd "$LELAMP_DIR"
+  cd "$HAL_DIR"
   uv sync --python 3.12 --extra hardware
   cd /
 
   # Patch webrtcvad: replace pkg_resources import (removed in Python 3.12+)
-  WEBRTCVAD_PY=$(find "$LELAMP_DIR/.venv" -name "webrtcvad.py" -path "*/site-packages/*" 2>/dev/null | head -1)
+  WEBRTCVAD_PY=$(find "$HAL_DIR/.venv" -name "webrtcvad.py" -path "*/site-packages/*" 2>/dev/null | head -1)
   if [ -n "$WEBRTCVAD_PY" ] && grep -q "import pkg_resources" "$WEBRTCVAD_PY" 2>/dev/null; then
     echo "[stage] Patching webrtcvad for Python 3.12+ (pkg_resources removal)"
     cat > "$WEBRTCVAD_PY" <<'WEBRTCVAD_EOF'
@@ -423,9 +423,9 @@ WEBRTCVAD_EOF
   fi
 
   # Write default .env (production mode). Idempotent — only adds the line if absent.
-  touch "$LELAMP_DIR/.env"
-  grep -q "^LELAMP_MODE=" "$LELAMP_DIR/.env" \
-    || echo "LELAMP_MODE=production" >> "$LELAMP_DIR/.env"
+  touch "$HAL_DIR/.env"
+  grep -q "^HAL_MODE=" "$HAL_DIR/.env" \
+    || echo "HAL_MODE=production" >> "$HAL_DIR/.env"
 
   cat >/etc/systemd/system/lamp-hal.service <<EOF
 [Unit]
@@ -435,13 +435,13 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=$LELAMP_DIR
-EnvironmentFile=$LELAMP_DIR/.env
+WorkingDirectory=$HAL_DIR
+EnvironmentFile=$HAL_DIR/.env
 Environment="PYTHONPATH=/opt"
 # Anonymous PulseAudio socket — see /etc/pulse/default.pa. Lets root reach the
 # desktop user's PulseAudio so the Bluetooth headset routing works.
 Environment="PULSE_SERVER=unix:/tmp/pulse-anon-lamp"
-ExecStart=$LELAMP_DIR/.venv/bin/uvicorn hal.server:app --host 127.0.0.1 --port 5001
+ExecStart=$HAL_DIR/.venv/bin/uvicorn hal.server:app --host 127.0.0.1 --port 5001
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -1313,11 +1313,11 @@ elif [ "$APP" = "hal" ]; then
   [ -z "$URL" ] && { echo "Metadata has no url for hal"; exit 1; }
   ZIP_TMP=$(mktemp)
   curl -fsSL -H "Cache-Control: no-cache" -o "$ZIP_TMP" "$URL" || { echo "Failed to download hal"; exit 1; }
-  LELAMP_DIR="/opt/hal"
-  unzip -o -q "$ZIP_TMP" -d "$LELAMP_DIR"
+  HAL_DIR="/opt/hal"
+  unzip -o -q "$ZIP_TMP" -d "$HAL_DIR"
   UV_BIN=$(command -v uv || echo "/root/.local/bin/uv")
   find /root/.cache/uv -name "lerobot.egg-info" -type d 2>/dev/null | xargs rm -rf
-  cd "$LELAMP_DIR" && "$UV_BIN" sync --python 3.12 --extra hardware || { echo "uv sync failed"; exit 1; }
+  cd "$HAL_DIR" && "$UV_BIN" sync --python 3.12 --extra hardware || { echo "uv sync failed"; exit 1; }
   cd /
   systemctl restart lamp-hal
   echo "hal updated to $VERSION"

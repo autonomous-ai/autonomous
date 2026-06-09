@@ -5,7 +5,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev
 
 # Directories
 OS_DIR         := os/services
-LELAMP_DIR     := os/hal
+HAL_DIR        := os/hal
 BUDDY_DIR      := companions/claude-desktop-buddy
 TWITCH_DIR     := chat-hooks/twitch-chat-hook
 AUTONOMOUS_DIR := chat-hooks/autonomous-chat-hook
@@ -19,8 +19,8 @@ LDFLAGS_BOOT   := -X $(MODULE)/bootstrap/config.BootstrapVersion=$(VERSION)
 LDFLAGS_IRC    := -X main.Version=$(VERSION)
 LDFLAGS_AUTONOMOUS_CHAT := -X main.Version=$(VERSION)
 
-# LeLamp
-LELAMP_PORT    := 5001
+# HAL
+HAL_PORT       := 5001
 
 # ============================================================================
 # OS services (Go) — build | generate | lint | test
@@ -46,7 +46,7 @@ os-test:
 	cd $(OS_DIR) && go test ./...
 
 # ============================================================================
-# LeLamp (Python) — dev | run | test
+# HAL (Python) — dev | run | test
 # ============================================================================
 
 .PHONY: hal hal-dev hal-run hal-test hal-clean
@@ -54,16 +54,16 @@ os-test:
 hal: hal-dev
 
 hal-dev:
-	cd $(LELAMP_DIR) && PYTHONPATH=.. LELAMP_MODE=developer .venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port $(LELAMP_PORT) --reload
+	cd $(HAL_DIR) && PYTHONPATH=.. LELAMP_MODE=developer .venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port $(HAL_PORT) --reload
 
 hal-run:
-	cd $(LELAMP_DIR) && PYTHONPATH=.. .venv/bin/python -m hal.server
+	cd $(HAL_DIR) && PYTHONPATH=.. .venv/bin/python -m hal.server
 
 hal-test:
-	cd $(LELAMP_DIR) && .venv/bin/python -m pytest test/
+	cd $(HAL_DIR) && .venv/bin/python -m pytest test/
 
 hal-clean:
-	rm -rf $(LELAMP_DIR)/.venv $(LELAMP_DIR)/__pycache__
+	rm -rf $(HAL_DIR)/.venv $(HAL_DIR)/__pycache__
 
 # ============================================================================
 # Web (React/Vite/Tailwind) — install | dev | build
@@ -202,5 +202,5 @@ clean:
 	rm -f $(OS_DIR)/os-server $(OS_DIR)/bootstrap-server
 	rm -f $(BUDDY_DIR)/buddy-plugin $(BUDDY_DIR)/claude-desktop-buddy
 	rm -f $(TWITCH_DIR)/twitch-irc
-	rm -rf $(LELAMP_DIR)/.venv $(LELAMP_DIR)/__pycache__
+	rm -rf $(HAL_DIR)/.venv $(HAL_DIR)/__pycache__
 	rm -rf $(WEB_DIR)/dist $(WEB_DIR)/node_modules
