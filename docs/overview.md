@@ -39,7 +39,6 @@ os/services/
 ├── lib/mqtt/                     — MQTT client (Eclipse Paho autopaho)
 ├── domain/                       — Shared structs
 ├── bootstrap/                    — OTA worker
-├── resources/openclaw-hooks/     — Agent runtime hook scripts
 └── web/                          — React 19 + Vite + Tailwind CSS 4 SPA
 
 os/hal/
@@ -61,6 +60,7 @@ os/hal/
 
 devices/                          — Per-device configs and overlays
 skills/                           — SKILL.md files for agent runtime
+hooks/                            — HOOK.md lifecycle hooks for agent runtime
 companions/                       — Companion apps (e.g. Lamp Buddy)
 contract/                         — Shared API contracts
 cts/                              — Compatibility test suite
