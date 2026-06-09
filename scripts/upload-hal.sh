@@ -3,7 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-LELAMP_DIR="${ROOT_DIR}/os/hal"
+HAL_DIR="${ROOT_DIR}/os/hal"
 VERSION_FILE="${ROOT_DIR}/os/hal/${VERSION_FILE:-VERSION_LELAMP}"
 
 # Bucket and path: lamp/ota/hal/[semver].zip
@@ -27,14 +27,14 @@ ZIP_NAME="hal-${new_version}.zip"
 ZIP_PATH="${ROOT_DIR}/${ZIP_NAME}"
 GCS_PATH="${GCS_PATH:-lamp/ota/hal/${new_version}.zip}"
 
-if [[ ! -d "$LELAMP_DIR" ]]; then
-  echo "Error: hal directory not found at $LELAMP_DIR"
+if [[ ! -d "$HAL_DIR" ]]; then
+  echo "Error: hal directory not found at $HAL_DIR"
   exit 1
 fi
 
 echo "========== Zipping hal to ${ZIP_NAME} =========="
 rm -f "$ZIP_PATH"
-(cd "$LELAMP_DIR" && zip -r "$ZIP_PATH" . \
+(cd "$HAL_DIR" && zip -r "$ZIP_PATH" . \
   -x ".venv/*" "__pycache__/*" "*/__pycache__/*" ".git/*" "*.pyc" \
   "uv.lock" ".env" ".python-version" "test/*")
 
