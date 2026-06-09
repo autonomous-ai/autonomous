@@ -61,15 +61,15 @@ Use this when setting up a new lamp or after replacing servos.
 
 ```bash
 # Follower only
-sudo /opt/lelamp/.venv/bin/python3 -m lelamp.calibrate \
+sudo /opt/hal/.venv/bin/python3 -m hal.calibrate \
   --id lelamp --port /dev/ttyACM0 --follower-only
 
 # Leader only
-sudo /opt/lelamp/.venv/bin/python3 -m lelamp.calibrate \
+sudo /opt/hal/.venv/bin/python3 -m hal.calibrate \
   --id lelamp --port /dev/ttyACM0 --leader-only
 
 # Both follower and leader
-sudo /opt/lelamp/.venv/bin/python3 -m lelamp.calibrate \
+sudo /opt/hal/.venv/bin/python3 -m hal.calibrate \
   --id lelamp --port /dev/ttyACM0
 ```
 

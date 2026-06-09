@@ -14,10 +14,10 @@ Observed 2026-04-22 trên Pi (test device). Log lelamp lặp hàng phút:
 
 Khi `_sleeping` bật, `sensing_service._send_event` suppress tất cả event ngoại trừ `presence.enter`:
 
-- `/opt/lelamp/service/sensing/sensing_service.py:316-319`
+- `/opt/hal/drivers/sensing/sensing_service.py:316-319`
 - Repo: `lelamp/service/sensing/sensing_service.py` (cùng logic)
 
-Đồng thời `/opt/lelamp/routes/emotion.py:40-44`:
+Đồng thời `/opt/hal/routes/emotion.py:40-44`:
 
 ```python
 if state._sleeping and req.emotion not in _WAKE_EMOTIONS:

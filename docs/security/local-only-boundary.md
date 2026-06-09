@@ -35,17 +35,17 @@ Current references found:
 
 - `Makefile:52`
   ```make
-  cd $(LELAMP_DIR) && PYTHONPATH=.. .venv/bin/uvicorn lelamp.server:app --host 0.0.0.0 --port $(LELAMP_PORT) --reload
+  cd $(LELAMP_DIR) && PYTHONPATH=.. .venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port $(LELAMP_PORT) --reload
   ```
 
 - `scripts/provision/setup.sh:430`
   ```sh
-  ExecStart=$LELAMP_DIR/.venv/bin/uvicorn lelamp.server:app --host 0.0.0.0 --port 5001
+  ExecStart=$LELAMP_DIR/.venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port 5001
   ```
 
 - `imager/build.sh:859`
   ```sh
-  ExecStart=/opt/lelamp/.venv/bin/uvicorn lelamp.server:app --host 0.0.0.0 --port 5001
+  ExecStart=/opt/hal/.venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port 5001
   ```
 
 - `lelamp/server.py:707`
@@ -84,13 +84,13 @@ Change every production/dev LeLamp start command from `0.0.0.0` to `127.0.0.1`.
 Replace:
 
 ```sh
-ExecStart=$LELAMP_DIR/.venv/bin/uvicorn lelamp.server:app --host 0.0.0.0 --port 5001
+ExecStart=$LELAMP_DIR/.venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port 5001
 ```
 
 With:
 
 ```sh
-ExecStart=$LELAMP_DIR/.venv/bin/uvicorn lelamp.server:app --host 127.0.0.1 --port 5001
+ExecStart=$LELAMP_DIR/.venv/bin/uvicorn hal.server:app --host 127.0.0.1 --port 5001
 ```
 
 #### File: `imager/build.sh`
@@ -98,13 +98,13 @@ ExecStart=$LELAMP_DIR/.venv/bin/uvicorn lelamp.server:app --host 127.0.0.1 --por
 Replace:
 
 ```sh
-ExecStart=/opt/lelamp/.venv/bin/uvicorn lelamp.server:app --host 0.0.0.0 --port 5001
+ExecStart=/opt/hal/.venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port 5001
 ```
 
 With:
 
 ```sh
-ExecStart=/opt/lelamp/.venv/bin/uvicorn lelamp.server:app --host 127.0.0.1 --port 5001
+ExecStart=/opt/hal/.venv/bin/uvicorn hal.server:app --host 127.0.0.1 --port 5001
 ```
 
 #### File: `Makefile`
@@ -112,13 +112,13 @@ ExecStart=/opt/lelamp/.venv/bin/uvicorn lelamp.server:app --host 127.0.0.1 --por
 Replace:
 
 ```make
-cd $(LELAMP_DIR) && PYTHONPATH=.. .venv/bin/uvicorn lelamp.server:app --host 0.0.0.0 --port $(LELAMP_PORT) --reload
+cd $(LELAMP_DIR) && PYTHONPATH=.. .venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port $(LELAMP_PORT) --reload
 ```
 
 With:
 
 ```make
-cd $(LELAMP_DIR) && PYTHONPATH=.. .venv/bin/uvicorn lelamp.server:app --host 127.0.0.1 --port $(LELAMP_PORT) --reload
+cd $(LELAMP_DIR) && PYTHONPATH=.. .venv/bin/uvicorn hal.server:app --host 127.0.0.1 --port $(LELAMP_PORT) --reload
 ```
 
 #### File: `lelamp/server.py`

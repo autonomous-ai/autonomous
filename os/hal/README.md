@@ -119,7 +119,7 @@ uv run -m lelamp.setup_motors --id your_lamp_name --port the_port_found_in_previ
 This command calibrate your motors.
 
 ```bash
-sudo uv run -m lelamp.calibrate --id your_lamp_name --port the_port_found_in_previous_step
+sudo uv run -m hal.calibrate --id your_lamp_name --port the_port_found_in_previous_step
 ```
 
 The calibration process will:
