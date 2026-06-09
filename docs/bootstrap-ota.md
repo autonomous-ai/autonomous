@@ -47,28 +47,33 @@ The device runs **5 software components** on a supported board (Raspberry Pi 4, 
 
 Single JSON file hosted on GCS. All components reference this file.
 
-**URL**: `https://storage.googleapis.com/{BUCKET}/lamp/ota/metadata.json`
+> In the URLs below, `{BUCKET}` and `{PREFIX}` are the bucket + path namespace:
+> `GCS_BUCKET` (default `s3-autonomous-upgrade-3`) and `BUCKET_PREFIX` (default
+> `os`), both set in `scripts/ota-config.sh`. Upload scripts read them from there;
+> on-device consumers derive the same paths from the provisioned `ota_metadata_url`.
+
+**URL**: `https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/metadata.json`
 
 ```json
 {
   "lamp": {
     "version": "1.2.3",
-    "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/lamp/1.2.3/lamp-1.2.3.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/lamp/1.2.3/lamp-1.2.3.zip"
   },
   "bootstrap": {
     "version": "1.0.5",
-    "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/bootstrap/1.0.5/bootstrap-1.0.5.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/bootstrap/1.0.5/bootstrap-1.0.5.zip"
   },
   "web": {
     "version": "0.9.0",
-    "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/web/0.9.0/setup-0.9.0.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/web/0.9.0/setup-0.9.0.zip"
   },
   "openclaw": {
     "version": "2026.5.27"
   },
   "hal": {
     "version": "1.0.0",
-    "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/hal/1.0.0/hal-1.0.0.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/hal/1.0.0/hal-1.0.0.zip"
   }
 }
 ```
@@ -100,7 +105,7 @@ One-time provisioning script run on a fresh Raspberry Pi. Executes stages sequen
 
 **Quick install from CDN:**
 ```bash
-curl -fsSL https://cdn.autonomous.ai/lamp/install.sh | sudo bash
+curl -fsSL https://cdn.autonomous.ai/os/install.sh | sudo bash
 ```
 
 ### Stage Overview
@@ -205,7 +210,7 @@ The bootstrap worker keeps its own config file, separate from lamp-server's
 ```json
 {
   "httpPort": 8080,
-  "metadata_url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/metadata.json",
+  "metadata_url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/metadata.json",
   "poll_interval": "5m",
   "state_file": "/root/bootstrap/state.json"
 }
@@ -459,8 +464,8 @@ set -euo pipefail
 
 VERSION_FILE="VERSION_HAL"
 BUCKET="s3-autonomous-upgrade-3"
-OTA_PATH="lamp/ota/hal"
-METADATA_PATH="lamp/ota/metadata.json"
+OTA_PATH="os/ota/hal"
+METADATA_PATH="os/ota/metadata.json"
 
 # Auto-increment patch version
 CURRENT=$(cat "$VERSION_FILE" 2>/dev/null || echo "0.0.0")
@@ -510,14 +515,14 @@ After component uploads succeed (`make upload-lamp upload-hal upload-web ...`), 
 
 ```bash
 make tag-release v0.0.8
-# → curl https://cdn.autonomous.ai/lamp/ota/metadata.json
+# → curl https://cdn.autonomous.ai/os/ota/metadata.json
 # → git tag -a v0.0.8 -F - (annotation = pretty-printed metadata JSON)
 # → git push origin v0.0.8
 ```
 
 Buyers run `lamp-server --version` on the device — value comes from `git describe --tags --always --dirty` at build time (`Makefile:VERSION`), so it resolves to the closest tag. They then open the public repo (`github.com/autonomous-ai/lamp`), find the matching tag, read the annotation for the exact `lamp`/`hal`/`web`/`bootstrap` versions baked at release time, and checkout that commit for corresponding source.
 
-Guards in the script: refuses if tag already exists locally or on remote, refuses if metadata fetch fails or JSON is invalid (`set -euo pipefail` + `jq .`). Overrides via env vars: `OTA_METADATA_URL` (default: `https://cdn.autonomous.ai/lamp/ota/metadata.json`), `TAG_REMOTE` (default: `origin`).
+Guards in the script: refuses if tag already exists locally or on remote, refuses if metadata fetch fails or JSON is invalid (`set -euo pipefail` + `jq .`). Overrides via env vars: `OTA_METADATA_URL` (default: `https://cdn.autonomous.ai/os/ota/metadata.json`), `TAG_REMOTE` (default: `origin`).
 
 ---
 

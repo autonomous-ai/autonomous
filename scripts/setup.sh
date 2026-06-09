@@ -632,8 +632,10 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 EOF
-  # Download skills from GCS into workspace/skills
-  SKILLS_GCS_PREFIX="https://storage.googleapis.com/s3-autonomous-upgrade-3/lamp/skills"
+  # Download skills from GCS into workspace/skills. Derive the base from the OTA
+  # metadata URL (single source of truth) — skills live at <base>/skills, where
+  # <base> is the metadata URL minus "/ota/metadata.json". No hardcoded URL.
+  SKILLS_GCS_PREFIX="${OTA_METADATA_URL%/ota/metadata.json}/skills"
   SKILLS_LIST="audio camera display emotion led-control scene scheduling sensing servo-control"
   mkdir -p "$OPENCLAW_HOME/workspace/skills"
   for skill_name in $SKILLS_LIST; do

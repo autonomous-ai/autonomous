@@ -107,7 +107,7 @@ The restructure landed in CI-gated stages:
 2. ✅ **Go layer**: `os/core` → `os/services` (runtime bridge stays `os/services/internal/openclaw`).
 3. ✅ **HAL package**: `lelamp` → `hal`, surfaced as `os/hal/drivers` (by subsystem) +
    `os/hal/board` (by board). Deploy identifiers renamed consistently (`/opt/hal`,
-   `lamp/ota/hal`, `python -m hal.server`). On-device `LELAMP_*` env vars remain as **legacy
+   `os/ota/hal`, `python -m hal.server`). On-device `LELAMP_*` env vars remain as **legacy
    aliases** until a field OTA cycle migrates them.
 4. ✅ **Lamp + Intern**: unchanged — they are `DEVICE.md` overlays over the shared core, so the
    restructure didn't touch them; `cts` confirms both stay compliant (one image, two manifests).

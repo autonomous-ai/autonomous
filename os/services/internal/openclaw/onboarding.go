@@ -21,9 +21,6 @@ var soulFS embed.FS
 var knowledgeFS embed.FS
 
 const (
-	skillsBaseURL = "https://storage.googleapis.com/s3-autonomous-upgrade-3/lamp/skills"
-	hooksBaseURL  = "https://storage.googleapis.com/s3-autonomous-upgrade-3/lamp/hooks"
-
 	lampMandatoryMarker = "<!-- LAMP DO NOT REMOVE -->"
 
 	agentsMDBlock = `<!-- LAMP DO NOT REMOVE -->
@@ -96,6 +93,33 @@ var skills = []string{
 // EnsureOnboarding seeds SOUL.md, downloads skills, and injects the mandatory
 // block into workspace/AGENTS.md so OpenClaw scans the skills directory.
 // IDENTITY.md is managed by OpenClaw itself (created during openclaw onboard).
+// otaBaseURL derives the CDN base for OTA-published assets from the device's OTA
+// metadata URL (config.json): the metadata URL minus "/ota/metadata.json".
+// Skills and hooks live alongside it at <base>/skills and <base>/hooks. Returns
+// "" when no metadata URL is configured (device not provisioned) so callers skip
+// rather than fall back to a hardcoded URL.
+func (s *Service) otaBaseURL() string {
+	u := strings.TrimSpace(s.config.OTAMetadataURL)
+	if u == "" {
+		return ""
+	}
+	return strings.TrimSuffix(u, "/ota/metadata.json")
+}
+
+func (s *Service) skillsBaseURL() string {
+	if base := s.otaBaseURL(); base != "" {
+		return base + "/skills"
+	}
+	return ""
+}
+
+func (s *Service) hooksBaseURL() string {
+	if base := s.otaBaseURL(); base != "" {
+		return base + "/hooks"
+	}
+	return ""
+}
+
 func (s *Service) EnsureOnboarding() error {
 	workspace := filepath.Join(s.config.OpenclawConfigDir, "workspace")
 	if err := os.MkdirAll(workspace, 0755); err != nil {
@@ -130,31 +154,35 @@ func (s *Service) EnsureOnboarding() error {
 	}
 	changedSkills := s.downloadSkills()
 
-	// Download hooks from CDN
-	hooksDir := filepath.Join(workspace, "hooks")
-	if err := os.MkdirAll(hooksDir, 0755); err != nil {
-		return fmt.Errorf("create hooks dir: %w", err)
-	}
-	hookFiles := []string{"HOOK.md", "handler.ts"}
-	for _, name := range hooks {
-		dir := filepath.Join(hooksDir, name)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			slog.Error("mkdir failed", "component", "onboarding", "dir", dir, "error", err)
-			continue
+	// Download hooks from CDN (alongside the device's OTA metadata URL).
+	if hooksBase := s.hooksBaseURL(); hooksBase == "" {
+		slog.Info("hooks download skipped: no ota_metadata_url configured", "component", "onboarding")
+	} else {
+		hooksDir := filepath.Join(workspace, "hooks")
+		if err := os.MkdirAll(hooksDir, 0755); err != nil {
+			return fmt.Errorf("create hooks dir: %w", err)
 		}
-		for _, file := range hookFiles {
-			dst := filepath.Join(dir, file)
-			url := fmt.Sprintf("%s/%s/%s", hooksBaseURL, name, file)
-			changed, err := downloadFile(url, dst)
-			if err != nil {
-				slog.Error("download hook file failed", "component", "onboarding", "hook", name, "file", file, "error", err)
+		hookFiles := []string{"HOOK.md", "handler.ts"}
+		for _, name := range hooks {
+			dir := filepath.Join(hooksDir, name)
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				slog.Error("mkdir failed", "component", "onboarding", "dir", dir, "error", err)
 				continue
 			}
-			if changed {
-				needRestart = true
+			for _, file := range hookFiles {
+				dst := filepath.Join(dir, file)
+				url := fmt.Sprintf("%s/%s/%s", hooksBase, name, file)
+				changed, err := downloadFile(url, dst)
+				if err != nil {
+					slog.Error("download hook file failed", "component", "onboarding", "hook", name, "file", file, "error", err)
+					continue
+				}
+				if changed {
+					needRestart = true
+				}
 			}
+			slog.Info("seeded hook", "component", "onboarding", "hook", name)
 		}
-		slog.Info("seeded hook", "component", "onboarding", "hook", name)
 	}
 
 	// Seed KNOWLEDGE.md template only if the file does not already exist (living doc)

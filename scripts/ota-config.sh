@@ -14,4 +14,4 @@
 # Path namespace inside the bucket — the single knob to re-namespace every
 # artifact (OTA zips, metadata.json, skills, hooks, setup scripts). Referenced
 # as ${BUCKET_PREFIX} wherever a bucket path is built.
-: "${BUCKET_PREFIX:=lamp}"
+: "${BUCKET_PREFIX:=os}"

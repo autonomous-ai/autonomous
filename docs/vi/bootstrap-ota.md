@@ -47,28 +47,33 @@ Thiết bị chạy **5 thành phần phần mềm** trên board được hỗ t
 
 File JSON duy nhất trên GCS. Tất cả thành phần tham chiếu file này.
 
-**URL**: `https://storage.googleapis.com/{BUCKET}/lamp/ota/metadata.json`
+> Trong các URL bên dưới, `{BUCKET}` và `{PREFIX}` là bucket + namespace path:
+> `GCS_BUCKET` (mặc định `s3-autonomous-upgrade-3`) và `BUCKET_PREFIX` (mặc định
+> `os`), đều set trong `scripts/ota-config.sh`. Upload scripts đọc từ đó; consumer
+> trên device derive cùng path từ `ota_metadata_url` đã provisioning.
+
+**URL**: `https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/metadata.json`
 
 ```json
 {
   "lamp": {
     "version": "1.2.3",
-    "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/lamp/1.2.3/lamp-1.2.3.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/lamp/1.2.3/lamp-1.2.3.zip"
   },
   "bootstrap": {
     "version": "1.0.5",
-    "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/bootstrap/1.0.5/bootstrap-1.0.5.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/bootstrap/1.0.5/bootstrap-1.0.5.zip"
   },
   "web": {
     "version": "0.9.0",
-    "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/web/0.9.0/setup-0.9.0.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/web/0.9.0/setup-0.9.0.zip"
   },
   "openclaw": {
     "version": "2026.5.27"
   },
   "hal": {
     "version": "1.0.0",
-    "url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/hal/1.0.0/hal-1.0.0.zip"
+    "url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/hal/1.0.0/hal-1.0.0.zip"
   }
 }
 ```
@@ -100,7 +105,7 @@ Script chạy **1 lần duy nhất** trên Pi mới. Thực thi tuần tự theo
 
 **Cài nhanh từ CDN:**
 ```bash
-curl -fsSL https://cdn.autonomous.ai/lamp/install.sh | sudo bash
+curl -fsSL https://cdn.autonomous.ai/os/install.sh | sudo bash
 ```
 
 ### Tổng quan stages
@@ -203,7 +208,7 @@ nhưng nằm cùng thư mục `/root/config/`.
 ```json
 {
   "httpPort": 8080,
-  "metadata_url": "https://storage.googleapis.com/{BUCKET}/lamp/ota/metadata.json",
+  "metadata_url": "https://storage.googleapis.com/{BUCKET}/{PREFIX}/ota/metadata.json",
   "poll_interval": "5m",
   "state_file": "/root/bootstrap/state.json"
 }
@@ -457,8 +462,8 @@ set -euo pipefail
 
 VERSION_FILE="VERSION_HAL"
 BUCKET="s3-autonomous-upgrade-3"
-OTA_PATH="lamp/ota/hal"
-METADATA_PATH="lamp/ota/metadata.json"
+OTA_PATH="os/ota/hal"
+METADATA_PATH="os/ota/metadata.json"
 
 # Tự tăng patch version
 CURRENT=$(cat "$VERSION_FILE" 2>/dev/null || echo "0.0.0")
@@ -508,14 +513,14 @@ Sau khi các upload component xong (`make upload-lamp upload-hal upload-web ...`
 
 ```bash
 make tag-release v0.0.8
-# → curl https://cdn.autonomous.ai/lamp/ota/metadata.json
+# → curl https://cdn.autonomous.ai/os/ota/metadata.json
 # → git tag -a v0.0.8 -F - (annotation = JSON metadata đẹp)
 # → git push origin v0.0.8
 ```
 
 Người mua chạy `lamp-server --version` trên thiết bị — giá trị lấy từ `git describe --tags --always --dirty` lúc build (`Makefile:VERSION`), nên resolve về tag gần nhất. Họ mở repo public (`github.com/autonomous-ai/lamp`), tìm tag đúng, đọc annotation để xem chính xác version `lamp`/`hal`/`web`/`bootstrap` đã bake vào release đó, rồi checkout commit tương ứng để có source.
 
-Guards trong script: từ chối nếu tag đã tồn tại local hoặc trên remote, từ chối nếu fetch metadata fail hoặc JSON invalid (`set -euo pipefail` + `jq .`). Override qua env: `OTA_METADATA_URL` (mặc định: `https://cdn.autonomous.ai/lamp/ota/metadata.json`), `TAG_REMOTE` (mặc định: `origin`).
+Guards trong script: từ chối nếu tag đã tồn tại local hoặc trên remote, từ chối nếu fetch metadata fail hoặc JSON invalid (`set -euo pipefail` + `jq .`). Override qua env: `OTA_METADATA_URL` (mặc định: `https://cdn.autonomous.ai/os/ota/metadata.json`), `TAG_REMOTE` (mặc định: `origin`).
 
 ---
 

@@ -129,8 +129,8 @@ All env vars; override at the `make` call.
 | `AP_CHANNEL` | `6` (2.4 GHz) / `36` (5 GHz) | hostapd channel |
 | `COUNTRY_CODE` | `US` | Regulatory domain for wpa_supplicant + hostapd |
 | `GCS_BUCKET` | `s3-autonomous-upgrade-3` | (Makefile) target bucket for `make upload` |
-| `GCS_PATH` | `lamp/imager/output` | (Makefile) path inside the bucket |
-| `GCS_LEDGER` | `lamp/imager/RELEASES.md` | (Makefile) path for cumulative append-only release ledger |
+| `GCS_PATH` | `os/imager/output` | (Makefile) path inside the bucket |
+| `GCS_LEDGER` | `os/imager/RELEASES.md` | (Makefile) path for cumulative append-only release ledger |
 
 ## Upload to GCS
 
@@ -157,7 +157,7 @@ Versioning: `golden-<target>-<UTC-timestamp>-<git-short-sha>.img.xz`
 ### Mirror the source .7z to GCS (one-shot)
 
 ```bash
-make upload-source                 # → gs://$GCS_BUCKET/lamp/imager/source/Orangepi4pro_*.7z
+make upload-source                 # → gs://$GCS_BUCKET/os/imager/source/Orangepi4pro_*.7z
 ```
 
 ## File layout

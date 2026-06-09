@@ -83,10 +83,15 @@ func (s *Service) downloadSkills() []string {
 // onboarding) already pre-filters by version, so any successful return here
 // means content actually changed.
 func (s *Service) downloadSkillsByName(names []string) []string {
+	base := s.skillsBaseURL()
+	if base == "" {
+		slog.Info("skill download skipped: no ota_metadata_url configured", "component", "skill-watcher")
+		return nil
+	}
 	skillsDir := filepath.Join(s.config.OpenclawConfigDir, "workspace", "skills")
 	var changed []string
 	for _, name := range names {
-		url := fmt.Sprintf("%s/%s.zip", skillsBaseURL, name)
+		url := fmt.Sprintf("%s/%s.zip", base, name)
 		tmpZip, err := downloadToTempFile(url, "skill-*.zip")
 		if err != nil {
 			slog.Warn("skill zip download failed", "component", "skill-watcher", "skill", name, "error", err)
