@@ -1010,7 +1010,7 @@ server {
     proxy_send_timeout 86400s;
   }
 
-  # Lamp Buddy (macOS companion) persistent WebSocket.
+  # Autonomous Buddy (macOS companion) persistent WebSocket.
   location = /api/buddy/ws {
     proxy_pass http://backend;
     proxy_http_version 1.1;
@@ -1961,7 +1961,7 @@ rm -f /tmp/web.zip
 
 # ── stage: Claude Desktop Buddy (BLE plugin, optional) ───────────────────────
 # Optional BLE bridge that pairs the lamp with Claude Desktop. The Mac-side
-# "Lamp Buddy" Swift app is a separate component and is NOT installed here.
+# "Autonomous Buddy" Swift app is a separate component and is NOT installed here.
 # Service name is claude-desktop-buddy.service for legacy parity with setup.sh.
 if [ -n "\$BUDDY_URL" ]; then
   echo "[overlay] Install Claude Desktop Buddy"
