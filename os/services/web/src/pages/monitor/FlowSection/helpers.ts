@@ -1304,13 +1304,13 @@ export function turnIO(turn: Turn): {
       // Extract snapshot paths from sensing_input (backend strips [snapshot:...] from chat_send
       // text, so sensing_input is the authoritative source for the Monitor turn-item thumbnails).
       if (typeof dataMsg === "string") {
-        const snapRe = /\[snapshot:\s*(?:\/tmp\/lamp-(?:sensing|emotion|motion)-snapshots|\/var\/lib\/lelamp\/snapshots)\/((?:sensing|emotion|motion)_[^\]]+\.jpg)\]/g;
+        const snapRe = /\[snapshot:\s*(?:\/tmp\/lamp-(?:sensing|emotion|motion)-snapshots|\/var\/lib\/hal\/snapshots)\/((?:sensing|emotion|motion)_[^\]]+\.jpg)\]/g;
         let snapMatch;
         while ((snapMatch = snapRe.exec(dataMsg)) !== null) {
           const url = `/api/sensing/snapshot/${snapMatch[1]}`;
           if (!snapshotUrls.includes(url)) snapshotUrls.push(url);
         }
-        // Pose bucket markers (motion.activity only) — emitted by lelamp
+        // Pose bucket markers (motion.activity only) — emitted by HAL
         // when a posture nudge folds into the turn. Lamp strips them from
         // the LLM-facing text but they survive in the sensing_input JSONL.
         // Pattern aligned with Go-side rePoseBucketMarker — accept any char
@@ -1350,7 +1350,7 @@ export function turnIO(turn: Turn): {
       const raw = (d?.data?.message ?? d?.message ?? ev.summary ?? "").trim();
       // Extract all snapshot paths → convert to API URLs.
       // Accepts sensing_*.jpg (presence), emotion_*.jpg (FER), motion_*.jpg (activity) across all 4 dirs.
-      const snapRe = /\[snapshot:\s*(?:\/tmp\/lamp-(?:sensing|emotion|motion)-snapshots|\/var\/lib\/lelamp\/snapshots)\/((?:sensing|emotion|motion)_[^\]]+\.jpg)\]/g;
+      const snapRe = /\[snapshot:\s*(?:\/tmp\/lamp-(?:sensing|emotion|motion)-snapshots|\/var\/lib\/hal\/snapshots)\/((?:sensing|emotion|motion)_[^\]]+\.jpg)\]/g;
       let snapMatch;
       while ((snapMatch = snapRe.exec(raw)) !== null) {
         const url = `/api/sensing/snapshot/${snapMatch[1]}`;
