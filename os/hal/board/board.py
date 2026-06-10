@@ -81,21 +81,23 @@ PROFILES: Dict[str, BoardProfile] = {
     ),
 }
 
-# Most conservative fallback when the model string is unknown: Pi 4 wiring
-# (PWM LED on GPIO 12, button on gpiochip0 line 17). Matches the pre-refactor
-# `else` branch in each driver.
-DEFAULT_BOARD_ID = "raspberry_pi_4"
+# Fallback when the model string is unknown/unreadable: OrangePi 4 Pro (sun60) —
+# the primary shipping board. Every known board is matched explicitly in
+# detect_board_id() below, so only genuinely unrecognized hardware lands here.
+DEFAULT_BOARD_ID = "orangepi_sun60"
 
 
 def detect_board_id(model: Optional[str] = None) -> str:
     """Classify the board from the device-tree model string. Pure; testable.
 
-    Mirrors the exact substring checks the drivers used before consolidation:
-    'pi 5' -> Pi 5, 'sun60iw2' -> OrangePi sun60, else the conservative default.
+    'pi 5' -> Pi 5, 'pi 4' -> Pi 4, 'sun60iw2' -> OrangePi 4 Pro (sun60). An
+    unrecognized/empty model falls back to DEFAULT_BOARD_ID (OrangePi 4 Pro).
     """
     m = model if model is not None else read_device_tree_model()
     if "pi 5" in m:
         return "raspberry_pi_5"
+    if "pi 4" in m:
+        return "raspberry_pi_4"
     if "sun60iw2" in m:
         return "orangepi_sun60"
     return DEFAULT_BOARD_ID
