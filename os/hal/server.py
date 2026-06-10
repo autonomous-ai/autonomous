@@ -662,6 +662,17 @@ _ROUTERS_BY_NAME = {
     "bluetooth": bluetooth.router,
 }
 
+# Speaker recognition imports separately — its deps (face/speaker embedding
+# models) are heavy and may be absent. It's a declared `speaker` route under the
+# audio capability (devices/*/DEVICE.md), so it joins the SAME declaration gate
+# below: import success == availability, no separate bypass mount.
+try:
+    from hal.routes.speaker import router as _speaker_router
+
+    _ROUTERS_BY_NAME["speaker"] = _speaker_router
+except Exception as _speaker_import_err:  # noqa: BLE001
+    logger.warning("Speaker recognition router unavailable: %s", _speaker_import_err)
+
 
 def _resolve_device_type() -> str:
     dev = os.environ.get("DEVICE_TYPE")
@@ -703,54 +714,38 @@ _route_available = {
     "display": DisplayService is not None,
     "music": MusicService is not None,
     "emotion": True, "scene": True, "system": True, "bluetooth": True,
+    "speaker": "speaker" in _ROUTERS_BY_NAME,
 }
 
 _profile = _device_profile_or_none()
 if _profile is None:
-    # Legacy fallback: no DEVICE.md → mount everything.
+    # Legacy fallback: no DEVICE.md → mount everything HAL has.
     for _router in _ROUTERS_BY_NAME.values():
         app.include_router(_router)
 else:
     from hal.board.device import plan_mounts
 
-    # Restrict the planner to routes HAL has routers for here ("speaker" is
-    # declared under the audio capability but mounted separately below).
-    _declared = {r: req for r, req in _profile.declared_routes().items() if r in _ROUTERS_BY_NAME}
-    _available = {r: _route_available.get(r, False) for r in _ROUTERS_BY_NAME}
+    # Full declared surface (incl. `speaker`). Availability = driver importable.
+    _declared = _profile.declared_routes()
+    _available = {r: _route_available.get(r, False) for r in _declared}
     _plan = plan_mounts(_declared, _available)
     logger.info(
         "Declaration-driven mount plan: device=%s mounted=%s skipped=%s failed_required=%s",
         _resolve_device_type(), _plan.mounted, _plan.skipped, _plan.failed_required,
     )
-    if MODE == "production":
-        # Spec rule #3: a required capability whose driver can't import is a real
-        # fault — abort loudly rather than boot a half-working device.
-        if not _plan.ok:
-            raise RuntimeError(
-                f"Device '{_resolve_device_type()}' requires routes whose drivers are "
-                f"unavailable: {_plan.failed_required}. Fix the driver/hardware, or mark "
-                f"the capability optional in devices/{_resolve_device_type()}/DEVICE.md."
-            )
-        for _name in _plan.mounted:
-            app.include_router(_ROUTERS_BY_NAME[_name])
-    else:
-        # Dev / off-hardware: keep the full *declared* API surface for testing even
-        # when drivers can't import (the plan above is logged for visibility).
-        # Declaration subsetting (Intern vs Lamp) still applies; only the
-        # availability + fail-loud enforcement defers to production.
-        for _name in _declared:
-            app.include_router(_ROUTERS_BY_NAME[_name])
-
-# Speaker recognition routes (lazy import — import failure tolerated so the
-# rest of the server still boots if speaker deps are missing).
-try:
-    from hal.routes.speaker import router as speaker_router
-
-    app.include_router(speaker_router)
-except Exception as _speaker_import_err:  # noqa: BLE001
-    logger.warning(
-        "Speaker recognition router disabled: %s", _speaker_import_err
-    )
+    # Spec rule #3: a required capability whose driver can't import is a real
+    # fault — abort loudly in EVERY mode. Dev runs on real Pi hardware too, so
+    # there is no off-hardware case to spare. Optional routes simply skip; a
+    # declared route HAL has no router for is treated as unavailable (→ fail if
+    # required, skip if optional).
+    if not _plan.ok:
+        raise RuntimeError(
+            f"Device '{_resolve_device_type()}' requires routes whose drivers are "
+            f"unavailable: {_plan.failed_required}. Fix the driver/hardware, or mark "
+            f"the capability optional in devices/{_resolve_device_type()}/DEVICE.md."
+        )
+    for _name in _plan.mounted:
+        app.include_router(_ROUTERS_BY_NAME[_name])
 
 # Self-hosted Swagger UI assets. Lamp nginx CSP keeps `script-src 'self'` so
 # the bundled JS/CSS load from this same origin (no cdn.jsdelivr.net). The
