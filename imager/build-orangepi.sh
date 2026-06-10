@@ -366,6 +366,9 @@ Type=simple
 User=root
 WorkingDirectory=/opt/hal
 Environment="PYTHONPATH=/opt"
+# Anonymous PulseAudio socket (see the default.pa drop-in below) so root-owned
+# hal can reach the desktop user's PulseAudio for Bluetooth headset routing.
+Environment="PULSE_SERVER=unix:/tmp/pulse-anon-${DEVICE_TYPE}"
 ExecStart=/opt/hal/.venv/bin/uvicorn hal.server:app --host 127.0.0.1 --port 5001
 Restart=always
 RestartSec=5
