@@ -31,6 +31,11 @@ nhiều — `input/orangepi.7z` được cache, chỉ Phase 3+ re-run.
 
 `make TARGET=rpi build` cho Pi 5 path. `make TARGET=rpi RPI_MODEL=4 build` cho Pi 4B. No-arg `make build` mặc định OrangePi.
 
+> The build script always writes a fixed name (`golden-opi.img.xz` / `golden.img`);
+> `make build` then renames it to the device-typed `golden[-opi]-<type>.img[.xz]` shown
+> above, so 3 device types don't clobber each other. Phase logs below show the raw
+> script name (pre-rename).
+
 ## OrangePi build flow
 
 ```
@@ -108,7 +113,7 @@ efficiently).
 **Recommended: Raspberry Pi Imager** (works for both OPi and RPi images)
 
 1. Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
-2. Choose OS → "Use custom" → select `output/golden-opi.img.xz` (or `golden.img` for RPi)
+2. Choose OS → "Use custom" → select `output/golden-opi-<type>.img.xz` (or `golden-<type>.img` for RPi)
 3. Choose Storage → select your SD card
 4. Click Write — Imager handles decompression and verification automatically
 
@@ -147,14 +152,14 @@ gcloud auth login                  # if token expired
 make upload                        # 3 uploads: image, per-release note, updated RELEASES.md ledger
 ```
 
-Versioning: `golden-<target>-<UTC-timestamp>-<git-short-sha>.img.xz`
+Versioning: `golden-<target>-<type>-<UTC-timestamp>-<git-short-sha>.img.xz`
 
 `make upload` does:
 
-1. Computes sha256 + size of `output/golden-opi.img.xz`.
+1. Computes sha256 + size of `output/golden-opi-<type>.img.xz`.
 2. Reads `output/manifest-opi.json` (written by Phase 5) for OTA versions
    baked in. Degrades gracefully if missing.
-3. Generates `output/golden-opi-<version>.release.txt`.
+3. Generates `output/golden-opi-<type>-<version>.release.txt`.
 4. Uploads image + release note to GCS.
 5. Prepends new entry to cumulative `RELEASES.md` ledger (newest-first).
 6. **Auto-cleans** `output/` after all uploads succeed. Skip with `KEEP_OUTPUT=1 make upload`.
@@ -254,7 +259,7 @@ To silence it: `gcloud config set storage/parallel_composite_upload_enabled Fals
 Check the U-Boot bootloader region survived:
 
 ```bash
-xz -dc output/golden-opi.img.xz | head -c 16M | hexdump -C | head -20
+xz -dc output/golden-opi-<type>.img.xz | head -c 16M | hexdump -C | head -20
 ```
 
 Expected: non-zero bytes near offsets 0x2000 (SPL header) and 0x20000 (U-Boot proper).
