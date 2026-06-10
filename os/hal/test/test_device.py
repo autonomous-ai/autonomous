@@ -110,8 +110,8 @@ class TestInternBootProof(unittest.TestCase):
         "sensing", "display", "voice", "music", "system", "bluetooth",
     }
 
-    def _mounted(self, device_id):
-        declared = set(load_device(device_id, DEVICES_DIR).declared_routes())
+    def _mounted(self, device_type):
+        declared = set(load_device(device_type, DEVICES_DIR).declared_routes())
         return self.ALL_ROUTERS & declared
 
     def test_lamp_mounts_servo_and_display(self):

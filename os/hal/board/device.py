@@ -85,7 +85,7 @@ def parse_capabilities(front_matter: str) -> Dict[str, Capability]:
 
 @dataclass(frozen=True)
 class DeviceProfile:
-    device_id: str
+    device_type: str
     capabilities: Dict[str, Capability]
 
     def declared_routes(self) -> Dict[str, bool]:
@@ -98,14 +98,14 @@ class DeviceProfile:
         return out
 
 
-def parse_device(device_id: str, text: str) -> DeviceProfile:
-    return DeviceProfile(device_id=device_id, capabilities=parse_capabilities(extract_front_matter(text)))
+def parse_device(device_type: str, text: str) -> DeviceProfile:
+    return DeviceProfile(device_type=device_type, capabilities=parse_capabilities(extract_front_matter(text)))
 
 
-def load_device(device_id: str, devices_dir: str) -> DeviceProfile:
-    """Load devices/<device_id>/DEVICE.md from a devices directory."""
-    with open(os.path.join(devices_dir, device_id, "DEVICE.md"), "r") as f:
-        return parse_device(device_id, f.read())
+def load_device(device_type: str, devices_dir: str) -> DeviceProfile:
+    """Load devices/<device_type>/DEVICE.md from a devices directory."""
+    with open(os.path.join(devices_dir, device_type, "DEVICE.md"), "r") as f:
+        return parse_device(device_type, f.read())
 
 
 @dataclass(frozen=True)

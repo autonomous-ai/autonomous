@@ -663,8 +663,8 @@ _ROUTERS_BY_NAME = {
 }
 
 
-def _resolve_device_id() -> str:
-    dev = os.environ.get("HAL_DEVICE_ID")
+def _resolve_device_type() -> str:
+    dev = os.environ.get("HAL_DEVICE_TYPE")
     if dev:
         return dev
     try:
@@ -681,7 +681,7 @@ def _device_profile_or_none():
         devices_dir = os.environ.get("HAL_DEVICES_DIR") or os.path.normpath(
             os.path.join(os.path.dirname(__file__), "..", "..", "..", "devices")
         )
-        return load_device(_resolve_device_id(), devices_dir)
+        return load_device(_resolve_device_type(), devices_dir)
     except Exception as e:
         logger.warning("DEVICE.md not loaded (%s) — mounting all routes (legacy behavior)", e)
         return None
@@ -720,16 +720,16 @@ else:
     _plan = plan_mounts(_declared, _available)
     logger.info(
         "Declaration-driven mount plan: device=%s mounted=%s skipped=%s failed_required=%s",
-        _resolve_device_id(), _plan.mounted, _plan.skipped, _plan.failed_required,
+        _resolve_device_type(), _plan.mounted, _plan.skipped, _plan.failed_required,
     )
     if MODE == "production":
         # Spec rule #3: a required capability whose driver can't import is a real
         # fault — abort loudly rather than boot a half-working device.
         if not _plan.ok:
             raise RuntimeError(
-                f"Device '{_resolve_device_id()}' requires routes whose drivers are "
+                f"Device '{_resolve_device_type()}' requires routes whose drivers are "
                 f"unavailable: {_plan.failed_required}. Fix the driver/hardware, or mark "
-                f"the capability optional in devices/{_resolve_device_id()}/DEVICE.md."
+                f"the capability optional in devices/{_resolve_device_type()}/DEVICE.md."
             )
         for _name in _plan.mounted:
             app.include_router(_ROUTERS_BY_NAME[_name])
