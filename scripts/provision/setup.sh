@@ -996,7 +996,7 @@ no-resolv
 EOF
   # Remove any conflicting global interface in main config (leave rest intact)
   if [ -f /etc/dnsmasq.conf ]; then
-    sed -i 's/^interface=wlan0/#interface=wlan0  # use dnsmasq.d/99-${DEVICE_TYPE}.conf/' /etc/dnsmasq.conf 2>/dev/null || true
+    sed -i 's|^interface=wlan0|#interface=wlan0  # use dnsmasq.d/99-${DEVICE_TYPE}.conf|' /etc/dnsmasq.conf 2>/dev/null || true
   fi
 
   # dhcpcd: remove wlan0 block (including when it's at end-of-file with no trailing blank line)
