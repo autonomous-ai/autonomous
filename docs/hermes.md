@@ -20,9 +20,14 @@ which brain is active.
 
 | `agent_runtime` | Backend |
 |---|---|
-| unset / `"openclaw"` | OpenClaw (default) |
+| unset | falls back to `gateway.default` in `devices/<type>/DEVICE.md`, then OpenClaw if that is empty too |
+| `"openclaw"` | OpenClaw (default) |
 | `"hermes"` | Hermes (`hermes.ProvideService`) |
-| anything else | OpenClaw (logged as `FALLBACK — unknown agent_runtime=…`) |
+| anything else | OpenClaw (logged as `FALLBACK — unknown runtime=…`) |
+
+When `agent_runtime` is unset in `config.json`, the backend is taken from the
+device's declared `gateway.default` (`devices/<type>/DEVICE.md`); OpenClaw is used
+only if that is also empty. The banner logs `source` so you can tell which won.
 
 On startup `ProvideGateway` prints an `AGENT BACKEND ACTIVE → HERMES` banner with
 `base_url`, `conversation`, `model`, and `api_key_set`. There is **no per-unit

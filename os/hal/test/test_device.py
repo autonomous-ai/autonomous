@@ -7,12 +7,14 @@ import os
 import unittest
 
 from hal.board.device import (
+    Capability,
     MountPlan,
     extract_front_matter,
     load_device,
     parse_capabilities,
     parse_device,
     plan_mounts,
+    validate_safety_refs,
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -75,6 +77,37 @@ class TestRealDeviceFiles(unittest.TestCase):
         self.assertNotIn("display", intern)
         self.assertIn("audio", intern)
         self.assertTrue(load_device("intern", DEVICES_DIR).capabilities["audio"].required)
+
+
+class TestSafetyRefs(unittest.TestCase):
+    def test_parse_capabilities_sets_safety(self):
+        caps = parse_capabilities(extract_front_matter(SAMPLE))
+        self.assertEqual(caps["motion"].safety, "SAFETY.md#motion")
+
+    def test_capability_without_safety_defaults_none(self):
+        cap = Capability(group="audio", routes=["audio"], required=True)
+        self.assertIsNone(cap.safety)
+
+    def test_validate_clean_when_anchor_exists(self):
+        dev = parse_device("sample", SAMPLE)
+        problems = validate_safety_refs(dev, "# Safety\n\n## motion\n\nrules here\n")
+        self.assertEqual(problems, [])
+
+    def test_validate_warns_when_anchor_missing(self):
+        dev = parse_device("sample", SAMPLE)
+        problems = validate_safety_refs(dev, "# Safety\n\n## light\n\nrules here\n")
+        self.assertTrue(problems)
+        self.assertIn("motion", problems[0])
+
+    def test_validate_warns_when_safety_md_empty(self):
+        dev = parse_device("sample", SAMPLE)
+        self.assertTrue(validate_safety_refs(dev, ""))
+
+    def test_lamp_real_refs_validate_clean(self):
+        lamp = load_device("lamp", DEVICES_DIR)
+        safety_path = os.path.join(DEVICES_DIR, "lamp", "SAFETY.md")
+        with open(safety_path, "r") as f:
+            self.assertEqual(validate_safety_refs(lamp, f.read()), [])
 
 
 class TestMountPlanning(unittest.TestCase):

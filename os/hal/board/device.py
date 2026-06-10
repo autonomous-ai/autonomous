@@ -16,10 +16,13 @@ off-hardware. See contract/DEVICE-SPEC.md and contract/capabilities.md.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
+
+logger = logging.getLogger("hal.device")
 
 
 @dataclass(frozen=True)
@@ -27,6 +30,7 @@ class Capability:
     group: str
     routes: List[str]
     required: bool
+    safety: Optional[str] = None
 
 
 def extract_front_matter(text: str) -> str:
@@ -45,6 +49,11 @@ def _parse_routes(body: str) -> List[str]:
 def _parse_required(body: str) -> bool:
     m = re.search(r"required:\s*(true|false)", body, re.IGNORECASE)
     return bool(m and m.group(1).lower() == "true")
+
+
+def _parse_safety(body: str) -> Optional[str]:
+    m = re.search(r"safety:\s*([^\s,}]+)", body)
+    return m.group(1) if m else None
 
 
 def parse_capabilities(front_matter: str) -> Dict[str, Capability]:
@@ -79,6 +88,7 @@ def parse_capabilities(front_matter: str) -> Dict[str, Capability]:
             group=group,
             routes=_parse_routes(body),
             required=_parse_required(body),
+            safety=_parse_safety(body),
         )
     return caps
 
@@ -102,10 +112,55 @@ def parse_device(device_type: str, text: str) -> DeviceProfile:
     return DeviceProfile(device_type=device_type, capabilities=parse_capabilities(extract_front_matter(text)))
 
 
+def validate_safety_refs(profile: DeviceProfile, safety_md_text: str) -> List[str]:
+    """Pure check that each capability's `safety: SAFETY.md#<anchor>` reference
+    resolves to a heading in SAFETY.md. Returns human-readable problem strings
+    (empty = clean). No file IO so it stays unit-testable.
+
+    The safety enforcement engine does not exist yet; this only catches
+    declaration errors, so callers WARN rather than fail boot.
+    """
+    problems: List[str] = []
+    for cap in profile.capabilities.values():
+        if not cap.safety:
+            continue
+        if not safety_md_text:
+            problems.append(
+                f"capability '{cap.group}' declares safety '{cap.safety}' but SAFETY.md is empty or missing"
+            )
+            continue
+        m = re.match(r"SAFETY\.md#(.+)$", cap.safety)
+        if not m:
+            continue  # not a SAFETY.md anchor reference; nothing to resolve here
+        anchor = m.group(1)
+        heading = re.compile(r"^##\s+" + re.escape(anchor) + r"\s*$", re.IGNORECASE | re.MULTILINE)
+        if not heading.search(safety_md_text):
+            problems.append(
+                f"capability '{cap.group}' references '{cap.safety}' but no '## {anchor}' heading found in SAFETY.md"
+            )
+    return problems
+
+
 def load_device(device_type: str, devices_dir: str) -> DeviceProfile:
     """Load devices/<device_type>/DEVICE.md from a devices directory."""
-    with open(os.path.join(devices_dir, device_type, "DEVICE.md"), "r") as f:
-        return parse_device(device_type, f.read())
+    device_dir = os.path.join(devices_dir, device_type)
+    with open(os.path.join(device_dir, "DEVICE.md"), "r") as f:
+        profile = parse_device(device_type, f.read())
+
+    if any(cap.safety for cap in profile.capabilities.values()):
+        safety_path = os.path.join(device_dir, "SAFETY.md")
+        safety_text = ""
+        if os.path.exists(safety_path):
+            with open(safety_path, "r") as f:
+                safety_text = f.read()
+        else:
+            logger.warning(
+                "[device] %s declares safety refs but %s is missing", device_type, safety_path
+            )
+        for problem in validate_safety_refs(profile, safety_text):
+            logger.warning("[device] %s: %s", device_type, problem)
+
+    return profile
 
 
 @dataclass(frozen=True)

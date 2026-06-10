@@ -20,9 +20,14 @@ nào đang chạy.
 
 | `agent_runtime` | Backend |
 |---|---|
-| không set / `"openclaw"` | OpenClaw (mặc định) |
+| không set | fallback về `gateway.default` trong `devices/<type>/DEVICE.md`, rồi OpenClaw nếu cái đó cũng trống |
+| `"openclaw"` | OpenClaw (mặc định) |
 | `"hermes"` | Hermes (`hermes.ProvideService`) |
-| giá trị khác | OpenClaw (log là `FALLBACK — unknown agent_runtime=…`) |
+| giá trị khác | OpenClaw (log là `FALLBACK — unknown runtime=…`) |
+
+Khi `agent_runtime` không được set trong `config.json`, backend lấy từ
+`gateway.default` của thiết bị (`devices/<type>/DEVICE.md`); chỉ dùng OpenClaw nếu
+giá trị đó cũng trống. Banner log thêm `source` để biết nguồn nào thắng.
 
 Lúc khởi động, `ProvideGateway` in banner `AGENT BACKEND ACTIVE → HERMES` kèm
 `base_url`, `conversation`, `model`, `api_key_set`. **Chưa có config theo từng

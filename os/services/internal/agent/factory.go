@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"go.autonomous.ai/os/domain"
+	"go.autonomous.ai/os/internal/device"
 	"go.autonomous.ai/os/internal/hermes"
 	"go.autonomous.ai/os/internal/monitor"
 	"go.autonomous.ai/os/internal/openclaw"
@@ -11,7 +12,9 @@ import (
 	"go.autonomous.ai/os/server/config"
 )
 
-// ProvideGateway returns the AgentGateway implementation based on config.AgentRuntime.
+// ProvideGateway returns the AgentGateway implementation. The backend is chosen
+// by config.AgentRuntime; when that is unset it falls back to the device's
+// declared gateway.default (devices/<type>/DEVICE.md), then OpenClaw.
 //
 // "openclaw" (default): persistent WebSocket to the OpenClaw daemon at
 // 127.0.0.1:18789. See internal/openclaw and docs/os-server.md.
@@ -19,25 +22,37 @@ import (
 // "hermes": HTTP+SSE client against the Hermes API server (default
 // 127.0.0.1:8642). See internal/hermes and docs/hermes.md.
 func ProvideGateway(cfg *config.Config, bus *monitor.Bus, sled *statusled.Service) domain.AgentGateway {
-	switch cfg.AgentRuntime {
+	// Backend resolution: explicit config.agent_runtime wins; if unset, fall back
+	// to the device's declared gateway.default (DEVICE.md); else OpenClaw default.
+	runtime := cfg.AgentRuntime
+	source := "config.agent_runtime"
+	if runtime == "" {
+		if g := device.GatewayDefault(cfg.DeviceTypeOrDefault()); g != "" {
+			runtime, source = g, "DEVICE.md gateway.default"
+		}
+	}
+
+	switch runtime {
 	case "hermes":
 		logBackendBanner("HERMES", map[string]string{
 			"base_url":     hermes.BaseURL,
 			"conversation": hermes.Conversation,
 			"model":        hermes.Model,
 			"api_key_set":  boolStr(hermes.APIKey != ""),
+			"source":       source,
 		})
 		return hermes.ProvideService(cfg, bus, sled)
 	default:
-		effective := cfg.AgentRuntime
+		effective := runtime
 		if effective == "" {
-			effective = "openclaw (default — agent_runtime unset)"
+			effective = "openclaw (default — agent_runtime + gateway.default both unset)"
 		} else if effective != "openclaw" {
-			effective = "openclaw (FALLBACK — unknown agent_runtime=" + cfg.AgentRuntime + ")"
+			effective = "openclaw (FALLBACK — unknown runtime=" + runtime + ")"
 		}
 		logBackendBanner("OPENCLAW", map[string]string{
 			"config_dir":      cfg.OpenclawConfigDir,
 			"effective_value": effective,
+			"source":          source,
 		})
 		return openclaw.ProvideService(cfg, bus, sled)
 	}
