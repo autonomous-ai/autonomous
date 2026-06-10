@@ -685,17 +685,20 @@ def _resolve_device_type() -> str:
         return "lamp"
 
 
-def _device_profile_or_none():
-    """This device's DeviceProfile, or None to mount all routes (safe fallback)."""
+def _device_profile():
+    """This device's DeviceProfile. DEVICE.md is REQUIRED — a missing/unparseable
+    one is a deploy fault, so fail loudly (no legacy "mount everything" fallback)."""
+    from hal.board.device import load_device
+    devices_dir = os.environ.get("DEVICES_DIR") or os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "devices")
+    )
     try:
-        from hal.board.device import load_device
-        devices_dir = os.environ.get("DEVICES_DIR") or os.path.normpath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", "devices")
-        )
         return load_device(_resolve_device_type(), devices_dir)
     except Exception as e:
-        logger.warning("DEVICE.md not loaded (%s) — mounting all routes (legacy behavior)", e)
-        return None
+        raise RuntimeError(
+            f"DEVICE.md required but not loaded for device '{_resolve_device_type()}' "
+            f"(devices_dir={devices_dir}): {e}"
+        ) from e
 
 
 # Mount-time driver availability: "is this route's driver code importable on this
@@ -717,35 +720,31 @@ _route_available = {
     "speaker": "speaker" in _ROUTERS_BY_NAME,
 }
 
-_profile = _device_profile_or_none()
-if _profile is None:
-    # Legacy fallback: no DEVICE.md → mount everything HAL has.
-    for _router in _ROUTERS_BY_NAME.values():
-        app.include_router(_router)
-else:
-    from hal.board.device import plan_mounts
+# DEVICE.md is required — _device_profile() fail-louds if it's missing/unparseable.
+_profile = _device_profile()
+from hal.board.device import plan_mounts
 
-    # Full declared surface (incl. `speaker`). Availability = driver importable.
-    _declared = _profile.declared_routes()
-    _available = {r: _route_available.get(r, False) for r in _declared}
-    _plan = plan_mounts(_declared, _available)
-    logger.info(
-        "Declaration-driven mount plan: device=%s mounted=%s skipped=%s failed_required=%s",
-        _resolve_device_type(), _plan.mounted, _plan.skipped, _plan.failed_required,
+# Full declared surface (incl. `speaker`). Availability = driver importable.
+_declared = _profile.declared_routes()
+_available = {r: _route_available.get(r, False) for r in _declared}
+_plan = plan_mounts(_declared, _available)
+logger.info(
+    "Declaration-driven mount plan: device=%s mounted=%s skipped=%s failed_required=%s",
+    _resolve_device_type(), _plan.mounted, _plan.skipped, _plan.failed_required,
+)
+# Spec rule #3: a required capability whose driver can't import is a real
+# fault — abort loudly in EVERY mode. Dev runs on real Pi hardware too, so
+# there is no off-hardware case to spare. Optional routes simply skip; a
+# declared route HAL has no router for is treated as unavailable (→ fail if
+# required, skip if optional).
+if not _plan.ok:
+    raise RuntimeError(
+        f"Device '{_resolve_device_type()}' requires routes whose drivers are "
+        f"unavailable: {_plan.failed_required}. Fix the driver/hardware, or mark "
+        f"the capability optional in devices/{_resolve_device_type()}/DEVICE.md."
     )
-    # Spec rule #3: a required capability whose driver can't import is a real
-    # fault — abort loudly in EVERY mode. Dev runs on real Pi hardware too, so
-    # there is no off-hardware case to spare. Optional routes simply skip; a
-    # declared route HAL has no router for is treated as unavailable (→ fail if
-    # required, skip if optional).
-    if not _plan.ok:
-        raise RuntimeError(
-            f"Device '{_resolve_device_type()}' requires routes whose drivers are "
-            f"unavailable: {_plan.failed_required}. Fix the driver/hardware, or mark "
-            f"the capability optional in devices/{_resolve_device_type()}/DEVICE.md."
-        )
-    for _name in _plan.mounted:
-        app.include_router(_ROUTERS_BY_NAME[_name])
+for _name in _plan.mounted:
+    app.include_router(_ROUTERS_BY_NAME[_name])
 
 # Self-hosted Swagger UI assets. Lamp nginx CSP keeps `script-src 'self'` so
 # the bundled JS/CSS load from this same origin (no cdn.jsdelivr.net). The
