@@ -3,9 +3,9 @@
 //
 // Wraps the Figma REST API (https://api.figma.com/v1) as MCP tools so OpenClaw
 // can read Figma designs with a user OAuth access token. The token is read from
-// the FIGMA_ACCESS_TOKEN env var (set by the lamp connector writer in the
-// mcp.servers.figma-api entry of openclaw.json) and sent as Authorization:
-// Bearer — it never lives inside this script.
+// the FIGMA_TOKEN env var (FIGMA_ACCESS_TOKEN is accepted as a back-compat alias),
+// set by the lamp connector writer in the mcp.servers.figma-api entry of
+// openclaw.json, and sent as Authorization: Bearer — it never lives inside this script.
 //
 // Transport: MCP stdio = newline-delimited JSON-RPC 2.0 over stdin/stdout.
 // Implements: initialize, tools/list, tools/call, ping. Notifications ignored.
@@ -22,7 +22,14 @@ const SERVER_INFO = { name: "figma-rest", version: "1.0.0" };
 const DEFAULT_PROTOCOL = "2025-03-26";
 
 function token() {
-  return (process.env.FIGMA_ACCESS_TOKEN || "").trim();
+  return (process.env.FIGMA_TOKEN || process.env.FIGMA_ACCESS_TOKEN || "").trim();
+}
+
+// authHeaderName is the HTTP header the access token rides in. Default
+// "Authorization" (Bearer-prefixed); a custom name like "X-Figma-Token" (used by
+// Figma personal access tokens) sends the raw token with no prefix.
+function authHeaderName() {
+  return (process.env.FIGMA_AUTH_HEADER || "Authorization").trim();
 }
 
 // ── Figma REST call ─────────────────────────────────────────────────────────
@@ -32,10 +39,15 @@ function figmaRequest(method, path, body) {
     const url = new URL(FIGMA_BASE + path);
     const payload = body ? JSON.stringify(body) : null;
     const headers = {
-      Authorization: "Bearer " + token(),
       Accept: "application/json",
       "User-Agent": "lamp-figma-rest-mcp/1.0",
     };
+    const hName = authHeaderName();
+    if (hName.toLowerCase() === "authorization") {
+      headers["Authorization"] = "Bearer " + token();
+    } else {
+      headers[hName] = token();
+    }
     if (payload) {
       headers["Content-Type"] = "application/json";
       headers["Content-Length"] = Buffer.byteLength(payload);
@@ -205,7 +217,7 @@ async function handleToolCall(id, params) {
   }
   if (!token()) {
     return reply(id, {
-      content: [{ type: "text", text: "Error: FIGMA_ACCESS_TOKEN is not set on the MCP server." }],
+      content: [{ type: "text", text: "Error: FIGMA_TOKEN (or FIGMA_ACCESS_TOKEN) is not set on the MCP server." }],
       isError: true,
     });
   }

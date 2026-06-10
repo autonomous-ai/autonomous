@@ -300,3 +300,63 @@ func mustWrite(t *testing.T, w *connectorWriter, creds ConnectorCreds) {
 		t.Fatalf("Write(%s): %v", creds.Connector, err)
 	}
 }
+
+func TestConnectorAuthHeader(t *testing.T) {
+	cases := []struct {
+		name       string
+		descriptor string
+		creds      ConnectorCreds
+		wantName   string
+		wantValue  string
+		wantToken  string
+	}{
+		{name: "default empty -> bearer access_token", descriptor: "", creds: ConnectorCreds{AccessToken: "at"}, wantName: "Authorization", wantValue: "Bearer at", wantToken: "at"},
+		{name: "bearer_access_token", descriptor: authHeaderBearerAccessToken, creds: ConnectorCreds{AccessToken: "at"}, wantName: "Authorization", wantValue: "Bearer at", wantToken: "at"},
+		{name: "bearer_api_key", descriptor: authHeaderBearerAPIKey, creds: ConnectorCreds{APIKey: "key"}, wantName: "Authorization", wantValue: "Bearer key", wantToken: "key"},
+		{name: "custom header with pat -> api_key, no prefix", descriptor: "header:X-Figma-Token", creds: ConnectorCreds{AuthType: "pat", APIKey: "pat123"}, wantName: "X-Figma-Token", wantValue: "pat123", wantToken: "pat123"},
+		{name: "custom header non-pat -> access_token, no prefix", descriptor: "header:X-Figma-Token", creds: ConnectorCreds{AuthType: "oauth", AccessToken: "oauthtok"}, wantName: "X-Figma-Token", wantValue: "oauthtok", wantToken: "oauthtok"},
+		{name: "custom header with api_key auth_type -> api_key", descriptor: "header:X-Api-Key", creds: ConnectorCreds{AuthType: "api_key", APIKey: "k"}, wantName: "X-Api-Key", wantValue: "k", wantToken: "k"},
+		{name: "custom header named Authorization still gets Bearer", descriptor: "header:Authorization", creds: ConnectorCreds{AuthType: "pat", APIKey: "pat123"}, wantName: "Authorization", wantValue: "Bearer pat123", wantToken: "pat123"},
+		{name: "unknown descriptor falls back to bearer access_token", descriptor: "garbage", creds: ConnectorCreds{AccessToken: "at"}, wantName: "Authorization", wantValue: "Bearer at", wantToken: "at"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			name, value, token := connectorAuthHeader(tc.descriptor, tc.creds)
+			if name != tc.wantName || value != tc.wantValue || token != tc.wantToken {
+				t.Fatalf("connectorAuthHeader(%q) = (%q,%q,%q), want (%q,%q,%q)",
+					tc.descriptor, name, value, token, tc.wantName, tc.wantValue, tc.wantToken)
+			}
+		})
+	}
+}
+
+func TestConnectorWriter_CustomHeaderEntry(t *testing.T) {
+	dir := t.TempDir()
+	fake := &fakeMCPGateway{}
+	w := newConnectorWriter(dir, fake, nil)
+
+	creds := ConnectorCreds{
+		Connector: "figmate", AuthType: "pat", APIKey: "pat123",
+		Credentials: map[string]string{
+			"mcp_url":         "https://example.com/mcp",
+			"mcp_auth_header": "header:X-Figma-Token",
+		},
+	}
+	if err := w.Write(context.Background(), creds); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	entry, ok := fake.written["figmate"]
+	if !ok {
+		t.Fatalf("no entry written for figmate: %v", fake.written)
+	}
+	headers, _ := entry["headers"].(map[string]any)
+	if headers == nil {
+		t.Fatalf("no headers in entry: %+v", entry)
+	}
+	if _, hasAuth := headers["Authorization"]; hasAuth {
+		t.Fatalf("expected no Authorization header, got %+v", headers)
+	}
+	if got := headers["X-Figma-Token"]; got != "pat123" {
+		t.Fatalf("X-Figma-Token = %v, want pat123", got)
+	}
+}

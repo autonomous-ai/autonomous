@@ -76,11 +76,7 @@ func newSpecialConnectorWriters(cfg *config.Config, gw domain.AgentGateway) map[
 		"figma-api": newMCPConnectorWriter(mcpConnectorConfig{
 			name: "figma-api",
 			entry: func(c ConnectorCreds) map[string]any {
-				return map[string]any{
-					"command": "node",
-					"args":    []any{wrapperPath},
-					"env":     map[string]any{"FIGMA_ACCESS_TOKEN": c.AccessToken},
-				}
+				return figmaStdioEntry(wrapperPath, c)
 			},
 			ensureAssets: func() error {
 				// Wrapper script is required — fail the connector.set if it can't drop.
@@ -96,6 +92,24 @@ func newSpecialConnectorWriters(cfg *config.Config, gw domain.AgentGateway) map[
 				return nil
 			},
 		}, configsDir, gw),
+	}
+}
+
+// figmaStdioEntry builds the mcp.servers.figma-api stdio entry for the figma-api
+// connector. Token + auth header come from the connector's mcp_auth_header
+// descriptor: OAuth -> access_token via Authorization/Bearer; PAT -> api_key via
+// the connector's custom header (e.g. X-Figma-Token). FIGMA_ACCESS_TOKEN is kept
+// as a back-compat alias for wrappers shipped before FIGMA_TOKEN existed.
+func figmaStdioEntry(wrapperPath string, c ConnectorCreds) map[string]any {
+	hdrName, _, token := connectorAuthHeader(c.Credentials[credentialMCPAuthHeader], c)
+	return map[string]any{
+		"command": "node",
+		"args":    []any{wrapperPath},
+		"env": map[string]any{
+			"FIGMA_TOKEN":        token,
+			"FIGMA_AUTH_HEADER":  hdrName,
+			"FIGMA_ACCESS_TOKEN": token,
+		},
 	}
 }
 

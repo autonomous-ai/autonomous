@@ -31,6 +31,9 @@ const (
 const (
 	authHeaderBearerAccessToken = "bearer_access_token" // "Bearer " + access_token (default)
 	authHeaderBearerAPIKey      = "bearer_api_key"      // "Bearer " + api_key (static-key connectors, e.g. ahrefs)
+	// authHeaderCustomPrefix marks a raw custom header: "header:<Name>" sends
+	// "<Name>: <token>" with no Bearer prefix (e.g. "header:X-Figma-Token").
+	authHeaderCustomPrefix = "header:"
 )
 
 // mcpEntryWriter is the subset of the agent gateway the connector writer needs.
@@ -124,11 +127,39 @@ func (w *connectorWriter) resolveRouting(creds ConnectorCreds) mcpRouting {
 }
 
 // buildAuthHeader renders the Authorization value for the mcp.servers entry.
+// Deprecated: use connectorAuthHeader which also returns the header name and
+// raw token, enabling custom header keys (e.g. "header:X-Figma-Token").
 func buildAuthHeader(style string, creds ConnectorCreds) string {
 	if style == authHeaderBearerAPIKey {
 		return "Bearer " + creds.APIKey
 	}
 	return "Bearer " + creds.AccessToken
+}
+
+// connectorAuthHeader renders how a connector's token is presented as an HTTP
+// header for the mcp.servers entry, from the descriptor + creds. Returns the
+// header name, the full header value (Bearer-prefixed for Authorization, raw
+// otherwise), and the raw token (for stdio writers that build their own header).
+func connectorAuthHeader(descriptor string, creds ConnectorCreds) (name, value, token string) {
+	switch {
+	case descriptor == authHeaderBearerAPIKey:
+		return "Authorization", "Bearer " + creds.APIKey, creds.APIKey
+	case strings.HasPrefix(descriptor, authHeaderCustomPrefix):
+		hdr := strings.TrimSpace(strings.TrimPrefix(descriptor, authHeaderCustomPrefix))
+		// Prefer the pasted api_key (PAT / static key); fall back to access_token
+		// (OAuth). Whichever field is populated is the credential — this avoids
+		// coupling the token source to a specific auth_type string.
+		tok := creds.APIKey
+		if tok == "" {
+			tok = creds.AccessToken
+		}
+		if hdr == "" || strings.EqualFold(hdr, "Authorization") {
+			return "Authorization", "Bearer " + tok, tok
+		}
+		return hdr, tok, tok
+	default: // bearer_access_token / "" / unknown
+		return "Authorization", "Bearer " + creds.AccessToken, creds.AccessToken
+	}
 }
 
 // Write persists the token file then, when the connector resolves to an MCP
@@ -158,11 +189,12 @@ func (w *connectorWriter) Write(ctx context.Context, creds ConnectorCreds) error
 		// Credential-only connector (e.g. gmail/google_*): no openclaw entry.
 		return nil
 	}
+	hdrName, hdrValue, _ := connectorAuthHeader(routing.authHeader, creds)
 	entry := map[string]any{
 		"type": "http",
 		"url":  routing.url,
 		"headers": map[string]any{
-			"Authorization": buildAuthHeader(routing.authHeader, creds),
+			hdrName: hdrValue,
 		},
 	}
 	if err := w.gateway.WriteMCPEntry(creds.Connector, entry); err != nil {

@@ -9,8 +9,9 @@ import (
 
 // figmaMCPServerJS is the first-party Figma REST MCP stdio server, embedded at
 // build time and dropped onto the device by the figma-api connector writer.
-// Token is supplied at runtime via the FIGMA_ACCESS_TOKEN env in the
-// mcp.servers.figma-api entry — never baked into this script.
+// Token is supplied at runtime via the FIGMA_TOKEN env (FIGMA_ACCESS_TOKEN is a
+// back-compat alias) in the mcp.servers.figma-api entry — never baked into this
+// script.
 //
 //go:embed assets/figma_mcp_server.mjs
 var figmaMCPServerJS []byte
