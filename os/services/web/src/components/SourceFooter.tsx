@@ -1,4 +1,4 @@
-// GPL v3 §6 compliance: lelamp/ ships GPLv3 source baked into the board image,
+// GPL v3 §6 compliance: os/hal/ ships GPLv3 source baked into the board image,
 // so buyers must be told where to fetch corresponding source. Public repo URL
 // satisfies the "written offer" alternative. Rendered globally (App.tsx)
 // so every page (setup, login, monitor, edit, gw-config) surfaces the link.

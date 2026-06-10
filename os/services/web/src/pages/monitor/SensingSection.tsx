@@ -364,7 +364,7 @@ export function SensingSection() {
       </div>
 
       {/* Pose / Posture — tumbling time window rendered as a raw sample
-          table (newest first). See lelamp pose.py + motion.py: samples
+          table (newest first). See os/hal pose.py + motion.py: samples
           accumulate until POSE_WINDOW_DURATION_S elapses, then motion.py
           evaluates the aggregate, optionally folds a posture nudge into
           motion.activity, and always resets the window. */}
@@ -433,7 +433,7 @@ export function SensingSection() {
                     const L = s.left?.body_scores ?? {};
                     const R = s.right?.body_scores ?? {};
                     // Thumbnail per row links to that sample's annotated JPEG.
-                    // lelamp keeps the file under snapshots/<int(ts)>.jpg
+                    // HAL keeps the file under snapshots/<int(ts)>.jpg
                     // until rotation prunes it (24h / 50MB caps), so older
                     // rows gracefully 404 once they age out (onError hides).
                     // loading="lazy" defers fetches that are offscreen.
