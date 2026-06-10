@@ -12,14 +12,28 @@ logger = logging.getLogger(__name__)
 # Default interpolation duration for move_to (seconds)
 DEFAULT_MOVE_DURATION = 2.0
 
-# Startup position for base_pitch and elbow_pitch only.
-# Other servos (base_yaw, wrist_roll, wrist_pitch) are left released.
-STARTUP_POSITION = {
-    "base_pitch.pos": -30.0,
-    "elbow_pitch.pos": 57.0,
+# Zero/hold position in raw encoder units — the physical resting pose after release.
+# wrist_pitch (-59.18°, raw 1914) exceeds calibrated range_min=2044, so move_to_raw is used.
+ZERO_RAW = {
+    "base_yaw":    2100,  #   5.22° — mid=2041.5
+    "base_pitch":  2082,  # -20.25° — mid=2312.5
+    "elbow_pitch": 2019,  # -30.54° — mid=2366.5
+    "wrist_roll":  2070,  #   0.00° — mid=2070.0
+    "wrist_pitch": 1914,  # -59.18° — mid=2588.0
 }
 
-# Duration for the startup move (seconds)
+# Wake/resume position in raw encoder units — all 5 joints.
+# Pre-computed from calibration JSON: raw = int(deg * 4095/360 + mid), mid=(range_min+range_max)/2.
+# wrist_pitch (-68.48°, raw 1809) exceeds calibrated range_min=2044, so move_to_raw is used.
+RESUME_STARTUP_RAW = {
+    "base_yaw":    2109,  #   5.96° — mid=2041.5
+    "base_pitch":  2105,  # -18.20° — mid=2312.5
+    "elbow_pitch": 2233,  # -11.68° — mid=2366.5
+    "wrist_roll":  2070,  #   0.00° — mid=2070.0
+    "wrist_pitch": 1809,  # -68.48° — mid=2588.0
+}
+
+# Duration for the startup/resume move (seconds)
 STARTUP_MOVE_DURATION = 5.0
 
 # Recordings that hold final pose instead of returning to idle
@@ -62,6 +76,7 @@ class AnimationService:
         self._current_frame_index: int = 0
         self._current_actions: List[Dict[str, float]] = []
         self._interpolation_frames: int = 0
+        self._interpolation_total_frames: int = 0  # denominator for progress; must match _interpolation_frames initial value
         self._interpolation_target: Optional[Dict[str, float]] = None
 
         # Music groove: loop while music is playing
@@ -76,6 +91,10 @@ class AnimationService:
 
         # Serial bus lock — all bus access (read/write/ping) must hold this lock
         self.bus_lock = threading.RLock()
+
+        # One-shot duration override for the next _handle_play interpolation (resume slow-start).
+        # Set before dispatch; consumed and cleared inside _handle_play.
+        self._resume_duration: Optional[float] = None
 
         # Freeze flag — when set, _continue_playback() skips servo writes so camera can capture a stable frame
         self._frozen = threading.Event()
@@ -141,10 +160,10 @@ class AnimationService:
 
         logger.info(f"Animation service connected to {self.port}")
 
-        # Move base_pitch and elbow_pitch to startup position
+        # Move all joints to wake/startup position (includes wrist_pitch outside calib range)
         try:
-            self.move_to(STARTUP_POSITION, duration=STARTUP_MOVE_DURATION)
-            logger.info("Servos 2,3 moved to startup position")
+            self.move_to_raw(RESUME_STARTUP_RAW, duration=STARTUP_MOVE_DURATION)
+            logger.info("Servos moved to startup position")
         except Exception as e:
             logger.warning(f"Failed to move to startup position: {e}")
 
@@ -274,9 +293,14 @@ class AnimationService:
         self._current_actions = actions
         self._current_frame_index = 0
         
-        # If we have a current state, set up interpolation to the first frame
+        # If we have a current state, set up interpolation to the first frame.
+        # _resume_duration overrides self.duration once (set by resume endpoint for slow-start).
         if self._current_state is not None:
-            self._interpolation_frames = int(self.duration * self.fps)
+            effective_duration = self._resume_duration if self._resume_duration is not None else self.duration
+            self._resume_duration = None
+            total = int(effective_duration * self.fps)
+            self._interpolation_frames = total
+            self._interpolation_total_frames = total
             self._interpolation_target = actions[0]
         else:
             self._interpolation_frames = 0
@@ -316,8 +340,10 @@ class AnimationService:
         try:
             # Handle interpolation to first frame
             if self._interpolation_frames > 0 and self._interpolation_target is not None:
-                # Calculate interpolation progress
-                progress = 1.0 - (self._interpolation_frames / (self.duration * self.fps))
+                # Calculate interpolation progress — use stored total so the denominator
+                # matches the initial _interpolation_frames value, not always self.duration.
+                denom = self._interpolation_total_frames if self._interpolation_total_frames > 0 else int(self.duration * self.fps)
+                progress = 1.0 - (self._interpolation_frames / denom)
                 progress = max(0.0, min(1.0, progress))
                 
                 # Interpolate between current state and target
@@ -388,7 +414,9 @@ class AnimationService:
                         self._current_actions = next_actions
                         self._current_frame_index = 0
                         if self._current_state is not None:
-                            self._interpolation_frames = int(self.duration * self.fps)
+                            total = int(self.duration * self.fps)
+                            self._interpolation_frames = total
+                            self._interpolation_total_frames = total
                             self._interpolation_target = next_actions[0]
                 elif self._hold_mode:
                     # Hold mode active while idle finished — hold pose, reduce FPS
@@ -521,4 +549,65 @@ class AnimationService:
         except Exception as e:
             logger.warning(f"move_to: could not read full state after move: {e}")
         self._current_state = target_positions.copy()
-    
+
+    def move_to_raw(self, target_raw: Dict[str, int], duration: float = DEFAULT_MOVE_DURATION):
+        """Smoothly move servos to raw encoder positions via direct STS3215 register writes.
+
+        Bypasses lerobot calibration range limits entirely. Use for release/collapse
+        positions that exceed the calibrated range_min/max. Caller pre-computes raw
+        encoder targets so no bus.calibration access is needed here.
+
+        Args:
+            target_raw: motor_name → raw encoder value (0-4095), e.g. {"base_pitch": 1456}
+            duration: seconds to reach the target
+        """
+        if not self.robot:
+            raise RuntimeError("Robot not connected")
+
+        GOAL_POSITION_REG = 42     # STS3215: Goal_Position (2 bytes, LSB first)
+        PRESENT_POSITION_REG = 56  # STS3215: Present_Position (2 bytes)
+
+        ph = self.robot.bus.port_handler
+        pk = self.robot.bus.packet_handler
+
+        # Read current raw positions directly (bypasses normalization)
+        current_raw: Dict[str, int] = {}
+        with self.bus_lock:
+            for motor_name, motor_obj in self.robot.bus.motors.items():
+                data, result, _ = pk.read2ByteTxRx(ph, motor_obj.id, PRESENT_POSITION_REG)
+                # result==0 means COMM_SUCCESS in scservo_sdk
+                current_raw[motor_name] = data if result == 0 else target_raw.get(motor_name, 2048)
+
+        total_frames = max(1, int(duration * self.fps))
+
+        for frame in range(1, total_frames + 1):
+            t0 = time.perf_counter()
+            progress = frame / total_frames
+
+            with self.bus_lock:
+                for motor_name, target in target_raw.items():
+                    cur = current_raw.get(motor_name, target)
+                    raw = max(0, min(4095, int(cur + (target - cur) * progress)))
+                    motor_obj = self.robot.bus.motors.get(motor_name)
+                    if motor_obj:
+                        pk.write2ByteTxRx(ph, motor_obj.id, GOAL_POSITION_REG, raw)
+
+            dt = time.perf_counter() - t0
+            sleep_time = (1.0 / self.fps) - dt
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+
+        # Final exact write
+        with self.bus_lock:
+            for motor_name, raw in target_raw.items():
+                motor_obj = self.robot.bus.motors.get(motor_name)
+                if motor_obj:
+                    pk.write2ByteTxRx(ph, motor_obj.id, GOAL_POSITION_REG, raw)
+
+        try:
+            with self.bus_lock:
+                pos = _motor_positions_from_bus(self.robot)
+            if pos:
+                self._current_state = pos
+        except Exception as e:
+            logger.warning("move_to_raw: could not read state after move: %s", e)

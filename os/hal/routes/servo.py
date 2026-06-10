@@ -32,6 +32,7 @@ from hal.presets import (
     AIM_RIGHT,
     SERVO_CMD_PLAY,
 )
+from hal.drivers.motors.animation_service import RESUME_STARTUP_RAW, STARTUP_MOVE_DURATION, ZERO_RAW
 
 router = APIRouter(tags=["Servo"])
 
@@ -202,14 +203,32 @@ def resume_servos():
         raise HTTPException(503, "Servo not available")
     state.animation_service._zero_mode = False
     state.animation_service._hold_mode = False
-    if not state.animation_service._running.is_set():
-        state.animation_service._running.set()
-        state.animation_service._event_thread = threading.Thread(
-            target=state.animation_service._event_loop, daemon=True
-        )
-        state.animation_service._event_thread.start()
-        state.logger.info("Animation event loop restarted via /servo/resume")
+    # Stop the event loop before raw bus moves to prevent bus contention
+    state.animation_service._running.clear()
+    if state.animation_service._event_thread and state.animation_service._event_thread.is_alive():
+        state.animation_service._event_thread.join(timeout=3.0)
+    # Re-enable torque and reconfigure servos (release left torque disabled)
+    try:
+        state.animation_service._configure_servos_raw()
+    except Exception as e:
+        state.logger.warning("resume: raw configure failed: %s", e)
+    # Move to wake position before entering idle (arm lifts from release pose)
+    try:
+        state.animation_service.move_to_raw(RESUME_STARTUP_RAW, duration=STARTUP_MOVE_DURATION)
+        state.logger.info("Servo moved to resume startup position")
+    except Exception as e:
+        state.logger.warning("resume: startup move failed: %s", e)
+    # Sync state from hardware now that arm is at a known position
+    state.animation_service._sync_state_from_hardware()
+    # Normal interpolation duration (arm arrives from a controlled position)
+    state.animation_service._resume_duration = state.animation_service.duration
+    # Restart event loop
+    state.animation_service._running.set()
     state.animation_service.dispatch(SERVO_CMD_PLAY, state.animation_service.idle_recording)
+    state.animation_service._event_thread = threading.Thread(
+        target=state.animation_service._event_loop, daemon=True
+    )
+    state.animation_service._event_thread.start()
     state.logger.info("Servo resumed from zero-hold mode")
     return {"status": "ok"}
 
@@ -283,13 +302,15 @@ def zero_servos():
     state.animation_service._running.clear()
     if state.animation_service._event_thread and state.animation_service._event_thread.is_alive():
         state.animation_service._event_thread.join(timeout=3.0)
-    zero_pos = {f"{m}.pos": 0.0 for m in state.animation_service.robot.bus.motors}
-    zero_pos["elbow_pitch.pos"] = 0.0
     try:
-        state.animation_service.move_to(zero_pos, duration=2.0)
+        state.animation_service._configure_servos_raw()
+    except Exception as e:
+        state.logger.warning("zero: raw configure failed: %s", e)
+    try:
+        state.animation_service.move_to_raw(ZERO_RAW, duration=2.0)
     except Exception as e:
         state.logger.warning(f"Could not move to zero: {e}")
-    state.animation_service._current_state = {k: 0.0 for k in zero_pos}
+    state.animation_service._sync_state_from_hardware()
     return {"status": "ok"}
 
 
@@ -303,44 +324,42 @@ def release_servos():
     state.animation_service._running.clear()
     if state.animation_service._event_thread and state.animation_service._event_thread.is_alive():
         state.animation_service._event_thread.join(timeout=3.0)
-    # Fully folded pose (elbow at max 90°) so the body is already at the
-    # mechanical floor when torque is cut — no remaining gap to drop.
-    rest_pos = {
-        "base_yaw.pos": 0.0,
-        "base_pitch.pos": -90.0,
-        "elbow_pitch.pos": 90.0,
-        "wrist_roll.pos": 0.0,
-        "wrist_pitch.pos": 0.0,
+    # Gravity-rest pose for lumi_final in raw encoder units.
+    # Pre-computed from calibration JSON: raw = round(deg * 4095/360 + mid)
+    # where mid = (range_min + range_max) / 2.
+    # base_pitch/elbow_pitch/wrist_pitch exceed calibrated range_min so we
+    # use move_to_raw (direct STS3215 writes) to bypass lerobot's software clamp.
+    rest_raw = {
+        "base_yaw":    2075,  #   3.00° — mid=2041.5
+        "base_pitch":  1456,  # -75.26° — mid=2312.5
+        "elbow_pitch": 1626,  # -65.02° — mid=2366.5
+        "wrist_roll":  2070,  #   0.00° — mid=2070.0
+        "wrist_pitch": 2108,  # -42.16° — mid=2588.0
     }
     try:
-        # move_to commands the ramp but does not verify the servo physically
-        # arrived. Under load the motor lags the command, so poll
-        # Present_Position until every joint is within tolerance of rest_pos
-        # before cutting torque — otherwise the body drops the remaining gap.
-        state.animation_service.move_to(rest_pos, duration=4.0)
-        from hal.drivers.motors.animation_service import (
-            _motor_positions_from_bus,
-        )
-
-        tol_deg = 2.0
-        deadline = time.perf_counter() + 3.0
-        while time.perf_counter() < deadline:
-            with state.animation_service.bus_lock:
-                actual = _motor_positions_from_bus(
-                    state.animation_service.robot
-                )
-            if all(
-                abs(actual.get(k, 0.0) - v) <= tol_deg
-                for k, v in rest_pos.items()
-            ):
-                break
-            time.sleep(0.05)
-        else:
-            state.logger.warning(
-                "rest_pos not reached within 3s; releasing anyway"
-            )
+        state.animation_service.move_to_raw(rest_raw, duration=4.0)
     except Exception as e:
         state.logger.warning(f"Could not move to rest before release: {e}")
+    # Poll PRESENT_POSITION until all joints physically reach rest_raw before cutting torque.
+    # move_to_raw only writes GOAL_POSITION — under load the servo lags the command.
+    _PRESENT_REG = 56
+    _tol_raw = 23  # ~2 degrees (4095/360 * 2)
+    _bus = state.animation_service.robot.bus
+    _deadline = time.perf_counter() + 3.0
+    while time.perf_counter() < _deadline:
+        with state.animation_service.bus_lock:
+            actual = {}
+            for _name, _motor in _bus.motors.items():
+                _data, _result, _ = _bus.packet_handler.read2ByteTxRx(
+                    _bus.port_handler, _motor.id, _PRESENT_REG
+                )
+                if _result == 0:
+                    actual[_name] = _data
+        if all(abs(actual.get(k, 0) - v) <= _tol_raw for k, v in rest_raw.items()):
+            break
+        time.sleep(0.05)
+    else:
+        state.logger.warning("rest_raw not reached within 3s; releasing torque anyway")
     bus = state.animation_service.robot.bus
     errors = {}
     with state.animation_service.bus_lock:
