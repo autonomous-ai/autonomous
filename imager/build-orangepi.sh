@@ -37,8 +37,8 @@ COUNTRY_CODE="${COUNTRY_CODE:-US}"
 OPENCLAW_VERSION="${OPENCLAW_VERSION:-2026.5.27}"
 # Device class this golden image is for — bakes devices/<type>/{DEVICE,SOUL}.md
 # so one DEVICE_TYPE = one golden image. Forwarded by the Makefile via docker -e.
-# Default "lamp"; override e.g. DEVICE_TYPE=intern.
-DEVICE_TYPE="${DEVICE_TYPE:-lamp}"
+# REQUIRED, no default — a golden image must declare which device class it is.
+DEVICE_TYPE="${DEVICE_TYPE:?DEVICE_TYPE is required — build via 'make build DEVICE_TYPE=...'}"
 DEVICES_DIR="${DEVICES_DIR:-/opt/devices}"
 
 # Google Drive file ID for the bookworm server image. Override via env var when
@@ -497,17 +497,20 @@ if [ -z "\$SERIAL" ]; then
   done
 fi
 SUFFIX=\${SERIAL: -4}
-AP_SSID="Lamp-\${SUFFIX}"
+SUFFIX_LC=\$(echo "\$SUFFIX" | tr '[:upper:]' '[:lower:]')
+# Network identity is device-type-driven: <device_type>-<suffix>, lowercase.
+# DEVICE_TYPE is baked here at image-build time (one DEVICE_TYPE = one golden
+# image); the suffix resolves at first boot from the hardware serial / eth MAC.
+AP_SSID="${DEVICE_TYPE}-\${SUFFIX_LC}"
 [ -f /etc/hostapd/hostapd.conf ] && sed -i "s/^ssid=.*/ssid=\${AP_SSID}/" /etc/hostapd/hostapd.conf
 
-# mDNS hostname lamp-<suffix>.local so the setup wizard's AP→.local handoff works.
-SUFFIX_LC=\$(echo "\$SUFFIX" | tr '[:upper:]' '[:lower:]')
-LAMP_HOSTNAME="lamp-\${SUFFIX_LC}"
-hostnamectl set-hostname "\$LAMP_HOSTNAME" 2>/dev/null || hostname "\$LAMP_HOSTNAME" || true
+# mDNS <device_type>-<suffix>.local so the setup wizard's AP→.local handoff works.
+DEVICE_HOSTNAME="${DEVICE_TYPE}-\${SUFFIX_LC}"
+hostnamectl set-hostname "\$DEVICE_HOSTNAME" 2>/dev/null || hostname "\$DEVICE_HOSTNAME" || true
 if grep -q '^127\.0\.1\.1' /etc/hosts; then
-  sed -i "s/^127\.0\.1\.1.*/127.0.1.1 \$LAMP_HOSTNAME/" /etc/hosts
+  sed -i "s/^127\.0\.1\.1.*/127.0.1.1 \$DEVICE_HOSTNAME/" /etc/hosts
 else
-  echo "127.0.1.1 \$LAMP_HOSTNAME" >> /etc/hosts
+  echo "127.0.1.1 \$DEVICE_HOSTNAME" >> /etc/hosts
 fi
 systemctl enable avahi-daemon 2>/dev/null || true
 systemctl restart avahi-daemon 2>/dev/null || true
@@ -747,7 +750,7 @@ if [ "\${AP_BAND}" = "5" ]; then
   cat > /etc/hostapd/hostapd.conf <<EOF
 interface=wlan0
 driver=nl80211
-ssid=Lamp-XXXX
+ssid=${DEVICE_TYPE}-xxxx
 hw_mode=a
 channel=\$CHANNEL
 country_code=\${COUNTRY_CODE}
@@ -762,7 +765,7 @@ else
   cat > /etc/hostapd/hostapd.conf <<EOF
 interface=wlan0
 driver=nl80211
-ssid=Lamp-XXXX
+ssid=${DEVICE_TYPE}-xxxx
 hw_mode=g
 channel=\$CHANNEL
 country_code=\${COUNTRY_CODE}

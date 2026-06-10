@@ -27,8 +27,9 @@ OTA_METADATA_URL ?=
 # Device class baked into this golden image — one image per device type (3 device
 # types = 3 golden images). Forwarded into the build container; the build script
 # bakes it into os-server.service + /opt/hal/.env and stages only devices/<type>/
-# into the image. Default "lamp"; e.g. make build TARGET=opi DEVICE_TYPE=intern.
-DEVICE_TYPE ?= lamp
+# into the image. REQUIRED, no default — a golden image must declare its device
+# class. E.g. make build TARGET=opi DEVICE_TYPE=intern.
+DEVICE_TYPE ?=
 
 ifndef BUILD_SCRIPT
 $(error Unknown TARGET=$(TARGET). Supported: rpi, opi)
@@ -54,6 +55,7 @@ IMG_FILE := $(IMG_FILE_$(TARGET))
 build-preflight:
 	@echo "==> Preflight checks"
 	@[ -n "$(OTA_METADATA_URL)" ] || { echo "ERROR: OTA_METADATA_URL is required — e.g. make build OTA_METADATA_URL=https://.../metadata.json"; exit 1; }
+	@[ -n "$(DEVICE_TYPE)" ] || { echo "ERROR: DEVICE_TYPE is required — e.g. make build DEVICE_TYPE=lamp"; exit 1; }
 	@echo "    OTA metadata URL: $(OTA_METADATA_URL)"
 	@echo "    Device type:      $(DEVICE_TYPE)"
 	@command -v docker >/dev/null 2>&1 || { echo "ERROR: Docker not installed"; exit 1; }

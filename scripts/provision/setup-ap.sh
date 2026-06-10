@@ -15,6 +15,11 @@ ensure_root() {
 AP_BAND="${AP_BAND:-2.4}"       # 2.4 or 5 (5 GHz for better throughput)
 AP_CHANNEL="${AP_CHANNEL:-}"    # default: 6 (2.4 GHz) or 36 (5 GHz); override e.g. AP_CHANNEL=11 or 40
 
+# Device class — drives the AP SSID (<device_type>-<suffix>). REQUIRED, no
+# default: the network identity must reflect the device class, not a hardcoded
+# brand. Pass via env, e.g. DEVICE_TYPE=intern.
+DEVICE_TYPE="${DEVICE_TYPE:?DEVICE_TYPE must be set (e.g. DEVICE_TYPE=lamp) — no default}"
+
 # ----------------------------------------------------------
 # Prerequisites
 # ----------------------------------------------------------
@@ -35,7 +40,8 @@ stage_ap() {
   # Pi 5: prefer device-tree serial; fallback to cpuinfo
   SERIAL=$(tr -d '\0' </proc/device-tree/serial-number 2>/dev/null) || SERIAL=$(awk '/Serial/ {print $3}' /proc/cpuinfo)
   SUFFIX=${SERIAL: -4}
-  AP_SSID="Intern-${SUFFIX}"
+  SUFFIX_LC=$(echo "$SUFFIX" | tr '[:upper:]' '[:lower:]')
+  AP_SSID="${DEVICE_TYPE}-${SUFFIX_LC}"
   echo "[stage] AP SSID = $AP_SSID"
 
   # Ignore Pi Imager WiFi credentials baked into the image.

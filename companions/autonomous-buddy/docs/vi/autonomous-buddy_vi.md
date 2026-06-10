@@ -95,7 +95,7 @@ Use case MVP KHÔNG hỗ trợ (chờ phase vision):
 **Buddy là WS client. Thiết bị là WS server.** Lý do:
 
 - Buddy không cần mở port nào. Firewall Mac không bị động chạm. Attack surface thấp.
-- Thiết bị đã có hostname mDNS ổn định (`lamp-xxxx.local`) theo `project_mdns_hostname.md`. Buddy resolve và connect.
+- Thiết bị đã có hostname mDNS ổn định (`<device_type>-xxxx.local`, ví dụ `lamp-a1b2.local`). Buddy resolve và connect.
 - WS persistent duy nhất → latency command = 1 round-trip (không có cold-start TCP/TLS mỗi command).
 - Logic reconnect nằm ở buddy (đơn giản — buddy phát hiện thiết bị reboot và auto reconnect).
 
@@ -226,7 +226,7 @@ Page mới `Paired Computers`:
 - Buddy duyệt `_autonomous._tcp.local` qua `NWBrowser`
 - Mỗi service tìm thấy: resolve hostname → lưu vào danh sách
 - MVP: giả định chỉ có 1 thiết bị trên LAN → auto chọn cái đầu
-- Fallback: nhập hostname thủ công (`lamp-xxxx.local`) trong menu
+- Fallback: nhập hostname thủ công (`<device_type>-xxxx.local`) trong menu
 
 ### Pairing (1 lần)
 
@@ -404,7 +404,7 @@ Mac-only MVP → **Swift native**. Tauri/Rust để phase Windows/Linux. Flutter
 
 ## 13. Tham chiếu
 
-- `project_mdns_hostname.md` — lamp publish `lamp-<last4hex>.local`
+- mDNS hostname — thiết bị publish `<device_type>-<last4hex>.local` (ví dụ `lamp-a1b2.local`)
 - `feedback_lelamp_external.md` — hardware code ở Python, không phải Go
 - `project_security_login_ui_batch.md` — security audit mới đóng; pattern cookie HMAC + bcrypt admin có thể reuse cho auth buddy
 - [Tài liệu Anthropic Computer Use](https://docs.anthropic.com/en/docs/build-with-claude/computer-use) — cho phase vision v1.1

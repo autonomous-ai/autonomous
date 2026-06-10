@@ -68,7 +68,7 @@ Mỗi phase ship & review độc lập được.
 
 **Acceptance:** Khi lamp đang chạy trên LAN (advertise `_autonomous._tcp.local`), menu buddy hiện ví dụ `lamp-a1b2.local — 192.168.1.50` như item bấm được. Cũng có: option nhập hostname thủ công.
 
-> Note: confirm tên service mDNS hiện có của lamp. Hiện publish `lamp-<last4hex>.local`; có thể cần advertise thêm service `_autonomous._tcp.local` cho browsable. Có thể cần sửa nhỏ bên lelamp/lamp (xem §lamp-side dưới).
+> Note: confirm tên service mDNS hiện có của thiết bị. Publish `<device_type>-<last4hex>.local` (ví dụ `lamp-a1b2.local`); có thể cần advertise thêm service `_autonomous._tcp.local` cho browsable. Có thể cần sửa nhỏ bên device (xem §device-side dưới).
 
 ### Phase 1C — Luồng pairing
 
@@ -224,7 +224,7 @@ Mỗi phase ship & review độc lập được.
 
 ## Lamp-side cần verify trước Phase 1B
 
-1. **mDNS browsability** — confirm lamp publish `_autonomous._tcp.local` cho `NWBrowser`. Nếu chỉ có host record `lamp-xxxx.local`, cần thêm service publishing (chắc trong `lamp` startup hoặc avahi config).
+1. **mDNS browsability** — confirm thiết bị publish `_autonomous._tcp.local` cho `NWBrowser`. Nếu chỉ có host record `<device_type>-xxxx.local`, cần thêm service publishing (chắc trong device startup hoặc avahi config).
 2. **Convention header admin auth** — confirm endpoint buddy mới dùng `Authorization: Bearer <token>` (cookie hay bearer); reuse pattern `project_security_login_ui_batch.md`.
 3. **Vị trí OpenClaw skill** — tìm xem skill đang sống ở đâu, naming convention, lamp đăng ký skill thế nào. (Có thể trong filesystem lamp `~/.openclaw/skills/<name>/SKILL.md`.)
 

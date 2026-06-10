@@ -245,9 +245,15 @@ func goSameOrigin(header, host string) bool {
 	return h == host
 }
 
+// siblingDeviceHost matches an Autonomous device's mDNS hostname:
+// `<device_type>-<4 hex>.local` (see GetDeviceMac / setup.sh). Device-agnostic by
+// design — trusts any device class on the LAN, e.g. lamp-a1b2.local,
+// intern-3c4d.local — not just lamp.
+var siblingDeviceHost = regexp.MustCompile(`^[a-z0-9]+-[0-9a-f]{4}\.local$`)
+
 // isAllowedOrigin returns true for same-host origins and approved external
 // domains (autonomous.ai subdomains for parent-app embedding, sibling
-// lamp-*.local devices on the same LAN). Same-host wins for any IP or
+// <device_type>-XXXX.local devices on the same LAN). Same-host wins for any IP or
 // .local hostname the device itself is reached on.
 func isAllowedOrigin(origin, requestHost string) bool {
 	if origin == "" {
@@ -275,8 +281,9 @@ func isAllowedOrigin(origin, requestHost string) bool {
 	if h == "autonomous.ai" || strings.HasSuffix(h, ".autonomous.ai") {
 		return true
 	}
-	// Sibling Lamp devices on the same LAN (mDNS hostname `lamp-XXXX.local`).
-	if strings.HasPrefix(h, "lamp-") && strings.HasSuffix(h, ".local") {
+	// Sibling Autonomous devices on the same LAN (mDNS hostname
+	// `<device_type>-XXXX.local`, e.g. lamp-a1b2.local / intern-3c4d.local).
+	if siblingDeviceHost.MatchString(h) {
 		return true
 	}
 	return false
@@ -464,7 +471,7 @@ func corsMiddleware() gin.HandlerFunc {
 			c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept, Authorization, X-Requested-With")
 			// Required for the patched fetch (credentials: "include") to receive
 			// the session cookie on cross-origin responses from autonomous.ai
-			// or sibling lamp-*.local devices.
+			// or sibling <device_type>-*.local devices.
 			c.Header("Access-Control-Allow-Credentials", "true")
 		}
 		if c.Request.Method == "OPTIONS" {

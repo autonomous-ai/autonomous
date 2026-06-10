@@ -68,7 +68,7 @@ Each phase is independently shippable and reviewable.
 
 **Acceptance:** When a lamp is running on LAN (advertises `_autonomous._tcp.local`), buddy menu shows e.g. `lamp-a1b2.local — 192.168.1.50` as a clickable item. Also: manual hostname entry option.
 
-> Note: confirm lamp's existing mDNS service name. Currently it publishes `lamp-<last4hex>.local`; may need to also advertise a `_autonomous._tcp.local` service for browsability. May require a small lelamp/lamp tweak (see lamp-side §1 below).
+> Note: confirm the device's existing mDNS service name. It publishes `<device_type>-<last4hex>.local` (e.g. `lamp-a1b2.local`); may need to also advertise a `_autonomous._tcp.local` service for browsability. May require a small device-side tweak (see device-side §1 below).
 
 ### Phase 1C — Pairing flow
 
@@ -224,7 +224,7 @@ Each phase is independently shippable and reviewable.
 
 ## Lamp-side prerequisites (verify before Phase 1B)
 
-1. **mDNS browsability** — confirm lamp publishes `_autonomous._tcp.local` for `NWBrowser`. If only `lamp-xxxx.local` host record exists, add service publishing (likely in `lamp` startup or avahi config).
+1. **mDNS browsability** — confirm the device publishes `_autonomous._tcp.local` for `NWBrowser`. If only the `<device_type>-xxxx.local` host record exists, add service publishing (likely in device startup or avahi config).
 2. **Admin auth header convention** — confirm whether new buddy endpoints should use `Authorization: Bearer <token>` (cookie or bearer); reuse `project_security_login_ui_batch.md` patterns.
 3. **OpenClaw skill location** — find where existing skills live, naming convention, how lamp registers them. (Possibly in lamp's filesystem `~/.openclaw/skills/<name>/SKILL.md`.)
 

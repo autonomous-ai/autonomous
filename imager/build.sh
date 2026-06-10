@@ -64,7 +64,7 @@
 #   2. firstrun-wifi.service: unblocks rfkill, sets Wi-Fi country (runs once)
 #   3. btrfs-resize-once.service: resizes partition + Btrfs to full SD (runs once, self-destructs)
 #      @factory is the build-time white board — never overwritten
-#   4. User runs 'sudo device-ap-mode' to start AP hotspot "Lamp-XXXX" at 192.168.100.1
+#   4. User runs 'sudo device-ap-mode' to start AP hotspot "<device_type>-xxxx" at 192.168.100.1
 #   5. nginx serves setup web UI, bootstrap/lamp/hal backends running
 #
 # BTRFS SUBVOLUME LAYOUT
@@ -125,7 +125,8 @@ OTA_METADATA_URL="${OTA_METADATA_URL:?OTA_METADATA_URL is required — build via
 # Device profile baked into this golden image: 1 device type = 1 image. The
 # matching devices.<type> artifact (DEVICE.md + SOUL.md) is fetched from OTA
 # metadata and staged into DEVICES_DIR/<type>. Forwarded by the Makefile (-e).
-DEVICE_TYPE="${DEVICE_TYPE:-lamp}"
+# REQUIRED, no default — a golden image must declare which device class it is.
+DEVICE_TYPE="${DEVICE_TYPE:?DEVICE_TYPE is required — build via 'make build DEVICE_TYPE=...'}"
 DEVICES_DIR="${DEVICES_DIR:-/opt/devices}"
 AP_BAND="${AP_BAND:-2.4}"   # 2.4 or 5 (5 GHz needs supported regulatory domain + chip)
 AP_CHANNEL="${AP_CHANNEL:-}" # default: 6 for 2.4 GHz, 36 for 5 GHz
@@ -1095,7 +1096,7 @@ systemctl enable nginx
 #   dnsmasq   — DHCP server + DNS resolver for connected clients
 #   dhcpcd5   — assigns static IP 192.168.100.1 to wlan0 in AP mode
 #
-# AP SSID is "Lamp-XXXX" where XXXX = last 4 chars of Pi serial number.
+# AP SSID is "<device_type>-xxxx" where xxxx = last 4 chars of Pi serial number.
 # This is set at runtime by device-ap-mode (not hardcoded in config).
 #
 # Three helper scripts are installed:
@@ -1132,7 +1133,7 @@ Restart=on-failure
 RestartSec=5
 EOF
 
-# hostapd config — SSID placeholder "Lamp-XXXX" is replaced at runtime
+# hostapd config — SSID placeholder "<device_type>-xxxx" is replaced at runtime
 # by device-ap-mode using the actual Pi serial number. AP_BAND switches between
 # 2.4 GHz (hw_mode=g, default channel 6) and 5 GHz (hw_mode=a + ieee80211ac=1,
 # default channel 36). 5 GHz needs a regulatory domain that permits it AND a
@@ -1144,7 +1145,7 @@ if [ "\${AP_BAND}" = "5" ]; then
   cat > /etc/hostapd/hostapd.conf <<EOF
 interface=wlan0
 driver=nl80211
-ssid=Lamp-XXXX
+ssid=${DEVICE_TYPE}-xxxx
 hw_mode=\$HWMODE
 channel=\$CHANNEL
 country_code=\${COUNTRY_CODE}
@@ -1160,7 +1161,7 @@ else
   cat > /etc/hostapd/hostapd.conf <<EOF
 interface=wlan0
 driver=nl80211
-ssid=Lamp-XXXX
+ssid=${DEVICE_TYPE}-xxxx
 hw_mode=\$HWMODE
 channel=\$CHANNEL
 country_code=\${COUNTRY_CODE}
@@ -1227,19 +1228,21 @@ if [ -z "\$SERIAL" ]; then
   done
 fi
 SUFFIX=\${SERIAL: -4}
-AP_SSID="Lamp-\${SUFFIX}"
+SUFFIX_LC=\$(echo "\$SUFFIX" | tr '[:upper:]' '[:lower:]')
+# Network identity is device-type-driven: <device_type>-<suffix>, lowercase.
+# DEVICE_TYPE is baked here at image-build time (one DEVICE_TYPE = one golden
+# image); the suffix resolves at first boot from the hardware serial / eth MAC.
+# Lowercase because URLs in the wild aren't case-normalized even though mDNS is.
+AP_SSID="${DEVICE_TYPE}-\${SUFFIX_LC}"
 [ -f /etc/hostapd/hostapd.conf ] && sed -i "s/^ssid=.*/ssid=\${AP_SSID}/" /etc/hostapd/hostapd.conf
 
-# mDNS hostname so the web UI can redirect AP→STA via .local without knowing
-# the LAN IP. Lowercase because URLs in the wild aren't case-normalized even
-# though mDNS itself is.
-SUFFIX_LC=\$(echo "\$SUFFIX" | tr '[:upper:]' '[:lower:]')
-LAMP_HOSTNAME="lamp-\${SUFFIX_LC}"
-hostnamectl set-hostname "\$LAMP_HOSTNAME" 2>/dev/null || hostname "\$LAMP_HOSTNAME" || true
+# mDNS <device_type>-<suffix>.local so the web UI can redirect AP→STA via .local.
+DEVICE_HOSTNAME="${DEVICE_TYPE}-\${SUFFIX_LC}"
+hostnamectl set-hostname "\$DEVICE_HOSTNAME" 2>/dev/null || hostname "\$DEVICE_HOSTNAME" || true
 if grep -q '^127\.0\.1\.1' /etc/hosts; then
-  sed -i "s/^127\.0\.1\.1.*/127.0.1.1 \$LAMP_HOSTNAME/" /etc/hosts
+  sed -i "s/^127\.0\.1\.1.*/127.0.1.1 \$DEVICE_HOSTNAME/" /etc/hosts
 else
-  echo "127.0.1.1 \$LAMP_HOSTNAME" >> /etc/hosts
+  echo "127.0.1.1 \$DEVICE_HOSTNAME" >> /etc/hosts
 fi
 systemctl enable avahi-daemon 2>/dev/null || true
 systemctl restart avahi-daemon 2>/dev/null || true
@@ -2169,7 +2172,7 @@ echo "    Size:      ${OUT_IMG_SIZE} (expands to fill SD on first boot)"
 echo "    User:      ${USERNAME} / ${PASSWORD}"
 echo "    Hostname:  ${PI_HOSTNAME}"
 echo "    Timezone:  ${PI_TIMEZONE}"
-echo "    AP:        Lamp-XXXX (serial-based SSID) @ 192.168.100.1"
+echo "    AP:        ${DEVICE_TYPE}-xxxx (serial-based SSID) @ 192.168.100.1"
 echo ""
 echo "    Flash:"
 echo "      diskutil unmountDisk /dev/diskN"

@@ -95,7 +95,7 @@ Out-of-scope MVP examples (defer to vision phase):
 **Buddy is the WS client. The device is the WS server.** Reasons:
 
 - Buddy does not need to open any port. The Mac firewall stays untouched. Lower attack surface.
-- The device already has a stable mDNS hostname (`lamp-xxxx.local`) per `project_mdns_hostname.md`. Buddy resolves and connects.
+- The device already has a stable mDNS hostname (`<device_type>-xxxx.local`, e.g. `lamp-a1b2.local`). Buddy resolves and connects.
 - Single persistent WS → command latency = 1 round-trip (no TCP/TLS cold-start per command).
 - Reconnect logic lives in buddy (simpler — buddy can detect device reboots and re-connect after).
 
@@ -226,7 +226,7 @@ Reserved for later (defined but not implemented MVP):
 - Buddy browses `_autonomous._tcp.local` via `NWBrowser`
 - For each found service, resolve hostname → store in candidate list
 - MVP: assume single device on LAN → auto-pick the first
-- Fallback: manual hostname entry (`lamp-xxxx.local`) in menu
+- Fallback: manual hostname entry (`<device_type>-xxxx.local`) in menu
 
 ### Pairing (one-time)
 
@@ -404,7 +404,7 @@ Mac-only MVP → **Swift native**. Tauri/Rust deferred until Windows/Linux phase
 
 ## 13. References
 
-- `project_mdns_hostname.md` — lamp publishes `lamp-<last4hex>.local`
+- mDNS hostname — the device publishes `<device_type>-<last4hex>.local` (e.g. `lamp-a1b2.local`)
 - `feedback_lelamp_external.md` — hardware code lives in Python, not Go
 - `project_security_login_ui_batch.md` — recent security audit closed; cookie HMAC + bcrypt admin patterns to reuse for buddy auth
 - [Anthropic Computer Use docs](https://docs.anthropic.com/en/docs/build-with-claude/computer-use) — for vision phase v1.1

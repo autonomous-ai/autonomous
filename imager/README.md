@@ -1,13 +1,16 @@
-# imager — Lamp golden image builder
+# imager — device golden image builder
 
 Produces SD card images that boot OrangePi 4 Pro (or Raspberry Pi 4B / 5) directly
-into the Lamp AP/hotspot setup wizard. Flash, insert, power on — no
+into the device AP/hotspot setup wizard. Flash, insert, power on — no
 `scripts/provision/setup.sh` needed on the target.
 
+`DEVICE_TYPE` and `OTA_METADATA_URL` are **required** (no default) — one device
+class per golden image; preflight fails if either is unset.
+
 ```bash
-make build                              # → output/golden-opi.img.xz (OrangePi, default)
-make TARGET=rpi build                   # → output/golden.img (Raspberry Pi 5)
-make TARGET=rpi RPI_MODEL=4 build       # → output/golden.img (Raspberry Pi 4B)
+make build DEVICE_TYPE=lamp OTA_METADATA_URL=…                   # → output/golden-opi-lamp.img.xz (OrangePi, default)
+make TARGET=rpi DEVICE_TYPE=lamp OTA_METADATA_URL=… build        # → output/golden-lamp.img (Raspberry Pi 5)
+make TARGET=rpi RPI_MODEL=4 DEVICE_TYPE=lamp OTA_METADATA_URL=… build  # → output/golden-lamp.img (Raspberry Pi 4B)
 make upload                             # push image + release note to GCS, versioned (auto-cleans output/ on success)
 make upload-source                      # mirror input/orangepi.7z → GCS (one-time)
 make clean                              # nuclear: wipe output/ entirely (input/ kept)
@@ -22,9 +25,9 @@ nhiều — `input/orangepi.7z` được cache, chỉ Phase 3+ re-run.
 
 | Board | TARGET | RPI_MODEL | Builder | Output | Status |
 |-------|--------|-----------|---------|--------|--------|
-| **OrangePi 4 Pro v2 (Allwinner A733)** *default* | `opi` | — | `build-orangepi.sh` | `output/golden-opi.img.xz` | **working** (verified 2026-05-27) |
-| Raspberry Pi 5 | `rpi` | `5` (default) | `build.sh` | `output/golden.img` | working |
-| Raspberry Pi 4B | `rpi` | `4` | `build.sh` | `output/golden.img` | code-only, untested on HW |
+| **OrangePi 4 Pro v2 (Allwinner A733)** *default* | `opi` | — | `build-orangepi.sh` | `output/golden-opi-<type>.img.xz` | **working** (verified 2026-05-27) |
+| Raspberry Pi 5 | `rpi` | `5` (default) | `build.sh` | `output/golden-<type>.img` | working |
+| Raspberry Pi 4B | `rpi` | `4` | `build.sh` | `output/golden-<type>.img` | code-only, untested on HW |
 
 `make TARGET=rpi build` cho Pi 5 path. `make TARGET=rpi RPI_MODEL=4 build` cho Pi 4B. No-arg `make build` mặc định OrangePi.
 
@@ -90,14 +93,15 @@ efficiently).
    removes itself. Re-flash will reinstall it.
 3. Operator runs `sudo device-ap-mode` (or the bootstrap-server triggers it
    when no STA association after a timeout).
-4. SSID becomes `Lamp-XXXX` where `XXXX` = last 4 hex chars of the ethernet
-   MAC. The board has no device-tree serial; `device-ap-mode`'s fallback
-   chain (`/proc/device-tree/serial-number` → `/proc/cpuinfo Serial` →
-   `eth0`/`end0` MAC) lands on MAC for OPi.
-5. mDNS hostname `lamp-<xxxx>.local` published by `avahi-daemon`.
+4. SSID becomes `<device_type>-xxxx` (e.g. `lamp-a1b2`) where `xxxx` = last 4 hex
+   chars of the ethernet MAC and `<device_type>` is baked at build time. The board
+   has no device-tree serial; `device-ap-mode`'s fallback chain
+   (`/proc/device-tree/serial-number` → `/proc/cpuinfo Serial` → `eth0`/`end0` MAC)
+   lands on MAC for OPi.
+5. mDNS hostname `<device_type>-<xxxx>.local` published by `avahi-daemon`.
 6. Connect phone/laptop to AP → http://192.168.100.1/ → setup wizard collects
    API keys + home WiFi → `device-sta-mode` switches → device reachable via
-   `lamp-xxxx.local` on the home LAN.
+   `<device_type>-xxxx.local` on the home LAN.
 
 ## Flashing an SD card
 
@@ -125,6 +129,7 @@ All env vars; override at the `make` call.
 | `OPI_FILE_ID` | `1CYfOaY6f5DozJBNvPJ0Gx1jBIFlGe8fn` | Google Drive file ID for `Orangepi4pro_1.0.6_debian_bookworm_server_*.7z`. Bump when the dev team uploads a new vendor release. |
 | `OPENCLAW_VERSION` | `2026.5.27` | npm package version pin. Bump as OpenClaw releases. |
 | `OTA_METADATA_URL` | **(required, no default)** | OTA metadata source. Must be passed at build time (`make build OTA_METADATA_URL=...`); build fails in preflight if unset. Baked into the image's `/root/config/bootstrap.json`. |
+| `DEVICE_TYPE` | **(required, no default)** | Device class baked into the image (one `DEVICE_TYPE` = one golden image). Selects `devices/<type>/{DEVICE,SOUL}.md`, the staged device profile, and the network identity (`<type>-xxxx` AP SSID + mDNS hostname). Build fails in preflight if unset. |
 | `AP_BAND` | `2.4` | `2.4` or `5` — hostapd hw_mode. |
 | `AP_CHANNEL` | `6` (2.4 GHz) / `36` (5 GHz) | hostapd channel |
 | `COUNTRY_CODE` | `US` | Regulatory domain for wpa_supplicant + hostapd |
@@ -177,7 +182,7 @@ imager/
 
 ## Sanity checks after first flash
 
-SSH in (`ssh system@lamp-xxxx.local`, password `12345`) and verify:
+SSH in (`ssh system@<device_type>-xxxx.local`, e.g. `lamp-a1b2.local`, password `12345`) and verify:
 
 ```bash
 systemctl is-enabled lamp hal openclaw avahi-daemon

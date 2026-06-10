@@ -171,21 +171,22 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // retype a saved Wi-Fi password during re-setup via `#force`. Submit ships
   // an empty password; server merges from cfg.NetworkPassword pre-validation.
   const [hasNetworkPassword, setHasNetworkPassword] = useState(false);
-  // mDNS hostname for the lamp on home Wi-Fi: `lamp-<suffix>.local`. Matches
-  // what stage_ap sets via `hostnamectl set-hostname lamp-${SUFFIX_LC}` — both
-  // sides derive the suffix from the device's hardware ID (Pi device-tree
-  // serial / cpuinfo Serial / eth0 MAC, in that order) via the same logic in
-  // lamp/internal/device/hardware.go.
+  // mDNS hostname for the device on home Wi-Fi: `<device_type>-<suffix>.local`.
+  // Matches what stage_ap sets via `hostnamectl set-hostname ${DEVICE_TYPE}-${SUFFIX_LC}`
+  // — both sides derive from the device's hardware ID (Pi device-tree serial /
+  // cpuinfo Serial / eth0 MAC) and the DEVICE_TYPE class, via the same logic in
+  // os/services/internal/device/hardware.go.
   //
-  // The backend returns `cfg.mac` already formatted as "Lamp-XXXX" (see
-  // GetDeviceMac() — it prefixes "Lamp-" before the 4-char hex suffix), so
-  // taking the last 4 chars and validating as hex gives us the canonical
-  // suffix without depending on the prefix string. Empty when the config
-  // hasn't returned yet, or when the device couldn't determine a serial.
+  // The backend returns `cfg.mac` already formatted as "<device_type>-XXXX" and
+  // lowercase (see GetDeviceMac()), so the lowercased mac IS the hostname. Derive
+  // the prefix from mac — never hardcode "lamp-" — so the redirect follows the
+  // device class (lamp-a1b2 / intern-3c4d). The 4-char hex tail is validated to
+  // guard against an empty/partial config. Empty when the config hasn't returned
+  // yet, or when the device couldn't determine a serial.
   const lampMdnsHost = useMemo(() => {
-    const tail = (mac || "").trim().toLowerCase().slice(-4);
-    if (!/^[0-9a-f]{4}$/.test(tail)) return "";
-    return `lamp-${tail}`;
+    const host = (mac || "").trim().toLowerCase();
+    if (!/^[0-9a-f]{4}$/.test(host.slice(-4))) return "";
+    return host;
   }, [mac]);
   const [llmApiKey, setLlmApiKey] = useState(urlParams.llmApiKey || "");
   const [llmUrl, setLlmUrl] = useState(urlParams.llmUrl || "");
@@ -707,8 +708,8 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
                       Lamp is online!
                     </div>
 
-                    {/* mDNS path (primary): the lamp publishes
-                        `lamp-<last4mac>.local` via avahi-daemon, so we don't
+                    {/* mDNS path (primary): the device publishes
+                        `<device_type>-<last4mac>.local` via avahi-daemon, so we don't
                         need to know its new LAN IP to redirect — the browser
                         resolves it once the user is on home Wi-Fi.
                         Supported out-of-box: Windows 10 1803+, Windows 11,
@@ -763,7 +764,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
                     ) : (
                       <div style={{ fontSize: 12, color: C.textDim }}>
                         Lamp connected. Open your router's admin page to find
-                        the device's IP address (look for "lamp-").
+                        the device's IP address (look for "{lampMdnsHost || "lamp-"}").
                       </div>
                     )}
                   </>

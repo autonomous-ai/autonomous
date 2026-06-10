@@ -53,8 +53,11 @@ AP_BAND="${AP_BAND:-2.4}"       # 2.4 or 5 (5 GHz for better throughput)
 AP_CHANNEL="${AP_CHANNEL:-}"    # default: 6 (2.4 GHz) or 36 (5 GHz); override e.g. AP_CHANNEL=11 or 40
 
 # Device class this install is for — selects devices/<type>/{DEVICE,SOUL}.md at
-# runtime (os-server + HAL). Default "lamp"; override e.g. DEVICE_TYPE=intern.
-DEVICE_TYPE="${DEVICE_TYPE:-lamp}"
+# runtime (os-server + HAL) and drives the network identity (<type>-XXXX SSID +
+# mDNS hostname). REQUIRED, no default — provisioning must declare the device class
+# so one OS image can't silently brand itself "lamp". Pass via env, e.g.
+# DEVICE_TYPE=intern (install.sh forwards it).
+DEVICE_TYPE="${DEVICE_TYPE:?DEVICE_TYPE must be set (e.g. DEVICE_TYPE=lamp) — no default}"
 DEVICES_DIR="${DEVICES_DIR:-/opt/devices}"
 
 # ----------------------------------------------------------
@@ -874,39 +877,42 @@ stage_ap() {
     done
   fi
   SUFFIX=${SERIAL: -4}
-  AP_SSID="Lamp-${SUFFIX}"
+  SUFFIX_LC=$(echo "$SUFFIX" | tr '[:upper:]' '[:lower:]')
+
+  # Network identity (AP SSID + mDNS hostname) is device-type-driven so one OS
+  # image serves N device classes: `<device_type>-<suffix>`. DEVICE_TYPE is the
+  # immutable hardware identity (env → config.json → "lamp"), the same source Go's
+  # GetDeviceMac and HAL's _resolve_device_type read. Lowercase throughout — avahi
+  # publishes the hostname verbatim and `.local` URLs in the wild aren't
+  # case-normalized, and the web UI derives the redirect target from the lowercase
+  # `mac` field (GetDeviceMac).
+  AP_SSID="${DEVICE_TYPE}-${SUFFIX_LC}"
   echo "[stage] AP SSID = $AP_SSID (serial=$SERIAL)"
 
-  # mDNS hostname: per-device .local name so the web UI can redirect after
-  # AP→STA without needing to know the LAN IP. Browsers resolve `.local` via
-  # mDNS (built into Win10 1803+, macOS, iOS, most Linux). The lowercase form
-  # matters — avahi publishes the system hostname verbatim, and `.local` is
-  # case-insensitive but URLs in the wild aren't always normalized.
-  SUFFIX_LC=$(echo "$SUFFIX" | tr '[:upper:]' '[:lower:]')
-  LAMP_HOSTNAME="lamp-${SUFFIX_LC}"
-  hostnamectl set-hostname "$LAMP_HOSTNAME" 2>/dev/null || hostname "$LAMP_HOSTNAME"
+  DEVICE_HOSTNAME="${DEVICE_TYPE}-${SUFFIX_LC}"
+  hostnamectl set-hostname "$DEVICE_HOSTNAME" 2>/dev/null || hostname "$DEVICE_HOSTNAME"
   # Replace 127.0.1.1 line if present, otherwise append. /etc/hosts is required
   # for sudo/getent to resolve the hostname locally.
   if grep -q '^127\.0\.1\.1' /etc/hosts; then
-    sed -i "s/^127\.0\.1\.1.*/127.0.1.1 $LAMP_HOSTNAME/" /etc/hosts
+    sed -i "s/^127\.0\.1\.1.*/127.0.1.1 $DEVICE_HOSTNAME/" /etc/hosts
   else
-    echo "127.0.1.1 $LAMP_HOSTNAME" >> /etc/hosts
+    echo "127.0.1.1 $DEVICE_HOSTNAME" >> /etc/hosts
   fi
   systemctl enable avahi-daemon 2>/dev/null || true
   systemctl restart avahi-daemon 2>/dev/null || true
-  echo "[stage] mDNS hostname = $LAMP_HOSTNAME.local"
+  echo "[stage] mDNS hostname = $DEVICE_HOSTNAME.local"
   # Sanity check: confirm avahi actually publishes this name locally. A
   # warning here usually means the daemon failed to start (missing dbus,
   # masked service) or another device on the bench already claimed the
-  # name (avahi would have renamed ours to ${LAMP_HOSTNAME}-2). Two lamps
+  # name (avahi would have renamed ours to ${DEVICE_HOSTNAME}-2). Two devices
   # with identical last-4 serial chars on the same LAN is rare (1/65536)
   # but possible — if it happens, the FE's redirect will hit the wrong
   # device, and we'd need to bump the suffix length here and in
-  # lamp/internal/device/hardware.go.
+  # os/services/internal/device/hardware.go.
   sleep 1
   if command -v avahi-resolve-host-name >/dev/null 2>&1; then
-    if ! avahi-resolve-host-name -4 "${LAMP_HOSTNAME}.local" >/dev/null 2>&1; then
-      echo "[stage] WARNING: ${LAMP_HOSTNAME}.local not resolvable via mDNS yet (avahi may need a moment, or another device claimed the name)"
+    if ! avahi-resolve-host-name -4 "${DEVICE_HOSTNAME}.local" >/dev/null 2>&1; then
+      echo "[stage] WARNING: ${DEVICE_HOSTNAME}.local not resolvable via mDNS yet (avahi may need a moment, or another device claimed the name)"
     fi
   fi
 
@@ -1191,7 +1197,7 @@ else
   echo "  journalctl -u wpa_supplicant@wlan0 -n 50 --no-pager"
 fi
 
-# Re-announce mDNS on the new network so http://lamp-XXXX.local/ resolves
+# Re-announce mDNS on the new network so http://<device_type>-XXXX.local/ resolves
 # from the user's computer once they reconnect to home Wi-Fi. Without this,
 # avahi sometimes keeps stale records from the AP network and stays silent
 # on the new subnet until the next service restart or reboot.
@@ -1275,7 +1281,9 @@ if [ "$APP" = "device" ]; then
   # Device profile lives nested under devices.<type>; resolve THIS device's type.
   DEVICE_TYPE="$(grep -E '^DEVICE_TYPE=' /opt/hal/.env 2>/dev/null | cut -d= -f2)"
   [ -z "$DEVICE_TYPE" ] && DEVICE_TYPE="$(jq -r '.device_type // empty' /root/config/config.json 2>/dev/null)"
-  [ -z "$DEVICE_TYPE" ] && DEVICE_TYPE="lamp"
+  # No lamp fallback: pulling the lamp profile onto a device whose class can't be
+  # resolved would overwrite its persona with the wrong one — refuse instead.
+  [ -z "$DEVICE_TYPE" ] && { echo "ERROR: device_type not found in /opt/hal/.env or /root/config/config.json — cannot resolve device profile"; exit 1; }
   VERSION=$(jq -r --arg t "$DEVICE_TYPE" '.devices[$t].version // empty' "$METADATA_TMP")
   URL=$(jq -r --arg t "$DEVICE_TYPE" '.devices[$t].url // empty' "$METADATA_TMP")
 else
@@ -1423,9 +1431,9 @@ systemctl mask wpa_supplicant.service 2>/dev/null || true
 echo ""
 echo "======================================"
 echo "Setup complete!"
-echo "AP SSID: Lamp-XXXX (actual: ${AP_SSID:-unknown — stage_ap may have failed})"
-echo "Setup page: http://192.168.100.1 (AP) — or http://${LAMP_HOSTNAME:-lamp-xxxx}.local once on home Wi-Fi"
-echo "Backends: systemctl status bootstrap lamp hal claude-desktop-buddy"
+echo "AP SSID: ${DEVICE_TYPE}-xxxx (actual: ${AP_SSID:-unknown — stage_ap may have failed})"
+echo "Setup page: http://192.168.100.1 (AP) — or http://${DEVICE_HOSTNAME:-${DEVICE_TYPE}-xxxx}.local once on home Wi-Fi"
+echo "Backends: systemctl status bootstrap os-server hal claude-desktop-buddy"
 echo "Updates:  software-update <bootstrap|os-server|openclaw|hal|claude-desktop-buddy|web>"
 if [ -n "$FAILED_STAGES" ]; then
   echo ""
