@@ -6,18 +6,23 @@ previously duplicated across rgb_service, gpio_button, and ttp223 (each opened
 
 Drivers ask `board_profile()` for wiring; they never re-detect the board. This
 is the Autonomous equivalent of the Linux arch/ layer: generic driver code sits
-above, board-specific values live here, and a new board is one new entry.
+above, board-specific values live as DATA in `boards.json` (next to this module,
+the DTS / Android BoardConfig analogue), and a new board is one JSON entry — no
+code change. This module just loads that data into typed structs and classifies.
 
 Pure + testable: `detect_board_id()` takes an optional model string, so the whole
 classification can be unit-tested with no hardware and no /proc.
 """
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 DEVICE_TREE_MODEL_PATH = "/proc/device-tree/model"
+BOARDS_DATA_PATH = os.path.join(os.path.dirname(__file__), "boards.json")
 
 
 def read_device_tree_model(path: str = DEVICE_TREE_MODEL_PATH) -> str:
@@ -58,48 +63,54 @@ class BoardProfile:
     touch: Optional[TouchConfig] = None
 
 
-# --- per-board wiring (was scattered as module constants across drivers) ---
+# --- per-board wiring: loaded from boards.json (data, not code) -------------
+# A new board is a JSON entry; this module never hardcodes board values. The
+# data file ships inside the HAL package, so a missing/invalid one is a
+# packaging fault — fail loudly rather than guess wiring (see DEVICE-SPEC rule #3).
 
-_PI_BUTTON = ButtonConfig(chip=0, line=17, debounce_ns=200_000_000)
 
-PROFILES: Dict[str, BoardProfile] = {
-    "raspberry_pi_5": BoardProfile(
-        id="raspberry_pi_5",
-        led=LedConfig(transport="spi", spi_bus=0, spi_device=0),
-        button=_PI_BUTTON,
-    ),
-    "raspberry_pi_4": BoardProfile(
-        id="raspberry_pi_4",
-        led=LedConfig(transport="pwm", pwm_pin=12),
-        button=_PI_BUTTON,
-    ),
-    "orangepi_sun60": BoardProfile(
-        id="orangepi_sun60",
-        led=LedConfig(transport="spi", spi_bus=3, spi_device=0),
-        button=ButtonConfig(chip=1, line=9, debounce_ns=200_000_000),
-        touch=TouchConfig(chip=0, lines=[96, 97, 98, 99]),
-    ),
-}
+def _load_boards(
+    path: str = BOARDS_DATA_PATH,
+) -> Tuple[Dict[str, BoardProfile], List[Tuple[List[str], str]], str]:
+    """Parse boards.json → (profiles, matchers, default_board_id). Pure given a path.
 
-# Fallback when the model string is unknown/unreadable: OrangePi 4 Pro (sun60) —
-# the primary shipping board. Every known board is matched explicitly in
-# detect_board_id() below, so only genuinely unrecognized hardware lands here.
-DEFAULT_BOARD_ID = "orangepi_sun60"
+    matchers preserve file order; each is (lowercased model substrings, board_id).
+    """
+    with open(path, "r") as f:
+        data = json.load(f)
+    profiles: Dict[str, BoardProfile] = {}
+    matchers: List[Tuple[List[str], str]] = []
+    for bid, b in data["boards"].items():
+        touch = b.get("touch")
+        profiles[bid] = BoardProfile(
+            id=bid,
+            led=LedConfig(**b["led"]),
+            button=ButtonConfig(**b["button"]),
+            touch=TouchConfig(**touch) if touch else None,
+        )
+        matchers.append(([s.lower() for s in b.get("match", [])], bid))
+    return profiles, matchers, data["default_board"]
+
+
+try:
+    PROFILES, _MATCHERS, DEFAULT_BOARD_ID = _load_boards()
+except (OSError, ValueError, KeyError, TypeError) as e:
+    raise RuntimeError(
+        f"Board profile data invalid or missing at {BOARDS_DATA_PATH}: {e}"
+    ) from e
 
 
 def detect_board_id(model: Optional[str] = None) -> str:
     """Classify the board from the device-tree model string. Pure; testable.
 
-    'pi 5' -> Pi 5, 'pi 4' -> Pi 4, 'sun60iw2' -> OrangePi 4 Pro (sun60). An
-    unrecognized/empty model falls back to DEFAULT_BOARD_ID (OrangePi 4 Pro).
+    Tests the lowercased `match` substrings from boards.json (first hit wins, in
+    file order — keep them non-overlapping). Unrecognized/empty model falls back
+    to `default_board`. e.g. 'pi 5'→Pi 5, 'pi 4'→Pi 4, 'sun60iw2'→OrangePi 4 Pro.
     """
     m = model if model is not None else read_device_tree_model()
-    if "pi 5" in m:
-        return "raspberry_pi_5"
-    if "pi 4" in m:
-        return "raspberry_pi_4"
-    if "sun60iw2" in m:
-        return "orangepi_sun60"
+    for substrings, bid in _MATCHERS:
+        if any(s in m for s in substrings):
+            return bid
     return DEFAULT_BOARD_ID
 
 

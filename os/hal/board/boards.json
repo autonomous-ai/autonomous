@@ -1,0 +1,22 @@
+{
+  "_comment": "Board wiring data — the Autonomous equivalent of a Linux DTS / Android BoardConfig. Adding a board = one entry here, no code change. Loaded by board.py into typed BoardProfile structs. `match` = lowercased substrings tested against /proc/device-tree/model (first match wins, file order); keep them non-overlapping. `led.transport` = spi|pwm. `default_board` is used when the model is unknown/unreadable.",
+  "default_board": "orangepi_sun60",
+  "boards": {
+    "raspberry_pi_5": {
+      "match": ["pi 5"],
+      "led": { "transport": "spi", "spi_bus": 0, "spi_device": 0 },
+      "button": { "chip": 0, "line": 17, "debounce_ns": 200000000 }
+    },
+    "raspberry_pi_4": {
+      "match": ["pi 4"],
+      "led": { "transport": "pwm", "pwm_pin": 12 },
+      "button": { "chip": 0, "line": 17, "debounce_ns": 200000000 }
+    },
+    "orangepi_sun60": {
+      "match": ["sun60iw2"],
+      "led": { "transport": "spi", "spi_bus": 3, "spi_device": 0 },
+      "button": { "chip": 1, "line": 9, "debounce_ns": 200000000 },
+      "touch": { "chip": 0, "lines": [96, 97, 98, 99] }
+    }
+  }
+}
