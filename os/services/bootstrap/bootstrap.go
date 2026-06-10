@@ -209,12 +209,78 @@ func (b *Bootstrap) checkOnce(ctx context.Context) error {
 		}
 	}
 
+	// Device profile (devices.<type>) is nested in metadata, not a flat
+	// component, so it can't ride the loop above — reconcile it separately.
+	if updated, err := b.reconcileDevice(ctx); err != nil {
+		slog.Error("device reconcile error", "component", "bootstrap", "error", err)
+	} else if updated {
+		changed = true
+	}
+
 	if changed {
 		if err := state.Save(b.cfg.StateFile, b.state); err != nil {
 			return fmt.Errorf("save state: %w", err)
 		}
 	}
 	return nil
+}
+
+// resolveDeviceType returns this device's class for picking devices.<type> in
+// OTA metadata: DEVICE_TYPE env → config.json device_type → "lamp".
+func resolveDeviceType() string {
+	if t := strings.TrimSpace(os.Getenv("DEVICE_TYPE")); t != "" {
+		return t
+	}
+	if data, err := os.ReadFile("/root/config/config.json"); err == nil {
+		var c struct {
+			DeviceType string `json:"device_type"`
+		}
+		if json.Unmarshal(data, &c) == nil && strings.TrimSpace(c.DeviceType) != "" {
+			return strings.TrimSpace(c.DeviceType)
+		}
+	}
+	return "lamp"
+}
+
+// fetchDeviceComponent reads metadata.devices.<type>. The profile is nested, so
+// the flat OTAMetadata decode in fetchMetadata can't see it — fetch + decode the
+// devices map directly.
+func (b *Bootstrap) fetchDeviceComponent(ctx context.Context, deviceType string) (domain.OTAComponent, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, b.cfg.MetadataURL, nil)
+	if err != nil {
+		return domain.OTAComponent{}, false, fmt.Errorf("build metadata request: %w", err)
+	}
+	resp, err := b.client.Do(req)
+	if err != nil {
+		return domain.OTAComponent{}, false, fmt.Errorf("fetch metadata %s: %w", b.cfg.MetadataURL, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return domain.OTAComponent{}, false, fmt.Errorf("fetch metadata %s: status %s", b.cfg.MetadataURL, resp.Status)
+	}
+	var wrap struct {
+		Devices map[string]domain.OTAComponent `json:"devices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&wrap); err != nil {
+		return domain.OTAComponent{}, false, fmt.Errorf("decode metadata: %w", err)
+	}
+	comp, ok := wrap.Devices[deviceType]
+	return comp, ok, nil
+}
+
+// reconcileDevice updates this device's profile (devices.<type>) to the metadata
+// version, delegating the install to `software-update device`. Absent artifact
+// for this device type → no-op (the device simply has no published profile).
+func (b *Bootstrap) reconcileDevice(ctx context.Context) (bool, error) {
+	deviceType := resolveDeviceType()
+	comp, ok, err := b.fetchDeviceComponent(ctx, deviceType)
+	if err != nil {
+		return false, err
+	}
+	if !ok || strings.TrimSpace(comp.Version) == "" {
+		return false, nil
+	}
+	return b.reconcile(ctx, domain.OTAKeyDevice, comp)
 }
 
 // reconcile compares current vs target version and applies update if needed.
@@ -316,6 +382,16 @@ func (b *Bootstrap) detectVersion(ctx context.Context, key string) string {
 			return ""
 		}
 		return openclawNormalizeVersion(string(out))
+	case domain.OTAKeyDevice:
+		dir := os.Getenv("DEVICES_DIR")
+		if dir == "" {
+			dir = "/opt/devices"
+		}
+		data, err := os.ReadFile(filepath.Join(dir, resolveDeviceType(), "VERSION"))
+		if err != nil {
+			return ""
+		}
+		return strings.TrimSpace(string(data))
 	default:
 		return ""
 	}
@@ -324,7 +400,7 @@ func (b *Bootstrap) detectVersion(ctx context.Context, key string) string {
 // applyUpdate runs the appropriate update command for the given component.
 func (b *Bootstrap) applyUpdate(ctx context.Context, key string, component domain.OTAComponent) error {
 	switch key {
-	case domain.OTAKeyOSServer, domain.OTAKeyWeb, domain.OTAKeyHal, domain.OTAKeyBuddy, domain.OTAKeyOpenClaw:
+	case domain.OTAKeyOSServer, domain.OTAKeyWeb, domain.OTAKeyHal, domain.OTAKeyBuddy, domain.OTAKeyOpenClaw, domain.OTAKeyDevice:
 		// All non-bootstrap components delegate to the on-device
 		// `software-update <key>` script (installed by setup.sh) so the
 		// install logic lives in one place — the script self-fetches

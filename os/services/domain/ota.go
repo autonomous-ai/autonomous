@@ -15,6 +15,10 @@ const (
 	// dir (/opt/hal), and `software-update` arg.
 	OTAKeyHal   = "hal"
 	OTAKeyBuddy = "claude-desktop-buddy"
+	// OTAKeyDevice is the on-device `software-update` arg for the device profile.
+	// Unlike the others it is NOT a flat metadata key — the profile lives nested
+	// at metadata.devices.<device_type> (one metadata.json serves all types).
+	OTAKeyDevice = "device"
 )
 
 // OTAMetadata is the JSON shape returned by the OTA metadata URL.
