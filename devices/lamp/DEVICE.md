@@ -18,7 +18,7 @@ capabilities:
   media:        { routes: [music], required: true }
   connectivity: { routes: [bluetooth], required: true }
   system:       { routes: [system], required: true }
-soul_ref:   autonomous://souls/lamp-companion
+soul_ref:   SOUL.md
 safety_ref: SAFETY.md
 memory:     { backend: local }
 ---

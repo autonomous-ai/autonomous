@@ -15,7 +15,7 @@ capabilities:
   sensing: { routes: [sensing], required: true }
   motion:  { routes: [locomotion], driver: unitree_sdk, required: false, safety: SAFETY.md#motion }
   system:  { routes: [system], required: true }
-soul_ref:   autonomous://souls/companion
+soul_ref:   SOUL.md
 safety_ref: SAFETY.md
 memory:     { backend: local }
 ---

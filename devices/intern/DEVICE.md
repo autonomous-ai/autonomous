@@ -12,7 +12,6 @@ capabilities:
   vision:  { routes: [camera], required: false }
   sensing: { routes: [sensing], required: false }
   system:  { routes: [system], required: true }
-soul_ref:   autonomous://souls/intern
 safety_ref: SAFETY.md
 memory:     { backend: local }
 ---

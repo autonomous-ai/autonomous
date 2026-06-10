@@ -11,7 +11,28 @@ var (
 	reFrontMatter    = regexp.MustCompile(`(?s)^---\s*\n(.*?)\n---\s*\n`)
 	reGatewayBlock   = regexp.MustCompile(`(?m)^gateway:[ \t]*\n((?:[ \t]+.*\n?)+)`)
 	reGatewayDefault = regexp.MustCompile(`(?m)^[ \t]+default:[ \t]*(\S+)`)
+	reSoulRef        = regexp.MustCompile(`(?m)^soul_ref:[ \t]*(\S+)`)
 )
+
+// SoulRef returns the `soul_ref` declared in devices/<deviceType>/DEVICE.md, or
+// "" if absent/unreadable. The value is either a path (read relative to the
+// device dir) or an http(s) URL (downloaded) — see openclaw.deviceSoulCore.
+// Dependency-free front-matter parse, mirroring GatewayDefault.
+func SoulRef(deviceType string) string {
+	b, err := os.ReadFile(filepath.Join(DevicesDir(), deviceType, "DEVICE.md"))
+	if err != nil {
+		return ""
+	}
+	fm := reFrontMatter.FindSubmatch(b)
+	if fm == nil {
+		return ""
+	}
+	m := reSoulRef.FindSubmatch(fm[1])
+	if m == nil {
+		return ""
+	}
+	return strings.TrimSpace(string(m[1]))
+}
 
 // DevicesDir resolves the per-device profile root (devices/<type>/...).
 // DEVICES_DIR env wins; falls back to /opt/devices (mirrors HAL + onboarding.go).

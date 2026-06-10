@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"go.autonomous.ai/os/internal/device"
 )
 
 //go:embed resources/KNOWLEDGE.md
@@ -363,36 +365,71 @@ func devicesDir() string {
 	return "/opt/devices"
 }
 
-// deviceSoulCore returns the soul text to inject for this device, keyed by
-// config.device_type (DeviceTypeOrDefault). A device's persona lives at
-// devices/<type>/SOUL.md:
-//   - present → that device's own soul; we override the gateway's default.
+// deviceSoulCore returns the soul text to inject for this device, resolved from
+// the `soul_ref` declared in devices/<type>/DEVICE.md (config.device_type):
 //   - absent  → hasSoul=false: inject nothing, leaving the agentic runtime
 //     (OpenClaw) to use its own default soul. We never override a soulless body.
+//   - http(s) URL → download the soul artifact.
+//   - any other value → a path read relative to devices/<type>/ (e.g. SOUL.md).
+//
+// A declared soul_ref that fails to resolve is a deploy fault (named a soul but
+// did not ship it), so it returns an error rather than silently going soulless.
 //
 // This is what makes "device → which soul" real: Lamp gets its soul, Dog its
 // own, Intern none — from the same binary, no embedded hardcode.
-func (s *Service) deviceSoulCore() (content []byte, hasSoul bool) {
+func (s *Service) deviceSoulCore() (content []byte, hasSoul bool, err error) {
 	devType := s.config.DeviceTypeOrDefault()
-	b, err := os.ReadFile(filepath.Join(devicesDir(), devType, "SOUL.md"))
-	if err != nil {
-		return nil, false
+	ref := device.SoulRef(devType)
+	if ref == "" {
+		return nil, false, nil // soulless body (e.g. Intern): no override
 	}
-	return b, true
+	if strings.HasPrefix(ref, "http://") || strings.HasPrefix(ref, "https://") {
+		b, derr := downloadSoul(ref)
+		if derr != nil {
+			return nil, false, fmt.Errorf("download soul_ref %q: %w", ref, derr)
+		}
+		return b, true, nil
+	}
+	if strings.Contains(ref, "://") {
+		return nil, false, fmt.Errorf("unsupported soul_ref scheme: %q (use http(s):// or a path)", ref)
+	}
+	path := filepath.Join(devicesDir(), devType, ref)
+	b, rerr := os.ReadFile(path)
+	if rerr != nil {
+		return nil, false, fmt.Errorf("read soul_ref %q: %w", path, rerr)
+	}
+	return b, true, nil
 }
 
-// ensureSoulMDBlock wraps this device's SOUL.md as a marker-delimited core block
+// downloadSoul fetches a soul artifact named by an http(s) soul_ref.
+func downloadSoul(url string) ([]byte, error) {
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return io.ReadAll(resp.Body)
+}
+
+// ensureSoulMDBlock wraps this device's soul as a marker-delimited core block
 // at the top of workspace/SOUL.md. The soul is resolved per device_type from
-// devices/<type>/SOUL.md (embedded fallback) — see deviceSoulCore. Anything the
+// the DEVICE.md `soul_ref` (path or URL) — see deviceSoulCore. Anything the
 // owner writes below the closing `---` is preserved on subsequent onboarding
 // runs, mirroring the AGENTS.md / HEARTBEAT.md pattern. Returns true if the file
 // was modified. A device that declares no soul injects no block.
 func (s *Service) ensureSoulMDBlock() (bool, error) {
 	soulFile := filepath.Join(s.config.OpenclawConfigDir, "workspace", "SOUL.md")
 
-	coreContent, hasSoul := s.deviceSoulCore()
+	coreContent, hasSoul, err := s.deviceSoulCore()
+	if err != nil {
+		return false, fmt.Errorf("resolve device soul: %w", err)
+	}
 	if !hasSoul {
-		slog.Info("no SOUL.md for device — leaving the gateway's default soul (no override)",
+		slog.Info("no soul_ref for device — leaving the gateway's default soul (no override)",
 			"component", "onboarding", "device_type", s.config.DeviceTypeOrDefault())
 		return false, nil
 	}
