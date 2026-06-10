@@ -351,7 +351,7 @@ func handleBLEMessage(data []byte, sm *StateMachine, bleSrv *BLEServer, bridge *
 func loadConfig(path string) Config {
 	cfg := Config{
 		Enabled:            true,
-		DeviceName:         "Claude-lamp-{MAC}",
+		DeviceName:         "Claude-{MAC}",
 		HTTPPort:           5002,
 		LeLampURL:          "http://127.0.0.1:5001",
 		LampURL:            "http://127.0.0.1:5000",
@@ -391,7 +391,7 @@ func loadConfig(path string) Config {
 // response, which some scanners only fetch via active scan and may miss.
 func resolveDeviceName(name, lampURL string) string {
 	if name == "" {
-		name = "Claude-lamp-{MAC}"
+		name = "Claude-{MAC}"
 	}
 	if !strings.Contains(name, "{MAC}") {
 		return name
