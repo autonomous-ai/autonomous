@@ -117,6 +117,12 @@ type Config struct {
 	// DeviceID is saved at setup, used for backend status reporting
 	DeviceID string `json:"device_id" yaml:"deviceID"`
 
+	// DeviceType is the device class/profile id — the folder name under devices/
+	// (e.g. "lamp", "intern", "unitree-go2w"). Selects which DEVICE.md/SOUL.md the
+	// runtime loads. Empty defaults to "lamp" (see DeviceTypeOrDefault); HAL reads
+	// the same key from config.json via _lamp_cfg_get("device_type").
+	DeviceType string `json:"device_type,omitempty" yaml:"deviceType"`
+
 	// MQTT (optional): empty broker URL means MQTT disabled
 	MQTTEndpoint string `json:"mqtt_endpoint" yaml:"mqttEndpoint"`
 	MQTTUsername string `json:"mqtt_username" yaml:"mqttUsername"`
@@ -207,6 +213,16 @@ func Default() Config {
 
 		notify: make(chan bool, 1),
 	}
+}
+
+// DeviceTypeOrDefault returns the configured device class, defaulting to "lamp"
+// when unset (pre-device_type configs and the reference build). This is the
+// single resolver the runtime uses to pick devices/<type>/{DEVICE,SOUL}.md.
+func (c *Config) DeviceTypeOrDefault() string {
+	if c.DeviceType == "" {
+		return "lamp"
+	}
+	return c.DeviceType
 }
 
 func ProvideConfig() *Config {

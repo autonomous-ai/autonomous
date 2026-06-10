@@ -14,9 +14,6 @@ import (
 	"time"
 )
 
-//go:embed resources/SOUL.md
-var soulFS embed.FS
-
 //go:embed resources/KNOWLEDGE.md
 var knowledgeFS embed.FS
 
@@ -136,11 +133,6 @@ func (s *Service) EnsureOnboarding() error {
 		needRestart = true
 	}
 
-	// OLD (kept for rollback): full-file overwrite of SOUL.md from embedded binary.
-	// Replaced by ensureSoulMDBlock above so owner edits below the marker survive.
-	// if changed := seedFile(soulFS, "resources/SOUL.md", filepath.Join(workspace, "SOUL.md")); changed {
-	// 	needRestart = true
-	// }
 
 	// Download skills from CDN
 	skillsDir := filepath.Join(workspace, "skills")
@@ -361,16 +353,48 @@ func (s *Service) ensureAgentsMDBlock() (bool, error) {
 	return true, nil
 }
 
-// ensureSoulMDBlock wraps the embedded SOUL.md as a marker-delimited core block
-// at the top of workspace/SOUL.md. Anything the owner writes below the closing
-// `---` is preserved on subsequent onboarding runs, mirroring the AGENTS.md /
-// HEARTBEAT.md pattern. Returns true if the file was modified.
+// devicesDir returns the root that holds per-device profile folders
+// (devices/<type>/{DEVICE,SOUL}.md). Override with DEVICES_DIR; defaults to the
+// on-device install path. The same tree HAL reads via HAL_DEVICES_DIR.
+func devicesDir() string {
+	if d := strings.TrimSpace(os.Getenv("DEVICES_DIR")); d != "" {
+		return d
+	}
+	return "/opt/devices"
+}
+
+// deviceSoulCore returns the soul text to inject for this device, keyed by
+// config.device_type (DeviceTypeOrDefault). A device's persona lives at
+// devices/<type>/SOUL.md:
+//   - present → that device's own soul; we override the gateway's default.
+//   - absent  → hasSoul=false: inject nothing, leaving the agentic runtime
+//     (OpenClaw) to use its own default soul. We never override a soulless body.
+//
+// This is what makes "device → which soul" real: Lamp gets its soul, Dog its
+// own, Intern none — from the same binary, no embedded hardcode.
+func (s *Service) deviceSoulCore() (content []byte, hasSoul bool) {
+	devType := s.config.DeviceTypeOrDefault()
+	b, err := os.ReadFile(filepath.Join(devicesDir(), devType, "SOUL.md"))
+	if err != nil {
+		return nil, false
+	}
+	return b, true
+}
+
+// ensureSoulMDBlock wraps this device's SOUL.md as a marker-delimited core block
+// at the top of workspace/SOUL.md. The soul is resolved per device_type from
+// devices/<type>/SOUL.md (embedded fallback) — see deviceSoulCore. Anything the
+// owner writes below the closing `---` is preserved on subsequent onboarding
+// runs, mirroring the AGENTS.md / HEARTBEAT.md pattern. Returns true if the file
+// was modified. A device that declares no soul injects no block.
 func (s *Service) ensureSoulMDBlock() (bool, error) {
 	soulFile := filepath.Join(s.config.OpenclawConfigDir, "workspace", "SOUL.md")
 
-	coreContent, err := soulFS.ReadFile("resources/SOUL.md")
-	if err != nil {
-		return false, fmt.Errorf("read embedded SOUL.md: %w", err)
+	coreContent, hasSoul := s.deviceSoulCore()
+	if !hasSoul {
+		slog.Info("no SOUL.md for device — leaving the gateway's default soul (no override)",
+			"component", "onboarding", "device_type", s.config.DeviceTypeOrDefault())
+		return false, nil
 	}
 	soulMDBlock := lampMandatoryMarker + "\n" + strings.TrimSpace(string(coreContent)) + "\n---"
 
