@@ -200,7 +200,7 @@ Per-face motion opens a separate WS session per detected face and runs action re
 SPEECH_EMOTION_ENABLED = True
 SPEECH_EMOTION_FLUSH_S = 10.0               # Per-user buffer drain cadence
 SPEECH_EMOTION_DEDUP_WINDOW_S = 300.0       # (user, bucket) TTL — 5 min
-SPEECH_EMOTION_MIN_AUDIO_S = 3.0            # Skip utterances shorter than this (lelamp.config default)
+SPEECH_EMOTION_MIN_AUDIO_S = 3.0            # Skip utterances shorter than this (hal.config default)
 SPEECH_EMOTION_API_TIMEOUT_S = 15           # dlbackend HTTP timeout
 DL_SER_ENDPOINT = "/lelamp/api/dl/ser/recognize"
 ```

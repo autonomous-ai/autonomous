@@ -348,7 +348,7 @@ from fastapi.responses import JSONResponse
 Import config:
 
 ```py
-from lelamp.config import LOCAL_ONLY_API
+from hal.config import LOCAL_ONLY_API
 ```
 
 Add helper:
