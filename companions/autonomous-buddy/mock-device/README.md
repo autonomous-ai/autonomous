@@ -2,7 +2,7 @@
 
 Tiny Go server that mocks the device's buddy contract. Use it to test the macOS `autonomous-buddy` app end-to-end **without** running the real device Go server.
 
-It doubles as a **reference implementation** for the eventual device-side work: the file structure, types, and dispatch loop here mirror what `lamp/internal/buddy/` and `lamp/server/buddy/delivery/http/` will end up looking like.
+It doubles as a **reference implementation** for the eventual device-side work: the file structure, types, and dispatch loop here mirror what `os/services/internal/buddy/` and `os/services/server/buddy/delivery/http/` will end up looking like.
 
 ## Run
 
@@ -93,12 +93,12 @@ mock-device/
 
 When the real device-side work happens, expect roughly:
 
-- `lamp/server/buddy/delivery/http/handler_pair.go` ← `pairing.go`
-- `lamp/server/buddy/delivery/http/handler_ws.go` ← `ws.go` (HandleWS only)
-- `lamp/internal/buddy/dispatcher.go` ← `ws.go` (Dispatch + pending)
-- `lamp/internal/buddy/types.go` ← `command.go` (Command struct)
-- `lamp/internal/buddy/store.go` ← `state.go` (PairingRecord persistence — `buddies.json` instead of in-memory)
-- `lamp/internal/buddy/pairing.go` ← `state.go` (code generation + token issuance, with admin auth on /start)
+- `os/services/server/buddy/delivery/http/handler_pair.go` ← `pairing.go`
+- `os/services/server/buddy/delivery/http/handler_ws.go` ← `ws.go` (HandleWS only)
+- `os/services/internal/buddy/dispatcher.go` ← `ws.go` (Dispatch + pending)
+- `os/services/internal/buddy/types.go` ← `command.go` (Command struct)
+- `os/services/internal/buddy/store.go` ← `state.go` (PairingRecord persistence — `buddies.json` instead of in-memory)
+- `os/services/internal/buddy/pairing.go` ← `state.go` (code generation + token issuance, with admin auth on /start)
 
 ## What the mock does NOT do (vs production)
 

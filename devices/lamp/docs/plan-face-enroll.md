@@ -58,7 +58,7 @@ User sends photo + @mention via Telegram
   - Also handle: "who do you recognize?" → GET /face/status
   - Also handle: "forget face" / "reset faces" → POST /face/remove or /face/reset
 
-### 5. `lamp/internal/openclaw/onboarding.go`
+### 5. `os/services/internal/openclaw/onboarding.go`
 - Add `"face-enroll"` to the skills download list (~line 38-50)
 
 ## File list
@@ -66,7 +66,7 @@ User sends photo + @mention via Telegram
 - `os/hal/drivers/sensing/sensing_service.py` — named reference + load on init
 - `os/hal/server.py` — HTTP endpoints
 - `lamp/resources/openclaw-skills/face-enroll/SKILL.md` — new skill (new file)
-- `lamp/internal/openclaw/onboarding.go` — register skill
+- `os/services/internal/openclaw/onboarding.go` — register skill
 
 ## Storage
 ```

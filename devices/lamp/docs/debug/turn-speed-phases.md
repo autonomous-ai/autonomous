@@ -77,7 +77,7 @@ Read batch chạy ~700-950ms cho 3-5 reads concurrent (với `& wait`). Write ba
 **HW marker pattern** (đã có sẵn cho `/emotion`, `/audio/play`, `/dm`...): agent nhúng `[HW:/path:{json}]` vào TEXT reply. Lamp parse marker từ text, fire HTTP POST trong goroutine background, strip marker khỏi TTS. Agent không "thấy" như tool call → không có tool round-trip → không có post-write think pass.
 
 **Đụng:**
-- `lamp/server/openclaw/delivery/sse/handler_hw.go`: route Lamp-bound markers (path bắt đầu `/wellbeing/`) tới `http://127.0.0.1:5000/api/...` thay vì lelamp `5001`. Thêm flow log `hw_wellbeing`.
+- `os/services/server/openclaw/delivery/sse/handler_hw.go`: route Lamp-bound markers (path bắt đầu `/wellbeing/`) tới `http://127.0.0.1:5000/api/...` thay vì lelamp `5001`. Thêm flow log `hw_wellbeing`.
 - `lamp/resources/openclaw-skills/wellbeing/SKILL.md`: "What to write" rewrite — instruct `[HW:/wellbeing/log:{action,notes,user}]` thay curl exec. Giữ curl làm fallback nếu HW marker bị reject.
 
 **Gotcha — regex limit:** `hwMarkerRe` = `\[HW:(/[^:]+):(\{[^}]*\})\]` cấm `}` trong body. Wellbeing log body flat (`{action,notes,user}`) → OK. Nếu `notes` chứa `}` regex break — agent cần escape hoặc fallback curl.

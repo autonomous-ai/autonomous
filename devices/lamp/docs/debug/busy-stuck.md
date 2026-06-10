@@ -11,7 +11,7 @@ WARN  busy flag expired — auto-clearing (lifecycle.end likely missed) componen
 INFO  draining pending sensing events component=sensing count=N
 ```
 
-`busyTTL` is `5 * time.Minute` in `lamp/internal/openclaw/service_events.go:29`. After that the flag forcibly clears and queued sensing events drain (with high-frequency events coalesced + 60s expiry per `drainPendingEvents`).
+`busyTTL` is `5 * time.Minute` in `os/services/internal/openclaw/service_events.go:29`. After that the flag forcibly clears and queued sensing events drain (with high-frequency events coalesced + 60s expiry per `drainPendingEvents`).
 
 ## Root cause
 
@@ -26,8 +26,8 @@ OpenClaw heartbeat turn (target=none) ──────────────
 
 Files:
 - Hook source: `hooks/turn-gate/handler.ts`
-- Lamp handler: `lamp/server/openclaw/delivery/sse/handler_api_monitor.go` (`SetBusy`)
-- Auto-clear: `lamp/internal/openclaw/service_events.go` (`busyTTL`, `IsBusy`, `drainPendingEvents`)
+- Lamp handler: `os/services/server/openclaw/delivery/sse/handler_api_monitor.go` (`SetBusy`)
+- Auto-clear: `os/services/internal/openclaw/service_events.go` (`busyTTL`, `IsBusy`, `drainPendingEvents`)
 
 ## Confirm (3 commands)
 

@@ -63,7 +63,7 @@ Equivalent config exists in `imager/build.sh`.
 
 ### Lamp Go server listens on all interfaces
 
-In `lamp/server/server.go`:
+In `os/services/server/server.go`:
 
 ```go
 srv := &http.Server{
@@ -76,7 +76,7 @@ This binds to all interfaces. If port `5000` is reachable directly, nginx is not
 
 ### Routes are registered without auth middleware
 
-In `lamp/server/server.go`, the router uses:
+In `os/services/server/server.go`, the router uses:
 
 ```go
 r := gin.Default()
@@ -99,7 +99,7 @@ No authentication middleware is applied to `api` or sensitive subgroups.
 
 ### Evidence
 
-`lamp/server/server.go` creates `api := r.Group("api")` and then registers sensitive routes directly. Examples:
+`os/services/server/server.go` creates `api := r.Group("api")` and then registers sensitive routes directly. Examples:
 
 ```go
 system.POST("software-update/:target", s.softwareUpdate)
@@ -145,7 +145,7 @@ Introduce explicit API zones:
 
 ### Suggested implementation pattern
 
-#### File: `lamp/server/server.go`
+#### File: `os/services/server/server.go`
 
 Create middleware helpers:
 
@@ -206,7 +206,7 @@ Expected after fix:
 
 ### Evidence
 
-`lamp/server/server.go`:
+`os/services/server/server.go`:
 
 ```go
 func corsMiddleware() gin.HandlerFunc {
@@ -242,7 +242,7 @@ Best option: **remove CORS entirely** if web UI and `/api/` are same-origin thro
 
 If CORS is needed for dev, make it opt-in and restricted.
 
-#### File: `lamp/server/server.go`
+#### File: `os/services/server/server.go`
 
 Replace wildcard CORS with same-origin/explicit allowlist:
 
@@ -310,7 +310,7 @@ Expected: `403 Forbidden`.
 
 ### Evidence
 
-Route registration in `lamp/server/server.go`:
+Route registration in `os/services/server/server.go`:
 
 ```go
 system.POST("exec", s.execCommand)
@@ -350,7 +350,7 @@ Options:
 
 #### Option A — Delete route from production
 
-In `lamp/server/server.go`, remove:
+In `os/services/server/server.go`, remove:
 
 ```go
 system.POST("exec", s.execCommand)
@@ -617,7 +617,7 @@ func (h *DeviceHandler) GetConfig(c *gin.Context) {
 }
 ```
 
-Response struct includes secrets in `lamp/domain/device.go`:
+Response struct includes secrets in `os/services/domain/device.go`:
 
 ```go
 type ConfigResponse struct {
@@ -653,7 +653,7 @@ Split config into two APIs:
 1. **Public/sanitized config view**: no secrets, only booleans or masked values.
 2. **Secret update endpoint**: write-only; never returns stored secret values.
 
-#### File: `lamp/domain/device.go`
+#### File: `os/services/domain/device.go`
 
 Create sanitized response:
 
@@ -688,11 +688,11 @@ func maskSecret(v string) string {
 }
 ```
 
-#### File: `lamp/internal/device/service.go`
+#### File: `os/services/internal/device/service.go`
 
 Change `GetConfig()` to return sanitized response for remote UI. If a full config is needed internally, expose a separate internal method not bound to HTTP.
 
-#### File: `lamp/server/device/delivery/http/handler.go`
+#### File: `os/services/server/device/delivery/http/handler.go`
 
 Protect config endpoint:
 
@@ -1069,7 +1069,7 @@ Expected: `401`/`403`.
 
 ### Evidence
 
-Routes in `lamp/server/server.go`:
+Routes in `os/services/server/server.go`:
 
 ```go
 sensing.POST("event", s.sensingHandler.PostEvent)
@@ -1144,13 +1144,13 @@ Expected: `401`/`403`.
 
 ### Evidence
 
-`lamp/server/server.go`:
+`os/services/server/server.go`:
 
 ```go
 Addr: fmt.Sprintf(":%d", s.config.HttpPort)
 ```
 
-`lamp/server/config/config.go` has only:
+`os/services/server/config/config.go` has only:
 
 ```go
 HttpPort int `json:"httpPort" yaml:"httpPort" validate:"required"`
@@ -1239,7 +1239,7 @@ Expected: still works.
 
 ### Evidence
 
-`lamp/bootstrap/bootstrap.go`:
+`os/services/bootstrap/bootstrap.go`:
 
 ```go
 srv := &http.Server{Addr: fmt.Sprintf(":%d", port), Handler: r}
@@ -1298,7 +1298,7 @@ Expected: works.
 
 ### Local-only middleware
 
-File: `lamp/server/server.go` or new file `lamp/server/security.go`.
+File: `os/services/server/server.go` or new file `os/services/server/security.go`.
 
 ```go
 func isLoopbackHost(host string) bool {
@@ -1538,7 +1538,7 @@ Expected: `401`/`403` without auth; redacted with auth.
 
 ### Core server security
 
-- `lamp/server/server.go`
+- `os/services/server/server.go`
   - Replace wildcard CORS.
   - Add `localOnlyMiddleware`.
   - Add/admin wire auth middleware.
@@ -1546,33 +1546,33 @@ Expected: `401`/`403` without auth; redacted with auth.
   - Protect logs and OTA routes.
   - Optionally bind `Addr` using explicit `HttpHost`.
 
-- `lamp/server/config/config.go`
+- `os/services/server/config/config.go`
   - Add `HttpHost` if direct bind control is desired.
   - Add admin token path/config if implementing token auth.
   - Avoid exposing admin token via `ConfigResponse`.
 
 ### Device config/secret handling
 
-- `lamp/domain/device.go`
+- `os/services/domain/device.go`
   - Replace `ConfigResponse` for HTTP with redacted/sanitized response.
   - Keep internal config struct separate from API response.
 
-- `lamp/internal/device/service.go`
+- `os/services/internal/device/service.go`
   - Update `GetConfig()` to return sanitized data for HTTP.
   - Add validation to `UpdateConfig()` for base URLs and high-risk fields.
   - Debounce/rate-limit service restarts triggered by config updates.
 
-- `lamp/server/device/delivery/http/handler.go`
+- `os/services/server/device/delivery/http/handler.go`
   - Require auth for `GetConfig`, `UpdateConfig`, `ChangeChannel`.
   - Restrict `Setup` to setup mode only.
 
 ### OpenClaw config exposure
 
-- `lamp/internal/openclaw/service_chat.go`
+- `os/services/internal/openclaw/service_chat.go`
   - Avoid returning raw `openclaw.json` to remote handlers.
   - Add redacted config summary method.
 
-- `lamp/server/openclaw/delivery/sse/handler_api_monitor.go`
+- `os/services/server/openclaw/delivery/sse/handler_api_monitor.go`
   - Replace raw `ConfigJSON` response or local-only guard it.
 
 - Frontend callers to update if endpoint changes:
@@ -1582,13 +1582,13 @@ Expected: `401`/`403` without auth; redacted with auth.
 
 ### Logs
 
-- `lamp/server/server.go`
+- `os/services/server/server.go`
   - Protect `logs.GET("tail")` and `logs.GET("stream")`.
   - Redact secret-like patterns in log output.
 
 ### Bootstrap
 
-- `lamp/bootstrap/bootstrap.go`
+- `os/services/bootstrap/bootstrap.go`
   - Bind health/update server to `127.0.0.1` or protect `/force-check`.
 
 ### Nginx integration

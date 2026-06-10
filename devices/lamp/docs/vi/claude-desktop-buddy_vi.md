@@ -543,7 +543,7 @@ prompt cũ.
 
 ## 10. Phối hợp phía Lamp
 
-### Watcher đổi config (lamp/server/server.go)
+### Watcher đổi config (os/services/server/server.go)
 
 Khi user setup device qua `POST /api/device/setup`, Lamp save
 `device_id` vào `config/config.json` và notify config bus in-process.

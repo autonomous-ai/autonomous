@@ -6,7 +6,7 @@ Observed 2026-04-22 qua run `lamp-chat-154-1776830220031` (skill watcher notify)
 
 ## Vấn đề
 
-`flow.Log("chat_send", ...)` tại `lamp/internal/openclaw/service.go:2033` không có field `type`:
+`flow.Log("chat_send", ...)` tại `os/services/internal/openclaw/service.go:2033` không có field `type`:
 
 ```go
 flow.Log("chat_send", map[string]any{
@@ -24,11 +24,11 @@ Tất cả các system-level callers của `SendChatMessage` bị mờ type tron
 
 | Caller | File:line | Message | Nature |
 |---|---|---|---|
-| Skill watcher | `lamp/internal/openclaw/skill_watcher.go:100` | `[system] The following skills have been updated...` | system.skill_updated |
-| Wake greeting | `lamp/server/server.go:414` | `You just woke up. Greet the user briefly.` | system.wake |
-| Compact | `lamp/server/openclaw/delivery/sse/handler.go:725` | `/compact` | system.compact |
+| Skill watcher | `os/services/internal/openclaw/skill_watcher.go:100` | `[system] The following skills have been updated...` | system.skill_updated |
+| Wake greeting | `os/services/server/server.go:414` | `You just woke up. Greet the user briefly.` | system.wake |
+| Compact | `os/services/server/openclaw/delivery/sse/handler.go:725` | `/compact` | system.compact |
 
-So sánh với sensing events có structured type: `voice`, `voice_command`, `presence.enter`, `presence.leave`, `presence.away`, `motion.activity`, `emotion.detected` (`lamp/internal/sensing/service.go:245-262`).
+So sánh với sensing events có structured type: `voice`, `voice_command`, `presence.enter`, `presence.leave`, `presence.away`, `motion.activity`, `emotion.detected` (`os/services/internal/sensing/service.go:245-262`).
 
 ## Fix idea
 

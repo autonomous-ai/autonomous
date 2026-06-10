@@ -201,7 +201,7 @@ The agent is LLM-driven so "the code is correct" doesn't guarantee "the agent co
 ### 6.1 Agent skips mood logging entirely
 **Symptom:** `tool_call` trace contains no `/api/mood/log` call. Mood JSONL empty despite events firing.
 **Diagnose:** grep `tool_call` for `mood/log` — zero hits.
-**Fix path:** strengthen MANDATORY directive in `lamp/server/sensing/delivery/http/handler.go` and `user-emotion-detection/SKILL.md` to explicitly chain to Mood skill.
+**Fix path:** strengthen MANDATORY directive in `os/services/server/sensing/delivery/http/handler.go` and `user-emotion-detection/SKILL.md` to explicitly chain to Mood skill.
 
 ### 6.2 Agent bijas mood payload schema
 **Symptom:** `POST /api/mood/log` returns `Field validation for 'Mood' failed on the 'required' tag`.
@@ -237,7 +237,7 @@ The agent is LLM-driven so "the code is correct" doesn't guarantee "the agent co
 
 If Lamp suddenly stops forwarding sensing events — log shows a stream of `sensing event queued — agent busy ... runId=` (empty runId) but OpenClaw is idle (`active=0 queued=0`) — the busy flag is wedged. Most common trigger is an OpenClaw heartbeat / memoryFlush turn (`target=none`) that never emits `lifecycle.end` SSE.
 
-See **[`busy-stuck.md`](./busy-stuck.md)** for full root-cause + diagnostic commands + fix paths. Self-heals after `busyTTL = 5 min` (`lamp/internal/openclaw/service_events.go:29`).
+See **[`busy-stuck.md`](./busy-stuck.md)** for full root-cause + diagnostic commands + fix paths. Self-heals after `busyTTL = 5 min` (`os/services/internal/openclaw/service_events.go:29`).
 
 ---
 

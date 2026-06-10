@@ -459,7 +459,7 @@ HTTP/1.1 200 OK
 
 ### Evidence
 
-`lamp/server/server.go:196-205`:
+`os/services/server/server.go:196-205`:
 
 ```go
 func corsMiddleware() gin.HandlerFunc {
@@ -591,7 +591,7 @@ Expected: works normally.
 
 ### Evidence
 
-`lamp/server/server.go` routes:
+`os/services/server/server.go` routes:
 
 ```go
 system.POST("exec", s.execCommand)
@@ -640,7 +640,7 @@ Use build tags or config flag, e.g. `LAMP_ENABLE_DEV_ADMIN=false` default.
 
 #### Recommended strategy B — Local-only middleware
 
-Add a local-only middleware in `lamp/server/server.go`:
+Add a local-only middleware in `os/services/server/server.go`:
 
 ```go
 func localOnlyMiddleware() gin.HandlerFunc {
@@ -1260,7 +1260,7 @@ Files to edit:
 - `scripts/maintenance/patch-nginx-gw.sh`
   - Ensure any generated `/gw/` block includes local-only deny rules.
 
-- `lamp/server/server.go`
+- `os/services/server/server.go`
   - Replace wildcard CORS.
   - Add local-only middleware.
   - Protect or remove `system exec`, `system shell`, `openclaw config-json`.
