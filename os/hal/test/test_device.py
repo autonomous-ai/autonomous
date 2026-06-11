@@ -52,6 +52,17 @@ class TestParsing(unittest.TestCase):
         self.assertEqual(caps["motion"].routes, ["servo"])
         self.assertFalse(caps["motion"].required)
 
+    def test_parse_capability_driver(self):
+        caps = parse_capabilities(extract_front_matter(SAMPLE))
+        self.assertEqual(caps["motion"].driver, "feetech")  # informational family
+        self.assertIsNone(caps["audio"].driver)             # none declared
+
+    def test_lamp_real_drivers(self):
+        caps = load_device("lamp", DEVICES_DIR).capabilities
+        self.assertEqual(caps["motion"].driver, "feetech")
+        self.assertEqual(caps["light"].driver, "ws2812")
+        self.assertEqual(caps["display"].driver, "gc9a01")
+
     def test_declared_routes_required_rollup(self):
         dev = parse_device("sample", SAMPLE)
         routes = dev.declared_routes()

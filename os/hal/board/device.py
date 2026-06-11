@@ -40,6 +40,7 @@ class Capability:
     group: str
     routes: List[str]
     required: bool
+    driver: Optional[str] = None   # implementation family (informational); NOT gated
     safety: Optional[str] = None
 
 
@@ -63,6 +64,13 @@ def _parse_required(body: str) -> bool:
 
 def _parse_safety(body: str) -> Optional[str]:
     m = re.search(r"safety:\s*([^\s,}]+)", body)
+    return m.group(1) if m else None
+
+
+def _parse_driver(body: str) -> Optional[str]:
+    """The capability's `driver:` implementation family, or None. Informational
+    only — the route, not the driver, is the stable contract (drivers churn)."""
+    m = re.search(r"driver:\s*([^\s,}]+)", body)
     return m.group(1) if m else None
 
 
@@ -140,6 +148,7 @@ def parse_capabilities(front_matter: str) -> Dict[str, Capability]:
             group=group,
             routes=_parse_routes(body),
             required=_parse_required(body),
+            driver=_parse_driver(body),
             safety=_parse_safety(body),
         )
     return caps

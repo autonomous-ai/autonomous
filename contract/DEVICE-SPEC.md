@@ -54,7 +54,9 @@ Each entry under `capabilities` is a group from `contract/capabilities.md`:
 capabilities:
   motion:
     routes: [servo]           # HAL routes this group mounts
-    driver: feetech           # implementation family (informational)
+    driver: feetech           # implementation family — informational, surfaced
+                              # via GET /device; NOT gated (the route is the
+                              # contract, the driver behind it churns freely)
     required: false           # if true, a missing driver is a boot failure
     safety: SAFETY.md#motion  # bounds that govern this capability
 ```

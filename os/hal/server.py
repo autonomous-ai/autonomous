@@ -946,6 +946,9 @@ def device():
         "board": _board_id,
         "boards": _profile.boards,
         "routes": sorted(_plan.mounted),
+        # Declared implementation families (informational hardware manifest; the
+        # route is the contract, the driver behind it is free to change).
+        "drivers": {g: c.driver for g, c in _profile.capabilities.items() if c.driver},
     }
 
 
