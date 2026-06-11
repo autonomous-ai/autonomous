@@ -1,6 +1,6 @@
 ---
 schema: autonomous.device.v1
-id: autonomous-lamp
+id: lamp
 name: Autonomous Lamp
 type: desk_robot
 boards: [raspberry_pi_4, raspberry_pi_5, orangepi_sun60]

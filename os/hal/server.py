@@ -934,6 +934,21 @@ def version():
     return {"version": app.version}
 
 
+@app.get("/device", tags=["System"])
+def device():
+    """This device's identity from DEVICE.md (id/name/type/schema) plus the
+    board the runtime resolved and the capability routes it mounted."""
+    return {
+        "id": _profile.id,
+        "name": _profile.name,
+        "type": _profile.type,
+        "schema": _profile.schema,
+        "board": _board_id,
+        "boards": _profile.boards,
+        "routes": sorted(_plan.mounted),
+    }
+
+
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 def health():
     """Check which hardware drivers are available."""

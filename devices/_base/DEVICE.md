@@ -1,6 +1,6 @@
 ---
 schema: autonomous.device.v1
-id: autonomous-base
+id: _base
 name: Autonomous Base Device
 type: base
 abstract: true

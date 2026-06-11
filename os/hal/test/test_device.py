@@ -25,6 +25,8 @@ DEVICES_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "..", "devices"))
 SAMPLE = """---
 schema: autonomous.device.v1
 id: sample
+name: Sample Device
+type: test_device
 capabilities:
   audio:  { routes: [audio, speaker, voice], required: true }
   motion: { routes: [servo], driver: feetech, required: false, safety: SAFETY.md#motion }
@@ -84,6 +86,23 @@ class TestSchemaValidation(unittest.TestCase):
     def test_real_devices_declare_v1(self):
         self.assertEqual(load_device("lamp", DEVICES_DIR).schema, "autonomous.device.v1")
         self.assertEqual(load_device("intern", DEVICES_DIR).schema, "autonomous.device.v1")
+
+
+class TestIdentityFields(unittest.TestCase):
+    def test_parse_id_name_type(self):
+        dev = parse_device("sample", SAMPLE)
+        self.assertEqual(dev.id, "sample")
+        self.assertEqual(dev.name, "Sample Device")
+        self.assertEqual(dev.type, "test_device")
+
+    def test_id_must_match_folder(self):
+        # SAMPLE declares id: sample; loading it as a different device_type aborts.
+        with self.assertRaises(ValueError):
+            parse_device("other", SAMPLE)
+
+    def test_real_devices_id_equals_folder(self):
+        for t in ("lamp", "intern", "unitree-go2w"):
+            self.assertEqual(load_device(t, DEVICES_DIR).id, t)
 
 
 class TestBoardsField(unittest.TestCase):

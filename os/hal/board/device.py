@@ -74,6 +74,12 @@ def parse_boards(front_matter: str) -> List[str]:
     return [b.strip() for b in m.group(1).split(",") if b.strip()]
 
 
+def _parse_scalar(front_matter: str, key: str) -> str:
+    """A top-level `key: value` scalar from the front matter, trimmed, or ''."""
+    m = re.search(r"^" + re.escape(key) + r":\s*(.+?)\s*$", front_matter, re.MULTILINE)
+    return m.group(1) if m else ""
+
+
 def validate_schema(front_matter: str) -> str:
     """Parse and validate the `schema:` ABI tag. Returns the raw schema string.
 
@@ -141,7 +147,15 @@ def parse_capabilities(front_matter: str) -> Dict[str, Capability]:
 
 @dataclass(frozen=True)
 class DeviceProfile:
+    # NOTE two distinct concepts, deliberately not merged:
+    #   device_type — the class/folder id this profile mounts from (lamp, intern,
+    #                 unitree-go2w); == `id`; what Go's config.DeviceType selects.
+    #   type        — the DEVICE.md `type:` form-factor category (desk_robot,
+    #                 desk_agent, mobile_robot); a coarse grouping, display-only.
     device_type: str
+    id: str
+    name: str
+    type: str
     schema: str
     boards: List[str]
     capabilities: Dict[str, Capability]
@@ -159,8 +173,20 @@ class DeviceProfile:
 def parse_device(device_type: str, text: str) -> DeviceProfile:
     front_matter = extract_front_matter(text)
     schema = validate_schema(front_matter)  # fail loud on missing/unknown ABI
+    dev_id = _parse_scalar(front_matter, "id")
+    # `id` is the device's stable identity; it must equal the folder it is
+    # mounted from (device_type). A mismatch means a DEVICE.md copied into the
+    # wrong folder or a typo'd id — a deploy fault, so fail loud (DEVICE-SPEC #3).
+    if dev_id != device_type:
+        raise ValueError(
+            f"DEVICE.md id '{dev_id}' does not match its folder '{device_type}' — "
+            f"id must equal the device folder name"
+        )
     return DeviceProfile(
         device_type=device_type,
+        id=dev_id,
+        name=_parse_scalar(front_matter, "name"),
+        type=_parse_scalar(front_matter, "type"),
         schema=schema,
         boards=parse_boards(front_matter),
         capabilities=parse_capabilities(front_matter),

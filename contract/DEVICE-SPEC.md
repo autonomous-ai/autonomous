@@ -18,6 +18,9 @@ At boot the runtime reads the front matter and:
 0b. **Verifies the `boards` gate** — resolves the physical board and aborts if it
    is unidentifiable or not in `boards`. Wrong board means wrong pin maps, a
    hardware fault, not a configuration choice.
+0c. **Checks `id` against the folder** — `id` must equal the directory the
+   profile is mounted from; a mismatch is a misplaced or mistyped profile and
+   aborts boot. `id`/`name`/`type` are then exposed via HAL `GET /device`.
 1. Brings up **only** the capability subsystems the device declares.
 2. **Skips** undeclared capabilities silently — that is a different device, by design.
 3. **Fails loudly** if a *declared* capability's driver is missing or won't initialize —
@@ -33,9 +36,9 @@ tell "no servo by design" from "servo lib missing" from "servo broken."
 | Field | Required | Meaning |
 |-------|----------|---------|
 | `schema` | yes | Contract version. `autonomous.device.v1`. |
-| `id` | yes | Stable device id, e.g. `autonomous-lamp`. |
-| `name` | yes | Display name. |
-| `type` | yes | Free-form class (`desk_robot`, `desk_agent`). |
+| `id` | yes | Stable device id. **Must equal the device folder name** (`devices/<id>/`); the runtime aborts boot on a mismatch. |
+| `name` | yes | Display name. Exposed via HAL `GET /device`. |
+| `type` | yes | Free-form class (`desk_robot`, `desk_agent`). Exposed via HAL `GET /device`. |
 | `boards` | yes | Supported boards. At boot the runtime resolves the physical board (`os/hal/board`) and aborts if it is unknown or not in this list. |
 | `gateway` | yes | Default agentic gateway + protocol. |
 | `capabilities` | yes | Map of capability group → declaration (below). |
