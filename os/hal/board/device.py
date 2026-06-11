@@ -66,6 +66,14 @@ def _parse_safety(body: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def parse_boards(front_matter: str) -> List[str]:
+    """The `boards: [a, b, c]` flow list, or [] if absent."""
+    m = re.search(r"^boards:\s*\[([^\]]*)\]", front_matter, re.MULTILINE)
+    if not m:
+        return []
+    return [b.strip() for b in m.group(1).split(",") if b.strip()]
+
+
 def validate_schema(front_matter: str) -> str:
     """Parse and validate the `schema:` ABI tag. Returns the raw schema string.
 
@@ -135,6 +143,7 @@ def parse_capabilities(front_matter: str) -> Dict[str, Capability]:
 class DeviceProfile:
     device_type: str
     schema: str
+    boards: List[str]
     capabilities: Dict[str, Capability]
 
     def declared_routes(self) -> Dict[str, bool]:
@@ -153,6 +162,7 @@ def parse_device(device_type: str, text: str) -> DeviceProfile:
     return DeviceProfile(
         device_type=device_type,
         schema=schema,
+        boards=parse_boards(front_matter),
         capabilities=parse_capabilities(front_matter),
     )
 

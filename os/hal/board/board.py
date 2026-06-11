@@ -100,6 +100,21 @@ except (OSError, ValueError, KeyError, TypeError) as e:
     ) from e
 
 
+def matched_board_id(model: Optional[str] = None) -> Optional[str]:
+    """The board whose `match` substrings appear in the device-tree model, or
+    None if the model matches no known board. Pure; testable.
+
+    Unlike detect_board_id this does NOT fall back to `default_board`: the
+    board-support gate must tell a genuine hardware match from a blind default,
+    so it needs to see the None.
+    """
+    m = model if model is not None else read_device_tree_model()
+    for substrings, bid in _MATCHERS:
+        if any(s in m for s in substrings):
+            return bid
+    return None
+
+
 def detect_board_id(model: Optional[str] = None) -> str:
     """Classify the board from the device-tree model string. Pure; testable.
 
@@ -107,11 +122,34 @@ def detect_board_id(model: Optional[str] = None) -> str:
     file order — keep them non-overlapping). Unrecognized/empty model falls back
     to `default_board`. e.g. 'pi 5'→Pi 5, 'pi 4'→Pi 4, 'sun60iw2'→OrangePi 4 Pro.
     """
+    return matched_board_id(model) or DEFAULT_BOARD_ID
+
+
+def assert_board_supported(declared: List[str], model: Optional[str] = None) -> str:
+    """Fail loud unless the physical board is one this device declares in
+    DEVICE.md `boards`. Returns the resolved board id.
+
+    Wrong hardware means wrong pin maps; actuating servos/LEDs against an
+    unverified board is a hardware fault, not graceful degradation
+    (DEVICE-SPEC rule #3). Two ways to abort:
+      - the model matches no boards.json entry → unidentifiable hardware, no
+        wiring profile can be trusted;
+      - it matches a real board the device does not declare → unsupported.
+    """
     m = model if model is not None else read_device_tree_model()
-    for substrings, bid in _MATCHERS:
-        if any(s in m for s in substrings):
-            return bid
-    return DEFAULT_BOARD_ID
+    matched = matched_board_id(m)
+    if matched is None:
+        raise RuntimeError(
+            f"Unknown board: device-tree model {m!r} matches no entry in boards.json "
+            f"(device declares boards {declared}). Refusing to boot on unidentified "
+            f"hardware — wiring is unverifiable."
+        )
+    if declared and matched not in declared:
+        raise RuntimeError(
+            f"Board '{matched}' is not supported by this device (DEVICE.md boards: "
+            f"{declared}). Refusing to boot — pin maps would be wrong."
+        )
+    return matched
 
 
 @lru_cache(maxsize=1)

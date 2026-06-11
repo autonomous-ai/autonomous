@@ -15,6 +15,9 @@ At boot the runtime reads the front matter and:
 0. **Validates `schema`** — a missing, malformed, or unknown-major tag (e.g.
    `autonomous.device.v2` on a runtime that only understands `v1`) aborts boot.
    The runtime refuses to mount a body against an ABI it cannot read.
+0b. **Verifies the `boards` gate** — resolves the physical board and aborts if it
+   is unidentifiable or not in `boards`. Wrong board means wrong pin maps, a
+   hardware fault, not a configuration choice.
 1. Brings up **only** the capability subsystems the device declares.
 2. **Skips** undeclared capabilities silently — that is a different device, by design.
 3. **Fails loudly** if a *declared* capability's driver is missing or won't initialize —
@@ -33,7 +36,7 @@ tell "no servo by design" from "servo lib missing" from "servo broken."
 | `id` | yes | Stable device id, e.g. `autonomous-lamp`. |
 | `name` | yes | Display name. |
 | `type` | yes | Free-form class (`desk_robot`, `desk_agent`). |
-| `boards` | yes | Supported boards; resolved by `os/hal/board`. |
+| `boards` | yes | Supported boards. At boot the runtime resolves the physical board (`os/hal/board`) and aborts if it is unknown or not in this list. |
 | `gateway` | yes | Default agentic gateway + protocol. |
 | `capabilities` | yes | Map of capability group → declaration (below). |
 | `soul_ref` | no | Soul artifact for this body: a path read relative to the device folder (e.g. `SOUL.md`), or an `http(s)://` URL the runtime downloads. Absent → the gateway's default soul. |

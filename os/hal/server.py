@@ -722,6 +722,15 @@ _route_available = {
 
 # DEVICE.md is required — _device_profile() fail-louds if it's missing/unparseable.
 _profile = _device_profile()
+
+# Board gate: refuse to boot on hardware this device doesn't declare in
+# DEVICE.md `boards`. Wrong/unknown board → wrong pin maps → fail loud before we
+# mount any actuating route (raw match, so the default_board fallback can't mask
+# an unsupported board).
+from hal.board.board import assert_board_supported
+_board_id = assert_board_supported(_profile.boards)
+logger.info("Board gate: device=%s board=%s declared=%s", _resolve_device_type(), _board_id, _profile.boards)
+
 from hal.board.device import plan_mounts
 
 # Full declared surface (incl. `speaker`). Availability = driver importable.

@@ -86,6 +86,17 @@ class TestSchemaValidation(unittest.TestCase):
         self.assertEqual(load_device("intern", DEVICES_DIR).schema, "autonomous.device.v1")
 
 
+class TestBoardsField(unittest.TestCase):
+    def test_parse_boards_flow_list(self):
+        dev = parse_device("sample", SAMPLE)
+        self.assertEqual(dev.boards, [])  # SAMPLE declares none
+
+    def test_lamp_declares_its_boards(self):
+        lamp = load_device("lamp", DEVICES_DIR)
+        self.assertIn("orangepi_sun60", lamp.boards)
+        self.assertIn("raspberry_pi_5", lamp.boards)
+
+
 class TestRealDeviceFiles(unittest.TestCase):
     def test_lamp_is_maximal(self):
         lamp = load_device("lamp", DEVICES_DIR)

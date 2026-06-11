@@ -4,8 +4,10 @@ import unittest
 from hal.board.board import (
     DEFAULT_BOARD_ID,
     PROFILES,
+    assert_board_supported,
     board_profile,
     detect_board_id,
+    matched_board_id,
     read_device_tree_model,
 )
 
@@ -30,6 +32,35 @@ class TestDetectBoardId(unittest.TestCase):
         # nonexistent path -> '' -> default board (mirrors driver OSError handling)
         self.assertEqual(read_device_tree_model("/no/such/proc/model"), "")
         self.assertEqual(detect_board_id(read_device_tree_model("/no/such/proc/model")), DEFAULT_BOARD_ID)
+
+
+class TestMatchedBoardId(unittest.TestCase):
+    """matched_board_id is the raw matcher with NO default fallback."""
+
+    def test_real_match_returns_board(self):
+        self.assertEqual(matched_board_id("raspberry pi 5 model b"), "raspberry_pi_5")
+
+    def test_unknown_returns_none_not_default(self):
+        self.assertIsNone(matched_board_id("some-other-sbc"))
+        self.assertIsNone(matched_board_id(""))
+
+
+class TestBoardSupportGate(unittest.TestCase):
+    """assert_board_supported fails loud on wrong/unknown hardware."""
+
+    def test_supported_board_passes(self):
+        bid = assert_board_supported(["raspberry_pi_5", "orangepi_sun60"], "raspberry pi 5 model b")
+        self.assertEqual(bid, "raspberry_pi_5")
+
+    def test_unsupported_board_aborts(self):
+        # Pi 5 hardware, but the device only declares OrangePi.
+        with self.assertRaises(RuntimeError):
+            assert_board_supported(["orangepi_sun60"], "raspberry pi 5 model b")
+
+    def test_unknown_board_aborts(self):
+        # Model matches nothing in boards.json -> unidentifiable -> abort.
+        with self.assertRaises(RuntimeError):
+            assert_board_supported(["raspberry_pi_5"], "some-other-sbc")
 
 
 class TestProfiles(unittest.TestCase):
