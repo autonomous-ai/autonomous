@@ -54,9 +54,10 @@ DELEGATE_TOOL: dict[str, Any] = {
         "properties": {
             "message": {
                 "type": "string",
-                "description": "A short summary of the user's request to pass to the main system.",
+                "description": "A short summary of the user's request to pass to the main system. Must not be empty.",
             },
         },
+        "required": ["message"],
     },
 }
 

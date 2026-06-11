@@ -126,11 +126,27 @@ class RealtimeContextManager:
 
     # --- Private loaders ---
 
+    LANGUAGE_NAMES: dict[str, str] = {
+        "en": "English",
+        "vi": "Vietnamese",
+        "zh-CN": "Chinese (Simplified)",
+        "zh-TW": "Chinese (Traditional)",
+        "ko": "Korean",
+        "ja": "Japanese",
+        "fr": "French",
+        "de": "German",
+        "es": "Spanish",
+        "pt": "Portuguese",
+        "id": "Indonesian",
+        "th": "Thai",
+    }
+
     def _load_system_prompt(self) -> str:
-        """Load system_prompt.md with {language} placeholder resolved."""
+        """Load system_prompt.md with {language} placeholder resolved to full name."""
         try:
             template: str = self.DEFAULT_PROMPT_PATH.read_text(encoding="utf-8").strip()
-            return template.replace("{language}", self._language)
+            lang_name: str = self.LANGUAGE_NAMES.get(self._language, self._language)
+            return template.replace("{language}", lang_name)
         except FileNotFoundError:
             return ""
 

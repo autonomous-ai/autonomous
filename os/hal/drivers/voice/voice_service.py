@@ -984,7 +984,7 @@ class VoiceService:
                 elif rt_delegated:
                     # Delegated — send voice agent's summary + STT transcript to Lamp
                     if rt_delegate_msg:
-                        lamp_msg: str = f"{rt_delegate_msg}\n[transcript] {final_msg}" if final_msg else rt_delegate_msg
+                        lamp_msg: str = f"[voice-instruction] {rt_delegate_msg}\n[transcript] {final_msg}"
                     else:
                         lamp_msg = final_msg
                     logger.info("[realtime] Delegated with message: %r", lamp_msg[:100] if lamp_msg else "")
