@@ -913,7 +913,7 @@ retry() {
   echo "ERROR: failed \$max attempts"; return 1
 }
 [ "\$(id -u)" -ne 0 ] && { echo "Run as root."; exit 1; }
-[ \$# -lt 1 ] && { echo "Usage: software-update <bootstrap|os-server|hal|openclaw|web>"; exit 1; }
+[ \$# -lt 1 ] && { echo "Usage: software-update <bootstrap|os-server|hal|openclaw|web|device>"; exit 1; }
 
 # Wait for NTP time sync (RPi has no battery-backed RTC; clock may be wrong on boot)
 for i in \$(seq 1 10); do
@@ -922,11 +922,21 @@ for i in \$(seq 1 10); do
   sleep 2
 done
 KIND="\$1"
-case "\$KIND" in bootstrap|os-server|hal|openclaw|web) ;; *) echo "Unknown: \$KIND (bootstrap, os-server, hal, openclaw, web)"; exit 1 ;; esac
+case "\$KIND" in bootstrap|os-server|hal|openclaw|web|device) ;; *) echo "Unknown: \$KIND (bootstrap, os-server, hal, openclaw, web, device)"; exit 1 ;; esac
 META="\$(mktemp)"
 retry "curl -fsSL -H 'Cache-Control: no-cache' -o '\$META' '\$OTA_METADATA_URL'" 5
-URL=\$(jq -r --arg k "\$KIND" '.[\$k].url // empty' "\$META")
-VER=\$(jq -r --arg k "\$KIND" '.[\$k].version // empty' "\$META")
+if [ "\$KIND" = "device" ]; then
+  # Device profile lives nested under devices.<type>; resolve THIS device's type
+  # (no lamp fallback — wrong persona is worse than refusing).
+  DEVICE_TYPE="\$(grep -E '^DEVICE_TYPE=' /opt/hal/.env 2>/dev/null | cut -d= -f2)"
+  [ -z "\$DEVICE_TYPE" ] && DEVICE_TYPE="\$(jq -r '.device_type // empty' /root/config/config.json 2>/dev/null)"
+  [ -z "\$DEVICE_TYPE" ] && { echo "ERROR: device_type not found in /opt/hal/.env or /root/config/config.json"; exit 1; }
+  URL=\$(jq -r --arg t "\$DEVICE_TYPE" '.devices[\$t].url // empty' "\$META")
+  VER=\$(jq -r --arg t "\$DEVICE_TYPE" '.devices[\$t].version // empty' "\$META")
+else
+  URL=\$(jq -r --arg k "\$KIND" '.[\$k].url // empty' "\$META")
+  VER=\$(jq -r --arg k "\$KIND" '.[\$k].version // empty' "\$META")
+fi
 rm -f "\$META"
 [ -z "\$URL" ] && [ "\$KIND" != "openclaw" ] && { echo "ERROR: no url for \$KIND"; exit 1; }
 echo "Installing \$KIND \$VER..."
@@ -965,6 +975,16 @@ elif [ "\$KIND" = "openclaw" ]; then
   V="\${VER:-latest}"
   npm install -g "openclaw@\${V}" || { echo "npm install openclaw failed"; exit 1; }
   systemctl restart openclaw 2>/dev/null || true
+elif [ "\$KIND" = "device" ]; then
+  DEVICES_DIR="\$(grep -E '^DEVICES_DIR=' /opt/hal/.env 2>/dev/null | cut -d= -f2)"
+  [ -z "\$DEVICES_DIR" ] && DEVICES_DIR="/opt/devices"
+  DEST="\$DEVICES_DIR/\$DEVICE_TYPE"
+  curl -fsSL -o /tmp/device.zip "\$URL"
+  mkdir -p "\$DEST"
+  unzip -o -q /tmp/device.zip -d "\$DEST"
+  rm -f /tmp/device.zip
+  systemctl restart os-server 2>/dev/null || true
+  systemctl restart hal 2>/dev/null || true
 fi
 echo "\$KIND updated to \$VER"
 SWUPDATE

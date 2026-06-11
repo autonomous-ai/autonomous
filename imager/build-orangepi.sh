@@ -644,11 +644,11 @@ if [ -z "\$OTA_METADATA_URL" ]; then
 fi
 echo "[software-update] OTA metadata: \$OTA_METADATA_URL"
 [ "\$(id -u)" -ne 0 ] && { echo "Run as root."; exit 1; }
-[ \$# -ne 1 ] && { echo "Usage: software-update <os-server|openclaw|bootstrap|web|hal|claude-desktop-buddy>"; exit 1; }
+[ \$# -ne 1 ] && { echo "Usage: software-update <os-server|openclaw|bootstrap|web|hal|claude-desktop-buddy|device>"; exit 1; }
 APP="\$1"
 case "\$APP" in
-  os-server|openclaw|bootstrap|web|hal|claude-desktop-buddy) ;;
-  *) echo "Unknown app: \$APP. Use os-server, openclaw, bootstrap, web, hal, or claude-desktop-buddy."; exit 1 ;;
+  os-server|openclaw|bootstrap|web|hal|claude-desktop-buddy|device) ;;
+  *) echo "Unknown app: \$APP. Use os-server, openclaw, bootstrap, web, hal, claude-desktop-buddy, or device."; exit 1 ;;
 esac
 
 METADATA_TMP=\$(mktemp)
@@ -656,9 +656,20 @@ ZIP_TMP=""
 DIR_TMP=""
 trap 'rm -f "\$METADATA_TMP" "\$ZIP_TMP"; rm -rf "\$DIR_TMP"' EXIT
 curl -fsSL -H "Cache-Control: no-cache" -H "Pragma: no-cache" -o "\$METADATA_TMP" "\$OTA_METADATA_URL" || { echo "Failed to fetch metadata from \$OTA_METADATA_URL"; exit 1; }
-META_KEY="\$APP"
-VERSION=\$(jq -r --arg a "\$META_KEY" '.[\$a].version // empty' "\$METADATA_TMP")
-URL=\$(jq -r --arg a "\$META_KEY" '.[\$a].url // empty' "\$METADATA_TMP")
+if [ "\$APP" = "device" ]; then
+  # Device profile lives nested under devices.<type>; resolve THIS device's type.
+  DEVICE_TYPE="\$(grep -E '^DEVICE_TYPE=' /opt/hal/.env 2>/dev/null | cut -d= -f2)"
+  [ -z "\$DEVICE_TYPE" ] && DEVICE_TYPE="\$(jq -r '.device_type // empty' /root/config/config.json 2>/dev/null)"
+  # No lamp fallback: pulling the lamp profile onto a device whose class can't be
+  # resolved would overwrite its persona with the wrong one — refuse instead.
+  [ -z "\$DEVICE_TYPE" ] && { echo "ERROR: device_type not found in /opt/hal/.env or /root/config/config.json — cannot resolve device profile"; exit 1; }
+  VERSION=\$(jq -r --arg t "\$DEVICE_TYPE" '.devices[\$t].version // empty' "\$METADATA_TMP")
+  URL=\$(jq -r --arg t "\$DEVICE_TYPE" '.devices[\$t].url // empty' "\$METADATA_TMP")
+else
+  META_KEY="\$APP"
+  VERSION=\$(jq -r --arg a "\$META_KEY" '.[\$a].version // empty' "\$METADATA_TMP")
+  URL=\$(jq -r --arg a "\$META_KEY" '.[\$a].url // empty' "\$METADATA_TMP")
+fi
 [ -z "\$VERSION" ] && { echo "Metadata has no version for \$APP"; exit 1; }
 
 if [ "\$APP" = "os-server" ]; then
@@ -731,6 +742,18 @@ elif [ "\$APP" = "claude-desktop-buddy" ]; then
   echo "\$VERSION" > "\$BUDDY_DIR/VERSION_BUDDY"
   systemctl restart claude-desktop-buddy
   echo "claude-desktop-buddy updated to \$VERSION"
+elif [ "\$APP" = "device" ]; then
+  [ -z "\$URL" ] && { echo "Metadata has no url for devices.\$DEVICE_TYPE"; exit 1; }
+  DEVICES_DIR="\$(grep -E '^DEVICES_DIR=' /opt/hal/.env 2>/dev/null | cut -d= -f2)"
+  [ -z "\$DEVICES_DIR" ] && DEVICES_DIR="/opt/devices"
+  DEST="\$DEVICES_DIR/\$DEVICE_TYPE"
+  ZIP_TMP=\$(mktemp)
+  curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download device profile"; exit 1; }
+  mkdir -p "\$DEST"
+  unzip -o -q "\$ZIP_TMP" -d "\$DEST"
+  systemctl restart os-server 2>/dev/null || true
+  systemctl restart hal 2>/dev/null || true
+  echo "device profile (\$DEVICE_TYPE) updated to \$VERSION"
 fi
 EOFSCRIPT
 chmod +x /usr/local/bin/software-update
