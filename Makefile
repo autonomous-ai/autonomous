@@ -49,15 +49,20 @@ os-test:
 # HAL (Python) — dev | run | test
 # ============================================================================
 
-.PHONY: hal hal-dev hal-run hal-test hal-clean
+.PHONY: hal hal-dev hal-run hal-lint hal-test hal-clean
 
 hal: hal-dev
 
 hal-dev:
-	cd $(HAL_DIR) && PYTHONPATH=.. LELAMP_MODE=developer .venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port $(HAL_PORT) --reload
+	cd $(HAL_DIR) && PYTHONPATH=.. HAL_MODE=developer .venv/bin/uvicorn hal.server:app --host 0.0.0.0 --port $(HAL_PORT) --reload
 
 hal-run:
 	cd $(HAL_DIR) && PYTHONPATH=.. .venv/bin/python -m hal.server
+
+# Catch refactor-leftover bugs (broken local imports + undefined names) that
+# py_compile/tests miss off-hardware. Needs the `dev` extra (pyflakes).
+hal-lint:
+	cd $(HAL_DIR) && .venv/bin/python scripts/lint.py
 
 hal-test:
 	cd $(HAL_DIR) && .venv/bin/python -m pytest test/

@@ -59,6 +59,9 @@ required-environments = [
 lerobot = { git = "https://github.com/huggingface/lerobot", rev = "55198de096f46a8e0447a8795129dd9ee84c088c" }
 
 [project.optional-dependencies]
+dev = [
+    "pyflakes>=3.0",
+]
 hardware = [
     "adafruit-circuitpython-neopixel",
     "adafruit-circuitpython-neopixel-spi",

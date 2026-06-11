@@ -87,6 +87,7 @@ make os-test                 # cd os/services && go test ./...
 
 # HAL (Python hardware runtime, os/hal)
 make hal-dev                 # Install deps + run hal locally
+make hal-lint                # Catch broken local imports + undefined names (refactor leftovers)
 make hal-test                # Run HAL tests
 
 # Web frontend (React/Vite/Tailwind in os/services/web)
