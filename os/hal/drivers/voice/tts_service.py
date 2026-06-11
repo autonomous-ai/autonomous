@@ -207,12 +207,13 @@ class TTSService:
         self._invalidate_stream()
 
     def _silence_keepalive(self):
-        """Write 20ms of silence every 500ms when idle to keep the codec out of
-        suspend. WM8960/Rockchip codecs power down PCM after ~1s idle, which
-        forces a multi-second snd_pcm_prepare on the next write."""
+        """Write 100ms of silence every 100ms when idle to keep the codec out of
+        suspend and prevent XRUN on ARM (buffer must stay filled >= latency window).
+        WM8960/Rockchip codecs power down PCM after ~1s idle, which forces a
+        multi-second snd_pcm_prepare on the next write."""
         np = self._np
         while True:
-            time.sleep(0.5)
+            time.sleep(0.1)
             if self._speaking:
                 continue
             try:
@@ -221,7 +222,7 @@ class TTSService:
                         continue
                     if self._speaking:
                         continue
-                    silence = np.zeros((self._stream_rate // 50, 1), dtype=np.float32)
+                    silence = np.zeros((self._stream_rate // 10, 1), dtype=np.float32)
                     self._stream.write(silence)
             except Exception as e:
                 logger.debug("Silence keepalive write failed, invalidating: %s", e)
