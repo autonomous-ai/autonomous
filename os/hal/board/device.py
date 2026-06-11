@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import urllib.request
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -167,6 +168,7 @@ class DeviceProfile:
     type: str
     schema: str
     boards: List[str]
+    safety_ref: str
     capabilities: Dict[str, Capability]
 
     def declared_routes(self) -> Dict[str, bool]:
@@ -198,6 +200,7 @@ def parse_device(device_type: str, text: str) -> DeviceProfile:
         type=_parse_scalar(front_matter, "type"),
         schema=schema,
         boards=parse_boards(front_matter),
+        safety_ref=_parse_scalar(front_matter, "safety_ref"),
         capabilities=parse_capabilities(front_matter),
     )
 
@@ -231,21 +234,40 @@ def validate_safety_refs(profile: DeviceProfile, safety_md_text: str) -> List[st
     return problems
 
 
+def _read_ref(device_dir: str, ref: str) -> str:
+    """Resolve a *_ref value to text, mirroring soul_ref: an http(s) URL is
+    downloaded, anything else is read as a path relative to the device dir."""
+    if ref.startswith("http://") or ref.startswith("https://"):
+        with urllib.request.urlopen(ref, timeout=30) as r:  # noqa: S310 (device-trusted ref)
+            return r.read().decode("utf-8")
+    with open(os.path.join(device_dir, ref), "r") as f:
+        return f.read()
+
+
 def load_device(device_type: str, devices_dir: str) -> DeviceProfile:
     """Load devices/<device_type>/DEVICE.md from a devices directory."""
     device_dir = os.path.join(devices_dir, device_type)
     with open(os.path.join(device_dir, "DEVICE.md"), "r") as f:
         profile = parse_device(device_type, f.read())
 
+    # Resolve the safety document from the top-level `safety_ref` (path or URL),
+    # then anchor-check the per-capability `safety:` refs against it. safety_ref
+    # is OPTIONAL and the enforcement engine does not exist yet, so every problem
+    # is a WARNING, never a boot failure.
     if any(cap.safety for cap in profile.capabilities.values()):
-        safety_path = os.path.join(device_dir, "SAFETY.md")
         safety_text = ""
-        if os.path.exists(safety_path):
-            with open(safety_path, "r") as f:
-                safety_text = f.read()
+        if profile.safety_ref:
+            try:
+                safety_text = _read_ref(device_dir, profile.safety_ref)
+            except Exception as e:  # missing file, bad URL, network error
+                logger.warning(
+                    "[device] %s: cannot read safety_ref %r: %s",
+                    device_type, profile.safety_ref, e,
+                )
         else:
             logger.warning(
-                "[device] %s declares safety refs but %s is missing", device_type, safety_path
+                "[device] %s declares per-capability safety refs but no top-level safety_ref",
+                device_type,
             )
         for problem in validate_safety_refs(profile, safety_text):
             logger.warning("[device] %s: %s", device_type, problem)

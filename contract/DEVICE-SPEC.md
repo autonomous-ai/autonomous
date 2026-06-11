@@ -43,7 +43,7 @@ tell "no servo by design" from "servo lib missing" from "servo broken."
 | `gateway` | yes | Default agentic gateway (`default`) + wire transport (`protocol`). The transport follows from the runtime (openclaw→websocket, hermes→sse); `protocol` is validated for consistency against `default` (a warning, not a driver). |
 | `capabilities` | yes | Map of capability group → declaration (below). |
 | `soul_ref` | no | Soul artifact for this body: a path read relative to the device folder (e.g. `SOUL.md`), or an `http(s)://` URL the runtime downloads. Absent → the gateway's default soul. |
-| `safety_ref` | no | Path to this device's `SAFETY.md`. |
+| `safety_ref` | no | The device's safety document: a path read relative to the device folder (e.g. `SAFETY.md`), or an `http(s)://` URL downloaded. Today it only feeds the per-capability anchor-consistency check (a warning); enforcement is a future engine. |
 | `memory` | no | Memory backend declaration. |
 
 ### Capability declaration

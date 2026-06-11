@@ -945,6 +945,7 @@ def device():
         "schema": _profile.schema,
         "board": _board_id,
         "boards": _profile.boards,
+        "safety_ref": _profile.safety_ref,
         "routes": sorted(_plan.mounted),
         # Declared implementation families (informational hardware manifest; the
         # route is the contract, the driver behind it is free to change).

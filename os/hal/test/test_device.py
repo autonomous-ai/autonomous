@@ -63,6 +63,11 @@ class TestParsing(unittest.TestCase):
         self.assertEqual(caps["light"].driver, "ws2812")
         self.assertEqual(caps["display"].driver, "gc9a01")
 
+    def test_safety_ref_parsed(self):
+        # SAMPLE declares no top-level safety_ref; lamp declares SAFETY.md.
+        self.assertEqual(parse_device("sample", SAMPLE).safety_ref, "")
+        self.assertEqual(load_device("lamp", DEVICES_DIR).safety_ref, "SAFETY.md")
+
     def test_declared_routes_required_rollup(self):
         dev = parse_device("sample", SAMPLE)
         routes = dev.declared_routes()
