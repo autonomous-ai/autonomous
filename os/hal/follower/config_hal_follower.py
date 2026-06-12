@@ -15,10 +15,17 @@
 # limitations under the License.
 
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from lerobot.cameras import CameraConfig
 
 from lerobot.robots import RobotConfig
+
+# Repo-local, version-controlled calibration dir (os/hal/calibration/robots/hal_follower)
+# instead of lerobot's per-user default (~/.cache/huggingface/lerobot/calibration), which
+# breaks when the service user differs (e.g. hal.service runs as root, not orangepi).
+# lerobot loads `calibration_dir / f"{id}.json"` (id = HAL_DEVICE_ID, default "hal").
+CALIBRATION_DIR = Path(__file__).resolve().parent.parent / "calibration" / "robots" / "hal_follower"
 
 
 @RobotConfig.register_subclass("hal_follower")
@@ -39,3 +46,9 @@ class LeLampFollowerConfig(RobotConfig):
 
     # Set to `True` for backward compatibility with previous policies/dataset
     use_degrees: bool = False
+
+    def __post_init__(self):
+        super().__post_init__()
+        # Pin calibration to the repo-local dir unless a caller overrides it.
+        if self.calibration_dir is None:
+            self.calibration_dir = CALIBRATION_DIR

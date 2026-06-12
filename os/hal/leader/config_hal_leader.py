@@ -15,8 +15,15 @@
 # limitations under the License.
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from lerobot.teleoperators import TeleoperatorConfig
+
+# Repo-local, version-controlled calibration dir (os/hal/calibration/teleoperators/hal_leader)
+# instead of lerobot's per-user default (~/.cache/huggingface/lerobot/calibration), which
+# breaks when the service user differs (e.g. hal.service runs as root, not orangepi).
+# lerobot loads `calibration_dir / f"{id}.json"` (id = HAL_DEVICE_ID, default "hal").
+CALIBRATION_DIR = Path(__file__).resolve().parent.parent / "calibration" / "teleoperators" / "hal_leader"
 
 
 @TeleoperatorConfig.register_subclass("hal_leader")
@@ -26,3 +33,8 @@ class LeLampLeaderConfig(TeleoperatorConfig):
     port: str
 
     use_degrees: bool = False
+
+    def __post_init__(self):
+        # Pin calibration to the repo-local dir unless a caller overrides it.
+        if self.calibration_dir is None:
+            self.calibration_dir = CALIBRATION_DIR
