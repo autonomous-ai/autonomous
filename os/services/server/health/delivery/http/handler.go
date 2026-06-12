@@ -63,7 +63,7 @@ func (h *HealthHandler) SystemInfo(c *gin.Context) {
 		"halUptime":     readHALUptime(),
 		"halVersion":    readHALVersion(),
 		"goRoutines":    runtime.NumGoroutine(),
-		"version":       config.LampVersion,
+		"version":       config.OSVersion,
 		"deviceId":      h.config.DeviceID,
 		"agent":         h.agentInfo(),
 	}
@@ -225,7 +225,7 @@ func (h *HealthHandler) Dashboard(c *gin.Context) {
 			"connected":  h.agentGateway.IsReady(),
 			"sessionKey": h.agentGateway.GetSessionKey() != "",
 		},
-		"version":  config.LampVersion,
+		"version":  config.OSVersion,
 		"deviceId": h.config.DeviceID,
 	}
 	c.JSON(http.StatusOK, serializers.ResponseSuccess(dash))

@@ -413,7 +413,7 @@ func NewMQTTInfoResponse(cfg *config.Config, msgType string, mac string) MQTTInf
 	return MQTTInfoResponse{
 		Device:      cfg.DeviceTypeOrDefault(),
 		Type:        msgType,
-		Version:     config.LampVersion,
+		Version:     config.OSVersion,
 		ID:          cfg.DeviceID,
 		Mac:         mac,
 		Time:        time.Now().UTC().Format(time.RFC3339Nano),

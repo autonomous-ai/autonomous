@@ -206,7 +206,7 @@ func (s *Service) Setup(data domain.SetupRequest) error {
 			Status:         "working",
 			SetupCompleted: true,
 			Mac:            GetDeviceMac(),
-			Version:        config.LampVersion,
+			Version:        config.OSVersion,
 		})
 	}
 	return nil
@@ -295,7 +295,7 @@ func (s *Service) StartStatusReporter(ctx context.Context) {
 				Status:         "working",
 				SetupCompleted: s.config.SetUpCompleted,
 				Mac:            GetDeviceMac(),
-				Version:        config.LampVersion,
+				Version:        config.OSVersion,
 				SlackTeamID:    s.beClient.SlackTeamID(),
 			})
 			dump, _ := json.Marshal(resp)

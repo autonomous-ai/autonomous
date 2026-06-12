@@ -36,11 +36,11 @@ func otaMetadataURLFromBootstrap() string {
 
 const configPath = "config/config.json"
 
-// LampVersion is injected at build time via ldflags.
+// OSVersion is injected at build time via ldflags.
 // Example:
 //
-//	-X go.autonomous.ai/os/server/config.LampVersion=v1.2.3
-var LampVersion = "dev"
+//	-X go.autonomous.ai/os/server/config.OSVersion=v1.2.3
+var OSVersion = "dev"
 
 type Config struct {
 	// mu serialises LLMModel mutations and config.Save() so the primary-model

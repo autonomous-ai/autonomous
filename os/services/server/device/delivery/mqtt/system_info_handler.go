@@ -78,7 +78,7 @@ func (h *DeviceMQTTHandler) handleSystemNetwork(env domain.MQTTDataCommand) erro
 //     unparseable".
 func probeVersions(ctx context.Context) domain.MQTTVersionsData {
 	out := domain.MQTTVersionsData{
-		OSServer: config.LampVersion,
+		OSServer: config.OSVersion,
 	}
 
 	if v, err := system.Run(ctx, bootstrapBinary, "--version"); err != nil {

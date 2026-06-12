@@ -71,7 +71,7 @@ type emitter struct {
 var global = &emitter{}
 
 // Init attaches a monitor.Bus so flow events are also broadcast via SSE.
-// version is stamped on every event (typically config.LampVersion).
+// version is stamped on every event (typically config.OSVersion).
 // Must be called once at startup before any other flow calls.
 func Init(bus *monitor.Bus, version string) {
 	global.mu.Lock()

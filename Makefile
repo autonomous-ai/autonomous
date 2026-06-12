@@ -13,8 +13,8 @@ WEB_DIR        := $(OS_DIR)/web
 
 # Go build
 MODULE         := go.autonomous.ai/os
-# Go symbol stays config.LampVersion (internal, not part of deploy identity).
-LDFLAGS_OS     := -X $(MODULE)/server/config.LampVersion=$(VERSION)
+# os-server version injected into config.OSVersion (internal build var).
+LDFLAGS_OS     := -X $(MODULE)/server/config.OSVersion=$(VERSION)
 LDFLAGS_BOOT   := -X $(MODULE)/bootstrap/config.BootstrapVersion=$(VERSION)
 LDFLAGS_IRC    := -X main.Version=$(VERSION)
 LDFLAGS_AUTONOMOUS_CHAT := -X main.Version=$(VERSION)
