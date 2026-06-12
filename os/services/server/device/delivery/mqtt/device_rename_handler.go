@@ -10,29 +10,29 @@ import (
 	"go.autonomous.ai/os/lib/i18n"
 )
 
-// handleLampRename rewrites the agent name in workspace/IDENTITY.md. WatchIdentity
+// handleDeviceRename rewrites the agent name in workspace/IDENTITY.md. WatchIdentity
 // will pick up the change on its next poll cycle and push fresh wake words to
 // HAL; OpenClaw re-reads IDENTITY.md on its own so no gateway restart is needed.
 // After the file write succeeds, an async system chat message tells the agent its
 // new name so it greets the owner with the new identity in the next turn.
-func (h *DeviceMQTTHandler) handleLampRename(env domain.MQTTDataCommand) error {
-	var req domain.MQTTLampRenameData
+func (h *DeviceMQTTHandler) handleDeviceRename(env domain.MQTTDataCommand) error {
+	var req domain.MQTTDeviceRenameData
 	if err := json.Unmarshal(env.Data, &req); err != nil {
-		slog.Error("lamp.rename: invalid payload", "component", "mqtt", "error", err)
-		return h.publishDataResult(domain.KindLampRename, "failure", "invalid JSON payload", nil)
+		slog.Error("device.rename: invalid payload", "component", "mqtt", "error", err)
+		return h.publishDataResult(domain.KindDeviceRename, "failure", "invalid JSON payload", nil)
 	}
 
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
-		slog.Warn("lamp.rename: missing name", "component", "mqtt")
-		return h.publishDataResult(domain.KindLampRename, "failure", "name is required", nil)
+		slog.Warn("device.rename: missing name", "component", "mqtt")
+		return h.publishDataResult(domain.KindDeviceRename, "failure", "name is required", nil)
 	}
 
-	slog.Info("lamp.rename: received", "component", "mqtt", "name", name)
+	slog.Info("device.rename: received", "component", "mqtt", "name", name)
 
 	if err := h.agentGateway.UpdateIdentityName(name); err != nil {
-		slog.Error("lamp.rename: UpdateIdentityName failed", "component", "mqtt", "error", err)
-		return h.publishDataResult(domain.KindLampRename, "failure", err.Error(), nil)
+		slog.Error("device.rename: UpdateIdentityName failed", "component", "mqtt", "error", err)
+		return h.publishDataResult(domain.KindDeviceRename, "failure", err.Error(), nil)
 	}
 
 	// Tell the agent its new name asynchronously — failures don't fail the ack.
@@ -42,12 +42,12 @@ func (h *DeviceMQTTHandler) handleLampRename(env domain.MQTTDataCommand) error {
 	go func() {
 		prompt := renameGreetingPrompt(name)
 		if _, err := h.agentGateway.SendSystemChatMessage(prompt); err != nil {
-			slog.Warn("lamp.rename: notify agent failed", "component", "mqtt", "error", err)
+			slog.Warn("device.rename: notify agent failed", "component", "mqtt", "error", err)
 		}
 	}()
 
-	slog.Info("lamp.rename: applied", "component", "mqtt", "name", name)
-	return h.publishDataResult(domain.KindLampRename, "success", "", map[string]interface{}{
+	slog.Info("device.rename: applied", "component", "mqtt", "name", name)
+	return h.publishDataResult(domain.KindDeviceRename, "success", "", map[string]interface{}{
 		"name": name,
 	})
 }

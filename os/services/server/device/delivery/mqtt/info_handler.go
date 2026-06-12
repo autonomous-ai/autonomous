@@ -12,7 +12,6 @@ import (
 func (h *DeviceMQTTHandler) handleInfo(_ domain.MQTTMessage) error {
 	msg := domain.NewMQTTInfoResponse(h.config, "info", device.GetDeviceMac())
 	if v, err := hal.GetVersion(); err == nil {
-		msg.LelampVersion = v
 		msg.HalVersion = v
 	}
 	msg.OpenClawVersion = agenthttp.GetOpenClawVersion()
@@ -22,7 +21,7 @@ func (h *DeviceMQTTHandler) handleInfo(_ domain.MQTTMessage) error {
 	slog.Info("mqtt_handler_info",
 		"id", msg.ID,
 		"version", msg.Version,
-		"hal_version", msg.LelampVersion,
+		"hal_version", msg.HalVersion,
 		"openclaw_version", msg.OpenClawVersion,
 		"local_ip", msg.LocalIP,
 		"tts_provider", msg.TTSProvider,

@@ -257,11 +257,11 @@ const (
 
 // Data kinds carried inside CommandData envelope.
 const (
-	KindTTSSet      = "tts.set"      // persist TTS voice/provider/language config
-	KindTTSPreview  = "tts.preview"  // one-shot TTS preview, no config write
-	KindLampRename  = "lamp.rename"  // rewrite IDENTITY.md Name (WatchIdentity picks up wake-words)
-	KindOAuthSet    = "oauth.set"    // store/replace OAuth token for a provider
-	KindOAuthRemove = "oauth.remove" // delete OAuth token for a provider
+	KindTTSSet       = "tts.set"       // persist TTS voice/provider/language config
+	KindTTSPreview   = "tts.preview"   // one-shot TTS preview, no config write
+	KindDeviceRename = "device.rename" // rewrite IDENTITY.md Name (WatchIdentity picks up wake-words)
+	KindOAuthSet     = "oauth.set"     // store/replace OAuth token for a provider
+	KindOAuthRemove  = "oauth.remove"  // delete OAuth token for a provider
 
 	KindSystemInfo    = "system.info"    // aggregate: versions + network + host
 	KindSystemVersion = "system.version" // lamp + bootstrap + hal + openclaw versions
@@ -403,7 +403,6 @@ type MQTTInfoResponse struct {
 	TTSProvider     string `json:"tts_provider,omitempty"`
 	TTSVoice        string `json:"tts_voice,omitempty"`
 	STTLanguage     string `json:"stt_language,omitempty"`
-	LelampVersion   string `json:"lelamp_version,omitempty"`
 	HalVersion      string `json:"hal_version,omitempty"`
 	OpenClawVersion string `json:"openclaw_version,omitempty"`
 	LocalIP         string `json:"local_ip,omitempty"`
@@ -472,9 +471,8 @@ type MQTTSystemInfoData struct {
 // Empty string means probing failed; OpenClawDetected lets the caller
 // distinguish "not installed" from "installed but unparseable".
 type MQTTVersionsData struct {
-	Lamp             string `json:"lamp"`
+	OSServer         string `json:"os-server"`
 	Bootstrap        string `json:"bootstrap"`
-	Lelamp           string `json:"lelamp"`
 	Hal              string `json:"hal"`
 	OpenClaw         string `json:"openclaw"`
 	OpenClawDetected bool   `json:"openclaw_detected"`
@@ -637,11 +635,11 @@ type MQTTTTSPreviewCommand struct {
 	Data MQTTTTSPreviewData `json:"data"`
 }
 
-// MQTTLampRenameData is the nested data payload for cmd:"data", kind:"lamp.rename".
+// MQTTDeviceRenameData is the nested data payload for cmd:"data", kind:"device.rename".
 // Name is the new agent name written into workspace/IDENTITY.md's **Name:** line.
 // WatchIdentity picks up the change within 5s and pushes new wake words to HAL;
 // OpenClaw re-reads IDENTITY.md on its own — no gateway restart needed.
-type MQTTLampRenameData struct {
+type MQTTDeviceRenameData struct {
 	Name string `json:"name"`
 }
 

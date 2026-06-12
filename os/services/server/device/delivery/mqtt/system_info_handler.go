@@ -40,8 +40,8 @@ func (h *DeviceMQTTHandler) handleSystemInfo(env domain.MQTTDataCommand) error {
 		Host:     h.probeHost(),
 	}
 	slog.Info("system.info", "component", "mqtt",
-		"lamp", data.Versions.Lamp, "bootstrap", data.Versions.Bootstrap,
-		"hal", data.Versions.Lelamp, "openclaw", data.Versions.OpenClaw,
+		"os-server", data.Versions.OSServer, "bootstrap", data.Versions.Bootstrap,
+		"hal", data.Versions.Hal, "openclaw", data.Versions.OpenClaw,
 		"ip", data.Network.PrivateIP, "ssid", data.Network.SSID)
 	return h.publishDataResult(env.Kind, "success", "", data)
 }
@@ -54,7 +54,7 @@ func (h *DeviceMQTTHandler) handleSystemVersion(env domain.MQTTDataCommand) erro
 
 	v := probeVersions(ctx)
 	slog.Info("system.version", "component", "mqtt",
-		"lamp", v.Lamp, "bootstrap", v.Bootstrap, "hal", v.Lelamp, "openclaw", v.OpenClaw)
+		"os-server", v.OSServer, "bootstrap", v.Bootstrap, "hal", v.Hal, "openclaw", v.OpenClaw)
 	return h.publishDataResult(env.Kind, "success", "", v)
 }
 
@@ -78,7 +78,7 @@ func (h *DeviceMQTTHandler) handleSystemNetwork(env domain.MQTTDataCommand) erro
 //     unparseable".
 func probeVersions(ctx context.Context) domain.MQTTVersionsData {
 	out := domain.MQTTVersionsData{
-		Lamp: config.LampVersion,
+		OSServer: config.LampVersion,
 	}
 
 	if v, err := system.Run(ctx, bootstrapBinary, "--version"); err != nil {
@@ -90,7 +90,6 @@ func probeVersions(ctx context.Context) domain.MQTTVersionsData {
 	if v, err := hal.GetVersion(); err != nil {
 		slog.Warn("system.info: hal version failed", "component", "mqtt", "error", err)
 	} else {
-		out.Lelamp = strings.TrimSpace(v)
 		out.Hal = strings.TrimSpace(v)
 	}
 
