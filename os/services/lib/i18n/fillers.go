@@ -78,25 +78,25 @@ var toolFillers = map[string]map[string][]string{
 		"image":          {"Taking a look", "Peeking at it"},
 	},
 	LangVI: {
-		"web_search":     {"Để Lamp tìm chút", "Để xem có gì hay", "Lùng chút nha", "Tra cho bạn nha"},
+		"web_search":     {"Để {Name} tìm chút", "Để xem có gì hay", "Lùng chút nha", "Tra cho bạn nha"},
 		"x_search":       {"Ngó X tí", "Xem trên X chút", "Lùng X coi"},
-		"web_fetch":      {"Để mình xem chút", "Mở ra xem nha", "Để Lamp ngó qua", "Coi thử nha"},
-		"read":           {"Để Lamp đọc qua", "Xem chút nha", "Lướt qua chút", "Để mình ngó"},
-		"memory_search":  {"Để Lamp nhớ lại", "Lục trí nhớ chút", "Đợi Lamp nhớ ra"},
-		"memory_get":     {"Để Lamp nhớ chút", "Đợi mình nhớ ra"},
-		"exec":           {"Lamp làm liền", "Đang làm cho bạn", "Đợi tí nha", "Mình lo nha"},
+		"web_fetch":      {"Để mình xem chút", "Mở ra xem nha", "Để {Name} ngó qua", "Coi thử nha"},
+		"read":           {"Để {Name} đọc qua", "Xem chút nha", "Lướt qua chút", "Để mình ngó"},
+		"memory_search":  {"Để {Name} nhớ lại", "Lục trí nhớ chút", "Đợi {Name} nhớ ra"},
+		"memory_get":     {"Để {Name} nhớ chút", "Đợi mình nhớ ra"},
+		"exec":           {"{Name} làm liền", "Đang làm cho bạn", "Đợi tí nha", "Mình lo nha"},
 		"process":        {"Mình lo phần đó", "Đang làm phía sau"},
-		"image_generate": {"Để Lamp vẽ chút", "Đang vẽ nha", "Sáng tác chút", "Đợi Lamp tạo nha"},
-		"video_generate": {"Đang dựng cho bạn", "Để Lamp làm chút"},
-		"music_generate": {"Đang sáng tác nha", "Để Lamp soạn nhạc"},
-		"update_plan":    {"Để Lamp sắp xếp lại", "Tính lại chút", "Nghĩ lại chút"},
-		"session_status": {"Để Lamp nhìn lại", "Coi tình hình chút"},
+		"image_generate": {"Để {Name} vẽ chút", "Đang vẽ nha", "Sáng tác chút", "Đợi {Name} tạo nha"},
+		"video_generate": {"Đang dựng cho bạn", "Để {Name} làm chút"},
+		"music_generate": {"Đang sáng tác nha", "Để {Name} soạn nhạc"},
+		"update_plan":    {"Để {Name} sắp xếp lại", "Tính lại chút", "Nghĩ lại chút"},
+		"session_status": {"Để {Name} nhìn lại", "Coi tình hình chút"},
 		"apply_patch":    {"Đang chỉnh chút", "Sửa giúp bạn"},
-		"pdf":            {"Để Lamp đọc qua", "Lướt qua chút"},
+		"pdf":            {"Để {Name} đọc qua", "Lướt qua chút"},
 		"canvas":         {"Đang vẽ nha", "Phác chút coi"},
-		"nodes":          {"Lamp làm liền", "Để mình lo nha"},
-		"subagents":      {"Để Lamp nhờ phụ chút", "Gọi phụ tá nha"},
-		"image":          {"Để Lamp nhìn nha", "Ngắm tí coi"},
+		"nodes":          {"{Name} làm liền", "Để mình lo nha"},
+		"subagents":      {"Để {Name} nhờ phụ chút", "Gọi phụ tá nha"},
+		"image":          {"Để {Name} nhìn nha", "Ngắm tí coi"},
 	},
 	LangZhCN: {
 		"web_search":     {"我帮你找找", "查一下哦", "我去搜搜", "找一下啊"},
@@ -146,18 +146,18 @@ var toolFillers = map[string]map[string][]string{
 // Falls back to English on unknown / empty lang.
 func FillerOpening(lang string) []string {
 	if p, ok := fillerOpening[lang]; ok && len(p) > 0 {
-		return p
+		return applyNameAll(p)
 	}
-	return fillerOpening[fallbackLang]
+	return applyNameAll(fillerOpening[fallbackLang])
 }
 
 // FillerContinuation returns the continuation (between-tools) filler pool
 // for lang. Falls back to English on unknown / empty lang.
 func FillerContinuation(lang string) []string {
 	if p, ok := fillerContinuation[lang]; ok && len(p) > 0 {
-		return p
+		return applyNameAll(p)
 	}
-	return fillerContinuation[fallbackLang]
+	return applyNameAll(fillerContinuation[fallbackLang])
 }
 
 // FillerForTool returns the tool-specific override pool for (lang, tool).
@@ -171,5 +171,5 @@ func FillerForTool(lang, tool string) []string {
 	if !ok {
 		pools = toolFillers[fallbackLang]
 	}
-	return pools[tool]
+	return applyNameAll(pools[tool])
 }

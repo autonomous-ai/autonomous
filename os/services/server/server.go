@@ -488,6 +488,9 @@ func (s *Server) Serve(closeFn func()) error {
 		logger.SetGELFHost(s.config.DeviceID)
 	}
 	logger.SetGELFDeviceType(s.config.DeviceTypeOrDefault())
+	// i18n device name (wake-words + {name}/{Name} in strings) — device_type as the
+	// startup fallback; WatchIdentity overrides with the agent name once IDENTITY.md loads.
+	i18n.SetDeviceName(s.config.DeviceTypeOrDefault())
 
 	// Register the shared bearer token for outbound HAL HTTP calls.
 	// HAL's local_only_middleware accepts Authorization: Bearer <llm_api_key>

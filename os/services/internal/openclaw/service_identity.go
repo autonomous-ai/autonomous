@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"go.autonomous.ai/os/lib/hal"
+	"go.autonomous.ai/os/lib/i18n"
 )
 
 // --- Device identity (Ed25519) for gateway auth ---
@@ -109,6 +110,7 @@ func (s *Service) WatchIdentity(ctx context.Context) {
 		words := buildWakeWords(name)
 		slog.Info("agent renamed, updating wake words", "component", "openclaw", "name", name, "words", words)
 		hal.SetVoiceConfig(words)
+		i18n.SetDeviceName(name) // {name}/{Name} + chitchat strip follow the agent name too
 	}
 }
 
