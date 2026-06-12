@@ -1,6 +1,6 @@
 """Localized user-facing phrases.
 
-Single source of truth for every multi-language string Lamp speaks. Kept
+Single source of truth for every multi-language string the agent speaks. Kept
 out of the modules that use them so copy/translation edits don't require
 touching action logic.
 
@@ -276,12 +276,12 @@ DEFAULT_FILLERS_BY_LANG = {
 # --- Music pre-play backchannel pools ---
 #
 # yt-dlp resolve + ffmpeg startup takes 1-3s before audio actually plays.
-# A short cached TTS line fills that gap so the lamp sounds responsive.
+# A short cached TTS line fills that gap so the agent sounds responsive.
 # Phrases are intentionally generic and short so one cache pool covers
 # every style/query. Cache is keyed by provider/voice/model in TTSService.
 #
 # Pools are split by language × provider:
-#   - language is read from Lamp's stt_language (config.json) at fire time,
+#   - language is read from the device's stt_language (config.json) at fire time,
 #     so changing the language picker doesn't require code edits — only a
 #     hal restart so the prewarm hits the new pool.
 #   - ElevenLabs variants embed eleven_v3 audio tags ([excited], [curious])
