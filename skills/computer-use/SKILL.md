@@ -9,7 +9,7 @@ description: Control the user's Mac via the paired Autonomous Buddy companion ap
 
 Autonomous Buddy is a small macOS app the user installs on their Mac. Once paired with the device via the Buddy card on the Monitor web UI, it lets Lamp launch apps, open URLs, type text, fire keyboard shortcuts, and click UI elements **on the user's actual Mac**.
 
-This skill emits inline markers that Lamp fires asynchronously while TTS speaks the confirmation:
+This skill emits inline markers that the device fires asynchronously while TTS speaks the confirmation:
 
 ```
 [HW:/buddy/exec/<action>:<params-json>]
@@ -179,7 +179,7 @@ Markers fire in order. Useful patterns:
 
 ## Rules
 
-- **Markers must appear at the START of the reply**, before the TTS sentence. Lamp parses and strips them before reading.
+- **Markers must appear at the START of the reply**, before the TTS sentence. The device parses and strips them before reading.
 - **No nested JSON** in marker params (the marker regex doesn't support nested `{}`). All actions above take flat params.
 - **One action per marker.** Don't try to batch multiple ops into a single marker body.
 - **Don't use this skill for the device's hardware** (LED, scene, emotion, audio playback on the device's speaker, servo, display) — those are separate skills.
