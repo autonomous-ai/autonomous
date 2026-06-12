@@ -48,9 +48,18 @@ func (s *Service) StartSkillWatcher(ctx context.Context) {
 			}
 			slog.Info("skill watcher: checked", "component", "skill-watcher", "skills", len(remote))
 
-			// Find skills with changed versions
+			// Find skills with changed versions, gated to what this device
+			// supports so a CDN version bump never re-adds a capability-pruned
+			// skill (e.g. servo-control on a motionless device).
+			supported := map[string]bool{}
+			for _, n := range s.supportedSkills() {
+				supported[n] = true
+			}
 			var toUpdate []string
 			for name, ver := range remote {
+				if !supported[name] {
+					continue
+				}
 				if ver != "" && ver != lastVersions[name] {
 					toUpdate = append(toUpdate, name)
 					lastVersions[name] = ver
@@ -67,9 +76,10 @@ func (s *Service) StartSkillWatcher(ctx context.Context) {
 	}
 }
 
-// downloadSkills downloads all skills from CDN, returns names of changed ones.
+// downloadSkills downloads the skills this device supports from CDN (capability-
+// gated via supportedSkills), returning names of changed ones.
 func (s *Service) downloadSkills() []string {
-	return s.downloadSkillsByName(skills)
+	return s.downloadSkillsByName(s.supportedSkills())
 }
 
 // downloadSkillsByName downloads specific skill zips from CDN, extracts each

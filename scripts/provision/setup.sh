@@ -650,10 +650,46 @@ EOF
   # Download skills from GCS into workspace/skills. Derive the base from the OTA
   # metadata URL (single source of truth) — skills live at <base>/skills, where
   # <base> is the metadata URL minus "/ota/metadata.json". No hardcoded URL.
+  #
+  # Capability gate: a skill that needs a hardware capability (servo/light/...)
+  # is only seeded when this device's DEVICE.md declares that capability. Skills
+  # with no capability (platform/logic skills) are always seeded. This mirrors
+  # the authoritative gate in os-server (internal/skills.Supported); both read
+  # DEVICE.md so a reduced device never ships skills it can't run. Fail-open:
+  # if DEVICE.md declares no capabilities, everything is seeded (legacy behavior).
+  # os-server re-syncs + prunes on boot, so this is only the first-boot seed.
   SKILLS_GCS_PREFIX="${OTA_METADATA_URL%/ota/metadata.json}/skills"
-  SKILLS_LIST="audio camera display emotion led-control scene scheduling sensing servo-control"
+  # Full catalog (keep in sync with internal/skills.Catalog).
+  SKILLS_CATALOG="audio camera connectors display emotion face-enroll guard led-control music music-suggestion scene sensing sensing-track servo-control servo-tracking voice wellbeing mood speaker-recognizer user-emotion-detection habit input-branching"
+  # skill -> required DEVICE.md capability (keep in sync with skills.Capability in
+  # internal/skills/skills.go). Empty = platform skill, always seeded.
+  skill_cap() {
+    case "$1" in
+      audio|voice|speaker-recognizer) echo audio ;;
+      camera|face-enroll|guard)       echo vision ;;
+      display)                        echo display ;;
+      emotion|scene)                  echo presence ;;
+      led-control)                    echo light ;;
+      servo-control|servo-tracking)   echo motion ;;
+      music)                          echo media ;;
+      sensing|sensing-track)          echo sensing ;;
+      *)                              echo "" ;;
+    esac
+  }
+  # Capability keys declared in this device's DEVICE.md (one per line).
+  DEVICE_MD="$DEVICES_DIR/$DEVICE_TYPE/DEVICE.md"
+  DEVICE_CAPS="$(awk '
+    /^capabilities:/ {f=1; next}
+    f && /^[A-Za-z]/ {exit}
+    f && /^[[:space:]]+[A-Za-z_]+:/ { s=$0; sub(/^[[:space:]]+/,"",s); sub(/:.*/,"",s); print s }
+  ' "$DEVICE_MD" 2>/dev/null)"
   mkdir -p "$OPENCLAW_HOME/workspace/skills"
-  for skill_name in $SKILLS_LIST; do
+  for skill_name in $SKILLS_CATALOG; do
+    cap="$(skill_cap "$skill_name")"
+    if [ -n "$cap" ] && [ -n "$DEVICE_CAPS" ] && ! echo "$DEVICE_CAPS" | grep -qx "$cap"; then
+      echo "[stage] skill $skill_name needs capability '$cap' not declared in DEVICE.md — skipping"
+      continue
+    fi
     skill_dir="$OPENCLAW_HOME/workspace/skills/$skill_name"
     mkdir -p "$skill_dir"
     echo "[stage] Downloading skill: $skill_name"

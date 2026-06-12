@@ -13,7 +13,36 @@ var (
 	reGatewayDefault  = regexp.MustCompile(`(?m)^[ \t]+default:[ \t]*(\S+)`)
 	reGatewayProtocol = regexp.MustCompile(`(?m)^[ \t]+protocol:[ \t]*(\S+)`)
 	reSoulRef         = regexp.MustCompile(`(?m)^soul_ref:[ \t]*(\S+)`)
+	reCapBlock        = regexp.MustCompile(`(?m)^capabilities:[ \t]*\n((?:[ \t]+.*\n?)+)`)
+	reCapKey          = regexp.MustCompile(`(?m)^[ \t]+(\w+):`)
 )
+
+// Capabilities returns the set of capability keys declared in the
+// `capabilities:` block of devices/<deviceType>/DEVICE.md (e.g. audio, vision,
+// motion, light, display, …), or nil if absent/unreadable. Dependency-free
+// front-matter parse, mirroring SoulRef/GatewayDefault. The capability keys are
+// what gate which hardware/body skills a device loads (see openclaw onboarding):
+// a skill that declares `capability: motion` is only shipped to a device whose
+// DEVICE.md declares `motion`.
+func Capabilities(deviceType string) map[string]bool {
+	b, err := os.ReadFile(filepath.Join(DevicesDir(), deviceType, "DEVICE.md"))
+	if err != nil {
+		return nil
+	}
+	fm := reFrontMatter.FindSubmatch(b)
+	if fm == nil {
+		return nil
+	}
+	blk := reCapBlock.FindSubmatch(fm[1])
+	if blk == nil {
+		return nil
+	}
+	caps := map[string]bool{}
+	for _, m := range reCapKey.FindAllSubmatch(blk[1], -1) {
+		caps[strings.TrimSpace(string(m[1]))] = true
+	}
+	return caps
+}
 
 // SoulRef returns the `soul_ref` declared in devices/<deviceType>/DEVICE.md, or
 // "" if absent/unreadable. The value is either a path (read relative to the

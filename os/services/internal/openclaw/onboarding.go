@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"go.autonomous.ai/os/internal/device"
+	"go.autonomous.ai/os/internal/skills"
 )
 
 //go:embed resources/KNOWLEDGE.md
@@ -64,30 +65,13 @@ var hooks = []string{
 	"turn-gate",
 }
 
-// skills is the list of skill names available on CDN.
-var skills = []string{
-	"audio",
-	"camera",
-	"connectors",
-	"display",
-	"emotion",
-	"face-enroll",
-	"guard",
-	"led-control",
-	"music",
-	"music-suggestion",
-	"scene",
-	"sensing",
-	"sensing-track",
-	"servo-control",
-	"servo-tracking",
-	"voice",
-	"wellbeing",
-	"mood",
-	"speaker-recognizer",
-	"user-emotion-detection",
-	"habit",
-	"input-branching",
+// supportedSkills resolves this device's capabilities from DEVICE.md and filters
+// the platform skill catalog (skills.Catalog) to what this device can run. The
+// catalog and skill→capability map are runtime-agnostic platform metadata in
+// internal/skills — OpenClaw is only one consumer (Hermes or any other runtime
+// would gate the same way).
+func (s *Service) supportedSkills() []string {
+	return skills.Supported(device.Capabilities(s.config.DeviceTypeOrDefault()))
 }
 
 // EnsureOnboarding seeds SOUL.md, downloads skills, and injects the mandatory
@@ -141,10 +125,25 @@ func (s *Service) EnsureOnboarding() error {
 	if err := os.MkdirAll(skillsDir, 0755); err != nil {
 		return fmt.Errorf("create skills dir: %w", err)
 	}
-	// Ensure skill directories exist
-	for _, name := range skills {
-		if err := os.MkdirAll(filepath.Join(skillsDir, name), 0755); err != nil {
-			slog.Error("mkdir failed", "component", "onboarding", "dir", name, "error", err)
+	// Capability gate: this device runs only the skills its DEVICE.md capabilities
+	// support (plus platform skills). Create dirs for supported skills; remove any
+	// unsupported skill dir so a re-provisioned device (or one whose DEVICE.md
+	// changed) self-heals and a provision-time over-seed is cleaned up. Fail-open
+	// for a device that declares no capabilities → full catalog (see supportedSkills).
+	wanted := map[string]bool{}
+	for _, name := range s.supportedSkills() {
+		wanted[name] = true
+	}
+	for _, name := range skills.Catalog {
+		dir := filepath.Join(skillsDir, name)
+		if wanted[name] {
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				slog.Error("mkdir failed", "component", "onboarding", "dir", name, "error", err)
+			}
+		} else if err := os.RemoveAll(dir); err != nil {
+			slog.Warn("prune unsupported skill failed", "component", "onboarding", "skill", name, "error", err)
+		} else {
+			slog.Info("skill not supported by device, pruned", "component", "onboarding", "skill", name, "capability", skills.Capability[name])
 		}
 	}
 	changedSkills := s.downloadSkills()

@@ -9,7 +9,6 @@ gateway:
   protocol: websocket
 capabilities:
   audio:   { routes: [audio, speaker, voice], required: true }
-  vision:  { routes: [camera], required: false }
   sensing: { routes: [sensing], required: false }
   system:  { routes: [system], required: true }
 safety_ref: SAFETY.md
@@ -18,22 +17,24 @@ memory:     { backend: local }
 
 # Autonomous Intern
 
-The deliberate inverse of Lamp: an always-on desk agent with voice and ambient sensing,
-but **no actuation and no display**. Intern proves the platform is real — it is not a
-fork of Lamp. It is the same OS image declaring fewer capabilities.
+The deliberate inverse of Lamp: an always-on desk agent with voice and ambient (sound)
+sensing, but **no camera, no actuation, no display**. Intern proves the platform is
+real — it is not a fork of Lamp. It is the same OS image declaring fewer capabilities.
 
 ## What makes Intern "not Lamp"
 
-Exactly two lines: Lamp declares `motion` and `display`; Intern does not. The OS boots
-the same runtime, mounts only the audio/vision/sensing/system routes Intern declares,
-and never brings up servo or display drivers. There is no `if device == intern`
-anywhere in the OS.
+Intern declares only `audio`, `sensing`, and `system` — Lamp's `vision`, `motion`,
+`light`, `display`, `presence`, `media`, and `connectivity` are simply absent. The OS
+boots the same runtime, mounts only the audio/sensing/system routes Intern declares, and
+never brings up the camera, servo, or display drivers. Ambient sensing is sound-only
+(the mic) — presence/light/motion perceptions need a camera Intern does not have. There
+is no `if device == intern` anywhere in the OS.
 
 Intern v2 adds mic + speaker — capabilities Lamp already has — so the two devices share
 their entire audio/voice stack verbatim. That overlap is the whole argument for one OS.
 
 ## What the agent should assume
 
-- No body to move and no screen to draw on — presence is voice; light is unavailable.
+- No camera, no body to move, and no screen to draw on — presence is voice; vision and light are unavailable.
 - The job is agentic work (mail, calendar, tasks, research), not expressive companionship.
 - Same privacy posture as Lamp: local-first, ask before sensitive sensing.

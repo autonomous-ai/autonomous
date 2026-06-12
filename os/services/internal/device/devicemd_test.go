@@ -19,6 +19,51 @@ func writeDeviceMD(t *testing.T, deviceType, body string) {
 	}
 }
 
+func TestCapabilities_Present(t *testing.T) {
+	writeDeviceMD(t, "lamp", `---
+schema: autonomous.device.v1
+capabilities:
+  audio:   { routes: [audio, speaker, voice], required: true }
+  motion:  { routes: [servo], driver: feetech, required: true }
+  light:   { routes: [led], driver: ws2812, required: true }
+  display: { routes: [display], driver: gc9a01, required: true }
+soul_ref: SOUL.md
+---
+
+# Lamp
+`)
+	caps := Capabilities("lamp")
+	for _, want := range []string{"audio", "motion", "light", "display"} {
+		if !caps[want] {
+			t.Fatalf("Capabilities missing %q (got %v)", want, caps)
+		}
+	}
+	if caps["vision"] {
+		t.Fatalf("Capabilities should not contain undeclared %q", "vision")
+	}
+}
+
+func TestCapabilities_NoBlock(t *testing.T) {
+	writeDeviceMD(t, "intern", `---
+schema: autonomous.device.v1
+gateway:
+  default: openclaw
+---
+
+# Intern
+`)
+	if caps := Capabilities("intern"); len(caps) != 0 {
+		t.Fatalf("Capabilities = %v, want empty", caps)
+	}
+}
+
+func TestCapabilities_Missing(t *testing.T) {
+	t.Setenv("DEVICES_DIR", t.TempDir())
+	if caps := Capabilities("ghost"); caps != nil {
+		t.Fatalf("Capabilities = %v, want nil", caps)
+	}
+}
+
 func TestGatewayDefault_Present(t *testing.T) {
 	writeDeviceMD(t, "lamp", `---
 schema: autonomous.device.v1
