@@ -24,7 +24,7 @@ A concrete device's `DEVICE.md` adds the capabilities its body has (`vision`, `m
 `light`, `display`, `sensing`, …) on top of this base. The two reference devices show the range:
 
 - **[Lamp](../lamp/)** — adds everything (the maximal device).
-- **[Intern](../intern/)** — adds `vision` + `sensing`, no actuation.
+- **[Intern](../intern-v2/)** — adds `vision` + `sensing`, no actuation.
 
 Every device declares `system` (health, setup, OTA) and at least one primary sense or output;
 this base declares `audio`, the agent baseline. Inheritance keeps onboarding a new device to

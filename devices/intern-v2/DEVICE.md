@@ -1,6 +1,6 @@
 ---
 schema: autonomous.device.v1
-id: intern
+id: intern-v2
 name: Autonomous Intern
 type: desk_agent
 boards: [raspberry_pi_4, raspberry_pi_5, orangepi_sun60]
