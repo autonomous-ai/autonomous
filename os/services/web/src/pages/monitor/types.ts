@@ -3,7 +3,7 @@ export const API = "/api";
 // Web never touches /hw/* directly anymore — adminAuthMiddleware on the
 // proxy gates the bearer, and Go calls the device on loopback. Bearer is
 // attached automatically by the fetch interceptor in lib/api.ts (search for
-// `__lampFetchPatched`). For <img src> / <a href> / window.open use the
+// `__osFetchPatched`). For <img src> / <a href> / window.open use the
 // `hwUrl()` helper which appends ?token= since those can't set headers.
 export const HW  = "/api/hardware";
 // Agent gateway base path. Runtime-agnostic: `/api/agent/*` proxies to the

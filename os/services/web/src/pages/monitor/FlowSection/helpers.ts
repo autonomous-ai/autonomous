@@ -736,7 +736,7 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
     mic_input: [], cam_input: [], button_input: [], channel_input: [], webchat_input: [], intent_check: [], local_match: [],
     agent_call: [], agent_thinking: [], tool_exec: [],
     agent_response: [], tts_speak: [], schedule_trigger: [],
-    lamp_gate: [], hw_led: [], hw_servo: [], hw_emotion: [], hw_audio: [], hw_wellbeing: [], hw_mood: [], hw_music_suggestion: [], hw_posture: [], tg_out: [], tg_alert: [],
+    os_gate: [], hw_led: [], hw_servo: [], hw_emotion: [], hw_audio: [], hw_wellbeing: [], hw_mood: [], hw_music_suggestion: [], hw_posture: [], tg_out: [], tg_alert: [],
     ambient: [],
   };
   const fmtToken = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`);
@@ -1014,28 +1014,28 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
       if (body && body.startsWith("{")) {
         pushUnique(info.hw_emotion, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5001${path} -H "Content-Type: application/json" -d '${body}'`);
         const m = body.match(/"emotion"\s*:\s*"([^"]+)"/);
-        pushUnique(info.lamp_gate, `🎭 → ${m ? m[1] : "emotion"}`);
+        pushUnique(info.os_gate, `🎭 → ${m ? m[1] : "emotion"}`);
       }
     }
     if (ev.type === "hw_led" || (ev.type === "flow_event" && ev.detail?.node === "hw_led")) {
       const { path, body } = parseHWEvent(ev, "/led/solid");
       if (body && body.startsWith("{")) {
         pushUnique(info.hw_led, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5001${path} -d '${body}'`);
-        pushUnique(info.lamp_gate, `💡 → LED ${path}`);
+        pushUnique(info.os_gate, `💡 → LED ${path}`);
       }
     }
     if (ev.type === "hw_servo" || (ev.type === "flow_event" && ev.detail?.node === "hw_servo")) {
       const { path, body } = parseHWEvent(ev, "/servo/play");
       if (body && body.startsWith("{")) {
         pushUnique(info.hw_servo, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5001${path} -d '${body}'`);
-        pushUnique(info.lamp_gate, `🤖 → servo ${path}`);
+        pushUnique(info.os_gate, `🤖 → servo ${path}`);
       }
     }
     if (ev.type === "hw_audio" || (ev.type === "flow_event" && ev.detail?.node === "hw_audio")) {
       const { path, body } = parseHWEvent(ev, "/audio/play");
       if (body && body.startsWith("{")) {
         pushUnique(info.hw_audio, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5001${path} -d '${body}'`);
-        pushUnique(info.lamp_gate, `🎵 → audio ${path}`);
+        pushUnique(info.os_gate, `🎵 → audio ${path}`);
       }
     }
     if (ev.type === "hw_wellbeing" || (ev.type === "flow_event" && ev.detail?.node === "hw_wellbeing")) {
@@ -1044,7 +1044,7 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
         // Wellbeing log goes to the OS server (port 5000), not the device (5001), via the /api/ prefix.
         pushUnique(info.hw_wellbeing, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -d '${body}'`);
         const m = body.match(/"action"\s*:\s*"([^"]+)"/);
-        pushUnique(info.lamp_gate, `💧 → wellbeing ${m ? m[1] : path}`);
+        pushUnique(info.os_gate, `💧 → wellbeing ${m ? m[1] : path}`);
       }
     }
     if (ev.type === "hw_mood" || (ev.type === "flow_event" && ev.detail?.node === "hw_mood")) {
@@ -1055,7 +1055,7 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
         const moodMatch = body.match(/"mood"\s*:\s*"([^"]+)"/);
         const kind = kindMatch ? kindMatch[1] : "log";
         const mood = moodMatch ? moodMatch[1] : "?";
-        pushUnique(info.lamp_gate, `🧠 → mood ${kind}=${mood}`);
+        pushUnique(info.os_gate, `🧠 → mood ${kind}=${mood}`);
       }
     }
     if (ev.type === "hw_music_suggestion" || (ev.type === "flow_event" && ev.detail?.node === "hw_music_suggestion")) {
@@ -1063,7 +1063,7 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
       if (body && body.startsWith("{")) {
         pushUnique(info.hw_music_suggestion, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -d '${body}'`);
         const triggerMatch = body.match(/"trigger"\s*:\s*"([^"]+)"/);
-        pushUnique(info.lamp_gate, `🎼 → music-suggest ${triggerMatch ? triggerMatch[1] : path}`);
+        pushUnique(info.os_gate, `🎼 → music-suggest ${triggerMatch ? triggerMatch[1] : path}`);
       }
     }
     if (ev.type === "hw_posture" || (ev.type === "flow_event" && ev.detail?.node === "hw_posture")) {
@@ -1071,25 +1071,25 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
       if (body && body.startsWith("{")) {
         pushUnique(info.hw_posture, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -d '${body}'`);
         const kindMatch = body.match(/"kind"\s*:\s*"([^"]+)"/);
-        pushUnique(info.lamp_gate, `🪑 → posture ${kindMatch ? kindMatch[1] : path}`);
+        pushUnique(info.os_gate, `🪑 → posture ${kindMatch ? kindMatch[1] : path}`);
       }
     }
     if (ev.type === "flow_event" && (ev.detail?.node === "tts_send" || ev.detail?.node === "tts_suppressed")) {
-      pushUnique(info.lamp_gate, "🔊 → TTS");
+      pushUnique(info.os_gate, "🔊 → TTS");
     }
     if (ev.type === "flow_event" && ev.detail?.node === "tts_suppressed") {
       const d = ev.detail as Record<string, any> | undefined;
       const reason = d?.data?.reason ?? "suppressed";
-      pushUnique(info.lamp_gate, `🔇 → TTS suppressed (${reason})`);
+      pushUnique(info.os_gate, `🔇 → TTS suppressed (${reason})`);
     }
     if (ev.type === "flow_event" && ev.detail?.node === "no_reply") {
-      pushUnique(info.lamp_gate, "🚫 → no reply");
+      pushUnique(info.os_gate, "🚫 → no reply");
     }
     if (ev.type === "flow_event" && ev.detail?.node === "hw_only_reply") {
-      pushUnique(info.lamp_gate, "⚙ → HW only (no speech)");
+      pushUnique(info.os_gate, "⚙ → HW only (no speech)");
     }
     if (ev.type === "flow_event" && ev.detail?.node === "telegram_alert_broadcast") {
-      pushUnique(info.lamp_gate, "📢 → broadcast");
+      pushUnique(info.os_gate, "📢 → broadcast");
     }
   }
   // After processing all events: if lifecycle_end was seen but no response/no_reply, mark silent

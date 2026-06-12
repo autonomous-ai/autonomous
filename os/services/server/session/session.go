@@ -22,7 +22,7 @@ import (
 // CookieName is the browser cookie that carries the HMAC-signed session token
 // after a successful POST /api/login. httpOnly + SameSite=Strict keeps it off
 // JS reach and out of cross-site requests.
-const CookieName = "lamp_session"
+const CookieName = "os_session"
 
 // TTL is how long an issued session stays valid. Single-user device, stateless
 // HMAC — no per-session revoke. Rotate config.SessionSecret to nuke every
@@ -126,7 +126,7 @@ func Clear(c *gin.Context) {
 	})
 }
 
-// HasValid returns true if the request carries a lamp_session cookie that
+// HasValid returns true if the request carries a os_session cookie that
 // verifies under the current secret and hasn't expired. Used by
 // adminAuthMiddleware to accept browser sessions alongside Bearer tokens.
 func HasValid(c *gin.Context, cfg *config.Config) bool {

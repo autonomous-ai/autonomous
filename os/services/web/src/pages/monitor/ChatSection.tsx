@@ -321,8 +321,8 @@ function parseToolChip(ev: ToolEventInput): ToolChip | null {
 
 // ─── Storage ────────────────────────────────────────────────────────────────
 
-const CONVOS_KEY = "lamp_chat_convos";
-const ACTIVE_KEY = "lamp_chat_active";
+const CONVOS_KEY = "os_chat_convos";
+const ACTIVE_KEY = "os_chat_active";
 const MAX_MESSAGES = 200;
 const MAX_CONVOS = 50;
 
@@ -343,7 +343,7 @@ interface ConvosEnvelope {
 
 interface ChatMessage {
   id: string;
-  role: "user" | "lamp";
+  role: "user" | "agent";
   text: string;
   time: string;
   date?: string;       // YYYY-MM-DD for date separators
@@ -407,10 +407,10 @@ function cleanPending(msgs: ChatMessage[]): ChatMessage[] {
 function titleFromMessages(msgs: ChatMessage[]): string {
   const userMsg = msgs.find((m) => m.role === "user");
   if (!userMsg) return "New chat";
-  const lampMsg = msgs.find((m) => m.role === "lamp" && !m.pending && !m.error && m.text && m.text !== "…");
-  if (lampMsg) {
+  const agentMsg = msgs.find((m) => m.role === "agent" && !m.pending && !m.error && m.text && m.text !== "…");
+  if (agentMsg) {
     const q = userMsg.text.length > 20 ? userMsg.text.slice(0, 20) + "…" : userMsg.text;
-    const a = lampMsg.text.replace(/\n/g, " ");
+    const a = agentMsg.text.replace(/\n/g, " ");
     const aShort = a.length > 20 ? a.slice(0, 20) + "…" : a;
     return `${q} → ${aShort}`;
   }
@@ -652,7 +652,7 @@ export function ChatSection({ events, isActive }: Props) {
           const cleaned = stripHWMarkers(buf);
           updateMessages((prev) =>
             prev.map((m) =>
-              m.runId === p && m.role === "lamp" && m.pending
+              m.runId === p && m.role === "agent" && m.pending
                 ? { ...m, text: cleaned }
                 : m,
             ),
@@ -808,7 +808,7 @@ export function ChatSection({ events, isActive }: Props) {
             const { text, savedChips, usage } = resolveRun(pending);
             updateMessages((prev) =>
               prev.map((m) =>
-                m.runId === pending && m.role === "lamp" && m.pending
+                m.runId === pending && m.role === "agent" && m.pending
                   ? { ...m, text: text === "…" ? "…" : text, pending: false, tools: savedChips, tokenUsage: usage }
                   : m,
               ),
@@ -825,7 +825,7 @@ export function ChatSection({ events, isActive }: Props) {
             const cleaned = stripHWMarkers(finalText);
             updateMessages((prev) =>
               prev.map((m) =>
-                m.runId === pending && m.role === "lamp" && m.pending
+                m.runId === pending && m.role === "agent" && m.pending
                   ? { ...m, text: cleaned, pending: false, tools: savedChips, tokenUsage: usage }
                   : m,
               ),
@@ -838,7 +838,7 @@ export function ChatSection({ events, isActive }: Props) {
             const { savedChips, usage } = resolveRun(pending);
             updateMessages((prev) =>
               prev.map((m) =>
-                m.runId === pending && m.role === "lamp" && m.pending
+                m.runId === pending && m.role === "agent" && m.pending
                   ? { ...m, text: errMsg, pending: false, error: true, tools: savedChips, tokenUsage: usage }
                   : m,
               ),
@@ -851,7 +851,7 @@ export function ChatSection({ events, isActive }: Props) {
             const cleaned = stripHWMarkers(chatMsg);
             updateMessages((prev) =>
               prev.map((m) =>
-                m.runId === pending && m.role === "lamp" && m.pending
+                m.runId === pending && m.role === "agent" && m.pending
                   ? { ...m, text: cleaned }
                   : m,
               ),
@@ -966,7 +966,7 @@ export function ChatSection({ events, isActive }: Props) {
           const cleaned = stripHWMarkers(text);
           updateMessages((prev) =>
             prev.map((m) =>
-              m.runId === pending && m.role === "lamp" && m.pending
+              m.runId === pending && m.role === "agent" && m.pending
                 ? { ...m, text: cleaned, pending: false, tools: savedChips, tokenUsage: usage }
                 : m,
             ),
@@ -984,7 +984,7 @@ export function ChatSection({ events, isActive }: Props) {
         tokenUsageRef.current = undefined;
         updateMessages((prev) =>
           prev.map((m) =>
-            m.runId === pending && m.role === "lamp" && m.pending
+            m.runId === pending && m.role === "agent" && m.pending
               ? { ...m, text: "…", pending: false }
               : m,
           ),
@@ -1239,7 +1239,7 @@ export function ChatSection({ events, isActive }: Props) {
         setConvos((prev) =>
           prev.map((c) =>
             c.id === targetId
-              ? { ...c, messages: [...c.messages, { id: `l-${runId}`, role: "lamp", text: "", time: replyTime, runId, pending: true }] }
+              ? { ...c, messages: [...c.messages, { id: `l-${runId}`, role: "agent", text: "", time: replyTime, runId, pending: true }] }
               : c,
           ),
         );
@@ -1270,7 +1270,7 @@ export function ChatSection({ events, isActive }: Props) {
         setConvos((prev) =>
           prev.map((c) =>
             c.id === targetId
-              ? { ...c, messages: [...c.messages, { id: `l-local-${Date.now()}`, role: "lamp", text: localText, time: now }] }
+              ? { ...c, messages: [...c.messages, { id: `l-local-${Date.now()}`, role: "agent", text: localText, time: now }] }
               : c,
           ),
         );
@@ -1279,7 +1279,7 @@ export function ChatSection({ events, isActive }: Props) {
         setConvos((prev) =>
           prev.map((c) =>
             c.id === targetId
-              ? { ...c, messages: [...c.messages, { id: `l-drop-${Date.now()}`, role: "lamp", text: "⏸ busy — try again", time: now, error: true }] }
+              ? { ...c, messages: [...c.messages, { id: `l-drop-${Date.now()}`, role: "agent", text: "⏸ busy — try again", time: now, error: true }] }
               : c,
           ),
         );
@@ -1288,7 +1288,7 @@ export function ChatSection({ events, isActive }: Props) {
         setConvos((prev) =>
           prev.map((c) =>
             c.id === targetId
-              ? { ...c, messages: [...c.messages, { id: `l-err-${Date.now()}`, role: "lamp", text: json.message ?? "error", time: now, error: true }] }
+              ? { ...c, messages: [...c.messages, { id: `l-err-${Date.now()}`, role: "agent", text: json.message ?? "error", time: now, error: true }] }
               : c,
           ),
         );
@@ -1298,7 +1298,7 @@ export function ChatSection({ events, isActive }: Props) {
       setConvos((prev) =>
         prev.map((c) =>
           c.id === targetId
-            ? { ...c, messages: [...c.messages, { id: `l-err-${Date.now()}`, role: "lamp", text: "connection error", time: now, error: true }] }
+            ? { ...c, messages: [...c.messages, { id: `l-err-${Date.now()}`, role: "agent", text: "connection error", time: now, error: true }] }
             : c,
         ),
       );
@@ -1467,7 +1467,7 @@ export function ChatSection({ events, isActive }: Props) {
                           {(() => {
                             const last = c.messages[c.messages.length - 1];
                             const txt = last.text || "…";
-                            return (last.role === "lamp" ? "↪ " : "") + (txt.length > 40 ? txt.slice(0, 40) + "…" : txt);
+                            return (last.role === "agent" ? "↪ " : "") + (txt.length > 40 ? txt.slice(0, 40) + "…" : txt);
                           })()}
                         </div>
                       )}
@@ -1636,16 +1636,16 @@ export function ChatSection({ events, isActive }: Props) {
               >
               <div style={{ maxWidth: msg.role === "user" ? "72%" : "85%", display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start", gap: 3 }}>
                 {/* Sender label for first device message or after user message */}
-                {msg.role === "lamp" && (i === 0 || messages[i - 1]?.role === "user") && (
+                {msg.role === "agent" && (i === 0 || messages[i - 1]?.role === "user") && (
                   <span style={{ fontSize: 10, color: "var(--lm-amber)", fontWeight: 600, paddingLeft: 4 }}>Lamp</span>
                 )}
                 {/* Thinking indicator — shown only for the active pending message */}
-                {msg.pending && msg.role === "lamp" && msg.runId === pendingRunIdRef.current && thinkingText && (
+                {msg.pending && msg.role === "agent" && msg.runId === pendingRunIdRef.current && thinkingText && (
                   <ThinkingBlock text={thinkingText} />
                 )}
                 {/* Tool call chips — live during pending, persisted after finalize.
                     Click a chip to expand its args/result panel. */}
-                {msg.role === "lamp" && (() => {
+                {msg.role === "agent" && (() => {
                   const isActivePending = msg.pending && msg.runId === pendingRunIdRef.current;
                   const chips = isActivePending ? toolChips : msg.tools;
                   if (!chips || chips.length === 0) return null;
@@ -1702,14 +1702,14 @@ export function ChatSection({ events, isActive }: Props) {
                     </span>
                   ) : msg.pending && msg.text ? (
                     <>
-                      {msg.role === "lamp" ? renderMarkdown(msg.text) : msg.text}
+                      {msg.role === "agent" ? renderMarkdown(msg.text) : msg.text}
                       <span className="lm-cursor" style={{
                         display: "inline-block", width: 2, height: "1em",
                         background: "var(--lm-amber)", marginLeft: 2,
                         verticalAlign: "text-bottom", borderRadius: 1,
                       }} />
                     </>
-                  ) : msg.role === "lamp" ? renderMarkdown(msg.text) : msg.text}
+                  ) : msg.role === "agent" ? renderMarkdown(msg.text) : msg.text}
                 </div>
                 {/* Action bar: time + copy + retry */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, paddingInline: 4 }}>
@@ -1729,7 +1729,7 @@ export function ChatSection({ events, isActive }: Props) {
                       aria-label="Copy message"
                     >{copiedId === msg.id ? <Check size={12} /> : <Copy size={12} />}</button>
                   )}
-                  {msg.error && msg.role === "lamp" && (
+                  {msg.error && msg.role === "agent" && (
                     <button
                       onClick={() => retryMessage(msg)}
                       style={{
@@ -1743,7 +1743,7 @@ export function ChatSection({ events, isActive }: Props) {
                       title="Retry"
                     ><RotateCcw size={11} /> retry</button>
                   )}
-                  {msg.tokenUsage && msg.role === "lamp" && <UsageBadge usage={msg.tokenUsage} model={modelLabel} />}
+                  {msg.tokenUsage && msg.role === "agent" && <UsageBadge usage={msg.tokenUsage} model={modelLabel} />}
                 </div>
               </div>
             </div>

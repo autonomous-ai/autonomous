@@ -4,7 +4,7 @@ import type { DisplayEvent } from "../types";
 export type FlowStage =
   | "mic_input" | "cam_input" | "button_input" | "channel_input" | "webchat_input" | "intent_check" | "local_match"
   | "agent_call" | "agent_thinking" | "tool_exec" | "agent_response" | "tts_speak"
-  | "schedule_trigger" | "lamp_gate" | "hw_led" | "hw_servo" | "hw_emotion" | "hw_audio" | "hw_wellbeing" | "hw_mood" | "hw_music_suggestion" | "hw_posture" | "tg_out" | "tg_alert";
+  | "schedule_trigger" | "os_gate" | "hw_led" | "hw_servo" | "hw_emotion" | "hw_audio" | "hw_wellbeing" | "hw_mood" | "hw_music_suggestion" | "hw_posture" | "tg_out" | "tg_alert";
 
 /** No pipeline node highlighted — e.g. no matching triggers in recent events */
 export type ActiveFlowStage = FlowStage | "idle";
@@ -151,7 +151,7 @@ export const FLOW_NODES: FlowNodeDef[] = [
       "flow_event:cron_fire", "cron_fire",
     ] },
 
-  { id: "lamp_gate",
+  { id: "os_gate",
     label: "Lamp Hook", short: "HOOK", icon: "🚦", color: "var(--lm-teal)", path: "agent",
     shape: "square",
     desc: "Lamp middleware · parse [HW:] markers · dispatch HW calls\n→ emotion / LED / servo / audio\n→ TTS (suppress if music)\n→ Telegram broadcast\n→ pause ambient if LED changed",

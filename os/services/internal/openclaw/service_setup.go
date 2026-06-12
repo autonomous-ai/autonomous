@@ -272,7 +272,7 @@ func (s *Service) SetupAgent(data domain.SetupRequest) error {
 	slog.Debug("ensuring logging defaults", "component", "openclaw")
 	loggingMap := ensureMap(configData, "logging")
 	loggingMap["consoleStyle"] = "pretty"
-	loggingMap["file"] = "/var/log/openclaw/lamp.log"
+	loggingMap["file"] = "/var/log/openclaw/agent.log"
 	loggingMap["level"] = "debug"
 	loggingMap["consoleLevel"] = "debug"
 	configData["logging"] = loggingMap
@@ -312,7 +312,7 @@ func (s *Service) SetupAgent(data domain.SetupRequest) error {
 	// with the watcher (syncPrimaryFromFile) or other openclaw.json writers.
 	expectedPrimary := customProviderName + "/" + defaultModel.Key
 	s.primarySyncMu.Lock()
-	setLampWriteFlag(s.config.OpenclawConfigDir, expectedPrimary)
+	setOSWriteFlag(s.config.OpenclawConfigDir, expectedPrimary)
 	writeErr := os.WriteFile(configPath, written, 0600)
 	s.primarySyncMu.Unlock()
 	if writeErr != nil {
@@ -500,7 +500,7 @@ func (s *Service) AddChannel(ctx context.Context, data domain.AddChannelRequest)
 	// primarySyncMu is already held for the full RMW cycle (acquired at entry).
 	existingPrimary := extractPrimaryModel(configData)
 	if existingPrimary != "" {
-		setLampWriteFlag(s.config.OpenclawConfigDir, existingPrimary)
+		setOSWriteFlag(s.config.OpenclawConfigDir, existingPrimary)
 	}
 	if err := os.WriteFile(configPath, written, 0600); err != nil {
 		return fmt.Errorf("write openclaw config: %w", err)
@@ -618,7 +618,7 @@ func (s *Service) RefreshModelsConfig() error {
 		// operators know why the os-server-side model and OpenClaw diverge.
 		flagPrimary = currentPrimary
 		slog.Warn("[refresh] non-autonomous provider active, skipping primary patch (state drift)",
-			"current", currentPrimary, "lamp_model", s.config.LLMModel)
+			"current", currentPrimary, "os_model", s.config.LLMModel)
 	}
 
 	written, err := json.MarshalIndent(configData, "", "  ")
@@ -627,7 +627,7 @@ func (s *Service) RefreshModelsConfig() error {
 	}
 	// Write the flag BEFORE the file so the watcher can match by content and
 	// correctly skip this os-server-initiated write regardless of the provider.
-	setLampWriteFlag(s.config.OpenclawConfigDir, flagPrimary)
+	setOSWriteFlag(s.config.OpenclawConfigDir, flagPrimary)
 	if err := os.WriteFile(configPath, written, 0600); err != nil {
 		return fmt.Errorf("write openclaw config: %w", err)
 	}

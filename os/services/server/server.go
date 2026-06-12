@@ -400,7 +400,7 @@ var hardwareProxy = func() http.Handler {
 
 // adminAuthMiddleware admits a request when any of these holds:
 //   - Authorization: Bearer <llm_api_key> matches cfg.LLMAPIKey (scripts, curl)
-//   - lamp_session cookie validates under cfg.SessionSecret (browser, post-login)
+//   - os_session cookie validates under cfg.SessionSecret (browser, post-login)
 //   - ?token=<llm_api_key> query param matches (legacy <img>/<a>/EventSource —
 //     still needed for cases where the browser can't set headers AND cookies
 //     can't ride along, e.g. cross-tab popups)
@@ -559,7 +559,7 @@ func (s *Server) Serve(closeFn func()) error {
 	api.POST("login", s.loginHandler)
 	api.POST("logout", s.logoutHandler)
 	// Exchange Bearer auth for a session cookie on the current origin.
-	// Used by the AP→.local post-setup redirect: lamp_session is bound to
+	// Used by the AP→.local post-setup redirect: os_session is bound to
 	// the AP origin and doesn't survive the host switch, so the web carries
 	// the Bearer (llm_api_key) across via URL fragment and exchanges it for
 	// a cookie here. adminAuthMiddleware already validates the Bearer (or an
@@ -1039,7 +1039,7 @@ func (s *Server) voicePreview(c *gin.Context) {
 var allowedLogs = map[string]string{
 	"hal":           "/var/log/hal/server.log",
 	"os-server":        "/var/log/os-server.log",
-	"openclaw":         "/var/log/openclaw/lamp.log",
+	"openclaw":         "/var/log/openclaw/agent.log",
 	"openclaw-service": "journal:openclaw.service",
 	"buddy":            "/var/log/claude-desktop-buddy.log",
 }

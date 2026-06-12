@@ -228,7 +228,7 @@ func (s *Service) applyModelsToConfig(configPath string, configData map[string]a
 	// The flag value must equal whatever primary the file now carries so the
 	// watcher recognises this as a Lamp write and does not sync it back. When
 	// primaryChanged is true, extractPrimaryModel already returns the new value.
-	setLampWriteFlag(filepath.Dir(configPath), extractPrimaryModel(configData))
+	setOSWriteFlag(filepath.Dir(configPath), extractPrimaryModel(configData))
 	if err := atomicWriteFile(configPath, written, 0600); err != nil {
 		return false, fmt.Errorf("write openclaw config: %w", err)
 	}

@@ -67,7 +67,7 @@ type SetupRequest struct {
 	// AdminPassword is the plaintext password the operator picks at setup time.
 	// Server bcrypts it into config.AdminPasswordHash and never persists the
 	// plaintext. Used to gate browser admin access via POST /api/login + the
-	// lamp_session cookie. Empty allowed (validated at handler level so
+	// os_session cookie. Empty allowed (validated at handler level so
 	// pre-login-UI clients keep working during the migration window).
 	AdminPassword string `json:"admin_password"`
 

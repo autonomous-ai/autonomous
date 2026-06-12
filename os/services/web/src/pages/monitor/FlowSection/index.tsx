@@ -66,7 +66,7 @@ export function FlowSection({
   // Opt-out model: store what user has EXCLUDED. Empty = show all.
   const [excludedTypes, setExcludedTypes] = useState<Set<string>>(() => {
     try {
-      const saved = localStorage.getItem("lamp-excluded-types-v1");
+      const saved = localStorage.getItem("os-excluded-types-v1");
       if (saved) return new Set(JSON.parse(saved));
     } catch {}
     return new Set();
@@ -133,7 +133,7 @@ export function FlowSection({
     const turnsSnapshot = groupIntoTurns(events);
     const payload = {
       exportedAt: new Date().toISOString(),
-      format: "lamp-monitor-ui-snapshot-v1",
+      format: "os-monitor-ui-snapshot-v1",
       flowEventsWindow: FLOW_EVENTS_MAX,
       eventCount: events.length,
       turnCount: turnsSnapshot.length,
@@ -193,7 +193,7 @@ export function FlowSection({
   }, [downloadServerJsonlTail, downloadUISnapshot]);
 
   const saveExcluded = (next: Set<string>) => {
-    try { localStorage.setItem("lamp-excluded-types-v1", JSON.stringify([...next])); } catch {}
+    try { localStorage.setItem("os-excluded-types-v1", JSON.stringify([...next])); } catch {}
   };
 
   const toggleType = (type: string) => {

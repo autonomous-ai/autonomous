@@ -6,7 +6,7 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { C, Field } from "@/components/setup/shared";
 
 // Login page — single password field that POSTs /api/login. On success the
-// server sets the lamp_session cookie (httpOnly + SameSite=Strict), and we
+// server sets the os_session cookie (httpOnly + SameSite=Strict), and we
 // navigate back to the page the user originally tried to reach (?next=…) or
 // fall back to /monitor.
 export default function Login() {

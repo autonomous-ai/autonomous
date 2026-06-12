@@ -71,44 +71,44 @@ func TestLampWriteFlag_ContentMatch(t *testing.T) {
 	dir := t.TempDir()
 
 	// No flag yet → not a Lamp write.
-	if isLampWrite(dir, "autonomous/claude-opus-4-6") {
-		t.Fatal("expected no match before setLampWriteFlag")
+	if isOSWrite(dir, "autonomous/claude-opus-4-6") {
+		t.Fatal("expected no match before setOSWriteFlag")
 	}
 
 	// Write flag with opus.
-	setLampWriteFlag(dir, "autonomous/claude-opus-4-6")
+	setOSWriteFlag(dir, "autonomous/claude-opus-4-6")
 
 	// Same primary → Lamp write.
-	if !isLampWrite(dir, "autonomous/claude-opus-4-6") {
-		t.Fatal("expected match after setLampWriteFlag with same primary")
+	if !isOSWrite(dir, "autonomous/claude-opus-4-6") {
+		t.Fatal("expected match after setOSWriteFlag with same primary")
 	}
 
 	// Different primary within 3 s window → NOT a Lamp write (external race).
-	if isLampWrite(dir, "autonomous/claude-haiku-4-5") {
+	if isOSWrite(dir, "autonomous/claude-haiku-4-5") {
 		t.Fatal("expected mismatch: flag carries opus but file now has haiku")
 	}
 
 	// After clear, gone.
-	clearLampWriteFlag(dir)
-	if isLampWrite(dir, "autonomous/claude-opus-4-6") {
-		t.Fatal("expected no match after clearLampWriteFlag")
+	clearOSWriteFlag(dir)
+	if isOSWrite(dir, "autonomous/claude-opus-4-6") {
+		t.Fatal("expected no match after clearOSWriteFlag")
 	}
 }
 
 // TestLampWriteFlag_Expired: expired flag is never a match regardless of content.
 func TestLampWriteFlag_Expired(t *testing.T) {
 	dir := t.TempDir()
-	flagPath := filepath.Join(dir, lampWriteFlagName)
+	flagPath := filepath.Join(dir, osWriteFlagName)
 
-	setLampWriteFlag(dir, "autonomous/claude-opus-4-6")
+	setOSWriteFlag(dir, "autonomous/claude-opus-4-6")
 
 	// Back-date mtime beyond the window.
-	past := time.Now().Add(-(lampWriteFlagWindow + time.Second))
+	past := time.Now().Add(-(osWriteFlagWindow + time.Second))
 	if err := os.Chtimes(flagPath, past, past); err != nil {
 		t.Fatalf("chtimes: %v", err)
 	}
 
-	if isLampWrite(dir, "autonomous/claude-opus-4-6") {
+	if isOSWrite(dir, "autonomous/claude-opus-4-6") {
 		t.Fatal("expected flag to be expired after back-dating mtime")
 	}
 }

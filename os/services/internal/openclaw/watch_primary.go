@@ -12,34 +12,34 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-const lampWriteFlagName = ".lamp-model-write-flag"
+const osWriteFlagName = ".os-model-write-flag"
 const primarySyncDebounce = 300 * time.Millisecond
-const lampWriteFlagWindow = 3 * time.Second
+const osWriteFlagWindow = 3 * time.Second
 const primaryWatchRetryInterval = 5 * time.Second
 
-// setLampWriteFlag writes expectedPrimary (e.g. "autonomous/claude-opus-4-6")
+// setOSWriteFlag writes expectedPrimary (e.g. "autonomous/claude-opus-4-6")
 // into the flag file. The watcher reads this value back and only treats a write
 // as os-server-initiated when the file's primary matches the flag content exactly —
 // preventing the race where an external write arrives within the 3 s mtime
 // window but carries a different primary value.
 //
 // Call this BEFORE writing openclaw.json so the watcher sees the flag on fire.
-func setLampWriteFlag(configDir, expectedPrimary string) {
-	flagPath := filepath.Join(configDir, lampWriteFlagName)
+func setOSWriteFlag(configDir, expectedPrimary string) {
+	flagPath := filepath.Join(configDir, osWriteFlagName)
 	if err := os.WriteFile(flagPath, []byte(expectedPrimary), 0600); err != nil {
 		slog.Warn("[primarysync] write flag failed", "path", flagPath, "err", err)
 	}
 }
 
-// isLampWrite returns true when the flag file exists, its mtime is within
-// lampWriteFlagWindow, AND its content matches actualPrimary. Content matching
+// isOSWrite returns true when the flag file exists, its mtime is within
+// osWriteFlagWindow, AND its content matches actualPrimary. Content matching
 // is the key guard: if an external write changes the primary to a different
 // value within the 3 s window, the mismatch correctly identifies it as
 // external even though the flag is still recent.
-func isLampWrite(configDir, actualPrimary string) bool {
-	flagPath := filepath.Join(configDir, lampWriteFlagName)
+func isOSWrite(configDir, actualPrimary string) bool {
+	flagPath := filepath.Join(configDir, osWriteFlagName)
 	info, err := os.Stat(flagPath)
-	if err != nil || time.Since(info.ModTime()) >= lampWriteFlagWindow {
+	if err != nil || time.Since(info.ModTime()) >= osWriteFlagWindow {
 		return false
 	}
 	content, err := os.ReadFile(flagPath)
@@ -49,9 +49,9 @@ func isLampWrite(configDir, actualPrimary string) bool {
 	return strings.TrimSpace(string(content)) == actualPrimary
 }
 
-// clearLampWriteFlag removes the flag file after consuming it.
-func clearLampWriteFlag(configDir string) {
-	_ = os.Remove(filepath.Join(configDir, lampWriteFlagName))
+// clearOSWriteFlag removes the flag file after consuming it.
+func clearOSWriteFlag(configDir string) {
+	_ = os.Remove(filepath.Join(configDir, osWriteFlagName))
 }
 
 // StartPrimaryModelWatch watches the openclaw config directory for changes to
@@ -163,8 +163,8 @@ func (s *Service) syncPrimaryFromFile() {
 	// Check both recency AND content: flag must carry the same primary value
 	// the os server just wrote. If an external write arrives within the 3 s window with
 	// a different primary, the content mismatch correctly flags it as external.
-	if isLampWrite(configDir, primary) {
-		clearLampWriteFlag(configDir)
+	if isOSWrite(configDir, primary) {
+		clearOSWriteFlag(configDir)
 		slog.Debug("[primarysync] skipping Lamp-initiated write", "primary", primary)
 		return
 	}
@@ -175,7 +175,7 @@ func (s *Service) syncPrimaryFromFile() {
 		// The os server does not manage credentials for other providers — log state
 		// drift at WARN so operators are aware and skip silently.
 		slog.Warn("[primarysync] external primary switched to non-autonomous provider, Lamp config NOT updated (state drift)",
-			"primary", primary, "lamp_model", s.config.LLMModelKey())
+			"primary", primary, "os_model", s.config.LLMModelKey())
 		return
 	}
 

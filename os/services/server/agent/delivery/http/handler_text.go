@@ -94,7 +94,7 @@ func isDeviceOutboundChatRunID(runID string) bool {
 	return strings.HasPrefix(runID, "device-chat-") || strings.HasPrefix(runID, "device-sensing-")
 }
 
-// labelForLampInternal returns the UI label that best describes a device-
+// labelForDeviceInternal returns the UI label that best describes a device-
 // internal message (sensing/voice/wellbeing/system events the device posts via
 // chat.send). Used by the Flow Monitor channel-turn handler to avoid
 // mis-labelling steer-merged self-fire turns as `[telegram]` when they
@@ -102,7 +102,7 @@ func isDeviceOutboundChatRunID(runID string) bool {
 //
 // Returns "" when the text doesn't match any known internal prefix —
 // caller should fall back to the configured-channel label in that case.
-func labelForLampInternal(text string) string {
+func labelForDeviceInternal(text string) string {
 	switch {
 	case strings.HasPrefix(text, "[user] [ambient]"),
 		strings.HasPrefix(text, "[ambient]"),
@@ -201,14 +201,14 @@ func extractMessageContentText(raw json.RawMessage) string {
 	return strings.Join(parts, "")
 }
 
-// lampInternalPrefixes are message-text prefixes the device puts on chat.sends it
+// deviceInternalPrefixes are message-text prefixes the device puts on chat.sends it
 // issues itself (sensing events, ambient voice, activity, emotion cues,
 // wellbeing nudges, wake greetings). Used as a robust guard alongside
 // IsRecentOutboundChat — that exact-match buffer can miss when the 30s
 // window expires or 32-entry cap overflows under load. Any text starting
 // with one of these prefixes is definitely device-internal, never a real
 // Telegram user message, and must NOT mark the run as a channel turn.
-var lampInternalPrefixes = []string{
+var deviceInternalPrefixes = []string{
 	"[sensing:",
 	"[ambient]",
 	"[activity]",
@@ -223,14 +223,14 @@ var lampInternalPrefixes = []string{
 	"你剛剛醒來",
 }
 
-// isLampInternalMessage returns true when the message text was issued by
+// isDeviceInternalMessage returns true when the message text was issued by
 // the device via chat.send (matches a known prefix). The check is independent of
 // the recent-outbound TTL buffer so it stays correct under burst load.
-func isLampInternalMessage(text string) bool {
+func isDeviceInternalMessage(text string) bool {
 	if text == "" {
 		return false
 	}
-	for _, p := range lampInternalPrefixes {
+	for _, p := range deviceInternalPrefixes {
 		if strings.HasPrefix(text, p) {
 			return true
 		}

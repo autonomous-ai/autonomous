@@ -195,7 +195,7 @@ func flowEventToMonitor(fe flow.Event, channelName string) domain.MonitorEvent {
 					summary = "[" + label + "]"
 				}
 			case msg != "":
-				if internal := labelForLampInternal(msg); internal != "" {
+				if internal := labelForDeviceInternal(msg); internal != "" {
 					summary = internal + " " + msg
 				} else {
 					summary = fmt.Sprintf("[%s] %s", channelName, msg)

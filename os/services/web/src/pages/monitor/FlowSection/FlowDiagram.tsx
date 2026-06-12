@@ -105,7 +105,7 @@ export function FlowDiagram({
     // OS server — top row
     intent_check:      { x: 80, y: 50 },
     local_match:       { x: 200, y: 50 },
-    lamp_gate:         { x: 467, y: 795 },
+    os_gate:         { x: 467, y: 795 },
     // Device — input row (MIC/CAM/BTN)
     mic_input:         { x: -40, y: 240 },
     cam_input:         { x: 80, y: 240 },
@@ -121,7 +121,7 @@ export function FlowDiagram({
     // OS-server-side log writes — stack BELOW the BCAST node (tg_alert at y=930)
     // so HOOK / BCAST stay grouped at the top of the OS-server column and the
     // three async-POST logs hang off the bottom in their own block.
-    // x=467 same column. Edges from lamp_gate use elbow routing
+    // x=467 same column. Edges from os_gate use elbow routing
     // (right → down → left) to avoid running through tg_alert.
     hw_mood:             { x: 467, y: 1065 },
     hw_wellbeing:        { x: 467, y: 1200 },
@@ -172,19 +172,19 @@ export function FlowDiagram({
     ["tool_exec",         "hw_servo"],
     ["tool_exec",         "hw_emotion"],
     ["tool_exec",         "hw_audio"],
-    ["tool_exec",         "lamp_gate"],
-    ["agent_response",    "lamp_gate"],
-    ["lamp_gate",         "hw_emotion"],
-    ["lamp_gate",         "hw_led"],
-    ["lamp_gate",         "hw_servo"],
-    ["lamp_gate",         "hw_audio"],
-    ["lamp_gate",         "hw_wellbeing"],
-    ["lamp_gate",         "hw_mood"],
-    ["lamp_gate",         "hw_music_suggestion"],
-    ["lamp_gate",         "hw_posture"],
-    ["lamp_gate",         "tts_speak"],
-    ["lamp_gate",         "tg_out"],
-    ["lamp_gate",         "tg_alert"],
+    ["tool_exec",         "os_gate"],
+    ["agent_response",    "os_gate"],
+    ["os_gate",         "hw_emotion"],
+    ["os_gate",         "hw_led"],
+    ["os_gate",         "hw_servo"],
+    ["os_gate",         "hw_audio"],
+    ["os_gate",         "hw_wellbeing"],
+    ["os_gate",         "hw_mood"],
+    ["os_gate",         "hw_music_suggestion"],
+    ["os_gate",         "hw_posture"],
+    ["os_gate",         "tts_speak"],
+    ["os_gate",         "tg_out"],
+    ["os_gate",         "tg_alert"],
     ["tg_alert",          "tg_out"],
   ];
 
@@ -327,11 +327,11 @@ export function FlowDiagram({
             );
           }
 
-          // Elbow edges: lamp_gate → log nodes (hw_mood / hw_wellbeing /
+          // Elbow edges: os_gate → log nodes (hw_mood / hw_wellbeing /
           // hw_music_suggestion) sitting BELOW tg_alert in the same column.
-          // Route right out of lamp_gate, down past tg_alert, then left back
+          // Route right out of os_gate, down past tg_alert, then left back
           // into the target so the line never overlaps tg_alert.
-          if (from === "lamp_gate" && (to === "hw_mood" || to === "hw_wellbeing" || to === "hw_music_suggestion" || to === "hw_posture")) {
+          if (from === "os_gate" && (to === "hw_mood" || to === "hw_wellbeing" || to === "hw_music_suggestion" || to === "hw_posture")) {
             const elbowX = f.x + 90; // offset right of source/target column
             const startX = f.x + nodeR + 4;
             const startY = f.y;
@@ -364,7 +364,7 @@ export function FlowDiagram({
             );
           }
 
-          const isGateEdge = from === "lamp_gate" || to === "lamp_gate";
+          const isGateEdge = from === "os_gate" || to === "os_gate";
           // HW marker path: agent_response fires inline markers — shown as dashed to distinguish from LLM tool path
           const isHWMarkerEdge = from === "agent_response" && (to === "hw_emotion" || to === "hw_led" || to === "hw_servo" || to === "hw_audio" || to === "hw_wellbeing" || to === "hw_mood" || to === "hw_music_suggestion" || to === "hw_posture");
 

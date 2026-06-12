@@ -109,9 +109,9 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 		// before flowRunID is computed below — every subsequent event for this
 		// UUID resolves to the device id from the very first emit, eliminating
 		// the split-turn race the previous async version had.
-		lampSession := h.agentGateway.GetSessionKey()
-		isLampSession := lampSession != "" && payload.SessionKey == lampSession
-		if payload.Stream == "lifecycle" && payload.Data.Phase == "start" && payload.RunID != "" && isLampSession {
+		agentSession := h.agentGateway.GetSessionKey()
+		isAgentSession := agentSession != "" && payload.SessionKey == agentSession
+		if payload.Stream == "lifecycle" && payload.Data.Phase == "start" && payload.RunID != "" && isAgentSession {
 			if isDeviceOutboundChatRunID(payload.RunID) {
 				h.agentGateway.RemovePendingChatTraceByRunID(payload.RunID)
 			} else {
@@ -289,7 +289,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 						case senderLabel != "":
 							prefix = "[" + chName + ":" + senderLabel + "]"
 						default:
-							if lbl := labelForLampInternal(userMsg); lbl != "" {
+							if lbl := labelForDeviceInternal(userMsg); lbl != "" {
 								prefix = lbl
 							} else {
 								prefix = "[chat]"
@@ -1368,7 +1368,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 				// 30s/32-entry buffer overflow) + IsRecentOutboundChat (catches
 				// custom message texts not in the prefix list).
 				msgText := extractMessageContentText(sm.Message.Content)
-				if msgText != "" && (isLampInternalMessage(msgText) || h.agentGateway.IsRecentOutboundChat(msgText)) {
+				if msgText != "" && (isDeviceInternalMessage(msgText) || h.agentGateway.IsRecentOutboundChat(msgText)) {
 					// fall through to skip log — not a real interleave
 				} else {
 					chatID := extractTelegramChatID(msgText)
@@ -1408,7 +1408,7 @@ func (h *AgentHandler) HandleEvent(ctx context.Context, evt domain.WSEvent) erro
 		// still get correctly classified as device-internal (not Telegram).
 		if sm.Message.Role == "user" {
 			text := extractMessageContentText(sm.Message.Content)
-			if text != "" && (isLampInternalMessage(text) || h.agentGateway.IsRecentOutboundChat(text)) {
+			if text != "" && (isDeviceInternalMessage(text) || h.agentGateway.IsRecentOutboundChat(text)) {
 				slog.Info("session.message skipped — device-outbound echo",
 					"component", "agent", "sessionKey", sm.SessionKey,
 					"preview", text[:min(len(text), 80)])
