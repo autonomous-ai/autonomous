@@ -1,0 +1,93 @@
+# SAFETY.md Specification — `autonomous.safety.v1`
+
+`SAFETY.md` is the bounds contract for a device. `DEVICE.md` declares what a body
+*can* do; `SAFETY.md` declares what it *must never* do, and which actions are
+governed by deterministic OS policy rather than the language model.
+
+Like `DEVICE.md`, it is two layers in one file:
+
+- **YAML front matter** — the machine contract the **safety engine** parses at boot
+  and enforces deterministically in the runtime (HAL).
+- **Prose below** — the human-readable rationale the gateway and contributors read.
+  The per-capability `safety: SAFETY.md#<anchor>` references in `DEVICE.md` point at
+  these prose headings; the bounds that back them live in the front matter.
+
+One file per device at `devices/<id>/SAFETY.md`, referenced by `DEVICE.md`'s
+top-level `safety_ref`. It is **optional** — a device that declares no safety bounds
+ships no `SAFETY.md`.
+
+## First principle: safety is below the brain
+
+Every bound here is enforced by the OS (Go/Python policy), not by prompting the
+agent. The gateway may choose the *wording* of a refusal; it may never be the thing
+that *decides whether* a safety-critical action happens. The agent cannot raise a
+ceiling, skip a clamp, or disable a stop by asking — the runtime gate sits between
+the agent's request and the hardware and is the single point that decides.
+
+## How the OS consumes it
+
+At boot the HAL runtime:
+
+1. Resolves `safety_ref` from `DEVICE.md` to the `SAFETY.md` text (path or URL).
+2. **Validates `schema`** — a missing/malformed/unknown-major tag aborts boot, like
+   `DEVICE.md` (the runtime will not enforce a bounds ABI it cannot read).
+3. Parses the front matter into a typed `SafetyPolicy`.
+4. Exposes deterministic **gate** functions (e.g. `clamp_brightness`) that the
+   capability routes call before actuating. The gate is pure, in-process, and runs
+   on every request regardless of who issued it.
+
+Bounds that are **declared** are enforced. Bounds that are **absent** are
+unenforced (and logged) — see *Fail-safe* below for the per-capability rule.
+
+## Front matter schema (v1)
+
+```yaml
+---
+schema: autonomous.safety.v1
+light:
+  max_brightness: 180        # 0–255 ceiling; the runtime clamps any higher request
+motion:                      # reserved (not yet enforced) — see roadmap
+  # max_speed:  <int>
+  # max_accel:  <int>
+  # stop_always: true
+audio:                       # reserved
+  # quiet_hours: { start: "22:00", end: "07:00" }
+---
+```
+
+| Field | Required | Status | Meaning |
+|-------|----------|--------|---------|
+| `schema` | yes | enforced | Contract version. `autonomous.safety.v1`. Frozen ABI — fields are only added within a major. |
+| `light.max_brightness` | no | **enforced (v1)** | Integer `0–255`. The LED route clamps any requested brightness to this ceiling. |
+| `light.quiet_hours` | no | reserved | A window during which `max_brightness` is further reduced. (Slice 2.) |
+| `motion.max_speed` / `max_accel` | no | reserved | Speed/acceleration ceilings the servo route clamps to. (Slice 3.) |
+| `motion.stop_always` | no | reserved | `motion.stop` is deterministic and always available, never queued behind the gateway. (Slice 3.) |
+| `audio.quiet_hours` | no | reserved | No loud output during the window. (Slice 2.) |
+
+Sections are keyed by **capability group** (the same vocabulary as `DEVICE.md`
+`capabilities` and `contract/capabilities.md`) so each `## <group>` prose heading,
+its `DEVICE.md` `safety:` anchor, and its machine bounds line up.
+
+## Fail-safe — what happens when a bound is absent or unloadable
+
+The rule is **per-capability criticality**, not one global default:
+
+- **Expressive capabilities (light, audio):** a missing bound is *pass-through* —
+  the request is unclamped, and the runtime logs that no ceiling is set. A calm LED
+  is not a safety risk, so the engine does not invent a limit nobody declared.
+- **Actuating capabilities (motion):** a missing or unloadable bound is *fail-closed*
+  — actuation is refused until bounds resolve. Moving a body against unknown limits
+  is a hardware fault, not graceful degradation. (Enforced from slice 3.)
+
+`SAFETY.md` itself is optional. A device with no `safety_ref` declares no bounds; the
+gate is a no-op for it (and any `motion` it declares must carry its bounds inline, or
+fail-closed once slice 3 lands).
+
+## Versioning — the frozen contract
+
+`schema` is an ABI, identical in discipline to `autonomous.device.v1`: within a major
+version fields are only **added**, never removed or repurposed. A `v1` `SAFETY.md`
+must keep enforcing on every later `v1` runtime. Breaking changes bump to
+`autonomous.safety.v2`, supported across a deprecation window.
+
+See `docs/safety.md` for the engine architecture and the slice roadmap.
