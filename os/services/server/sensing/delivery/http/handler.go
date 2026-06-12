@@ -594,9 +594,9 @@ func (h *SensingHandler) GetSnapshot(c *gin.Context) {
 		return
 	}
 	for _, dir := range []string{
-		"/tmp/lamp-sensing-snapshots",
-		"/tmp/lamp-emotion-snapshots",
-		"/tmp/lamp-motion-snapshots",
+		"/tmp/hal-sensing-snapshots",
+		"/tmp/hal-emotion-snapshots",
+		"/tmp/hal-motion-snapshots",
 	} {
 		p := filepath.Join(dir, category, name)
 		if _, err := os.Stat(p); err == nil {
@@ -613,7 +613,7 @@ func (h *SensingHandler) GetSnapshot(c *gin.Context) {
 // these dirs only.
 var speechEmotionAudioDirs = []string{
 	"/var/lib/hal/speech-emotion",
-	"/tmp/lamp-speech-emotion",
+	"/tmp/hal-speech-emotion",
 }
 
 // audioURLForPath maps a raw on-Pi WAV path (from SensingEventRequest.Audio)

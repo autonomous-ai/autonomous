@@ -161,7 +161,7 @@ MOTION_PERSON_MIN_AREA_RATIO = float(
 )
 MOTION_SNAPSHOT_DIR = os.environ.get(
     "HAL_MOTION_SNAPSHOT_DIR",
-    os.path.join(tempfile.gettempdir(), "lamp-motion-snapshots"),
+    os.path.join(tempfile.gettempdir(), "hal-motion-snapshots"),
 )
 MOTION_SNAPSHOT_MAX_COUNT = int(os.environ.get("HAL_MOTION_SNAPSHOT_MAX_COUNT", "100"))
 
@@ -174,7 +174,7 @@ EMOTION_FLUSH_S = float(os.environ.get("HAL_EMOTION_FLUSH_S", "10.0"))
 EMOTION_DEDUP_WINDOW_S = float(os.environ.get("HAL_EMOTION_DEDUP_WINDOW_S", "300.0"))
 EMOTION_SNAPSHOT_DIR = os.environ.get(
     "HAL_EMOTION_SNAPSHOT_DIR",
-    os.path.join(tempfile.gettempdir(), "lamp-emotion-snapshots"),
+    os.path.join(tempfile.gettempdir(), "hal-emotion-snapshots"),
 )
 EMOTION_SNAPSHOT_MAX_COUNT = int(os.environ.get("HAL_EMOTION_SNAPSHOT_MAX_COUNT", "100"))
 
@@ -267,7 +267,7 @@ POSE_FLIP_DLBACKEND_ANGLE_SIGN = (
 
 # --- Sensing: Snapshot storage ---
 SNAPSHOT_TMP_DIR = os.environ.get(
-    "HAL_SNAPSHOT_TMP_DIR", "/tmp/lamp-sensing-snapshots"
+    "HAL_SNAPSHOT_TMP_DIR", "/tmp/hal-sensing-snapshots"
 )
 SNAPSHOT_TMP_MAX_COUNT = int(os.environ.get("HAL_SNAPSHOT_TMP_MAX_COUNT", "50"))
 SNAPSHOT_PERSIST_DIR = os.environ.get(
@@ -299,7 +299,7 @@ SPEAKER_EMBEDDING_API_TIMEOUT_S: float = float(
 )
 SPEAKER_UNKNOWN_AUDIO_DIR: str = os.environ.get(
     "HAL_UNKNOWN_AUDIO_DIR",
-    os.path.join(tempfile.gettempdir(), "lamp-unknown-voice"),
+    os.path.join(tempfile.gettempdir(), "hal-unknown-voice"),
 )
 DL_SPEAKER_ENDPOINT = os.environ.get("DL_SPEAKER_ENDPOINT", "/hal/api/dl/audio-recognizer/embed")
 SPEAKER_EMBEDDING_API_URL: str = DL_BACKEND_URL.rstrip("/") + "/" + DL_SPEAKER_ENDPOINT.strip("/") if DL_BACKEND_URL else ""
@@ -331,7 +331,7 @@ SPEECH_EMOTION_API_URL: str = (
 SPEECH_EMOTION_API_KEY: str = DL_API_KEY
 SPEECH_EMOTION_AUDIO_DIR: str = os.environ.get(
     "HAL_SPEECH_EMOTION_AUDIO_DIR",
-    os.path.join(tempfile.gettempdir(), "lamp-speech-emotion"),
+    os.path.join(tempfile.gettempdir(), "hal-speech-emotion"),
 )
 
 # --- Realtime voice agent ---

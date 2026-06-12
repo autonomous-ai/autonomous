@@ -51,7 +51,7 @@ class RealtimeContextManager:
         self._summarizer: RealtimeSummarizer | None = summarizer
         # Summary files alongside the memory JSONL
         self._summary_path: Path = self._realtime_memory_path.parent / "summary.md"
-        self._lamp_summary_path: Path = self._realtime_memory_path.parent / "lamp_summary.md"
+        self._device_summary_path: Path = self._realtime_memory_path.parent / "device_summary.md"
         self._summary_max_chars: int = 10000
 
     # --- Public API ---
@@ -80,7 +80,7 @@ class RealtimeContextManager:
             sections.append(f"# SKILLS CATALOG\n\n{catalog}")
 
         # Lamp memory (pre-summarized at startup + recent entries)
-        device_mem: str = self._build_lamp_memory()
+        device_mem: str = self._build_device_memory()
         if device_mem:
             sections.append(f"# DEVICE MEMORY\n\n{device_mem}")
 
@@ -210,7 +210,7 @@ class RealtimeContextManager:
                 parts.append(recent)
         return "\n\n".join(parts)
 
-    def _build_lamp_memory(self) -> str:
+    def _build_device_memory(self) -> str:
         """Load lamp memory: summary + most recent .md entries."""
         memory_dir: Path = self._workspace / "memory"
         recent_lines: list[str] = []
@@ -222,7 +222,7 @@ class RealtimeContextManager:
                         recent_lines.append(f"## {md_file.stem}\n\n{content}")
                 except Exception as e:
                     logger.warning("Failed to read memory %s: %s", md_file, e)
-        return self._build_memory_section(self._lamp_summary_path, recent_lines)
+        return self._build_memory_section(self._device_summary_path, recent_lines)
 
     def _build_realtime_memory(self) -> str:
         """Load realtime memory: summary + most recent JSONL conversation entries."""

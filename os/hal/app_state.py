@@ -98,7 +98,7 @@ _shutdown_announced = False
 # --- Snapshot state ---
 
 _SNAPSHOT_DIR = os.environ.get(
-    "HAL_SNAPSHOT_DIR", "/root/.openclaw/media/lamp-snapshots"
+    "HAL_SNAPSHOT_DIR", "/root/.openclaw/media/hal-snapshots"
 )
 _SNAPSHOT_MAX = 20
 _snapshot_paths: list = []

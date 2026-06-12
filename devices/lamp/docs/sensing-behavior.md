@@ -121,7 +121,7 @@ Only large motion is forwarded — small motion is filtered out by HAL and never
 
 ## Posture (RULA — silently sampled, folded into `motion.activity`)
 
-HAL streams every camera frame to dlbackend `/api/dl/pose-estimation/ws` and receives a per-frame RULA breakdown (whole-body score + `risk_level` + per-side `body_scores` and `*_angle` for `neck / trunk / upper_arm / lower_arm / wrist`). `PosePerception` throttles to **one sample per `POSE_SAMPLE_INTERVAL_S` (default 60s)** into a tumbling window + daily JSONL under `/tmp/lamp-sensing-snapshots/sensing_pose/samples_YYYY-MM-DD.jsonl`. **No event is emitted directly** — `MotionPerception` checks `is_window_complete()` once per tick and folds the aggregate into the next `motion.activity` when the gate trips.
+HAL streams every camera frame to dlbackend `/api/dl/pose-estimation/ws` and receives a per-frame RULA breakdown (whole-body score + `risk_level` + per-side `body_scores` and `*_angle` for `neck / trunk / upper_arm / lower_arm / wrist`). `PosePerception` throttles to **one sample per `POSE_SAMPLE_INTERVAL_S` (default 60s)** into a tumbling window + daily JSONL under `/tmp/hal-sensing-snapshots/sensing_pose/samples_YYYY-MM-DD.jsonl`. **No event is emitted directly** — `MotionPerception` checks `is_window_complete()` once per tick and folds the aggregate into the next `motion.activity` when the gate trips.
 
 ### Tumbling window (when does the summary inject)
 
@@ -154,7 +154,7 @@ Window lifecycle:
 
 ### Per-window bucketed snapshots
 
-Each sample writes an annotated JPEG (skeleton overlay + RULA label) into the **current window's bucket dir**: `/tmp/lamp-sensing-snapshots/sensing_pose/buckets/<window_start_int>/<sample_ts_int>_<score>.jpg`. Filenames include the ergo score so the bucket itself is a self-describing on-disk record without re-reading metadata.
+Each sample writes an annotated JPEG (skeleton overlay + RULA label) into the **current window's bucket dir**: `/tmp/hal-sensing-snapshots/sensing_pose/buckets/<window_start_int>/<sample_ts_int>_<score>.jpg`. Filenames include the ergo score so the bucket itself is a self-describing on-disk record without re-reading metadata.
 
 When `reset_window()` runs:
 
@@ -192,7 +192,7 @@ Both markers are stripped before the message reaches the LLM (mirror of `[snapsh
 
 ### `/dm` auto-attach (Telegram)
 
-When the agent decides to nudge via `/dm`, Lamp's SSE handler calls `ConsumePoseBucketRun(runID)` (mirror of `ConsumeGuardRun`). If the run has a stashed bucket, the worst-snapshot filenames are resolved against `/tmp/lamp-sensing-snapshots/sensing_pose/buckets/<bid>/` and shipped to Telegram via `sendMediaGroup` — caption rides on the first photo, the rest appear as a gallery. The agent itself stays unaware of file paths; image attachment is decided entirely by Lamp based on whether the originating `motion.activity` carried a bucket.
+When the agent decides to nudge via `/dm`, Lamp's SSE handler calls `ConsumePoseBucketRun(runID)` (mirror of `ConsumeGuardRun`). If the run has a stashed bucket, the worst-snapshot filenames are resolved against `/tmp/hal-sensing-snapshots/sensing_pose/buckets/<bid>/` and shipped to Telegram via `sendMediaGroup` — caption rides on the first photo, the rest appear as a gallery. The agent itself stays unaware of file paths; image attachment is decided entirely by Lamp based on whether the originating `motion.activity` carried a bucket.
 
 ### Angle sign workaround (temporary)
 
@@ -697,7 +697,7 @@ Sensing events that include a camera frame (`motion`, `presence.enter`, `presenc
 
 | Tier | Path | Rotation | Survives reboot |
 |------|------|----------|-----------------|
-| **Tmp buffer** | `/tmp/lamp-sensing-snapshots/sensing_<prefix>/` | Count-based (max 50 files) | No |
+| **Tmp buffer** | `/tmp/hal-sensing-snapshots/sensing_<prefix>/` | Count-based (max 50 files) | No |
 | **Persistent** | `/var/lib/hal/snapshots/sensing_<prefix>/` | TTL (72h) + size (50 MB max) | Yes |
 
 Each event kind writes to its own subdir (`sensing_<prefix>`, e.g. `sensing_presence/`, `sensing_motion_activity/`, `sensing_emotion/`). Filenames are `<ms>.jpg`. Every snapshot is saved to tmp first, then copied to the persistent dir. The persistent path is included in the event message (`[snapshot: /var/lib/hal/snapshots/sensing_<prefix>/<ms>.jpg]`) so the agent can reference it later — even after a device reboot. Monitor serves them via `GET /api/sensing/snapshot/<category>/<name>`.

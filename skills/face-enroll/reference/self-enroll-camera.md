@@ -47,7 +47,7 @@ Do NOT activate this flow when:
 User: "Lamp, remember my face — I'm Gray."
 Agent (turn 1):
   Reply: "Got it, saving you as Gray — hold still for a sec."
-  → GET /camera/snapshot?save=true → {"path": "/root/.openclaw/media/lamp-snapshots/snap_171xxx.jpg"}
+  → GET /camera/snapshot?save=true → {"path": "/root/.openclaw/media/hal-snapshots/snap_171xxx.jpg"}
   → POST /face/enroll {"image_base64": "...", "label": "gray"}
   → confirm: "Done — I'll remember you as Gray now."
 ```

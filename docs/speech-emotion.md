@@ -130,7 +130,7 @@ Content-Type: application/json
   "type": "speech_emotion.detected",
   "message": "Speech emotion detected: Sad. (weak voice cue; confidence=0.72; bucket=negative; treat as uncertain, do not assume the user is distressed.)",
   "current_user": "alice",
-  "audio": "/tmp/lamp-speech-emotion/1715587812413_alice_sad.wav"
+  "audio": "/tmp/hal-speech-emotion/1715587812413_alice_sad.wav"
 }
 ```
 
@@ -150,7 +150,7 @@ To make noisy SER reads debuggable, the service persists the WAV clip behind eac
 
 In `_process_job`, every inference that clears the per-label confidence gate is written to disk by `_persist_wav()` before it lands in the buffer:
 
-- **Directory:** `SPEECH_EMOTION_AUDIO_DIR` (config in `os/hal/config.py`, env `HAL_SPEECH_EMOTION_AUDIO_DIR`), default `<tempdir>/lamp-speech-emotion` (i.e. `/tmp/lamp-speech-emotion`). Created with `os.makedirs(exist_ok=True)` at init; if creation fails the directory is disabled and every POST carries an empty `audio` field (graceful degradation — SER keeps working).
+- **Directory:** `SPEECH_EMOTION_AUDIO_DIR` (config in `os/hal/config.py`, env `HAL_SPEECH_EMOTION_AUDIO_DIR`), default `<tempdir>/hal-speech-emotion` (i.e. `/tmp/hal-speech-emotion`). Created with `os.makedirs(exist_ok=True)` at init; if creation fails the directory is disabled and every POST carries an empty `audio` field (graceful degradation — SER keeps working).
 - **Filename:** `<ms>_<user>_<label>.wav`, where `<ms>` is the inference timestamp in milliseconds and `<user>`/`<label>` are sanitized to `[a-zA-Z0-9_-]` (anything else collapsed to `_`).
 - **Flush selection:** when a user's flush emits the dominant non-neutral label, it attaches the **latest** clip among the dominant-label inferences — `max(dom_inferences, key=lambda i: i.ts).audio_path` — as the `audio` field in the POST.
 
@@ -160,7 +160,7 @@ The Lamp backend exposes the clip to the Flow Monitor UI **only** via a new rout
 
 ```
 /var/lib/hal/speech-emotion
-/tmp/lamp-speech-emotion
+/tmp/hal-speech-emotion
 ```
 
 The basename is validated (`.wav` suffix, no `/`, `\`, or `..`) before serving. On `PostEvent`, the raw `audio` path is mapped to a servable URL (`/api/sensing/audio/<name>`) and attached to the Monitor `sensing_input` event detail; the Monitor turn item renders it as a clickable audio player. The raw path is never exposed to the UI, and the `audio` field is never concatenated into the outgoing chat text.

@@ -16,7 +16,7 @@ Just call the snapshot endpoint — the server handles servo freeze, frame wait,
 curl -s "http://127.0.0.1:5001/camera/snapshot?save=true&width=768&quality=75"
 ```
 
-Returns JSON: `{"path": "/root/.openclaw/media/lamp-snapshots/snap_1712567890123.jpg"}`.
+Returns JSON: `{"path": "/root/.openclaw/media/hal-snapshots/snap_1712567890123.jpg"}`.
 **Never hardcode a filename** — always read `path` from the response.
 
 `width=768&quality=75` shrinks the JPEG (~50–80 KB instead of ~300–500 KB at full 1920×1080) so vision LLM uploads + tokenizes faster. 768 px wide is still enough to read text on a laptop screen and recognize people/objects. Do NOT remove these unless you specifically need a larger image.
@@ -56,7 +56,7 @@ curl -s "http://127.0.0.1:5001/camera/snapshot?save=true&width=768&quality=75"
 
 Returns JSON with the saved file path:
 ```json
-{"path": "/root/.openclaw/media/lamp-snapshots/snap_1712567890123.jpg"}
+{"path": "/root/.openclaw/media/hal-snapshots/snap_1712567890123.jpg"}
 ```
 
 Without `?save=true`, returns raw JPEG bytes (used by web UI).

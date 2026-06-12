@@ -6,14 +6,14 @@ HTTP at `http://127.0.0.1:5001`. Load only when actually calling the API.
 ```bash
 curl -s -X POST http://127.0.0.1:5001/speaker/enroll \
   -H "Content-Type: application/json" \
-  -d '{"name": "darren", "wav_paths": ["/tmp/lamp-unknown-voice/incoming_171_abc.wav"]}'
+  -d '{"name": "darren", "wav_paths": ["/tmp/hal-unknown-voice/incoming_171_abc.wav"]}'
 ```
 
 ## Enroll (mic, multiple paths — same `[voice:N]` combined)
 ```bash
 curl -s -X POST http://127.0.0.1:5001/speaker/enroll \
   -H "Content-Type: application/json" \
-  -d '{"name": "darren", "wav_paths": ["/tmp/lamp-unknown-voice/incoming_A.wav", "/tmp/lamp-unknown-voice/incoming_B.wav"]}'
+  -d '{"name": "darren", "wav_paths": ["/tmp/hal-unknown-voice/incoming_A.wav", "/tmp/hal-unknown-voice/incoming_B.wav"]}'
 ```
 
 ## Enroll (Telegram — convert in-place if needed)
