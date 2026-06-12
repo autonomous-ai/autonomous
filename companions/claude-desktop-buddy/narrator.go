@@ -24,7 +24,7 @@ type Narrator struct {
 }
 
 // NewNarrator constructs a narrator bound to a single TTS sink.
-// Passing speak=nil disables narration (useful when LeLamp is offline
+// Passing speak=nil disables narration (useful when the device is offline
 // or the operator wants to mute announcements without ripping out the
 // wiring). The language is clamped to a supported one so unknown
 // values fall back to English rather than emitting raw category ids.
@@ -69,7 +69,7 @@ func (n *Narrator) Say(cat NarrationCategory, args ...any) {
 
 // Warmup runs every narration phrase through a prerender callback so
 // the TTS cache is populated before the first real announcement.
-// `prerender` should call LeLamp /voice/speak with `prerender: true`,
+// `prerender` should call the device's /voice/speak with `prerender: true`,
 // which synthesizes + caches without playing. With the cache warm,
 // the very first time we say "Claude is searching the web" plays from
 // disk instead of waiting on the TTS provider.

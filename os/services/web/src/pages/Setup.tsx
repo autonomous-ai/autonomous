@@ -99,7 +99,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // (display:none) — same pattern as STT/MQTT below.
   const debug = searchParams.get("debug") === "true";
 
-  // Default operator path: Lamp parent pushes config via URL params, so
+  // Default operator path: the OS server parent pushes config via URL params, so
   // AI Brain / Channels never need to be touched manually — sidebar entries
   // for them stay hidden unless ?debug=true. Manual fresh setup without
   // pushed params also requires ?debug=true to reach those sections.
@@ -116,7 +116,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
       { id: "language" as SectionId, label: "Language",  icon: <Globe size={15} /> },
       { id: "tts" as SectionId,     label: "Lamp's Voice", icon: <Volume2 size={15} /> },
     ] : []),
-    // Voice / Face appear in continue mode only — they need the lamp's
+    // Voice / Face appear in continue mode only — they need the device's
     // hardware + backend, both unavailable while we're still on the AP.
     ...(isContinue ? [
       { id: "voice" as SectionId, label: "My Voice", icon: <Mic size={15} /> },
@@ -124,7 +124,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
     ] : []),
   ];
 
-  // When Lamp pushed config, the operator only needs Device + Wi-Fi visible —
+  // When the OS server pushed config, the operator only needs Device + Wi-Fi visible —
   // the rest are filled from URL and submitted silently. Sections remain in
   // the DOM (see `lampPushedConfig` display:none wrappers below) so values
   // still flow through the form; we just hide the menu entries.
@@ -145,7 +145,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   const [setupLanIP, setSetupLanIP] = useState<string>("");
   const [setupErrorMsg, setSetupErrorMsg] = useState<string>("");
   // Always start on Device. The admin-password input lives there (fresh
-  // devices need it; lamp-push doesn't carry that field via URL), so the
+  // devices need it; the OS-server push doesn't carry that field via URL), so the
   // user must see it before submitting. For already-provisioned devices
   // useConfigPrefill detects cfg.device_id and skips device → wifi.
   const [activeSection, setActiveSection] = useState<SectionId>("device");
@@ -259,7 +259,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   const [fdChannel, setFdChannel] = useState("");
 
   // Face enroll — same flow as EditConfig.Face. Uses /api/hardware/face endpoints
-  // directly; only relevant in continue mode (lamp online).
+  // directly; only relevant in continue mode (device online).
   const {
     faceName, setFaceName,
     faceFiles, setFaceFiles,
@@ -285,7 +285,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // counts as done, but a saved-but-not-retyped secret still shows the green
   // tick from its presence boolean.
   const sectionDone: Record<SectionId, boolean> = {
-    // device-section is "done" when a device id exists AND, if the lamp has
+    // device-section is "done" when a device id exists AND, if the device has
     // no admin password on file yet, the operator has filled + confirmed one.
     // Devices that already have a hash satisfy the gate automatically.
     device: !!deviceId && (hasAdminPassword || (!!adminPassword && adminPassword === adminPasswordConfirm)),
@@ -314,7 +314,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
     setFdChannel((prev) => prev || urlParams.fdChannel);
   }, [urlParams]);
 
-  // Continue mode: refresh enrolled face/voice owners (lamp is online now).
+  // Continue mode: refresh enrolled face/voice owners (device is online now).
   useEffect(() => {
     if (isContinue) loadFaceOwners();
   }, [isContinue, loadFaceOwners]);
@@ -342,7 +342,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
     if (required.every((id) => sectionDone[id])) {
       // Skip auto-bounce when user is on #force testing the UI on a
       // provisioned device, or when running on a local dev host pointed at a
-      // remote lamp — they want to see the page, not jump away.
+      // remote device — they want to see the page, not jump away.
       if (autoScrolledRef.current && !forceHash && !isLocalDev) navigate("/monitor", { replace: true });
       return;
     }
@@ -562,7 +562,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
           {visibleSections.map((s) => {
             const active = activeSection === s.id;
             // Show checks whenever a section's value is filled — including in
-            // #force (initial) mode if the lamp already has saved config to
+            // #force (initial) mode if the device already has saved config to
             // prefill from. A truly empty device still shows zero checks
             // because sectionDone returns false across the board.
             const done = sectionDone[s.id];
@@ -656,7 +656,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
         }}>
           <div style={{ maxWidth: 560, margin: "0 auto" }}>
 
-            {/* Post-submit screen: shows progress while the lamp joins
+            {/* Post-submit screen: shows progress while the device joins
                 Wi-Fi, then a QR + IP for the user to continue setup on the
                 home network once the AP shuts down. */}
             {setupWorking ? (
@@ -726,14 +726,14 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
                         </div>
                         <a
                           // Carry the current pathname + query params so any
-                          // ?llm_api_key=… etc. from Lamp remain in scope on
-                          // the new host (redundant — lamp already persisted
+                          // ?llm_api_key=… etc. from the OS server remain in scope on
+                          // the new host (redundant — the OS server already persisted
                           // them via submit — but cheap and useful when the
                           // operator re-runs setup with different overrides).
                           // Force reload when the user is already on the
                           // canonical .local URL — otherwise the browser
                           // no-ops the same-URL click and they stay stuck on
-                          // the "Lamp is online!" screen even though the lamp
+                          // the "Lamp is online!" screen even though the device
                           // is reachable in continue mode now.
                           href={`http://${lampMdnsHost}.local${window.location.pathname}${getInitialSearch()}`}
                           onClick={(e) => {

@@ -52,7 +52,7 @@ func main() {
 	logPath := flag.String("log", "/var/log/claude-desktop-buddy.log", "path to log file")
 	flag.Parse()
 
-	// Rotating log file: 2 MB per file, keep 10 backups (same as lamp)
+	// Rotating log file: 2 MB per file, keep 10 backups (same as the OS server)
 	rotatingWriter := &lumberjack.Logger{
 		Filename:   *logPath,
 		MaxSize:    2, // MB
@@ -83,12 +83,12 @@ func main() {
 	startTime := time.Now()
 
 	// Narrator (UC-9): short TTS announcements on state changes and
-	// per-tool-use blocks. Shares the LeLamp TTS endpoint with the rest
-	// of the voice pipeline so LeLamp's own mute / music-busy logic
+	// per-tool-use blocks. Shares the device's TTS endpoint with the rest
+	// of the voice pipeline so the device's own mute / music-busy logic
 	// applies.
 	narrator := NewNarrator(cfg.NarrationLang, bridge.speakTTS)
-	// Warm the TTS cache once LeLamp has had a chance to come up.
-	// Fire-and-forget; prerender requests are queued by LeLamp and any
+	// Warm the TTS cache once the device has had a chance to come up.
+	// Fire-and-forget; prerender requests are queued by the device and any
 	// 503 / 409 responses are ignored so we don't block startup.
 	go func() {
 		time.Sleep(8 * time.Second)
@@ -120,8 +120,8 @@ func main() {
 			narrator.Say(NarrateBusyStart)
 		case old == StateBusy && next == StateIdle:
 			narrator.Say(NarrateDone)
-			// Done = quick celebratory emotion. LeLamp coordinates the
-			// servo + LED together via /emotion so the lamp visibly
+			// Done = quick celebratory emotion. The device coordinates the
+			// servo + LED together via /emotion so the device visibly
 			// "exhales" between turns.
 			bridge.expressEmotion("happy", 0.7)
 		}
@@ -244,7 +244,7 @@ func handleBLEMessage(data []byte, sm *StateMachine, bleSrv *BLEServer, bridge *
 		// reading the journal — and us during integration work — see
 		// everything Claude Desktop sent.
 		log.Printf("[ble] event evt=%q role=%q content=%q", m.Evt, m.Role, m.TurnText())
-		// Fan out to Lamp so use cases (TTS, display, etc.) can subscribe.
+		// Fan out to the OS server so use cases (TTS, display, etc.) can subscribe.
 		bridge.OnEvent(m)
 		// UC-9 narration: a new user turn resets per-turn throttle;
 		// assistant turns are inspected block-by-block so tool_use and
@@ -375,8 +375,8 @@ func loadConfig(path string) Config {
 }
 
 // resolveDeviceName expands the {MAC} placeholder in name by fetching the
-// hardware MAC suffix from Lamp's /api/system/network. Buddy may start before
-// Lamp is ready, so we retry transport errors for a short window. Names
+// hardware MAC suffix from the OS server's /api/system/network. Buddy may start before
+// the OS server is ready, so we retry transport errors for a short window. Names
 // without the placeholder pass through untouched.
 //
 // MAC suffix is preferred over device_id because it's hardware-derived
@@ -444,7 +444,7 @@ const fetchAttempts = 15
 
 // fetchMAC returns (mac, reason). reason is one of:
 //
-//	"" on success, "empty" if Lamp answered with an empty mac (hardware
+//	"" on success, "empty" if the OS server answered with an empty mac (hardware
 //	serial/MAC unreadable), or a transport-level failure summary if all
 //	retries failed.
 func fetchMAC(lampURL string) (string, string) {
@@ -468,7 +468,7 @@ func fetchMAC(lampURL string) (string, string) {
 	return "", lastErr
 }
 
-// tryFetchMAC returns (mac, ok, errStr). ok=true means Lamp answered with
+// tryFetchMAC returns (mac, ok, errStr). ok=true means the OS server answered with
 // a parseable response (mac may still be empty if hardware ID is unset).
 // ok=false means transport/decode failure — caller should retry.
 func tryFetchMAC(client *http.Client, url string) (string, bool, string) {

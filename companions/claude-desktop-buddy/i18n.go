@@ -35,7 +35,7 @@ const fallbackLang = "en"
 // narrationStrings is the only place narration text lives. Every
 // phrase names "Claude" up front so the user always knows who the
 // announcement is about — without that prefix "Editing a file" played
-// out of a smart lamp is ambiguous (was it Lamp? was it the user?).
+// out of a smart device is ambiguous (was it the device? was it the user?).
 // Keep entries short — these are played mid-flow while the user is
 // reading code on the Mac.
 var narrationStrings = map[string]map[NarrationCategory]string{

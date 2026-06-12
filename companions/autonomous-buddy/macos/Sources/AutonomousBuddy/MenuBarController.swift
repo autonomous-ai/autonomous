@@ -70,7 +70,7 @@ final class MenuBarController: NSObject {
     // MARK: - header text + icon
 
     private func iconSymbol(for state: AppState) -> NSImage? {
-        // `lit` = lamp visibly "on": paired, healthy WS, not paused. In that
+        // `lit` = device visibly "on": paired, healthy WS, not paused. In that
         // state we drop template mode and paint the bulb in system yellow so
         // it actually looks lit against the menu bar — `isTemplate=true` would
         // flatten lightbulb.fill into the same monochrome silhouette as the
