@@ -14,7 +14,7 @@ import (
 // MVP is 1↔1 so this holds at most one record. Future multi-buddy will expand the schema.
 const BuddiesFilePath = "config/buddies.json"
 
-// PairingRecord is what the lamp persists for each paired buddy.
+// PairingRecord is what the device persists for each paired buddy.
 type PairingRecord struct {
 	BuddyID     string    `json:"buddy_id"`
 	Token       string    `json:"token"`
