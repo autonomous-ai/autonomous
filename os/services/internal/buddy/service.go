@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -21,7 +23,7 @@ type Service struct {
 }
 
 // ProvideService wires the buddy subsystem. It loads any existing pairing from
-// disk so a previously-paired buddy can reconnect after a lamp restart.
+// disk so a previously-paired buddy can reconnect after a device restart.
 func ProvideService() (*Service, error) {
 	store := NewStore(BuddiesFilePath)
 	if err := store.Load(); err != nil {
@@ -104,7 +106,7 @@ func (s *Service) Dispatch(ctx context.Context, cmd Command) (json.RawMessage, e
 
 // Greet fires a `ping` command immediately after the buddy WS connects. The
 // goal is purely UX: the buddy's Activity window shows one ✓ row right away,
-// so the user gets visual confirmation that the lamp can actually reach this
+// so the user gets visual confirmation that the device can actually reach this
 // Mac. Without this, the Activity window stays empty until the first real
 // command, which can be minutes later — leaving the user to wonder whether
 // pairing actually worked.
@@ -113,13 +115,20 @@ func (s *Service) Dispatch(ctx context.Context, cmd Command) (json.RawMessage, e
 // Caller should invoke from a goroutine because Dispatch blocks until the
 // buddy responds or times out.
 func (s *Service) Greet(buddyID string) {
+	// Self-identify by device type, not a hardcoded "lamp" (one image, many
+	// devices). DEVICE_TYPE is guaranteed set post-boot (server fail-louds on an
+	// unresolved type); the "device" fallback only guards this best-effort path.
+	deviceType := strings.ToLower(os.Getenv("DEVICE_TYPE"))
+	if deviceType == "" {
+		deviceType = "device"
+	}
 	cmd := Command{
 		ID:        NewCommandID(),
 		Action:    "ping",
-		Params:    map[string]any{"from": "lamp", "hello": true},
+		Params:    map[string]any{"from": deviceType, "hello": true},
 		TimeoutMs: 5000,
 		IssuedAt:  time.Now().UTC().Format(time.RFC3339),
-		IssuedBy:  "lamp:hello",
+		IssuedBy:  deviceType + ":hello",
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 	defer cancel()
