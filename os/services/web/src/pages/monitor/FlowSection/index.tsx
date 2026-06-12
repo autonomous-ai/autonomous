@@ -219,7 +219,7 @@ export function FlowSection({
 
   const turns = useMemo(() => groupIntoTurns(events), [events]);
 
-  // Live current_user — polled from LeLamp every 2s (same source the Users
+  // Live current_user — polled from the device every 2s (same source the Users
   // tab uses). Reading from turn events instead was stale: if the agent is
   // busy and no motion/emotion event has streamed through, the last tagged
   // turn can be minutes old and show the wrong person.
@@ -269,10 +269,10 @@ export function FlowSection({
     // "newest" = default order from groupIntoTurns (newest first)
     return filtered;
   }, [turns, excludedTypes, fromTime, toTime, searchText, sortBy]);
-  // Detect adjacent turn pairs where one is a Lamp-id turn that closed with
+  // Detect adjacent turn pairs where one is a device-id turn that closed with
   // chat_final_empty (OpenClaw closed stream · no message · no lifecycle) and
   // the adjacent turn is an OpenClaw-assigned UUID with matching input text.
-  // Each pair gets a stable color (hashed from the lamp runId) so distinct
+  // Each pair gets a stable color (hashed from the device runId) so distinct
   // pairs in view are visually distinguishable. Purely visual correlation —
   // no semantic label.
   const pairTintMap = useMemo(() => {
@@ -292,11 +292,11 @@ export function FlowSection({
       for (let i = 0; i < key.length; i++) h = ((h << 5) - h + key.charCodeAt(i)) | 0;
       return PAIR_BGS[Math.abs(h) % PAIR_BGS.length];
     };
-    // Inputs of the same logical message may differ between Lamp-side and
+    // Inputs of the same logical message may differ between OS-server-side and
     // OpenClaw-side because:
-    //   • Lamp log truncates chat_input message at 500 chars + "…" (see
+    //   • OS-server log truncates chat_input message at 500 chars + "…" (see
     //     service_chat.go:147) — UUID-side carries the full text.
-    //   • Lamp log keeps `[snapshot: /var/...]` paths in presence events
+    //   • OS-server log keeps `[snapshot: /var/...]` paths in presence events
     //     while OpenClaw refires with the snapshot stripped.
     // So check substring containment either way (after stripping the
     // sender prefix and trailing "…"). Guard with min length ≥32 to

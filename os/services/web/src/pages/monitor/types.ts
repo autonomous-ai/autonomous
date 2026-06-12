@@ -1,7 +1,7 @@
 export const API = "/api";
 // HW points at the Go reverse proxy (/api/hardware/*) instead of nginx /hw/*.
 // Web never touches /hw/* directly anymore — adminAuthMiddleware on the
-// proxy gates the bearer, and Go calls LeLamp on loopback. Bearer is
+// proxy gates the bearer, and Go calls the device on loopback. Bearer is
 // attached automatically by the fetch interceptor in lib/api.ts (search for
 // `__lampFetchPatched`). For <img src> / <a href> / window.open use the
 // `hwUrl()` helper which appends ?token= since those can't set headers.
@@ -65,8 +65,8 @@ export interface OCStatus {
   sessionKey: boolean;
   emotion?: string;
   version?: string;
-  uptime?: number; // seconds since Lamp WS became ready; 0 when disconnected (debug only)
-  agentUptime?: number; // OpenClaw gateway process uptime in seconds; survives Lamp restarts
+  uptime?: number; // seconds since OS server WS became ready; 0 when disconnected (debug only)
+  agentUptime?: number; // OpenClaw gateway process uptime in seconds; survives OS server restarts
 }
 export interface PresenceInfo {
   state: string;

@@ -304,7 +304,7 @@ export function StatPill({ label, value, color, bullet }: {
   value: string | number;
   color?: string;
   // bullet draws a small colored disc before the label so visually-related rows
-  // (e.g. Lamp vs LeLamp uptimes) can be scanned apart at a glance.
+  // (e.g. OS server vs device uptimes) can be scanned apart at a glance.
   bullet?: string;
 }) {
   return (

@@ -177,7 +177,7 @@ function LogPanel({ source, label, color, initialFilter, initialLevel, onFilterC
   const formatLine = (line: string) => {
     // HAL: 2026-04-13 17:47:52,944 INFO hal.voice: message
     const pyMatch = line.match(/^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,.\d]*)\s+(DEBUG|INFO|WARN(?:ING)?|ERROR|ERR|DBG|INF)\s+([\s\S]*)$/i);
-    // Lamp: [0be]2026-04-13 17:55:13 [0beDEBUG] message %key=value
+    // OS server: [0be]2026-04-13 17:55:13 [0beDEBUG] message %key=value
     const goMatch = line.match(/^(\[\w+\]\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})\s+(\[\w+(?:DEBUG|INFO|WARN|ERROR)\])\s+([\s\S]*)$/i);
 
     if (!pyMatch && !goMatch) return line;

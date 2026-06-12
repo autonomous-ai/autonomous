@@ -144,7 +144,7 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
       }}>
         {formatTurnTime(turn.startTime)}
       </div>
-      {/* Turn ID for tracing — label by ID origin (Lamp-emitted vs OpenClaw-assigned UUID) */}
+      {/* Turn ID for tracing — label by ID origin (device-emitted vs OpenClaw-assigned UUID) */}
       <div style={{ fontSize: 8, color: "var(--lm-text)", fontFamily: "monospace", marginBottom: 3, opacity: 0.7 }}>
         {turn.id.startsWith("lamp-") ? "lamp id" : "agent uuid"}: {turn.id}
       </div>
