@@ -965,7 +965,9 @@ SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
 UDEV_EOF
 
 # ── ALSA aliases for OPi 4 Pro ES8389 codec (sndi2s4) ────────────────────────
-echo "[stage] ALSA aliases"
+# Write a safe default; the overlay phase will overwrite with the device-specific
+# hardware/conf/asound.conf from the baked device profile (if present).
+echo "[stage] ALSA aliases (default)"
 cat > /etc/asound.conf <<'ALSA_EOF'
 # Persistent ALSA aliases for HAL on Orange Pi 4 Pro (A733).
 # Onboard codec is ES8389 (card sndi2s4); USB mic = lamp_micro2 (Jieli, renamed via udev).
@@ -1136,6 +1138,24 @@ if [ -n "\$DEVICES_URL" ]; then
   unzip -o -q /tmp/device-profile.zip -d "\$DEVICE_PROFILE_DIR"
   rm -f /tmp/device-profile.zip
   echo "[overlay] device profile baked → \$DEVICE_PROFILE_DIR"
+  # Override /etc/asound.conf with device-specific version if present in the profile.
+  if [ -f "\${DEVICE_PROFILE_DIR}/hardware/conf/asound.conf" ]; then
+    cp "\${DEVICE_PROFILE_DIR}/hardware/conf/asound.conf" /etc/asound.conf
+    echo "[overlay] asound.conf from device profile → /etc/asound.conf"
+  fi
+  # Apply device-specific HAL env overrides (audio devices, thresholds, capabilities).
+  if [ -f "\${DEVICE_PROFILE_DIR}/hardware/conf/hal.env" ]; then
+    while IFS='=' read -r key value; do
+      [[ "\$key" =~ ^[[:space:]]*# ]] && continue
+      [[ -z "\$key" ]] && continue
+      if grep -q "^\${key}=" /opt/hal/.env; then
+        sed -i "s|^\${key}=.*|\${key}=\${value}|" /opt/hal/.env
+      else
+        echo "\${key}=\${value}" >> /opt/hal/.env
+      fi
+    done < "\${DEVICE_PROFILE_DIR}/hardware/conf/hal.env"
+    echo "[overlay] hal.env overrides from device profile applied"
+  fi
 else
   echo "[overlay] ERROR: no devices.\$DEVICE_TYPE url in OTA metadata — device profile is required (one image = one device type). Run 'make upload-device \$DEVICE_TYPE' before building." >&2
   exit 1

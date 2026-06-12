@@ -1472,6 +1472,26 @@ stage_devices() {
     || { echo "[stage] ERROR: failed to extract device profile for $DEVICE_TYPE" >&2; return 1; }
   rm -f /tmp/device.zip
   echo "[stage] Device profile '$DEVICE_TYPE' installed at $dest"
+  # Apply device-specific ALSA config if present in the profile.
+  local asound_src="$dest/hardware/conf/asound.conf"
+  if [ -f "$asound_src" ]; then
+    cp "$asound_src" /etc/asound.conf
+    echo "[stage] asound.conf from device profile → /etc/asound.conf"
+  fi
+  # Apply device-specific HAL env overrides (audio devices, thresholds, capabilities).
+  local hal_env_src="$dest/hardware/conf/hal.env"
+  if [ -f "$hal_env_src" ] && [ -f /opt/hal/.env ]; then
+    while IFS='=' read -r key value; do
+      [[ "$key" =~ ^[[:space:]]*# ]] && continue
+      [[ -z "$key" ]] && continue
+      if grep -q "^${key}=" /opt/hal/.env; then
+        sed -i "s|^${key}=.*|${key}=${value}|" /opt/hal/.env
+      else
+        echo "${key}=${value}" >> /opt/hal/.env
+      fi
+    done < "$hal_env_src"
+    echo "[stage] hal.env overrides from device profile applied"
+  fi
 }
 
 # Stop os-server if running from a previous setup — it switches to AP mode when unconfigured, killing internet.

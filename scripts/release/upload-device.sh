@@ -46,12 +46,12 @@ ZIP_NAME="${DEVICE_TYPE}-${new_version}.zip"
 ZIP_PATH="${ROOT_DIR}/${ZIP_NAME}"
 GCS_PATH="${GCS_PATH:-${BUCKET_PREFIX}/ota/devices/${DEVICE_TYPE}/${new_version}.zip}"
 
-# Ship only the runtime contract (DEVICE.md / SOUL.md / SAFETY.md / VERSION).
-# Exclude docs/, hardware/ (CAD!), images/ — the device never reads those.
-echo "========== Zipping devices/${DEVICE_TYPE} (contract only) to ${ZIP_NAME} =========="
+# Ship runtime contract + hardware/conf/ (ALSA configs, etc.).
+# Exclude heavy hardware assets (CAD, brainstorm photos, images) and docs.
+echo "========== Zipping devices/${DEVICE_TYPE} (contract + hardware/conf) to ${ZIP_NAME} =========="
 rm -f "$ZIP_PATH"
 (cd "$DEVICE_DIR" && zip -r "$ZIP_PATH" . \
-  -x "docs/*" "hardware/*" "images/*" ".git/*" "*/__pycache__/*" "*.pyc")
+  -x "docs/*" "hardware/cad/*" "hardware/brainstorm/*" "hardware/images/*" "images/*" ".git/*" "*/__pycache__/*" "*.pyc")
 
 echo "========== Upload ${ZIP_NAME} to Google Cloud Storage (no-cache) =========="
 gsutil -h "Cache-Control:no-cache, no-store, must-revalidate" cp "$ZIP_PATH" "gs://${GCS_BUCKET}/${GCS_PATH}"
