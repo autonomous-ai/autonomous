@@ -47,7 +47,7 @@ Lamp sử dụng MQTT để giao tiếp với backend server (báo cáo trạng 
 **Phản hồi (publish fd_channel):**
 ```json
 {
-  "device": "ai-lamp",
+  "device": "lamp",
   "type": "info",
   "version": "0.0.35",
   "id": "{DeviceID}",
@@ -81,7 +81,7 @@ Lamp sử dụng MQTT để giao tiếp với backend server (báo cáo trạng 
 **Phản hồi (một message — telegram/slack/discord):**
 ```json
 {
-  "device": "ai_lamp",
+  "device": "lamp",
   "type": "add_channel",
   "channel": "telegram",
   "status": "success|failure",
@@ -176,7 +176,7 @@ metadata device/version chuẩn cộng với `kind`, `status` (`success|failure`
 probe lỗi sẽ rơi về zero value của nó.
 ```json
 {
-  "device": "ai_lamp",
+  "device": "lamp",
   "type": "data",
   "kind": "system.info",
   "status": "success",
@@ -196,9 +196,9 @@ probe lỗi sẽ rơi về zero value của nó.
       "gateway": "192.168.1.1"
     },
     "host": {
-      "hostname": "ai-lamp",
+      "hostname": "lamp-7f72",
       "device_id": "{DeviceID}",
-      "device_name": "Lamp-7f72",
+      "device_name": "lamp-7f72",
       "uptime_seconds": 86400
     }
   }
