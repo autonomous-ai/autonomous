@@ -1,13 +1,14 @@
 # Capability Vocabulary — `autonomous.capabilities.v1`
 
-The frozen namespace of physical capabilities. A `DEVICE.md` declares which groups a
-body has; a `SKILL.md` declares which it needs. Names here are an ABI — once published,
-a name is never removed or repurposed (see `DEVICE-SPEC.md` § Versioning).
+The frozen namespace of device capabilities — mostly physical hardware groups, plus a
+few platform features a body opts into. A `DEVICE.md` declares which groups a body has;
+a `SKILL.md` declares which it needs. Names here are an ABI — once published, a name is
+never removed or repurposed (see `DEVICE-SPEC.md` § Versioning).
 
-A capability group maps to one or more HAL routes under `os/hal/`. The route is the
-typed HTTP surface (consumer: the system); the capability is the agent-facing name
-(consumer: the LLM). **Skills and agents address capabilities, never routes or hardware
-models.**
+A capability group maps to one or more routes — HAL hardware routes under `os/hal/`, or
+(for platform features like `companion`) os-server routes. The route is the typed HTTP
+surface (consumer: the system); the capability is the agent-facing name (consumer: the
+LLM). **Skills and agents address capabilities, never routes or hardware models.**
 
 | Group | Capabilities | HAL routes (today) | Privacy | Safety |
 |-------|--------------|--------------------|---------|--------|
@@ -20,6 +21,7 @@ models.**
 | `display` | `display.render` | display | — | — |
 | `media` | `media.play` | music | — | loud-output |
 | `connectivity` | `connectivity.bluetooth` | bluetooth | — | — |
+| `companion` | `companion.control` | buddy (os-server) | computer | — |
 | `system` | `system.health`, `system.ota`, `system.network`, `system.setup` | system | — | — |
 
 ## Rules

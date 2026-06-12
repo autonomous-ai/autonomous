@@ -660,13 +660,14 @@ EOF
   # os-server re-syncs + prunes on boot, so this is only the first-boot seed.
   SKILLS_GCS_PREFIX="${OTA_METADATA_URL%/ota/metadata.json}/skills"
   # Full catalog (keep in sync with internal/skills.Catalog).
-  SKILLS_CATALOG="audio camera connectors display emotion face-enroll guard led-control music music-suggestion scene sensing sensing-track servo-control servo-tracking voice wellbeing mood speaker-recognizer user-emotion-detection habit input-branching"
+  SKILLS_CATALOG="audio camera computer-use connectors display emotion face-enroll guard led-control music music-suggestion scene sensing sensing-track servo-control servo-tracking voice wellbeing mood speaker-recognizer user-emotion-detection habit input-branching"
   # skill -> required DEVICE.md capability (keep in sync with skills.Capability in
   # internal/skills/skills.go). Empty = platform skill, always seeded.
   skill_cap() {
     case "$1" in
       audio|voice|speaker-recognizer) echo audio ;;
       camera|face-enroll|guard)       echo vision ;;
+      computer-use)                   echo companion ;;
       display)                        echo display ;;
       emotion|scene)                  echo presence ;;
       led-control)                    echo light ;;

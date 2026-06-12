@@ -17,6 +17,7 @@ capabilities:
   display:      { routes: [display], driver: gc9a01, required: true }
   media:        { routes: [music], required: true }
   connectivity: { routes: [bluetooth], required: true }
+  companion:    { routes: [buddy], required: false }
   system:       { routes: [system], required: true }
 soul_ref:   SOUL.md
 safety_ref: SAFETY.md

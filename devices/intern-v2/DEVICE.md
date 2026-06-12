@@ -8,9 +8,10 @@ gateway:
   default: openclaw
   protocol: websocket
 capabilities:
-  audio:   { routes: [audio, speaker, voice], required: true }
-  sensing: { routes: [sensing], required: false }
-  system:  { routes: [system], required: true }
+  audio:     { routes: [audio, speaker, voice], required: true }
+  sensing:   { routes: [sensing], required: false }
+  companion: { routes: [buddy], required: false }
+  system:    { routes: [system], required: true }
 safety_ref: SAFETY.md
 memory:     { backend: local }
 ---
@@ -23,8 +24,9 @@ real — it is not a fork of Lamp. It is the same OS image declaring fewer capab
 
 ## What makes Intern "not Lamp"
 
-Intern declares only `audio`, `sensing`, and `system` — Lamp's `vision`, `motion`,
-`light`, `display`, `presence`, `media`, and `connectivity` are simply absent. The OS
+Intern declares `audio`, `sensing`, `companion` (it pairs the Buddy app to drive a
+computer), and `system` — Lamp's `vision`, `motion`, `light`, `display`, `presence`,
+`media`, and `connectivity` are simply absent. The OS
 boots the same runtime, mounts only the audio/sensing/system routes Intern declares, and
 never brings up the camera, servo, or display drivers. Ambient sensing is sound-only
 (the mic) — presence/light/motion perceptions need a camera Intern does not have. There

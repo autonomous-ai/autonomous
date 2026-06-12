@@ -10,6 +10,7 @@ package skills
 var Catalog = []string{
 	"audio",
 	"camera",
+	"computer-use",
 	"connectors",
 	"display",
 	"emotion",
@@ -41,6 +42,7 @@ var Catalog = []string{
 var Capability = map[string]string{
 	"audio":              "audio",
 	"camera":             "vision",
+	"computer-use":       "companion",
 	"display":            "display",
 	"emotion":            "presence",
 	"led-control":        "light",

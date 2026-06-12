@@ -58,13 +58,6 @@ Follow the instructions in whichever file you read.
 ---`
 )
 
-// hooks is the list of hook names available on CDN.
-// Each hook has HOOK.md (metadata) and handler.ts (logic).
-var hooks = []string{
-	"emotion-acknowledge",
-	"turn-gate",
-}
-
 // supportedSkills resolves this device's capabilities from DEVICE.md and filters
 // the platform skill catalog (skills.Catalog) to what this device can run. The
 // catalog and skill→capability map are runtime-agnostic platform metadata in
@@ -130,8 +123,9 @@ func (s *Service) EnsureOnboarding() error {
 	// unsupported skill dir so a re-provisioned device (or one whose DEVICE.md
 	// changed) self-heals and a provision-time over-seed is cleaned up. Fail-open
 	// for a device that declares no capabilities → full catalog (see supportedSkills).
+	deviceCaps := device.Capabilities(s.config.DeviceTypeOrDefault())
 	wanted := map[string]bool{}
-	for _, name := range s.supportedSkills() {
+	for _, name := range skills.Supported(deviceCaps) {
 		wanted[name] = true
 	}
 	for _, name := range skills.Catalog {
@@ -157,8 +151,23 @@ func (s *Service) EnsureOnboarding() error {
 			return fmt.Errorf("create hooks dir: %w", err)
 		}
 		hookFiles := []string{"HOOK.md", "handler.ts"}
-		for _, name := range hooks {
+		// Capability gate (same as skills): a hook that needs an absent capability
+		// (e.g. emotion-acknowledge → presence on a no-expression device) is not
+		// seeded, and any stale copy is removed.
+		wantedHooks := map[string]bool{}
+		for _, name := range skills.SupportedHooks(deviceCaps) {
+			wantedHooks[name] = true
+		}
+		for _, name := range skills.Hooks {
 			dir := filepath.Join(hooksDir, name)
+			if !wantedHooks[name] {
+				if err := os.RemoveAll(dir); err != nil {
+					slog.Warn("prune unsupported hook failed", "component", "onboarding", "hook", name, "error", err)
+				} else {
+					slog.Info("hook not supported by device, pruned", "component", "onboarding", "hook", name, "capability", skills.HookCapability[name])
+				}
+				continue
+			}
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				slog.Error("mkdir failed", "component", "onboarding", "dir", dir, "error", err)
 				continue
@@ -196,8 +205,9 @@ func (s *Service) EnsureOnboarding() error {
 		needRestart = true
 	}
 
-	// Ensure all hooks are registered in openclaw.json hooks.internal.entries
-	if hooksAdded, err := s.ensureHooksRegistered(hooks); err != nil {
+	// Ensure supported hooks are registered (and unsupported ones removed) in
+	// openclaw.json hooks.internal.entries.
+	if hooksAdded, err := s.ensureHooksRegistered(skills.SupportedHooks(deviceCaps)); err != nil {
 		slog.Error("ensure hooks registered failed", "component", "onboarding", "error", err)
 	} else if hooksAdded {
 		needRestart = true
@@ -249,8 +259,10 @@ func (s *Service) EnsureOnboarding() error {
 	return nil
 }
 
-// ensureHooksRegistered adds any missing hooks to openclaw.json hooks.internal.entries.
-// Returns true if the file was modified.
+// ensureHooksRegistered reconciles openclaw.json hooks.internal.entries with the
+// hooks this device supports: it registers any missing supported hook and removes
+// any published hook (skills.Hooks) the device does not support. Returns true if
+// the file was modified.
 func (s *Service) ensureHooksRegistered(hookNames []string) (bool, error) {
 	configPath := filepath.Join(s.config.OpenclawConfigDir, "openclaw.json")
 	configBytes, err := os.ReadFile(configPath)
@@ -270,11 +282,25 @@ func (s *Service) ensureHooksRegistered(hookNames []string) (bool, error) {
 	entriesMap := ensureMap(internalMap, "entries")
 
 	changed := false
+	supported := map[string]bool{}
 	for _, name := range hookNames {
+		supported[name] = true
 		if _, exists := entriesMap[name]; !exists {
 			entriesMap[name] = map[string]interface{}{"enabled": true}
 			changed = true
 			slog.Info("registered hook in openclaw.json", "component", "onboarding", "hook", name)
+		}
+	}
+	// Remove any published hook this device no longer supports (capability lost
+	// or never had — e.g. emotion-acknowledge on a no-presence device), so it
+	// stops firing into a route the device never mounts.
+	for _, name := range skills.Hooks {
+		if !supported[name] {
+			if _, exists := entriesMap[name]; exists {
+				delete(entriesMap, name)
+				changed = true
+				slog.Info("unregistered unsupported hook", "component", "onboarding", "hook", name)
+			}
 		}
 	}
 	if !changed {

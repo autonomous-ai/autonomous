@@ -16,7 +16,7 @@ func TestSupported_MaximalDeviceKeepsAll(t *testing.T) {
 	caps := map[string]bool{
 		"audio": true, "vision": true, "sensing": true, "presence": true,
 		"motion": true, "light": true, "display": true, "media": true,
-		"connectivity": true, "system": true,
+		"connectivity": true, "companion": true, "system": true,
 	}
 	if got := Supported(caps); len(got) != len(Catalog) {
 		t.Fatalf("maximal device: got %d skills, want full catalog %d", len(got), len(Catalog))
@@ -39,7 +39,7 @@ func TestSupported_ReducedDevicePrunesHardware(t *testing.T) {
 	// A speaker-only box: audio + sensing, no motion/light/display/vision/presence/media.
 	got := Supported(map[string]bool{"audio": true, "sensing": true})
 
-	for _, gone := range []string{"servo-control", "servo-tracking", "led-control", "display", "emotion", "scene", "camera", "music", "face-enroll", "guard"} {
+	for _, gone := range []string{"servo-control", "servo-tracking", "led-control", "display", "emotion", "scene", "camera", "music", "face-enroll", "guard", "computer-use"} {
 		if contains(got, gone) {
 			t.Errorf("expected %q pruned (device lacks its capability)", gone)
 		}
@@ -63,7 +63,7 @@ func TestCapability_Consistency(t *testing.T) {
 	known := map[string]bool{
 		"audio": true, "vision": true, "sensing": true, "presence": true,
 		"motion": true, "light": true, "display": true, "media": true,
-		"connectivity": true, "system": true,
+		"connectivity": true, "companion": true, "system": true,
 	}
 	for skill, cap := range Capability {
 		if !known[cap] {
