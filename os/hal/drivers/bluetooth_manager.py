@@ -299,7 +299,7 @@ class BluetoothManager:
     #   2. `pactl set-default-sink <that>` so anything written to `pulse` lands
     #      on the BT device.
     #   3. Point TTS/voice at the `pulse` PortAudio device for the active period.
-    # Switching back to the lamp restores the previously-default sink.
+    # Switching back to the device restores the previously-default sink.
 
     def pa_default_sink(self) -> Optional[str]:
         try:

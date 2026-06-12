@@ -75,7 +75,7 @@ class RealtimeOrchestrator:
 
     Automatically registers the delegate_to_main tool so the model
     can signal that the user's request should be handled by the main
-    flow (Lamp → OpenClaw).
+    flow (device → OpenClaw).
     """
 
     def __init__(

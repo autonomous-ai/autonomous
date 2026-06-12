@@ -103,11 +103,11 @@ class EnrollSpeakerRequest(BaseModel):
 
 
 class RecordEnrollRequest(BaseModel):
-    """Capture audio from the lamp's mic, then enroll under ``name``.
+    """Capture audio from the device's mic, then enroll under ``name``.
 
     Web Setup / Edit pages can't reach the browser microphone without HTTPS
-    (insecure-context restriction on getUserMedia), so the lamp records its
-    own ALSA mic instead. The user stands near the lamp and reads the
+    (insecure-context restriction on getUserMedia), so the device records its
+    own ALSA mic instead. The user stands near the device and reads the
     prompted text while ``arecord`` writes a 16kHz mono WAV which is then
     fed straight to ``SpeakerRecognizer.enroll``.
     """
@@ -315,7 +315,7 @@ _LAMP_MIC_ALSA = "plug:lamp_micro2"
 
 @router.post("/speaker/record-enroll", response_model=EnrollResponse)
 def speaker_record_enroll(req: RecordEnrollRequest) -> EnrollResponse:
-    """Record from the lamp mic and enroll the captured audio.
+    """Record from the device mic and enroll the captured audio.
 
     Coordinates with the running voice_service to release ALSA cleanly:
     pause the listener thread, run arecord, restart the listener, then
@@ -543,7 +543,7 @@ def voice_strangers() -> StrangersResponse:
 
     Scans the per-cluster sub-dirs the speaker service writes under
     ``SPEAKER_UNKNOWN_AUDIO_DIR/voice_<N>/`` so the web UI can play back
-    clips the lamp has grouped as "same unknown voice" before deciding to
+    clips the device has grouped as "same unknown voice" before deciding to
     enroll them as a known speaker.
     """
     logger.info("GET /voice/strangers")

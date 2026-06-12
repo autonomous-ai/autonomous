@@ -817,7 +817,7 @@ class TrackerService:
           2026-05-13: claimed base+ = UP, elbow+ = DOWN, wrist+ = UP, code used
                       `wrist - pitch_correction` to look UP when dy<0.
           2026-05-14: log shows face dy=-180 → pid pitch=-5 → code wrote
-                      wrist -67→-7 (INCREASE), and the lamp visibly tilted DOWN.
+                      wrist -67→-7 (INCREASE), and the device visibly tilted DOWN.
                       So wrist+ is actually DOWN at the poses we encounter, and
                       the sign was inverted. Flipped to `wrist + pitch_correction`
                       so the camera now moves toward dy (per the long-standing
@@ -831,18 +831,18 @@ class TrackerService:
         }
         # Warn loudly when an axis has saturated against its mechanical limit and
         # the PID is still demanding more travel in that direction — camera
-        # physically can't follow further; only re-centering the lamp helps.
+        # physically can't follow further; only re-centering the device helps.
         if abs(yaw_step) >= 0.1 and (
             (yaw_step < 0 and self._track_yaw <= YAW_MIN + 0.5) or
             (yaw_step > 0 and self._track_yaw >= YAW_MAX - 0.5)
         ):
-            logger.warning("[saturation] yaw at limit %.1f° but PID still demanding %.2f° — recenter lamp",
+            logger.warning("[saturation] yaw at limit %.1f° but PID still demanding %.2f° — recenter device",
                            self._track_yaw, yaw_step)
         if abs(pitch_correction) >= 0.1 and PITCH_WEIGHT_WRIST > 0 and (
             (pitch_correction > 0 and self._track_wrist_pitch >= WRIST_PITCH_MAX - 0.5) or
             (pitch_correction < 0 and self._track_wrist_pitch <= WRIST_PITCH_MIN + 0.5)
         ):
-            logger.warning("[saturation] wrist at limit %.1f° but PID still demanding pitch=%.2f° — recenter lamp",
+            logger.warning("[saturation] wrist at limit %.1f° but PID still demanding pitch=%.2f° — recenter device",
                            self._track_wrist_pitch, pitch_correction)
         return self._send_gimbal_target(target, animation_service)
 

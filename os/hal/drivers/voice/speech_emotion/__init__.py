@@ -3,7 +3,7 @@
 Public surface:
     SpeechEmotionService — voice_service calls `submit(user, wav, dur)` per
     utterance; this service buffers per-user, dedups by polarity bucket,
-    and POSTs sensing events to Lamp. Mirrors the face emotion processor's
+    and POSTs sensing events to the OS server. Mirrors the face emotion processor's
     clustering/dedup architecture.
 
 Engine layer:

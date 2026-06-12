@@ -240,7 +240,7 @@ def speaking_wave(
     Divides the LED strip into 8 segments. Each segment has its own
     brightness target that changes randomly every few frames, simulating
     audio amplitude response. Brightness smoothly interpolates toward
-    targets to avoid harsh flickering. Looks like the lamp is "reacting"
+    targets to avoid harsh flickering. Looks like the device is "reacting"
     to its own speech.
     """
     step_delay = 0.04 / speed  # ~25fps

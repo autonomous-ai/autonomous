@@ -1,8 +1,8 @@
 """Bluetooth headset routes — pair / connect / route TTS+STT to a BT
-headset so the user can use the lamp privately without disturbing others.
+headset so the user can use the device privately without disturbing others.
 
 Endpoints live under /bluetooth/* (exposed to the web UI via /hw/bluetooth/*
-through the existing Lamp reverse proxy).
+through the existing OS server reverse proxy).
 """
 
 import logging
@@ -44,7 +44,7 @@ class MacRequest(BaseModel):
 
 
 class ActiveRequest(BaseModel):
-    mac: Optional[str] = None  # None / "" → switch back to lamp
+    mac: Optional[str] = None  # None / "" → switch back to the device
 
 
 @router.get("/available")
@@ -98,7 +98,7 @@ def bt_forget(req: MacRequest):
     mgr = _mgr()
     target = req.mac.upper()
     if mgr.active_mac and mgr.active_mac == target:
-        # Bring TTS/STT back to the lamp before the device disappears,
+        # Bring TTS/STT back to the device before it disappears,
         # otherwise the persistent OutputStream is left pointed at a gone sink.
         route_to_lamp()
     if not mgr.forget(target):
@@ -116,9 +116,9 @@ def bt_active_get():
 def bt_active_set(req: ActiveRequest):
     """Toggle voice routing.
 
-    mac = null / "" → route back to the lamp's built-in speaker + mic.
+    mac = null / "" → route back to the device's built-in speaker + mic.
     mac = MAC       → ensure connected, find PortAudio indices, route TTS+STT
-                      to the BT device. STT mic falls back to lamp mic if the
+                      to the BT device. STT mic falls back to the device mic if the
                       device has no input (BT speaker case).
     """
     mgr = _mgr()

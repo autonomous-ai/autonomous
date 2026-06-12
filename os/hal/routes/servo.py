@@ -432,7 +432,7 @@ def list_aim_directions():
 
 @router.post("/servo/aim", response_model=ServoAimResponse)
 def aim_servo(req: ServoAimRequest):
-    """Aim the lamp head to a named direction."""
+    """Aim the device head to a named direction."""
     if not state.animation_service:
         raise HTTPException(503, "Servo not available")
     if not state.animation_service.robot:

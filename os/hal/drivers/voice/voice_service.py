@@ -5,13 +5,13 @@ Pipeline:
   1. Mic always on, local RMS energy check (free, zero cost)
   2. Speech detected → create STT session, stream audio
   3. Silence for SILENCE_TIMEOUT → close session (stop billing)
-  4. Transcripts → POST to Lamp Server /api/sensing/event
-  5. Lamp Go → local intent match or OpenClaw → AI responds → POST /voice/speak
+  4. Transcripts → POST to OS server /api/sensing/event
+  5. OS server → local intent match or OpenClaw → AI responds → POST /voice/speak
 
 STT provider is pluggable (default: Deepgram).
 
 Helpers live in `_internal/` — config constants, audio I/O, VAD filters,
-speaker decoration, and Lamp event sender.
+speaker decoration, and OS server event sender.
 """
 
 import logging
@@ -149,7 +149,7 @@ class VoiceService:
             nudge_cooldown_s=ENROLL_NUDGE_COOLDOWN_S,
         )
 
-        # Lamp Server event sender (with echo similarity filter)
+        # OS server event sender (with echo similarity filter)
         self._sensing_sender = SensingSender(tts_service=tts_service)
 
         # Realtime voice agent — parallel audio pipeline (Gemini Live / OpenAI Realtime).
@@ -675,7 +675,7 @@ class VoiceService:
         final_segments = []
         final_sent = [False]
         # One-shot per session: fire emotion=listening on the first STT
-        # partial so the lamp leans forward + LED blue-pulses while the user
+        # partial so the device leans forward + LED blue-pulses while the user
         # is talking. Not on mic-open — that would fire on silence-only
         # false starts (wake word noise, accidental button press).
         listening_emotion_sent = [False]
@@ -782,7 +782,7 @@ class VoiceService:
             # the user stops, so without this the voiceprint ends up 30-50%
             # silence and the embedding degrades.
             last_speech_idx: int = len(audio_buffer) - 1
-            # Signal Lamp to show listening LED as soon as mic session opens (before transcript arrives)
+            # Signal the OS server to show listening LED as soon as mic session opens (before transcript arrives)
             try:
                 requests.post(
                     "http://127.0.0.1:5000/api/sensing/event",
@@ -878,7 +878,7 @@ class VoiceService:
                 combined or "(empty)",
             )
 
-            # --- Realtime voice agent (runs first, before speaker ID / Lamp) ---
+            # --- Realtime voice agent (runs first, before speaker ID / OS server) ---
             # Runs even if STT transcript is empty — the model has the raw audio.
             rt_delegated = False
             rt_handled = False
@@ -932,7 +932,7 @@ class VoiceService:
                     rt_transcript = self.strip_rt_markers("".join(text_parts))
 
                     if rt_delegated:
-                        logger.info("[realtime] Model delegated → will forward to Lamp")
+                        logger.info("[realtime] Model delegated → will forward to OS server")
                     else:
                         rt_handled = True
                         # Flush any remaining text that didn't end with a sentence boundary
@@ -955,12 +955,12 @@ class VoiceService:
                                 agent_text=rt_transcript or "(audio only)",
                             )
                 except Exception as e:
-                    logger.warning("[realtime] Processing failed: %s — will forward to Lamp", e)
-                    rt_delegated = True  # fall through to Lamp on error
+                    logger.warning("[realtime] Processing failed: %s — will forward to OS server", e)
+                    rt_delegated = True  # fall through to OS server on error
             elif hal_config.REALTIME_ENABLED:
-                logger.warning("[realtime] Enabled but agent not available — falling back to Lamp")
+                logger.warning("[realtime] Enabled but agent not available — falling back to OS server")
 
-            # --- Speaker recognition + Lamp send ---
+            # --- Speaker recognition + OS server send ---
             from hal.drivers.voice.speech_emotion.constants import UNKNOWN_USER_LABEL
 
             final_text, event_type = self._decorator.resolve_wake_word_split(combined)
@@ -971,7 +971,7 @@ class VoiceService:
                     final_text, audio_buffer
                 )
                 user = se_user if se_user else UNKNOWN_USER_LABEL
-                logger.info("Final message → Lamp (%s): %r", event_type, final_msg)
+                logger.info("Final message → OS server (%s): %r", event_type, final_msg)
 
                 if rt_handled:
                     # Realtime already spoke — send as "voice_handled" to skip dead-air filler.
@@ -982,7 +982,7 @@ class VoiceService:
                         skip_echo=True,
                     )
                 elif rt_delegated:
-                    # Delegated — send voice agent's summary + STT transcript to Lamp
+                    # Delegated — send voice agent's summary + STT transcript to the OS server
                     if rt_delegate_msg:
                         sensing_msg: str = f"[voice-instruction] {rt_delegate_msg}\n[transcript] {final_msg}"
                     else:
@@ -991,7 +991,7 @@ class VoiceService:
                     if sensing_msg:
                         self._sensing_sender.send(sensing_msg, event_type=event_type)
                 else:
-                    # Realtime not active — send to Lamp normally
+                    # Realtime not active — send to the OS server normally
                     self._sensing_sender.send(final_msg, event_type=event_type)
 
             # 2. Submit SER — uses the UNTRIMMED snapshot so laughter / sighs

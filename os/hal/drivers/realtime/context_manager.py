@@ -59,7 +59,7 @@ class RealtimeContextManager:
     def build_instructions(self) -> str:
         """Build the full instruction string from all context sources.
 
-        If a summarizer is set, lamp memory and realtime memory are
+        If a summarizer is set, device memory and realtime memory are
         summarized via LLM before injection.
         """
         sections: list[str] = []
@@ -69,17 +69,17 @@ class RealtimeContextManager:
         if prompt:
             sections.append(prompt)
 
-        # Lamp identity
+        # Device identity
         identity: str = self._load_device_identity()
         if identity:
-            sections.append(f"# LAMP IDENTITY\n\n{identity}")
+            sections.append(f"# IDENTITY\n\n{identity}")
 
         # Skills catalog
         catalog: str = self._load_skills_catalog()
         if catalog:
             sections.append(f"# SKILLS CATALOG\n\n{catalog}")
 
-        # Lamp memory (pre-summarized at startup + recent entries)
+        # Device memory (pre-summarized at startup + recent entries)
         device_mem: str = self._build_device_memory()
         if device_mem:
             sections.append(f"# DEVICE MEMORY\n\n{device_mem}")
@@ -211,7 +211,7 @@ class RealtimeContextManager:
         return "\n\n".join(parts)
 
     def _build_device_memory(self) -> str:
-        """Load lamp memory: summary + most recent .md entries."""
+        """Load device memory: summary + most recent .md entries."""
         memory_dir: Path = self._workspace / "memory"
         recent_lines: list[str] = []
         if memory_dir.is_dir():

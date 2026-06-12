@@ -17,7 +17,7 @@ from hal.drivers.realtime.enums import (
 
 
 def _load_language() -> str | None:
-    """Load language from Lamp's config.json (stt_language field)."""
+    """Load language from the device's config.json (stt_language field)."""
     from hal.config import _os_cfg_get
 
     lang: str = _os_cfg_get("stt_language", "").strip()

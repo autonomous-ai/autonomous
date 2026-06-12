@@ -44,7 +44,7 @@ class PresenseService:
         self._last_motion_time: float = time.time()
         self._enabled = True
 
-        # Guard mode cache — checked periodically from lamp-server API
+        # Guard mode cache — checked periodically from the OS server API
         self._guard_mode: bool = False
         self._guard_last_check: float = 0.0
 
@@ -90,7 +90,7 @@ class PresenseService:
             self._restore_light()
 
     def _is_guard_mode(self) -> bool:
-        """Check guard mode from lamp-server API, cached for _GUARD_CHECK_INTERVAL_S."""
+        """Check guard mode from the OS server API, cached for _GUARD_CHECK_INTERVAL_S."""
         now = time.time()
         if now - self._guard_last_check < config.GUARD_CHECK_INTERVAL_S:
             return self._guard_mode
@@ -108,7 +108,7 @@ class PresenseService:
         if not self._enabled or self._state == PresenceState.DISABLED:
             return
 
-        # Guard mode: never transition to IDLE or AWAY — lamp must stay alert.
+        # Guard mode: never transition to IDLE or AWAY — the device must stay alert.
         if self._is_guard_mode():
             return
 
@@ -126,7 +126,7 @@ class PresenseService:
             self._notify_away(int(elapsed))
 
     def _restore_light(self):
-        """Restore last known color at full brightness, and re-aim lamp to active scene direction."""
+        """Restore last known color at full brightness, and re-aim the device to active scene direction."""
         if not self._rgb_service:
             logger.warning("Presence: cannot restore light — rgb_service not available")
             return

@@ -4,7 +4,7 @@ HAL presets — emotion, scene, and LED effect constants.
 All pure data, no runtime dependencies. Import from server.py.
 """
 
-# --- Language code constants (Lamp stt_language / TTS language) ---
+# --- Language code constants (device stt_language / TTS language) ---
 # Keep these aligned with the language codes returned by /lamp config and
 # the keys used in TTS phrase dictionaries. DEFAULT_LANG is the fallback
 # when stt_language is empty or unknown.
@@ -121,7 +121,7 @@ EMO_HEADSHAKE = "headshake"
 # Emotion presets: maps emotion name to servo recording + LED color + optional LED effect.
 # "effect" triggers a background LED animation; "color" is the base color for that effect.
 # When no "effect" is set, LED is a simple solid fill.
-# "camera": "off" = auto-disable camera (e.g. sleepy — lamp going to sleep)
+# "camera": "off" = auto-disable camera (e.g. sleepy — device going to sleep)
 # "camera": "on"  = auto-enable camera if off (active interaction, need vision)
 # omitted         = no camera change
 EMOTION_PRESETS = {
@@ -165,7 +165,7 @@ SCENE_PRESETS = {
     SCENE_ENERGIZE: {"brightness": 1.00, "color": [255, 228, 206], "aim": AIM_UP,   "camera": "on",  "mic": "on",  "speaker": "on"},                    # ~5000K daylight
 }
 
-# Servo aim presets — named lamp-head directions mapped to joint positions (normalized -100..100).
+# Servo aim presets — named device-head directions mapped to joint positions (normalized -100..100).
 # Neutral: base_yaw=3, base_pitch=-30, elbow_pitch=57, wrist_roll=0, wrist_pitch=18
 AIM_PRESETS = {
     AIM_CENTER: {"base_yaw.pos": 3.0,   "base_pitch.pos": -20.0, "elbow_pitch.pos": 32.0, "wrist_roll.pos": 0.0, "wrist_pitch.pos": 0.0},

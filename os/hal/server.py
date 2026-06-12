@@ -438,7 +438,7 @@ async def lifespan(app: FastAPI):
             from hal.models import ServoAimRequest
 
             def _presence_restore_aim():
-                """Re-aim lamp to active scene direction when presence restores light."""
+                """Re-aim the device to active scene direction when presence restores light."""
                 if not state._active_scene:
                     logger.info("Presence aim restore: no active scene -- skipping aim")
                     return
@@ -509,7 +509,7 @@ async def lifespan(app: FastAPI):
         logger.warning(f"TTP223 init failed: {e}")
 
     # Restore Bluetooth headset route if the user had one active before reboot.
-    # Best effort — silent fallback to lamp speaker/mic if anything goes wrong.
+    # Best effort — silent fallback to the device speaker/mic if anything goes wrong.
     try:
         from hal.drivers.audio_route import maybe_restore_bt_route
         threading.Thread(
@@ -561,7 +561,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="HAL Hardware Runtime",
     description=(
-        "Hardware driver API for Lamp. "
+        "Hardware driver API for the OS. "
         "Controls servo motors (5-axis Feetech), RGB LEDs (64x WS2812), "
         "camera, audio (mic/speaker), display, and AI voice pipeline. "
         "OS Server (Go, port 5000) bridges requests here."
@@ -571,18 +571,18 @@ app = FastAPI(
     else "dev",
     lifespan=lifespan,
     # Built-in /docs disabled; a custom handler below serves the Swagger HTML
-    # without inline <script> so Lamp nginx can keep CSP `script-src 'self'`
+    # without inline <script> so the OS server nginx can keep CSP `script-src 'self'`
     # (no `'unsafe-inline'`). /redoc stays on the default since it's not the
     # endpoint the in-iframe browser flow uses.
     docs_url=None,
     redoc_url="/redoc",
     # `servers` tells Swagger UI which base URL to prepend on "Try it out".
     # In the browser context the iframe lives at /api/hardware/docs and admin
-    # auth gates /api/hardware/* via Lamp's reverse proxy; in the loopback /
+    # auth gates /api/hardware/* via the OS server's reverse proxy; in the loopback /
     # SSH-tunnel context calls go directly to HAL. Operator can switch
     # between them via the Swagger UI dropdown.
     servers=[
-        {"url": "/api/hardware", "description": "Via Lamp admin proxy (browser)"},
+        {"url": "/api/hardware", "description": "Via OS server admin proxy (browser)"},
         {"url": "/", "description": "Direct (loopback / SSH tunnel)"},
     ],
     openapi_tags=[
@@ -636,7 +636,7 @@ app = FastAPI(
 # --- Include route modules (declaration-driven via DEVICE.md) ---
 # Mount routes by crossing what this device's DEVICE.md *declares* with which
 # drivers are actually *available* (importable), via hal.board.device.plan_mounts.
-# A device is "Lamp minus motion+display" by declaring fewer capabilities — not by
+# A device is "the device minus motion+display" by declaring fewer capabilities — not by
 # forking. Per contract/DEVICE-SPEC.md the boot rule is:
 #   declared + available            -> mount
 #   declared + required + missing    -> FAIL LOUD in production (a hardware fault)
@@ -762,7 +762,7 @@ if not _plan.ok:
 for _name in _plan.mounted:
     app.include_router(_ROUTERS_BY_NAME[_name])
 
-# Self-hosted Swagger UI assets. Lamp nginx CSP keeps `script-src 'self'` so
+# Self-hosted Swagger UI assets. The OS server nginx CSP keeps `script-src 'self'` so
 # the bundled JS/CSS load from this same origin (no cdn.jsdelivr.net). The
 # /docs handler below serves the HTML; its <script> tags reference these
 # files via relative paths.
@@ -778,10 +778,10 @@ def custom_swagger_ui() -> HTMLResponse:
     """Serve Swagger UI with no inline <script>.
 
     Built-in `app.docs_url` injects an inline `<script>const ui = SwaggerUIBundle(...)</script>`
-    block which forces Lamp nginx CSP to allow `'unsafe-inline'` for scripts.
+    block which forces the OS server nginx CSP to allow `'unsafe-inline'` for scripts.
     Externalising the init into `/static/swagger-init.js` lets the CSP stay
     strict (`script-src 'self'`). Relative URLs (`./openapi.json`,
-    `./static/...`) make the page work both via the Lamp proxy iframe and
+    `./static/...`) make the page work both via the OS server proxy iframe and
     direct loopback access.
     """
     html = (

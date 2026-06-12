@@ -13,7 +13,7 @@ picks one of three audible cues based on what's actually happening:
   minutes.
 - Service-level restart (`systemctl restart hal` from OTA,
   deploy, or dev — OS itself stays `running`) → speak
-  PHRASE_SERVICE_RESTART ("Be right back."). User hears the lamp
+  PHRASE_SERVICE_RESTART ("Be right back."). User hears the device
   blinking but will return in seconds.
 
 Three phrases, deliberately distinct tone, so the user knows from the
@@ -85,7 +85,7 @@ def announce_os_shutdown():
         kind = "reboot" if is_reboot else "shutdown"
         text = _phrase(PHRASE_REBOOT if is_reboot else PHRASE_SHUTDOWN)
     else:
-        # Service-level: OTA, deploy, manual restart. Lamp comes back in
+        # Service-level: OTA, deploy, manual restart. The device comes back in
         # seconds; use the lighter cue so the user doesn't think the
         # board is dying.
         kind = "service_restart"

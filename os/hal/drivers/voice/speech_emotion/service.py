@@ -2,7 +2,7 @@
 
 Receives `(user, wav_bytes, duration_s)` per utterance from voice_service,
 buffers recognition results per user, periodically flushes with polarity-
-bucket dedup, and POSTs `speech_emotion.detected` sensing events to Lamp.
+bucket dedup, and POSTs `speech_emotion.detected` sensing events to the OS server.
 
 Architecture mirrors `EmotionPerception` in the face sensing pipeline:
 
@@ -21,7 +21,7 @@ Architecture mirrors `EmotionPerception` in the face sensing pipeline:
         - mode label per user
         - bucket = polarity(mode)
         - TTL dedup keyed on (user, bucket) over DEDUP_WINDOW_S
-        - hedged message → POST Lamp sensing event
+        - hedged message → POST OS server sensing event
 
 Anti-spam guards (matched to face emotion):
 
@@ -126,7 +126,7 @@ class SpeechEmotionService:
 
     Spawns two daemon threads when the recognizer is available — worker
     (drains the submission queue, runs HTTP recognize) and flush (drains
-    the per-user buffer every FLUSH_S, dedups, sends to Lamp). Both shut
+    the per-user buffer every FLUSH_S, dedups, sends to the OS server). Both shut
     down when stop() is called.
     """
 
@@ -459,10 +459,10 @@ class SpeechEmotionService:
     def _send_to_sensing(
         self, *, message: str, user: str, audio_path: str = "",
     ) -> None:
-        """POST sensing event to Lamp with 3x retry on connection error / 503.
+        """POST sensing event to the OS server with 3x retry on connection error / 503.
 
         Same shape as SensingSender.send but carries `current_user`
-        explicitly so the Lamp sensing handler doesn't have to look it up.
+        explicitly so the OS server sensing handler doesn't have to look it up.
         ``audio_path`` is the on-disk path of the latest WAV that produced
         the dominant label this flush; empty when persistence is disabled
         or the write failed.
@@ -489,36 +489,36 @@ class SpeechEmotionService:
             except requests.ConnectionError as e:
                 if attempt < max_retries:
                     logger.warning(
-                        "[speech_emotion] Lamp unreachable (attempt %d/%d), "
+                        "[speech_emotion] OS server unreachable (attempt %d/%d), "
                         "retry in 2s",
                         attempt, max_retries,
                     )
                     time.sleep(2)
                     continue
                 logger.warning(
-                    "[speech_emotion] Lamp unreachable after %d attempts: %s",
+                    "[speech_emotion] OS server unreachable after %d attempts: %s",
                     max_retries, e,
                 )
                 return
             except requests.RequestException as e:
-                logger.warning("[speech_emotion] Lamp POST failed: %s", e)
+                logger.warning("[speech_emotion] OS server POST failed: %s", e)
                 return
 
             if resp.status_code == 503 and attempt < max_retries:
                 logger.warning(
-                    "[speech_emotion] Lamp 503, retry %d/%d in 2s",
+                    "[speech_emotion] OS server 503, retry %d/%d in 2s",
                     attempt, max_retries,
                 )
                 time.sleep(2)
                 continue
             if resp.status_code != 200:
                 logger.warning(
-                    "[speech_emotion] Lamp returned %d: %s",
+                    "[speech_emotion] OS server returned %d: %s",
                     resp.status_code, resp.text[:200],
                 )
                 return
             logger.info(
-                "[speech_emotion] SENT -> Lamp 200 OK (attempt=%d): %s",
+                "[speech_emotion] SENT -> OS server 200 OK (attempt=%d): %s",
                 attempt, message,
             )
             return

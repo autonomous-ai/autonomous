@@ -26,7 +26,7 @@ from hal.presets import (
     SERVO_CMD_PLAY,
 )
 
-# Emotions that can wake the lamp from sleep.
+# Emotions that can wake the device from sleep.
 # greeting/stretching/sleepy = direct wake triggers.
 # happy/excited/caring/laugh/curious/sad/shy/shock/confused = agent responding to user interaction.
 # thinking/idle/acknowledge/nod/headshake/scan/music_* do NOT wake (background processing).
@@ -37,7 +37,7 @@ _WAKE_EMOTIONS = {
 }
 
 # Auto-release the servo after this many seconds of *continuous* sleepy.
-# The lamp is presumed unattended at that point; releasing prevents servo
+# The device is presumed unattended at that point; releasing prevents servo
 # heat / wear during long idle periods.
 SLEEPY_AUTO_RELEASE_SECONDS = 15 * 60
 
@@ -130,7 +130,7 @@ def express_emotion(req: EmotionRequest):
     #     (greeting/sleepy/stretching may legitimately transition scene).
     #   - tracking_active: vision tracker owns the servo. Suppress ALL
     #     emotion servo including scene-change — otherwise a loud-noise
-    #     shock reaction would yank the lamp off the tracked object.
+    #     shock reaction would yank the device off the tracked object.
     # LED display updates in both cases so the user still gets visual
     # feedback.
     svc = state.animation_service
@@ -167,7 +167,7 @@ def express_emotion(req: EmotionRequest):
     #   - tracking_active: LED still updates so the user sees emotion
     #     feedback (eyes/color) even though the servo is locked.
     #   - hold_mode (non-scene-change): LED suppressed — /servo/hold asks
-    #     for a fully "held" lamp, including ambient light.
+    #     for a fully "held" device, including ambient light.
     #   - otherwise: LED updates normally.
     led_allowed = tracking_active or not servo_blocked
     led_color = state._apply_emotion_led_display(req.emotion, req.intensity) if led_allowed else None

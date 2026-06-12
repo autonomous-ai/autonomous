@@ -80,18 +80,18 @@ _MUSIC_STYLE_EMOTION: dict[str, str] = {
 # --- Pre-play backchannel ---
 #
 # yt-dlp resolve + ffmpeg startup takes 1-3s before audio actually plays.
-# A short cached TTS line fills that gap so the lamp sounds responsive.
+# A short cached TTS line fills that gap so the device sounds responsive.
 # Phrase pools live in hal/i18n.py (MUSIC_BACKCHANNEL_POOLS) — split
 # by (language, provider_is_elevenlabs). Edit copy there, not here.
 
-# Index of the last spoken phrase — excluded from the next pick so the lamp
+# Index of the last spoken phrase — excluded from the next pick so the device
 # never repeats itself back-to-back. -1 = nothing spoken yet (first call
 # picks freely).
 _last_backchannel_idx: int = -1
 
 
 def _active_stt_language() -> str:
-    """Read stt_language from Lamp's config.json. Empty/missing → ""."""
+    """Read stt_language from the OS server's config.json. Empty/missing → ""."""
     try:
         from hal.config import _os_cfg_get
         return (_os_cfg_get("stt_language") or "").strip()

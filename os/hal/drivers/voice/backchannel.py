@@ -2,7 +2,7 @@
 Backchannel — active listening cues during STT sessions.
 
 Plays short filler words ("Uhm", "Ok", etc.) via TTS when the user pauses
-mid-speech, signaling that Lamp is still listening.
+mid-speech, signaling that the agent is still listening.
 
 Usage:
     bc = Backchannel(tts_service)
@@ -37,7 +37,7 @@ logger = logging.getLogger("hal.voice.backchannel")
 
 
 def _default_fillers_for_active_lang() -> str:
-    """Pick the default filler list based on Lamp's stt_language. Falls
+    """Pick the default filler list based on the OS server's stt_language. Falls
     back to DEFAULT_LANG when the config can't be read or the language is
     empty/unknown. Caller can still override with HAL_BACKCHANNEL_FILLERS."""
     try:

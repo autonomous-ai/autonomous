@@ -189,7 +189,7 @@ def speak_text(req: SpeakRequest):
         state.logger.error("POST /voice/speak: tts_service is None (not initialized)")
         raise HTTPException(
             503,
-            "TTS not initialized -- call /voice/start first or check lamp config has llm_api_key + llm_base_url",
+            "TTS not initialized -- call /voice/start first or check config has llm_api_key + llm_base_url",
         )
     if state._speaker_muted:
         state.logger.info("POST /voice/speak: suppressed -- speaker muted (text='%s')", req.text[:80])

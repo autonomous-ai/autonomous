@@ -35,8 +35,8 @@ DOUBLE_CLICK_WINDOW = 0.4  # seconds to wait for second click
 LONG_PRESS_DURATION = 5.0  # seconds held → shutdown on release
 FACTORY_RESET_DURATION = 10.0  # seconds held → factory-reset on release (supersedes shutdown)
 
-# Lamp Go sensing endpoint. Head-pat notify is fire-and-forget — Lamp
-# Go appends a NO_REPLY hint so the agent records the event in
+# OS server sensing endpoint. Head-pat notify is fire-and-forget — the
+# OS server appends a NO_REPLY hint so the agent records the event in
 # conversation history without speaking back.
 OS_SENSING_URL = "http://127.0.0.1:5000/api/sensing/event"
 
@@ -75,7 +75,7 @@ def _current_lang() -> str:
 
 
 def _phrase(key: str) -> str:
-    """Return the localized phrase for `key` based on Lamp's stt_language.
+    """Return the localized phrase for `key` based on the device's stt_language.
     Falls back to DEFAULT_LANG when the config can't be read or the
     language is empty/unknown."""
     pool = PHRASES_BY_LANG.get(key, {})
@@ -119,7 +119,7 @@ def _tts_available() -> bool:
 
 
 def _wake_if_sleepy(source: str):
-    """If Lamp is currently sleeping, fire a stretching wake emotion so a
+    """If the device is currently sleeping, fire a stretching wake emotion so a
     click pulls her out of sleep before the listening cue lands. Calls
     the /emotion handler in-process — it clears `_sleeping`, cancels the
     sleepy auto-release timer, plays the wake animation, and auto-deactivates
@@ -151,7 +151,7 @@ def single_click_action(source: str = "button"):
         audio_stop()
     # Always announce the listening cue so the user hears confirmation
     # of the click — both for unmute (mic just opened) and for
-    # stop-speaker (Lamp was talking, user wants the floor). The cue
+    # stop-speaker (the device was talking, user wants the floor). The cue
     # itself preempts in-flight TTS via stop() + speak_cached retry,
     # so calling stop_tts() above is fine — _announce_listening handles
     # the lock handoff.
@@ -180,8 +180,8 @@ def triple_click_action(source: str = "button"):
 
 def head_pat_action(source: str = "touch"):
     """Speak a random pet response. Non-interrupting: if TTS is busy
-    (Lamp already talking), drop silently so petting mid-speech doesn't
-    truncate her sentence. After the phrase actually plays, ping Lamp Go
+    (the device already talking), drop silently so petting mid-speech doesn't
+    truncate her sentence. After the phrase actually plays, ping the OS server
     so the agent records the petting moment (silent — NO_REPLY)."""
     text = _random_head_pat_phrase()
     logger.info("%s head pat -- %r", source, text)
@@ -244,14 +244,14 @@ def _factory_reset_phrase() -> str:
 
 
 def factory_reset_action(source: str = "button"):
-    """Announce + POST /api/system/factory-reset on lamp-server. Lamp-server
+    """Announce + POST /api/system/factory-reset on the OS server. The OS server
     wipes per-device state (config, API keys, enrollments, WiFi) and reboots
     into AP setup mode. HAL does NOT touch state itself — single source of
-    truth for what gets wiped lives in lamp-server's factoryResetWipePaths.
+    truth for what gets wiped lives in the OS server's factoryResetWipePaths.
 
     Authoritative because of physical presence: 10s deliberate hold + the
     /api/system/factory-reset endpoint allows loopback origin without Bearer
-    (see lamp server.go adminOrLoopbackAuth)."""
+    (see os-server server.go adminOrLoopbackAuth)."""
     logger.info("%s factory-reset hold (10s+) -- triggering soft reset", source)
     logger.info("%s LED: red solid (factory-reset armed)", source)
 
@@ -262,7 +262,7 @@ def factory_reset_action(source: str = "button"):
     state._shutdown_announced = True
 
     # Step 1: TTS announce so the user knows the gesture registered. Brief —
-    # the reboot lands ~5s after lamp-server accepts the POST, we want the
+    # the reboot lands ~5s after the OS server accepts the POST, we want the
     # announce + 3s settle window to fit inside that.
     if _tts_available():
         state.tts_service.speak_cached(_factory_reset_phrase())
@@ -278,7 +278,7 @@ def factory_reset_action(source: str = "button"):
         logger.warning(f"Servo release before factory-reset failed: {e}")
 
     # Step 3: trigger the Go-side wipe. Loopback bypasses admin auth (see
-    # lamp server.go adminOrLoopbackAuth) so this works even on devices that
+    # os-server server.go adminOrLoopbackAuth) so this works even on devices that
     # never completed setup (no llm_api_key in config).
     try:
         requests.post(

@@ -109,7 +109,7 @@ _TARGET_SR = 16000
 
 # Chunk window the /embed endpoint slices the waveform with before per-chunk
 # embedding extraction. Bumped from the dlbackend default (0.5s) because
-# smart-lamp audio is overwhelmingly single-speaker per turn — longer chunks
+# device audio is overwhelmingly single-speaker per turn — longer chunks
 # yield smoother per-chunk embeddings, at the cost of fewer votes in
 # recognize() and reduced ability to detect a speaker switch mid-turn.
 # Audio shorter than this collapses to a single chunk (voting degenerates to

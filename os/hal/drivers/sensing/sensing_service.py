@@ -1,13 +1,13 @@
 """
-Sensing Service — background loop that detects motion/sound/faces/light and pushes events to Lamp Server.
+Sensing Service — background loop that detects motion/sound/faces/light and pushes events to the OS server.
 
-Lamp Server (Go, port 5000) then forwards these events to OpenClaw via WebSocket chat.send,
+OS server (Go, port 5000) then forwards these events to OpenClaw via WebSocket chat.send,
 so the AI agent can react proactively (Pillar 4: "It acts on its own").
 
 Detectors:
   - Motion: camera frame differencing (grayscale → absdiff → threshold → contour area)
   - Face: InsightFace recognition — owner/stranger classification (presence.enter/leave)
-  - Light level: mean brightness of camera frame (auto-adjust lamp)
+  - Light level: mean brightness of camera frame (auto-adjust the device)
   - Sound: RMS level from microphone (loud noise detection)
 
 Also drives the PresenceService state machine for automatic light on/off.
@@ -315,7 +315,7 @@ class SensingService:
         logger.info("[sensing] %s: %s", event_type, message)
 
         payload: dict[str, object] = {"type": event_type, "message": message}
-        # Include HAL's effective current_user so Lamp handler doesn't
+        # Include HAL's effective current_user so the OS server handler doesn't
         # have to re-derive it from the message text. Text parsing breaks
         # when a stranger-only enter event fires while a friend is still
         # present (extractUserName sees no friend in the message and
@@ -338,9 +338,9 @@ class SensingService:
             )
             if resp.status_code != 200:
                 logger.warning(
-                    "[sensing] Lamp returned %d: %s", resp.status_code, resp.text
+                    "[sensing] OS server returned %d: %s", resp.status_code, resp.text
                 )
             else:
                 self._last_event_time[event_type] = cur_ts
         except requests.RequestException as e:
-            logger.warning("[sensing] Failed to send event to Lamp: %s", e)
+            logger.warning("[sensing] Failed to send event to the OS server: %s", e)

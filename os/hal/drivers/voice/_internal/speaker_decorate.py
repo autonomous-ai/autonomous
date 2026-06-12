@@ -98,7 +98,7 @@ class SpeakerDecorator:
         """Detect wake word in `combined` and split it off.
 
         Returns (final_text, event_type):
-          * final_text — text sent to Lamp (wake word stripped on command).
+          * final_text — text sent to the OS server (wake word stripped on command).
           * event_type — "voice_command" if a wake word matched at the start,
                          else "voice".
 
@@ -140,7 +140,7 @@ class SpeakerDecorator:
         duration_s: float = 0.0,
         voiceprint_hash: Optional[str] = None,
     ) -> str:
-        """Format Lamp message for an unrecognized speaker (enroll hints, cooldown)."""
+        """Format OS server message for an unrecognized speaker (enroll hints, cooldown)."""
         now = time.time()
         in_cooldown = False
         if voiceprint_hash:
@@ -179,7 +179,7 @@ class SpeakerDecorator:
     def identify_and_decorate(
         self, transcript: str, audio_buffer: list[bytes],
     ) -> tuple[str, Optional[str]]:
-        """Run speaker recognition; return (Lamp message, SER user name or None).
+        """Run speaker recognition; return (OS server message, SER user name or None).
 
         user_name is set only when speaker recognize completes without `error` —
         known label or "unknown" for no match. None skips SER.
