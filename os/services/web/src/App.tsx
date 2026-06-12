@@ -23,7 +23,7 @@ function isTailscaleHost(host: string): boolean {
 
 // Setup gate: provisioned (online) → continue mode (Voice/Face enroll, TTS
 // preview), else initial mode (offline form for AP setup). When the user
-// lands on the AP IP (192.168.4.1) but the lamp already has a real LAN IP
+// lands on the AP IP (192.168.4.1) but the device already has a real LAN IP
 // (e.g. they bookmarked the AP URL after first setup), bounce them to the
 // LAN address so the rest of the page works. `#force` in the URL hash
 // forces initial mode for testing.
@@ -38,7 +38,7 @@ function SetupGate() {
       if (cancelled) return;
       if (!ok) { setProvisioned(false); return; }
       // Online: see if we should redirect to the actual LAN IP first.
-      // Skip redirect when the user is already reaching the lamp via its
+      // Skip redirect when the user is already reaching the device via its
       // Tailscale IP (CGNAT 100.64.0.0/10) — that's a deliberate remote-access
       // path, not the AP-IP-after-setup case we're trying to fix.
       try {

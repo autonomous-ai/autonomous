@@ -3,7 +3,7 @@ import { C, Field, SectionCard } from "@/components/setup/shared";
 import { pickVoicePhrases, pickVoiceIntro, VOICE_DURATION_SEC } from "@/components/setup/voice-phrases";
 import type { FaceOwner } from "@/hooks/setup/useFaceEnroll";
 
-// Voice enroll — remote-trigger lelamp's /speaker/record-enroll. Lamp captures
+// Voice enroll — remote-trigger the device's /speaker/record-enroll. The device captures
 // via its own mic; web only does countdown UI. Sharing label with face enroll
 // keeps both biometrics in one per-user folder. State stays local since
 // nothing outside this section reads it.

@@ -82,8 +82,8 @@ export function useSetupStatusPolling({
 
   // mDNS probe — the primary auto-redirect channel since the LAN-IP one
   // rarely fires in real AP→STA transitions. Carries the current pathname +
-  // search across, so any URL params from Lamp (llm_api_key, device_id, …)
-  // remain in scope on the new host even though the lamp already persisted
+  // search across, so any URL params from the OS server (llm_api_key, device_id, …)
+  // remain in scope on the new host even though the OS server already persisted
   // them via the form submit. Manual button in Setup.tsx renders unconditionally
   // as the safety net if mDNS is blocked on the network.
   //
@@ -122,11 +122,11 @@ export function useSetupStatusPolling({
   // Pre-submit canonical URL upgrade: when user lands on the AP IP
   // (192.168.100.1) we silently bounce to `http://lamp-XXXX.local/…` once we
   // know the hostname AND the .local name is reachable from the current
-  // network. On the AP itself avahi runs on the lamp so the same multicast
+  // network. On the AP itself avahi runs on the device so the same multicast
   // reaches both peers — resolution is almost instant on Windows/macOS/iOS.
   // Benefit: the URL stays the same through the AP→STA wifi switch, so when
   // the user rejoins home Wi-Fi the browser reloads the same .local URL and
-  // mDNS transparently maps it to the lamp's new LAN IP — no manual click.
+  // mDNS transparently maps it to the device's new LAN IP — no manual click.
   // Android Chrome (no native mDNS) just sees probes fail and stays on the
   // AP IP — current behavior, no regression.
   //
