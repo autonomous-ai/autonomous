@@ -6,7 +6,7 @@ description: Guard mode for security monitoring. Two uses — (1) Toggle on/off 
 # Guard Mode
 
 ## Quick Start
-Guard mode turns Lamp into an alert watchdog. When enabled, Lamp monitors for strangers and reacts **dramatically** — jolting, flashing, and verbally describing intruders. The system auto-broadcasts alerts to Telegram so friends know what's happening. All **friends** (enrolled faces) can toggle guard mode.
+Guard mode turns the device into an alert watchdog. When enabled, the device monitors for strangers and reacts **dramatically** — jolting, flashing, and verbally describing intruders. The system auto-broadcasts alerts to Telegram so friends know what's happening. All **friends** (enrolled faces) can toggle guard mode.
 
 ## Workflow
 1. Friend requests guard mode (explicit or implied departure).
@@ -74,7 +74,7 @@ Do NOT skip the camera enable or emotion marker. Guard mode is security-critical
 
 ### When guard mode triggers (stranger/motion detected)
 
-When guard mode is active and a sensing event fires (`presence.enter` with stranger, `motion`, or `fire_hazard.detected`), Lamp must react **dramatically** — this is a security alert, not a casual observation:
+When guard mode is active and a sensing event fires (`presence.enter` with stranger, `motion`, or `fire_hazard.detected`), the device must react **dramatically** — this is a security alert, not a casual observation:
 
 | Guard event | HW markers | Voice |
 |---|---|---|

@@ -136,7 +136,7 @@ Read the `[activity] Activity detected: <labels>.` message + the `[wellbeing_con
 
 ## Reaction (when the user just did the thing)
 
-When the activity labels include `drink`, `break`, or any raw eat label (`eating burger`, `dining`, `tasting food`, …), **always speak** — silence on a positive action makes Lamp feel dead. This is the path the user explicitly asked for: short, surprised, casual acknowledgments instead of stoic NO_REPLY.
+When the activity labels include `drink`, `break`, or any raw eat label (`eating burger`, `dining`, `tasting food`, …), **always speak** — silence on a positive action makes the device feel dead. This is the path the user explicitly asked for: short, surprised, casual acknowledgments instead of stoic NO_REPLY.
 
 **Inputs to weave in (use what fits, ignore what doesn't):**
 - `count_today.drink` / `count_today.break` — N-th of the day, streak, milestone.

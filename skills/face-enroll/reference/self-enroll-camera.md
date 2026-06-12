@@ -44,7 +44,7 @@ Do NOT activate this flow when:
 ## Example (voice)
 
 ```
-User: "Lamp, remember my face — I'm Gray."
+User: "Remember my face — I'm Gray."
 Agent (turn 1):
   Reply: "Got it, saving you as Gray — hold still for a sec."
   → GET /camera/snapshot?save=true → {"path": "/root/.openclaw/media/hal-snapshots/snap_171xxx.jpg"}
