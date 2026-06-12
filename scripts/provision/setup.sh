@@ -1458,14 +1458,20 @@ stage_devices() {
   echo "[stage] Install device profile ($DEVICE_TYPE)"
   local dest="$DEVICES_DIR/$DEVICE_TYPE"
   mkdir -p "$dest"
-  if [ -n "${DEVICES_URL:-}" ]; then
-    retry "curl -fsSL -H \"Cache-Control: no-cache\" -H \"Pragma: no-cache\" -o /tmp/device.zip \"$DEVICES_URL\"" 5
-    unzip -o -q /tmp/device.zip -d "$dest"
-    rm -f /tmp/device.zip
-    echo "[stage] Device profile '$DEVICE_TYPE' installed at $dest"
-  else
-    echo "[stage] WARN: no devices.$DEVICE_TYPE url in OTA metadata — skipping (default soul, all routes mount)"
+  # Device profile is required — one install = one device type, and the device
+  # is useless without its DEVICE.md/SOUL.md/SAFETY.md. set -e is suspended
+  # inside run_stage's `if stage_devices`, so guard each step explicitly and
+  # return non-zero so the stage is recorded as FAILED (not silently OK).
+  if [ -z "${DEVICES_URL:-}" ]; then
+    echo "[stage] ERROR: no devices.$DEVICE_TYPE url in OTA metadata — device profile required. Run 'make upload-device $DEVICE_TYPE'." >&2
+    return 1
   fi
+  retry "curl -fsSL -H \"Cache-Control: no-cache\" -H \"Pragma: no-cache\" -o /tmp/device.zip \"$DEVICES_URL\"" 5 \
+    || { echo "[stage] ERROR: failed to download device profile for $DEVICE_TYPE from $DEVICES_URL" >&2; return 1; }
+  unzip -o -q /tmp/device.zip -d "$dest" \
+    || { echo "[stage] ERROR: failed to extract device profile for $DEVICE_TYPE" >&2; return 1; }
+  rm -f /tmp/device.zip
+  echo "[stage] Device profile '$DEVICE_TYPE' installed at $dest"
 }
 
 # Stop os-server if running from a previous setup — it switches to AP mode when unconfigured, killing internet.

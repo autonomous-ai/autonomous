@@ -1137,7 +1137,8 @@ if [ -n "\$DEVICES_URL" ]; then
   rm -f /tmp/device-profile.zip
   echo "[overlay] device profile baked → \$DEVICE_PROFILE_DIR"
 else
-  echo "[overlay] WARN: no devices.\$DEVICE_TYPE.url in OTA metadata — skipping device profile"
+  echo "[overlay] ERROR: no devices.\$DEVICE_TYPE url in OTA metadata — device profile is required (one image = one device type). Run 'make upload-device \$DEVICE_TYPE' before building." >&2
+  exit 1
 fi
 
 echo "[overlay] web UI"

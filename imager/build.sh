@@ -2035,7 +2035,8 @@ if [ -n "\${DEVICES_URL:-}" ]; then
   rm -f /tmp/device.zip
   echo "[overlay] Device profile '\$DEVICE_TYPE' installed at \$DEVICE_DEST"
 else
-  echo "[overlay] WARN: no devices.\$DEVICE_TYPE url in OTA metadata — skipping (default soul, all routes mount)"
+  echo "[overlay] ERROR: no devices.\$DEVICE_TYPE url in OTA metadata — device profile is required (one image = one device type). Run 'make upload-device \$DEVICE_TYPE' before building." >&2
+  exit 1
 fi
 
 # ── stage: web UI ────────────────────────────────────────────────────────────
