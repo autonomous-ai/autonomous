@@ -117,7 +117,7 @@ func (s *Service) runWSConn(ctx context.Context, handler domain.AgentEventHandle
 
 	connectReq := map[string]interface{}{
 		"type":   "req",
-		"id":     "lamp-1",
+		"id":     "os-1",
 		"method": "connect",
 		"params": map[string]interface{}{
 			"minProtocol": 3,
@@ -222,7 +222,7 @@ func (s *Service) runWSConn(ctx context.Context, handler domain.AgentEventHandle
 	if s.GetSessionKey() == "" {
 		listReq := map[string]interface{}{
 			"type":   "req",
-			"id":     "lamp-sessions",
+			"id":     "os-sessions",
 			"method": "sessions.list",
 		}
 		listBody, _ := json.Marshal(listReq)

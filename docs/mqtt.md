@@ -183,9 +183,9 @@ falls back to its zero value on failure.
   "status": "success",
   "data": {
     "versions": {
-      "lamp": "0.0.35",
+      "os-server": "0.0.35",
       "bootstrap": "0.0.10",
-      "lelamp": "1.2.3",
+      "hal": "1.2.3",
       "openclaw": "2026.5.27",
       "openclaw_detected": true
     },
@@ -207,8 +207,8 @@ falls back to its zero value on failure.
 ```
 
 `system.version` returns just the `versions` block as `data`; `system.network`
-returns just the `network` block. Version probes: `lamp` from the ldflags build
-var, `bootstrap` via `bootstrap-server --version`, `lelamp` over HTTP from the
+returns just the `network` block. Version probes: `os-server` from the ldflags build
+var, `bootstrap` via `bootstrap-server --version`, `hal` over HTTP from the
 local HAL `/version` endpoint, `openclaw` from the agent monitor's cached probe
 (`openclaw_detected` distinguishes "not installed" from "installed but unparseable").
 

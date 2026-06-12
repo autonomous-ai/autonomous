@@ -254,7 +254,7 @@ func (h *AgentHandler) FlowLogs(c *gin.Context) {
 		}
 	}
 
-	filename := fmt.Sprintf("lamp_flow_%s.jsonl", date)
+	filename := fmt.Sprintf("flow_%s.jsonl", date)
 	var out []byte
 	if last > 0 {
 		lines, err := readAllJSONLines(path)
@@ -265,7 +265,7 @@ func (h *AgentHandler) FlowLogs(c *gin.Context) {
 		if len(lines) > last {
 			lines = lines[len(lines)-last:]
 		}
-		filename = fmt.Sprintf("lamp_flow_%s_last%d.jsonl", date, last)
+		filename = fmt.Sprintf("flow_%s_last%d.jsonl", date, last)
 		out = []byte(strings.Join(lines, "\n"))
 		if len(out) > 0 {
 			out = append(out, '\n')

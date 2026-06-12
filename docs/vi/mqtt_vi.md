@@ -182,9 +182,9 @@ probe lỗi sẽ rơi về zero value của nó.
   "status": "success",
   "data": {
     "versions": {
-      "lamp": "0.0.35",
+      "os-server": "0.0.35",
       "bootstrap": "0.0.10",
-      "lelamp": "1.2.3",
+      "hal": "1.2.3",
       "openclaw": "2026.5.27",
       "openclaw_detected": true
     },
@@ -206,8 +206,8 @@ probe lỗi sẽ rơi về zero value của nó.
 ```
 
 `system.version` chỉ trả về block `versions` trong `data`; `system.network` chỉ trả
-về block `network`. Cách probe version: `lamp` từ biến ldflags lúc build, `bootstrap`
-qua `bootstrap-server --version`, `lelamp` qua HTTP từ endpoint `/version` của HAL
+về block `network`. Cách probe version: `os-server` từ biến ldflags lúc build, `bootstrap`
+qua `bootstrap-server --version`, `hal` qua HTTP từ endpoint `/version` của HAL
 local, `openclaw` từ probe cache của agent monitor (`openclaw_detected` phân biệt
 "chưa cài" với "đã cài nhưng không parse được").
 
