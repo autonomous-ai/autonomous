@@ -23,7 +23,7 @@ final class PairingWindowController: NSWindowController {
         super.init(window: window)
 
         hostField.stringValue = initialHost ?? ""
-        hostField.placeholderString = "lamp-xxxx.local"
+        hostField.placeholderString = "device-xxxx.local"
         codeField.placeholderString = "6-digit code from your device's web UI"
 
         pairButton.target = self
