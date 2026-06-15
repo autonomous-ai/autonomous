@@ -275,7 +275,7 @@ Expected: non-zero bytes near offsets 0x2000 (SPL header) and 0x20000 (U-Boot pr
 **2026-06-15** — Per-device output subfolder + lamp pre-built base image:
 - OPi build now outputs to `output/<device_type>/` (e.g. `output/lamp/`) — lamp and intern-v2 images no longer clobber each other in `output/`
 - lamp: Phase 0 decompresses `input/lamp/golden-opi-dev.img.xz` instead of downloading from Google Drive
-- intern-v2: exits early with "coming soon" message (base image pending hardware finalization)
+- intern-v2: uses `input/intern-v2/golden-opi-dev-intern.img.xz` as base image
 
 **2026-06-08** — Raspberry Pi 4B support:
 - `RPI_MODEL` env var added to `build.sh` (`4` = Pi 4B Bookworm, `5` = Pi 5 Trixie, default 5)

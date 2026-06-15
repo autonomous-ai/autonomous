@@ -41,15 +41,14 @@ OPENCLAW_VERSION="${OPENCLAW_VERSION:-2026.5.27}"
 DEVICE_TYPE="${DEVICE_TYPE:?DEVICE_TYPE is required — build via 'make build DEVICE_TYPE=...'}"
 DEVICES_DIR="${DEVICES_DIR:-/opt/devices}"
 
-# Per-device base image. lamp ships a pre-built minimal .img.xz in input/lamp/.
-# intern-v2 base image is pending — will be added when hardware is finalized.
+# Per-device base image. lamp and intern-v2 ship pre-built minimal .img.xz
+# in input/<device>/. Other device types fall back to the Google Drive stock image.
 case "${DEVICE_TYPE}" in
   lamp)
     DEVICE_BASE_IMG="${DEVICE_BASE_IMG:-/input/lamp/golden-opi-dev.img.xz}"
     ;;
   intern-v2)
-    echo "ERROR: intern-v2 base image — coming soon. No golden image available yet." >&2
-    exit 1
+    DEVICE_BASE_IMG="${DEVICE_BASE_IMG:-/input/intern-v2/golden-opi-dev-intern.img.xz}"
     ;;
   *)
     DEVICE_BASE_IMG=""
