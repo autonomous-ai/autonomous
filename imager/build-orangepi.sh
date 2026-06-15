@@ -954,7 +954,7 @@ PULSE_CONF="/etc/pulse/default.pa"
 if [ -f "\$PULSE_CONF" ] && ! grep -q "module-echo-cancel" "\$PULSE_CONF"; then
   cat >> "\$PULSE_CONF" <<'PULSE_EOF'
 
-### Echo cancellation (WebRTC AEC) for Lamp
+### Echo cancellation (WebRTC AEC)
 load-module module-echo-cancel source_name=aec_source sink_name=aec_sink aec_method=webrtc aec_args="analog_gain_control=0 digital_gain_control=0" channels=1
 set-default-source aec_source
 set-default-sink aec_sink
@@ -963,7 +963,7 @@ PULSE_EOF
 fi
 
 cat > /etc/udev/rules.d/91-pulseaudio-hal-ignore.rules <<'UDEV_EOF'
-# Keep PulseAudio away from the lamp speaker codec so hal can own it.
+# Keep PulseAudio away from the onboard I2S codecs so hal can own them.
 SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
 SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
 UDEV_EOF

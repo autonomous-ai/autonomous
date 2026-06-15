@@ -147,12 +147,24 @@ def query_play_history(person: str = "", date_str: str | None = None, last: int 
 
 
 def _detect_alsa_output_device() -> str:
-    """Detect ALSA output device from aplay -l.
+    """ALSA output device for music playback.
 
-    Priority: CD002 > Seeed ReSpeaker > any USB audio device.
+    Prefer HAL_AUDIO_OUTPUT_ALSA — the per-device speaker alias from
+    /etc/asound.conf (e.g. 'plug:device_speaker') — so music plays through the
+    SAME speaker as TTS. The device's asound.conf is the single source of truth
+    for where the speaker actually is; auto-detection by card name can't know
+    which card is wired to the amp (e.g. on Lamp the onboard codec is present but
+    its line-out is disconnected — only the USB DAC reaches the speaker).
+
+    Fall back to keyword auto-detect only when the env is unset (dev/test):
+    priority CD002 > Seeed ReSpeaker > onboard codec > any USB audio device.
     Returns plughw:CARD,0 for direct hardware access (handles sample rate
-    conversion), or "default" as fallback.
+    conversion), or "default" as last resort.
     """
+    env_dev = os.environ.get("HAL_AUDIO_OUTPUT_ALSA")
+    if env_dev:
+        logger.info("ALSA output: using HAL_AUDIO_OUTPUT_ALSA=%s", env_dev)
+        return env_dev
     try:
         result = subprocess.run(["aplay", "-l"], capture_output=True, text=True, timeout=5)
         if result.returncode != 0:
