@@ -103,7 +103,7 @@ Two mics: a USB mic for voice capture, an onboard mic for ambient sensing.
 
 > Mic 2 is the onboard MEMS mic that ships on the OrangePi 4 Pro PCB. It must be **desoldered from the OPi board and re-mounted in the lamp base with an extended cord** to the original pads. Keep the cord short enough to avoid noise pickup — twist the signal and ground together.
 
-> ALSA aliases live in `/etc/asound.conf` on each device; not the same string across all units.
+> ALSA aliases live in `/etc/asound.conf`. The source of truth is the device rootfs overlay `devices/lamp/rootfs/etc/asound.conf` (one per device type), installed onto `/` at image build and on every device-profile OTA. Cards are addressed by **name** (`Audio` = USB DAC, `Device` = USB mic, `sndi2s4` = onboard codec), not index, since USB card numbers reorder across boots.
 
 > On Raspberry Pi the wm8960 capture gain has a watchdog that clamps it to 160 — see `project_lamp_pcm_watchdog.md`.
 

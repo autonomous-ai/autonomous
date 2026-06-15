@@ -751,6 +751,10 @@ elif [ "\$APP" = "device" ]; then
   curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download device profile"; exit 1; }
   mkdir -p "\$DEST"
   unzip -o -q "\$ZIP_TMP" -d "\$DEST"
+  rm -f "\$ZIP_TMP"
+  # Re-apply the device rootfs overlay (asound.conf, udev rules, …) so audio/
+  # system config updates land on / before the services restart.
+  [ -d "\$DEST/rootfs" ] && cp -a "\$DEST/rootfs/." /
   systemctl restart os-server 2>/dev/null || true
   systemctl restart hal 2>/dev/null || true
   echo "device profile (\$DEVICE_TYPE) updated to \$VERSION"
@@ -964,33 +968,11 @@ SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
 SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
 UDEV_EOF
 
-# ── ALSA aliases for OPi 4 Pro ES8389 codec (sndi2s4) ────────────────────────
-echo "[stage] ALSA aliases"
-cat > /etc/asound.conf <<'ALSA_EOF'
-# Persistent ALSA aliases for HAL on Orange Pi 4 Pro (A733).
-# Onboard codec is ES8389 (card sndi2s4); USB mic = lamp_micro2 (Jieli, renamed via udev).
-
-pcm.lamp_speaker {
-    type plug
-    slave.pcm {
-        type hw
-        card sndi2s4
-        device 0
-    }
-}
-ctl.lamp_speaker { type hw card sndi2s4 }
-
-pcm.lamp_micro1 {
-    type plug
-    slave.pcm {
-        type hw
-        card sndi2s4
-        device 0
-    }
-    route_policy average
-}
-ctl.lamp_micro1 { type hw card sndi2s4 }
-ALSA_EOF
+# ── ALSA aliases ─────────────────────────────────────────────────────────────
+# /etc/asound.conf is NOT written here — it ships per device type in the device
+# rootfs overlay (devices/<type>/rootfs/etc/asound.conf), applied in Phase 3 after
+# the profile is baked. Audio routing differs per device's wiring, so it can't be
+# a board-wide constant.
 
 # ── disable conflicting vendor services ──────────────────────────────────────
 echo "[stage] mask conflicting vendor services"
@@ -1136,6 +1118,15 @@ if [ -n "\$DEVICES_URL" ]; then
   unzip -o -q /tmp/device-profile.zip -d "\$DEVICE_PROFILE_DIR"
   rm -f /tmp/device-profile.zip
   echo "[overlay] device profile baked → \$DEVICE_PROFILE_DIR"
+  # Device rootfs overlay: devices/<type>/rootfs/ mirrors the target filesystem
+  # (e.g. rootfs/etc/asound.conf). Copy the whole tree onto / so device-specific
+  # system config (ALSA routing, udev rules, …) matches this device's wiring.
+  if [ -d "\$DEVICE_PROFILE_DIR/rootfs" ]; then
+    cp -a "\$DEVICE_PROFILE_DIR/rootfs/." /
+    echo "[overlay] device rootfs overlay applied"
+  else
+    echo "[overlay] WARN: device profile has no rootfs/ overlay"
+  fi
 else
   echo "[overlay] ERROR: no devices.\$DEVICE_TYPE url in OTA metadata — device profile is required (one image = one device type). Run 'make upload-device \$DEVICE_TYPE' before building." >&2
   exit 1
