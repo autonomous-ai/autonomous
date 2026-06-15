@@ -247,7 +247,7 @@ def factory_reset_action(source: str = "button"):
     """Announce + POST /api/system/factory-reset on the OS server. The OS server
     wipes per-device state (config, API keys, enrollments, WiFi) and reboots
     into AP setup mode. HAL does NOT touch state itself — single source of
-    truth for what gets wiped lives in the OS server's factoryResetWipePaths.
+    truth for what gets wiped lives in the OS server's deviceWipePaths.
 
     Authoritative because of physical presence: 10s deliberate hold + the
     /api/system/factory-reset endpoint allows loopback origin without Bearer
