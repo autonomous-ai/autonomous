@@ -8,7 +8,7 @@ into the device AP/hotspot setup wizard. Flash, insert, power on — no
 class per golden image; preflight fails if either is unset.
 
 ```bash
-make build DEVICE_TYPE=lamp OTA_METADATA_URL=…                   # → output/golden-opi-lamp.img.xz (OrangePi, default)
+make build DEVICE_TYPE=lamp OTA_METADATA_URL=…                   # → output/lamp/golden-opi-lamp.img.xz (OrangePi, default)
 make TARGET=rpi DEVICE_TYPE=lamp OTA_METADATA_URL=… build        # → output/golden-lamp.img (Raspberry Pi 5)
 make TARGET=rpi RPI_MODEL=4 DEVICE_TYPE=lamp OTA_METADATA_URL=… build  # → output/golden-lamp.img (Raspberry Pi 4B)
 make upload                             # push image + release note to GCS, versioned (auto-cleans output/ on success)
@@ -19,33 +19,37 @@ make clean-all                          # wipe both output/ and input/
 
 Lần đầu build ~25–40 phút (download vendor base image, qemu-arm64 chroot apt
 install + LeLamp uv sync, OTA backend bake, xz compress). Re-runs nhanh hơn
-nhiều — `input/orangepi.7z` được cache, chỉ Phase 3+ re-run.
+nhiều — lamp dùng `input/lamp/golden-opi-dev.img.xz` (không cần download Google
+Drive); các device khác cache ở `input/orangepi.7z`, chỉ Phase 3+ re-run.
 
 ## Targets
 
 | Board | TARGET | RPI_MODEL | Builder | Output | Status |
 |-------|--------|-----------|---------|--------|--------|
-| **OrangePi 4 Pro v2 (Allwinner A733)** *default* | `opi` | — | `build-orangepi.sh` | `output/golden-opi-<type>.img.xz` | **working** (verified 2026-05-27) |
+| **OrangePi 4 Pro v2 (Allwinner A733)** *default* | `opi` | — | `build-orangepi.sh` | `output/<type>/golden-opi-<type>.img.xz` | **working** (verified 2026-05-27) |
 | Raspberry Pi 5 | `rpi` | `5` (default) | `build.sh` | `output/golden-<type>.img` | working |
 | Raspberry Pi 4B | `rpi` | `4` | `build.sh` | `output/golden-<type>.img` | code-only, untested on HW |
 
 `make TARGET=rpi build` cho Pi 5 path. `make TARGET=rpi RPI_MODEL=4 build` cho Pi 4B. No-arg `make build` mặc định OrangePi.
 
-> The build script always writes a fixed name (`golden-opi.img.xz` / `golden.img`);
-> `make build` then renames it to the device-typed `golden[-opi]-<type>.img[.xz]` shown
-> above, so 3 device types don't clobber each other. Phase logs below show the raw
+> The build script always writes a fixed name (`golden-opi.img.xz` / `golden.img`) to
+> `output/<type>/`; `make build` then renames it to `output/<type>/golden[-opi]-<type>.img[.xz]`
+> shown above, so device types don't clobber each other. Phase logs below show the raw
 > script name (pre-rename).
 
 ## OrangePi build flow
 
 ```
-Phase 0  Source .7z fetch
-         - gdown 'https://drive.google.com/uc?id=$OPI_FILE_ID' → input/orangepi.7z (cached, 734 MB)
-         - If Google Drive rate-limits the file (common — "Too many users have viewed
-           or downloaded this file recently"), see Troubleshooting → manual download.
+Phase 0  Source base image
+         - lamp: decompresses input/lamp/golden-opi-dev.img.xz directly (no Google Drive
+           download needed; pre-built base image ships in input/lamp/)
+         - other devices: gdown 'https://drive.google.com/uc?id=$OPI_FILE_ID' →
+           input/orangepi.7z (cached, 734 MB). If Google Drive rate-limits (common —
+           "Too many users have viewed or downloaded this file recently"), see
+           Troubleshooting → manual download.
 Phase 1  Extract + expand
          - 7z e → /work/Orangepi4pro_*.img (~3.8 GB raw ext4)
-         - cp → /output/golden-opi.img, truncate to OUT_IMG_SIZE (default 14 GB)
+         - cp → /output/<type>/golden-opi.img, truncate to OUT_IMG_SIZE (default 14 GB)
          - growpart loop0 1 → resize partition table to fill expanded image
          - losetup --offset / --sizelimit on partition byte range (bypass kernel
            partition device nodes; Docker on Mac lacks udev so /dev/loopXpY
@@ -82,9 +86,9 @@ Phase 4  resize-once.service installed
          - growpart + resize2fs to fill the actual SD card (image is 14 GB, SD likely larger)
 Phase 5  Finalize
          - Read /tmp/ota-versions.env back out of the image
-         - Write /output/manifest-opi.json (build_timestamp, OTA versions, source sha256, …)
+         - Write /output/<type>/manifest-opi.json (build_timestamp, OTA versions, source sha256, …)
          - Unmount, detach loop devices
-         - xz -9 --threads=0 /output/golden-opi.img → golden-opi.img.xz (~190 MB)
+         - xz -9 --threads=0 /output/<type>/golden-opi.img → golden-opi.img.xz (~190 MB)
 ```
 
 **Typical sizes**: source .7z = 734 MB, extracted .img = 3.8 GB, expanded image
@@ -115,7 +119,7 @@ efficiently).
 **Recommended: Raspberry Pi Imager** (works for both OPi and RPi images)
 
 1. Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/)
-2. Choose OS → "Use custom" → select `output/golden-opi-<type>.img.xz` (or `golden-<type>.img` for RPi)
+2. Choose OS → "Use custom" → select `output/<type>/golden-opi-<type>.img.xz` (or `output/<type>/golden-<type>.img` for RPi)
 3. Choose Storage → select your SD card
 4. Click Write — Imager handles decompression and verification automatically
 
@@ -158,10 +162,10 @@ Versioning: `golden-<target>-<type>-<UTC-timestamp>-<git-short-sha>.img.xz`
 
 `make upload` does:
 
-1. Computes sha256 + size of `output/golden-opi-<type>.img.xz`.
-2. Reads `output/manifest-opi.json` (written by Phase 5) for OTA versions
+1. Computes sha256 + size of `output/<type>/golden-opi-<type>.img.xz`.
+2. Reads `output/<type>/manifest-opi.json` (written by Phase 5) for OTA versions
    baked in. Degrades gracefully if missing.
-3. Generates `output/golden-opi-<type>-<version>.release.txt`.
+3. Generates `output/<type>/golden-opi-<type>-<version>.release.txt`.
 4. Uploads image + release note to GCS.
 5. Prepends new entry to cumulative `RELEASES.md` ledger (newest-first).
 6. **Auto-cleans** `output/` after all uploads succeed. Skip with `KEEP_OUTPUT=1 make upload`.
@@ -181,8 +185,8 @@ imager/
 ├── build-orangepi.sh      — OrangePi 4 Pro builder (default; ~1200 lines)
 ├── build.sh               — Raspberry Pi 4B / 5 builder (~2100 lines)
 ├── lib/                   — RESERVED for shared chroot stages (see lib/README.md)
-├── input/                 — cached source images (.7z / .img.xz). gitignored.
-├── output/                — built golden images + release notes + manifests. gitignored.
+├── input/                 — cached source images (.7z / .img.xz), per-device subdirs (e.g. input/lamp/). gitignored.
+├── output/                — built golden images + release notes + manifests, per-device subdirs (e.g. output/lamp/). gitignored.
 ├── .gitignore             — input/ output/ work/
 └── README.md              — this file
 ```
@@ -261,12 +265,17 @@ To silence it: `gcloud config set storage/parallel_composite_upload_enabled Fals
 Check the U-Boot bootloader region survived:
 
 ```bash
-xz -dc output/golden-opi-<type>.img.xz | head -c 16M | hexdump -C | head -20
+xz -dc output/<type>/golden-opi-<type>.img.xz | head -c 16M | hexdump -C | head -20
 ```
 
 Expected: non-zero bytes near offsets 0x2000 (SPL header) and 0x20000 (U-Boot proper).
 
 ## Recent changes
+
+**2026-06-15** — Per-device output subfolder + lamp pre-built base image:
+- OPi build now outputs to `output/<device_type>/` (e.g. `output/lamp/`) — lamp and intern-v2 images no longer clobber each other in `output/`
+- lamp: Phase 0 decompresses `input/lamp/golden-opi-dev.img.xz` instead of downloading from Google Drive
+- intern-v2: exits early with "coming soon" message (base image pending hardware finalization)
 
 **2026-06-08** — Raspberry Pi 4B support:
 - `RPI_MODEL` env var added to `build.sh` (`4` = Pi 4B Bookworm, `5` = Pi 5 Trixie, default 5)
@@ -295,5 +304,5 @@ Expected: non-zero bytes near offsets 0x2000 (SPL header) and 0x20000 (U-Boot pr
 **2026-05-27** — OPi builder verified end-to-end on Mac/Docker:
 - `OUT_IMG_SIZE` default raised to `14G`
 - Loop device handling switched to `losetup --offset/--sizelimit`
-- Phase 5 writes `output/manifest-opi.json`
+- Phase 5 writes `output/<type>/manifest-opi.json`
 - New Makefile targets: `make upload`, `make upload-source`

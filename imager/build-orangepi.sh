@@ -41,6 +41,21 @@ OPENCLAW_VERSION="${OPENCLAW_VERSION:-2026.5.27}"
 DEVICE_TYPE="${DEVICE_TYPE:?DEVICE_TYPE is required — build via 'make build DEVICE_TYPE=...'}"
 DEVICES_DIR="${DEVICES_DIR:-/opt/devices}"
 
+# Per-device base image. lamp ships a pre-built minimal .img.xz in input/lamp/.
+# intern-v2 base image is pending — will be added when hardware is finalized.
+case "${DEVICE_TYPE}" in
+  lamp)
+    DEVICE_BASE_IMG="${DEVICE_BASE_IMG:-/input/lamp/golden-opi-dev.img.xz}"
+    ;;
+  intern-v2)
+    echo "ERROR: intern-v2 base image — coming soon. No golden image available yet." >&2
+    exit 1
+    ;;
+  *)
+    DEVICE_BASE_IMG=""
+    ;;
+esac
+
 # Google Drive file ID for the bookworm server image. Override via env var when
 # the dev team rotates the .7z (new Orange Pi release).
 OPI_FILE_ID="${OPI_FILE_ID:-1CYfOaY6f5DozJBNvPJ0Gx1jBIFlGe8fn}"
@@ -48,8 +63,9 @@ OPI_FILE_NAME="Orangepi4pro_1.0.6_debian_bookworm_server_linux5.15.147"
 
 MNT="/mnt/opi"
 SRC_7Z="/input/orangepi.7z"
-SRC_IMG="/work/${OPI_FILE_NAME}.img"
-OUT_IMG="/output/golden-opi.img"
+SRC_IMG="/work/base-${DEVICE_TYPE}.img"
+OUT_DIR="/output/${DEVICE_TYPE}"
+OUT_IMG="${OUT_DIR}/golden-opi.img"
 
 LOOP_DEV=""
 PART_LOOP=""
@@ -83,17 +99,25 @@ retry() {
 for bin in 7z losetup parted resize2fs e2fsck mkfs.ext4 qemu-aarch64-static gdown xz growpart; do
   command -v "$bin" >/dev/null || err "missing tool: $bin (check Dockerfile)"
 done
-mkdir -p /input /output /work "${MNT}"
+mkdir -p /input /output "${OUT_DIR}" /work "${MNT}"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Phase 0 — Download source image from Google Drive
+# Phase 0 — Source base image: per-device pre-built or Google Drive stock
 # ─────────────────────────────────────────────────────────────────────────────
-if [ ! -f "${SRC_7Z}" ]; then
-  log "Downloading ${OPI_FILE_NAME}.7z (~734 MB) from Google Drive…"
-  # gdown takes URL or bare ID as positional argument.
-  if ! retry "gdown 'https://drive.google.com/uc?id=${OPI_FILE_ID}' -O '${SRC_7Z}'" 3 5; then
-    rm -f "${SRC_7Z}"
-    cat >&2 <<MSG
+if [ -n "${DEVICE_BASE_IMG:-}" ]; then
+  # Device-specific pre-built base image (e.g. lamp: imager/input/lamp/).
+  log "Base image for ${DEVICE_TYPE}: ${DEVICE_BASE_IMG}"
+  [ -f "${DEVICE_BASE_IMG}" ] || err "Base image not found: ${DEVICE_BASE_IMG} — place it at imager/input/${DEVICE_TYPE}/"
+  log "Decompressing ${DEVICE_BASE_IMG} → ${SRC_IMG}…"
+  xz -dkc --threads=0 "${DEVICE_BASE_IMG}" > "${SRC_IMG}"
+else
+  # No device-specific base: download OrangePi stock image from Google Drive.
+  if [ ! -f "${SRC_7Z}" ]; then
+    log "Downloading ${OPI_FILE_NAME}.7z (~734 MB) from Google Drive…"
+    # gdown takes URL or bare ID as positional argument.
+    if ! retry "gdown 'https://drive.google.com/uc?id=${OPI_FILE_ID}' -O '${SRC_7Z}'" 3 5; then
+      rm -f "${SRC_7Z}"
+      cat >&2 <<MSG
 ==============================================================================
 gdown failed. Google Drive rate-limits popular files (~"Too many users have
 viewed or downloaded this file recently"). The browser bypasses this because
@@ -117,24 +141,26 @@ MANUAL FIX (one-time per machine):
 The .7z file is cached after this — gdown isn't called on subsequent builds.
 ==============================================================================
 MSG
-    exit 1
+      exit 1
+    fi
+  else
+    log "Source .7z cached at ${SRC_7Z}"
   fi
-else
-  log "Source .7z cached at ${SRC_7Z}"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 1 — Extract, expand to OUT_IMG_SIZE, partprobe, resize2fs
 # ─────────────────────────────────────────────────────────────────────────────
-log "Extracting ${SRC_7Z}…"
-rm -f /work/*.img /work/*.sha
-7z x -y -o/work "${SRC_7Z}" >/dev/null
-
-# orangepi-build produces extras (.sha, .img.txt). Find the .img.
-EXTRACTED_IMG=$(find /work -maxdepth 2 -name '*.img' -type f | head -1)
-[ -n "${EXTRACTED_IMG}" ] || err "no .img found inside .7z"
-if [ "${EXTRACTED_IMG}" != "${SRC_IMG}" ]; then
-  mv -f "${EXTRACTED_IMG}" "${SRC_IMG}"
+if [ -z "${DEVICE_BASE_IMG:-}" ]; then
+  log "Extracting ${SRC_7Z}…"
+  rm -f /work/*.img /work/*.sha
+  7z x -y -o/work "${SRC_7Z}" >/dev/null
+  # orangepi-build produces extras (.sha, .img.txt). Find the .img.
+  EXTRACTED_IMG=$(find /work -maxdepth 2 -name '*.img' -type f | head -1)
+  [ -n "${EXTRACTED_IMG}" ] || err "no .img found inside .7z"
+  if [ "${EXTRACTED_IMG}" != "${SRC_IMG}" ]; then
+    mv -f "${EXTRACTED_IMG}" "${SRC_IMG}"
+  fi
 fi
 log "Source image: ${SRC_IMG} ($(du -h "${SRC_IMG}" | cut -f1))"
 
@@ -1208,7 +1234,7 @@ fi
 # Write the build manifest. Makefile `upload` target reads this to populate
 # the per-release note with OTA versions actually baked in.
 SRC_7Z_SHA=$(sha256sum "${SRC_7Z}" 2>/dev/null | cut -d' ' -f1 || echo unknown)
-cat > /output/manifest-opi.json <<MANIFEST_JSON
+cat > "${OUT_DIR}/manifest-opi.json" <<MANIFEST_JSON
 {
   "build_timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "target": "opi",
@@ -1229,7 +1255,7 @@ cat > /output/manifest-opi.json <<MANIFEST_JSON
   }
 }
 MANIFEST_JSON
-log "Manifest: /output/manifest-opi.json"
+log "Manifest: ${OUT_DIR}/manifest-opi.json"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 4 — Install resize-once.service (first-boot SD-fill expand)

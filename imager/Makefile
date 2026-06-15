@@ -40,10 +40,10 @@ endif
 # target renames it to the device-typed IMG_FILE (3 device types = 3 images).
 # OPi build produces .img.xz (compressed); RPi build produces raw .img.
 BUILT_IMG_rpi := golden.img
-BUILT_IMG_opi := golden-opi.img.xz
+BUILT_IMG_opi := $(DEVICE_TYPE)/golden-opi.img.xz
 BUILT_IMG := $(BUILT_IMG_$(TARGET))
 IMG_FILE_rpi := golden-$(DEVICE_TYPE).img
-IMG_FILE_opi := golden-opi-$(DEVICE_TYPE).img.xz
+IMG_FILE_opi := $(DEVICE_TYPE)/golden-opi-$(DEVICE_TYPE).img.xz
 IMG_FILE := $(IMG_FILE_$(TARGET))
 
 # Preflight — check Docker resources + clean dangling layers before a long
@@ -139,8 +139,8 @@ TARGET_PREFIX_opi := golden-opi
 TARGET_PREFIX := $(TARGET_PREFIX_$(TARGET))
 VERSIONED_BASE := $(TARGET_PREFIX)-$(DEVICE_TYPE)-$(VERSION)
 VERSIONED_IMG  := $(VERSIONED_BASE)$(if $(filter %.xz,$(IMG_FILE)),.img.xz,.img)
-RELEASE_NOTE   := output/$(VERSIONED_BASE).release.txt
-MANIFEST_FILE  := output/manifest-$(TARGET).json
+RELEASE_NOTE   := output/$(DEVICE_TYPE)/$(VERSIONED_BASE).release.txt
+MANIFEST_FILE  := output/$(DEVICE_TYPE)/manifest-$(TARGET).json
 
 upload: $(RELEASE_NOTE)
 	@command -v gcloud >/dev/null 2>&1 || { echo "ERROR: gcloud not installed. brew install --cask gcloud-cli"; exit 1; }
@@ -178,7 +178,7 @@ upload: $(RELEASE_NOTE)
 # Release note generated from manifest + image checksums at upload time.
 $(RELEASE_NOTE):
 	@[ -f output/$(IMG_FILE) ] || { echo "ERROR: output/$(IMG_FILE) not found. Run 'make build' first."; exit 1; }
-	@mkdir -p output
+	@mkdir -p output/$(DEVICE_TYPE)
 	@echo "==> Generating release note $(RELEASE_NOTE)"
 	@IMG_SHA=$$(shasum -a 256 output/$(IMG_FILE) | awk '{print $$1}'); \
 	IMG_BYTES=$$(stat -f %z output/$(IMG_FILE) 2>/dev/null || stat -c %s output/$(IMG_FILE)); \
