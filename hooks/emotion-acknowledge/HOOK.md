@@ -1,7 +1,7 @@
 ---
 name: emotion-acknowledge
 description: "Triggers a 'thinking' emotion on Lamp immediately when a message is received, before the LLM starts processing"
-homepage: https://github.com/autonomous-ai/lamp
+homepage: https://github.com/autonomous-ai/autonomous
 metadata:
   { "openclaw": {
       "emoji": "🤔",
