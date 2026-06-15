@@ -64,12 +64,14 @@ Phase 2  chroot qemu-arm64:
            software-update} synced from scripts/ in this repo
          - configs: hostapd, dnsmasq, dhcpcd, full prod nginx (CSP + WS + captive-portal
            + local-only block for /api/system/exec), PulseAudio (WebRTC AEC + anon socket),
-           udev PULSE_IGNORE for I2S codecs, /etc/asound.conf (lamp_speaker / lamp_micro1
-           for ES8389 sndi2s4)
+           udev PULSE_IGNORE for I2S codecs
+           (/etc/asound.conf is NOT here — it ships in the device rootfs overlay, Phase 3)
          - SPI3 overlay baked into orangepiEnv.txt for WS2812 LED ring (/dev/spidev3.0)
          - mask orangepi-firstrun-config.service (vendor wizard would conflict)
 Phase 3  OTA bake from metadata.json:
          - bootstrap-server + os-server binaries
+         - device profile (devices/<type>) → /opt/devices/<type>; its rootfs/ overlay
+           (e.g. rootfs/etc/asound.conf — device-specific ALSA routing) copied onto /
          - LeLamp Python app + `uv sync --python 3.12 --extra hardware`
            (with webrtcvad pkg_resources shim for Py 3.12+ where the symbol was removed)
          - Web UI to /usr/share/nginx/html/setup
