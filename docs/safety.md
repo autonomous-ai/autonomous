@@ -58,11 +58,16 @@ Per-capability criticality (full rule in `contract/SAFETY-SPEC.md`):
 
 | Capability | Bound absent / unloadable | Rationale |
 |------------|---------------------------|-----------|
-| light, audio | pass-through (log only) | a calm light/quiet speaker is not a hazard; do not invent a limit |
-| motion | **fail-closed** (refuse actuation) | moving against unknown limits is a hardware fault |
+| light, audio, motion | pass-through (log only) | enforcement is presence-driven and uniform: a declared bound is enforced, an absent one is not — the engine never invents a limit nobody wrote |
 
 `SAFETY.md` is optional. The schema tag is validated like `DEVICE.md`'s — a missing or
 unknown-major `schema` aborts boot rather than enforce an ABI it cannot read.
+
+There is no separate kill switch: because enforcement is presence-driven, removing a
+section (or the whole front matter) turns that enforcement off. To run a device with
+unrestricted motion during bring-up, ship no `motion:` bounds; that is the off state.
+A *malformed* bound (present but out of range) still fails loud — only *absence* is
+pass-through.
 
 ## Slice roadmap
 
@@ -70,7 +75,7 @@ unknown-major `schema` aborts boot rather than enforce an ABI it cannot read.
 |-------|-------|------|----------------|--------|
 | 1 | `light.max_brightness` ceiling | `clamp_brightness` / `clamp_color` | LED gate (`rgb_service` `_handle_solid`/`_handle_paint`) | **enforced (v1)** |
 | 2 | `quiet_hours` (light + audio) | `active_max_brightness` (time-aware) + `audio_quiet_now` | LED gate + music route | **enforced (v1)** |
-| 3 | `motion.max_speed` + `stop_always`, **fail-closed** | `motion_allowed` + `min_move_duration` | servo route | **enforced (v1)** (`max_accel` reserved) |
+| 3 | `motion.max_speed` + `stop_always` (presence-driven) | `min_move_duration` | servo route | **enforced (v1)** (`max_accel` reserved) |
 | 4 | fail-safe states (network loss → hold pose, board fault → disable capability) | state gate | lifespan + routes | reserved |
 
 Each slice adds fields to the `SafetyPolicy` and gate functions and wires one or more
@@ -141,29 +146,27 @@ on every request, so it flips at the boundary with no restart.
 
 ### Slice 3 — motion (checklist)
 
-Motion is **fail-closed** (the inverse of light): a device that declares the
-`motion` capability but ships no `motion:` bounds refuses to actuate. `max_speed`
-is enforced by *stretching a move's duration* (the move still reaches its target;
-only speed is capped) — never by truncating the destination. Recovery actions
-(`release`/`zero`/`hold`/`stop`) stay ungated so you can always safe the body.
+Motion is **presence-driven**, the same rule as light/audio: a declared bound is
+enforced, an absent one is pass-through (a device that ships no `motion:` bounds
+moves unrestricted — that is the off state, not a refusal). `max_speed` is enforced
+by *stretching a move's duration* (the move still reaches its target; only speed is
+capped) — never by truncating the destination. Recovery actions
+(`release`/`zero`/`hold`/`stop`) are never gated so you can always safe the body.
 
-- [x] **Unit:** `motion_allowed` → False when motion declared but no bounds (or no
-      policy), True with bounds, True for non-motion devices; `min_move_duration`
-      stretches a too-fast move (120° at 120 deg/s → 1.0s), passes a slow one,
-      bounds an instant (duration 0) request, passes through with no `max_speed`,
-      ignores joints with no known start; commented `# stop_always` is not parsed
-      as a bound; `max_speed: 0` fails loud. (`os/hal/test/test_safety.py`.)
+- [x] **Unit:** `min_move_duration` stretches a too-fast move (120° at 120 deg/s →
+      1.0s), passes a slow one, bounds an instant (duration 0) request, passes
+      through with no `max_speed` and with no policy at all, ignores joints with no
+      known start; commented `# stop_always` is not parsed as a bound; `max_speed:
+      0` fails loud. (`os/hal/test/test_safety.py`.)
 - [ ] **Runtime (NOT yet verified on device — user deploys):** `GET /device`
       reports `safety.motion`; `/servo/move` at a tiny duration returns a stretched
-      `duration` and the ring/arm moves at the capped speed; a device with motion
-      declared but no bounds returns 403 on `/servo/move|play|aim|nudge|track`.
-- [x] **Bypass audit (routes):** the fail-closed guard `_require_motion_bounds()`
-      is on every discretionary servo endpoint (move, play, aim, nudge, track,
-      track/update); recovery endpoints are intentionally exempt. NOTE: internal
+      `duration` and the ring/arm moves at the capped speed; a device with no
+      `motion:` bounds moves unrestricted (no 403).
+- [x] **Bypass audit (routes):** the speed cap is applied at `/servo/move` via
+      `min_move_duration` (the one endpoint that takes a duration). NOTE: internal
       animation (idle/emotion poses driven by the runtime, not the agent) is not
       gated — that is device-controlled, not agent-requested; revisit if needed.
-- [x] **Determinism:** `motion_allowed`/`min_move_duration` are pure (no clock, no
-      caller identity).
+- [x] **Determinism:** `min_move_duration` is pure (no clock, no caller identity).
 
 ## Relationship to existing ad-hoc enforcement
 

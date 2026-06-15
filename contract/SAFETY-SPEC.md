@@ -68,8 +68,8 @@ request, so the bound changes with the time of day without a restart.
 | `audio.quiet_hours` | no | **enforced (v1)** | `{ start, end }`. Inside the window loud discretionary output (music via `/audio/play`) is suppressed; spoken replies still play. (Slice 2.) |
 | `motion.max_speed` | no | **enforced (v1)** | deg/s ceiling. The servo route stretches a move's duration so no joint exceeds it (the move still reaches its target). (Slice 3.) |
 | `motion.max_accel` | no | reserved | Acceleration ceiling. (Reserved — no accel model yet.) |
-| `motion.stop_always` | no | **enforced (v1)** | `motion.stop`/release are deterministic and never gated, even when moves are fail-closed. (Slice 3.) |
-| **(motion declared, no bounds)** | — | **fail-closed (v1)** | A device that declares the `motion` capability but ships no `motion:` bounds **refuses to actuate** (`/servo/move`, `play`, `aim`, `nudge`, `track`). The inverse of the light fail-safe. |
+| `motion.stop_always` | no | **enforced (v1)** | `motion.stop`/release/zero/hold are deterministic recovery actions and never gated. (Slice 3.) |
+| **(motion declared, no bounds)** | — | **pass-through (v1)** | Presence-driven, like light/audio: a device that ships no `motion:` bounds moves unrestricted (that is the *off* state, not a refusal). A declared `max_speed` is enforced; an absent one is not. |
 
 Sections are keyed by **capability group** (the same vocabulary as `DEVICE.md`
 `capabilities` and `contract/capabilities.md`) so each `## <group>` prose heading,
@@ -77,18 +77,18 @@ its `DEVICE.md` `safety:` anchor, and its machine bounds line up.
 
 ## Fail-safe — what happens when a bound is absent or unloadable
 
-The rule is **per-capability criticality**, not one global default:
+The rule is **presence-driven and uniform** across every capability: a declared bound
+is enforced, an absent one is *pass-through* — the request is unclamped and the runtime
+logs that no ceiling is set. The engine never invents a limit nobody declared, whether
+the capability is a LED or a servo. Removing a section (or the whole front matter) is
+how you turn that enforcement off; there is no separate kill switch.
 
-- **Expressive capabilities (light, audio):** a missing bound is *pass-through* —
-  the request is unclamped, and the runtime logs that no ceiling is set. A calm LED
-  is not a safety risk, so the engine does not invent a limit nobody declared.
-- **Actuating capabilities (motion):** a missing or unloadable bound is *fail-closed*
-  — actuation is refused until bounds resolve. Moving a body against unknown limits
-  is a hardware fault, not graceful degradation. (Enforced from slice 3.)
+A *malformed* bound (present but out of range, e.g. `max_speed: 0`) still fails loud —
+only *absence* is pass-through.
 
 `SAFETY.md` itself is optional. A device with no `safety_ref` declares no bounds; the
-gate is a no-op for it (and any `motion` it declares must carry its bounds inline, or
-fail-closed once slice 3 lands).
+gate is a no-op for it. A device that declares `motion` but ships no `motion:` bounds
+moves unrestricted — by design, so bring-up and unbounded hardware need no special flag.
 
 ## Versioning — the frozen contract
 

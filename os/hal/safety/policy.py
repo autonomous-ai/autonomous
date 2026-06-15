@@ -12,6 +12,13 @@ Enforced bounds:
   - slice 1: light.max_brightness            — LED brightness ceiling
   - slice 2: light.quiet_hours{max_brightness}, audio.quiet_hours — a nightly
              window that lowers the LED ceiling and suppresses loud audio (music)
+  - slice 3: motion.max_speed                — deg/s ceiling, enforced by
+             stretching a move's duration (see min_move_duration)
+
+Enforcement is presence-driven and uniform across capabilities: a declared bound
+is enforced, an absent one is pass-through — the engine never invents a limit
+nobody wrote. Removing a section (or the whole front matter) turns its enforcement
+off; there is no separate kill switch.
 
 The autonomous.safety.v1 ABI only ever gains fields. See contract/SAFETY-SPEC.md
 and docs/safety.md.
@@ -58,7 +65,7 @@ class MotionBounds:
     # fast). None = no speed ceiling declared.
     max_speed: Optional[int] = None
     # motion.stop is deterministic and never gated (you must always be able to
-    # halt a body — stop/release are not refused even when moves are fail-closed).
+    # halt a body — stop/release/zero/hold are recovery actions, never refused).
     stop_always: bool = False
 
 
@@ -70,9 +77,10 @@ class SafetyPolicy:
     max_brightness: Optional[int] = None
     light_quiet: Optional[QuietHours] = None   # nightly reduced LED ceiling
     audio_quiet: Optional[QuietHours] = None    # nightly window: suppress loud audio
-    # Motion bounds. None = the device declared NO machine motion bounds. Unlike
-    # light, motion is FAIL-CLOSED: a device that declares the motion capability
-    # but has no bounds here must refuse to move (see motion_allowed).
+    # Motion bounds. None = no machine motion bounds declared → pass-through, the
+    # same presence-driven rule as light/audio: a declared bound is enforced, an
+    # absent one is not (the engine never invents a limit nobody wrote). The only
+    # motion enforcement is the speed cap (see min_move_duration).
     motion: Optional[MotionBounds] = None
 
 
@@ -163,8 +171,7 @@ def _parse_quiet_hours(section_body: str, *, with_brightness: bool) -> Optional[
 
 def _parse_motion(motion_body: str) -> Optional[MotionBounds]:
     """Parse the `motion:` section into MotionBounds, or None if it declares no
-    real bounds (so a device that declares the motion capability but leaves this
-    empty fails closed)."""
+    real bounds (an absent/empty section is pass-through, like light/audio)."""
     max_speed = _int_field(motion_body, "max_speed")
     if max_speed is not None and max_speed <= 0:
         raise ValueError(f"SAFETY.md motion.max_speed {max_speed} must be > 0 (deg/s)")
@@ -261,19 +268,6 @@ def audio_quiet_now(policy: Optional[SafetyPolicy], now: Optional[dtime] = None)
     if now is None:
         now = _now()
     return in_window(policy.audio_quiet, now)
-
-
-def motion_allowed(policy: Optional[SafetyPolicy], declares_motion: bool = True) -> bool:
-    """FAIL-CLOSED gate for actuating capabilities. A device that declares the
-    motion capability must carry motion bounds in SAFETY.md; if it doesn't (no
-    policy, or no motion section), moving against unknown limits is a hardware
-    fault — refuse actuation. A device that declares no motion is unaffected.
-
-    This is the inverse of the light fail-safe (pass-through): for a body that can
-    physically move, absence of bounds means *stop*, not *go*."""
-    if not declares_motion:
-        return True
-    return policy is not None and policy.motion is not None
 
 
 def min_move_duration(

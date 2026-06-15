@@ -19,7 +19,6 @@ from hal.safety.policy import (
     in_window,
     load_safety,
     min_move_duration,
-    motion_allowed,
     parse_safety,
     validate_schema,
 )
@@ -233,23 +232,6 @@ class TestMotionParse(unittest.TestCase):
             parse_safety("---\nschema: autonomous.safety.v1\nmotion:\n  max_speed: 0\n---\n")
 
 
-class TestMotionAllowed(unittest.TestCase):
-    def setUp(self):
-        self.p = parse_safety(_FM_MOTION)
-
-    def test_allowed_with_bounds(self):
-        self.assertTrue(motion_allowed(self.p, declares_motion=True))
-
-    def test_fail_closed_no_bounds(self):
-        self.assertFalse(motion_allowed(parse_safety(_FM), declares_motion=True))
-
-    def test_fail_closed_no_policy(self):
-        self.assertFalse(motion_allowed(None, declares_motion=True))
-
-    def test_non_motion_device_unaffected(self):
-        self.assertTrue(motion_allowed(None, declares_motion=False))
-
-
 class TestMinMoveDuration(unittest.TestCase):
     def setUp(self):
         self.p = parse_safety(_FM_MOTION)  # max_speed 120 deg/s
@@ -270,6 +252,11 @@ class TestMinMoveDuration(unittest.TestCase):
 
     def test_no_speed_bound_passthrough(self):
         self.assertEqual(min_move_duration(parse_safety(_FM), {"a.pos": 99}, {"a.pos": 0}, 0.2), 0.2)
+
+    def test_no_policy_passthrough(self):
+        # no safety config at all → motion runs unclamped (presence-driven, the
+        # same pass-through rule as light/audio; no fail-closed, no kill switch)
+        self.assertEqual(min_move_duration(None, {"a.pos": 999}, {"a.pos": 0}, 0.01), 0.01)
 
     def test_unknown_current_joint_ignored(self):
         # no known start for the joint -> can't bound its speed -> requested kept
