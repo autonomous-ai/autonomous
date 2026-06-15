@@ -405,8 +405,9 @@ SyslogIdentifier=hal
 WantedBy=multi-user.target
 UNIT
 
-# Default hal env — production-safe defaults. Secrets (GELF, API keys) are
-# filled by the device operator via setup wizard; not baked into the image.
+# hal.env — hardware team bakes per-device audio/sensor config into the base image.
+# Do NOT overwrite here. DEVICE_TYPE/DEVICES_DIR are appended below (idempotent).
+if false; then
 cat > /opt/hal/.env <<'ENV'
 HAL_MODE=production
 HAL_LOG_LEVEL=INFO
@@ -438,6 +439,7 @@ HAL_DL_ENCRYPTION_REQUIRED=false
 OMP_NUM_THREADS=1
 OPENBLAS_NUM_THREADS=1
 ENV
+fi
 
 # Device profile selector for HAL — appended idempotently so the quoted ENV
 # heredoc above stays literal while \${DEVICE_TYPE}/\${DEVICES_DIR} expand here
@@ -987,11 +989,14 @@ load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-anon-
 PULSE_EOF
 fi
 
-cat > /etc/udev/rules.d/91-pulseaudio-hal-ignore.rules <<'UDEV_EOF'
-# Keep PulseAudio away from the onboard I2S codecs so hal can own them.
-SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
-SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
-UDEV_EOF
+# 91-pulseaudio-hal-ignore.rules — hardware team bakes complete udev rules into the base image.
+# if false; then
+# cat > /etc/udev/rules.d/91-pulseaudio-hal-ignore.rules <<'UDEV_EOF'
+# # Keep PulseAudio away from the onboard I2S codecs so hal can own them.
+# SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
+# SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
+# UDEV_EOF
+# fi
 
 # ── ALSA aliases ─────────────────────────────────────────────────────────────
 # /etc/asound.conf is NOT written here — it ships per device type in the device
@@ -1009,13 +1014,13 @@ for unit in os-server bootstrap hal openclaw avahi-daemon bluetooth ssh; do
   systemctl enable "\$unit" 2>/dev/null || true
 done
 
-# ── SPI3 overlay for WS2812 RGB LED ring (OrangePi 4 Pro A733) ───────────────
-echo "[stage] enable SPI3 overlay for LED ring"
-if grep -q "^overlays=" /boot/orangepiEnv.txt 2>/dev/null; then
-  sed -i "s/^overlays=.*/& spi3-cs0-cs1-spidev/" /boot/orangepiEnv.txt
-else
-  echo "overlays=spi3-cs0-cs1-spidev" >> /boot/orangepiEnv.txt
-fi
+# ── SPI3 overlay for WS2812 RGB LED ring — hardware team bakes into base image ───────────────
+# echo "[stage] enable SPI3 overlay for LED ring"
+# if grep -q "^overlays=" /boot/orangepiEnv.txt 2>/dev/null; then
+#   sed -i "s/^overlays=.*/& spi3-cs0-cs1-spidev/" /boot/orangepiEnv.txt
+# else
+#   echo "overlays=spi3-cs0-cs1-spidev" >> /boot/orangepiEnv.txt
+# fi
 
 echo "[stage] chroot Phase 2 complete"
 CHROOT_STAGES
