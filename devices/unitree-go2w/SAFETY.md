@@ -4,7 +4,9 @@ The Go2-W moves through shared human space, so the safety floor matters more her
 desk device. Everything below is enforced by deterministic policy (the `safety` System
 Manager), never by the agentic runtime.
 
-## motion (locomotion)
+## motion
+
+Motion here is **locomotion** (the Unitree SDK drives wheels/legs, not Feetech servos).
 
 - **E-stop is immediate** — it halts all drive instantly and does not queue behind the
   runtime, the network, or any in-flight skill.

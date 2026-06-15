@@ -70,6 +70,8 @@ request, so the bound changes with the time of day without a restart.
 | `motion.max_accel` | no | reserved | Acceleration ceiling. (Reserved — no accel model yet.) |
 | `motion.stop_always` | no | **enforced (v1)** | `motion.stop`/release/zero/hold are deterministic recovery actions and never gated. (Slice 3.) |
 | **(motion declared, no bounds)** | — | **pass-through (v1)** | Presence-driven, like light/audio: a device that ships no `motion:` bounds moves unrestricted (that is the *off* state, not a refusal). A declared `max_speed` is enforced; an absent one is not. |
+| `thermal.max_temp_c` | no | **enforced (v1)** | SoC °C ceiling. A background monitor reads `/sys/class/thermal`; at/above this it raises a health event (`/health`) and stops discretionary motion (tracking), clearing on cool-down. Threshold is SoC-specific — read the board's own critical trip, not a generic guess. (Slice 4.) |
+| `thermal.resume_temp_c` | no | **enforced (v1)** | Cooled to/below this clears the over state (hysteresis). Defaults to `max_temp_c − 10`. (Slice 4.) |
 
 Sections are keyed by **capability group** (the same vocabulary as `DEVICE.md`
 `capabilities` and `contract/capabilities.md`) so each `## <group>` prose heading,

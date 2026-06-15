@@ -74,7 +74,7 @@ mới là pass-through.
 | 1 | trần `light.max_brightness` | `clamp_brightness` / `clamp_color` | gate LED (`rgb_service` `_handle_solid`/`_handle_paint`) | **đã thực thi (v1)** |
 | 2 | `quiet_hours` (light + audio) | `active_max_brightness` (theo giờ) + `audio_quiet_now` | gate LED + route music | **đã thực thi (v1)** |
 | 3 | `motion.max_speed` + `stop_always` (theo sự hiện diện) | `min_move_duration` | route servo | **đã thực thi (v1)** (`max_accel` dự trữ) |
-| 4 | trạng thái fail-safe (mất mạng/gateway → dừng tracking do agent điều khiển; lỗi board → cô lập `503`; setup + nhiệt dự trữ) | hook WS-disconnect + `503` theo từng capability | `os/services` khi gateway WS disconnect + route HAL/`/health` | **thực thi một phần (v1)** (setup + nhiệt dự trữ) |
+| 4 | trạng thái fail-safe (mất mạng/gateway → dừng tracking; lỗi board → cô lập `503`; `thermal.max_temp_c` → health event quá nhiệt SoC + dừng tracking; setup + quá dòng servo dự trữ) | hook WS-disconnect + `503` theo từng capability + monitor nhiệt (`thermal_over`/`read_soc_temp_c`) | `os/services` khi gateway WS disconnect + route HAL/`/health` + `server.py` `_thermal_monitor` | **thực thi một phần (v1)** (setup + quá dòng dự trữ) |
 
 Mỗi slice thêm field vào `SafetyPolicy` và gate function rồi nối một/nhiều route;
 loader và contract front-matter **không** đổi hình dạng giữa các slice (chỉ thêm field
@@ -162,8 +162,8 @@ dài duration** (move vẫn tới target, chỉ chậm lại) — không cắt c
 ### Slice 4 — trạng thái fail-safe (checklist)
 
 Fail-safe **theo trạng thái** chứ không clamp từng request: khi thiết bị mất một phụ
-thuộc tới hạn, nó rơi về tư thế an toàn một cách tất định, *dưới* tầng agent. Hai điều
-kiện đã thực thi hôm nay; hai điều kiện còn dự trữ.
+thuộc tới hạn, nó rơi về tư thế an toàn một cách tất định, *dưới* tầng agent. Ba điều
+kiện đã thực thi; setup-incomplete và over-current servo còn dự trữ.
 
 - [x] **Mất mạng / gateway → dừng tracking do agent điều khiển.** Khi gateway
       WebSocket disconnect, `os/services/internal/openclaw/service_ws.go` gọi
@@ -176,12 +176,25 @@ kiện đã thực thi hôm nay; hai điều kiện còn dự trữ.
 - [x] **Lỗi board / driver → cô lập `503`.** Đã có sẵn: capability bị lỗi trả `503`
       theo từng route trong khi phần còn lại vẫn phục vụ, lộ ra qua `/health`. Không cơ
       chế mới — contract fail-safe tái dùng cô lập đã có.
+- [x] **Nhiệt (quá nhiệt SoC) → health event + dừng tracking.** Theo sự hiện diện trên
+      `thermal.max_temp_c`: một monitor nền (`server.py` `_thermal_monitor`) đọc nhiệt độ
+      SoC từ `/sys/class/thermal` mỗi ~10s qua `policy.read_soc_temp_c`; gate hysteresis
+      thuần `policy.thermal_over` trip tại `max_temp_c` và clear tại `resume_temp_c`
+      (mặc định `max−10`). Khi trip nó set `state.thermal_over`, log, và dừng tracking tùy
+      ý; idle vẫn sống. Lộ ra ở `GET /health.thermal`. Ngưỡng đặc thù theo SoC — đọc
+      critical trip riêng của board, không đoán chung chung.
 - [ ] **Setup chưa xong → dự trữ.** Chưa gate trong runtime (chỉ reflex setup/identity
       là ý định đã khai, chưa thực thi).
-- [ ] **Nhiệt / quá dòng → dự trữ.** **Không có cảm biến nhiệt / dòng trên phần cứng
-      này**, nên không có gì để đọc; dự trữ cho phần cứng có cảm biến.
-- [ ] **Runtime (CHƯA verify trên máy):** đường WS-disconnect → `/servo/track/stop`
-      mới ở mức repo; chưa xác nhận bằng cách ngắt link gateway trên thiết bị thật.
+- [ ] **Quá dòng (servo) → dự trữ.** Không có cảm biến dòng servo trên phần cứng; dự trữ
+      cho phần cứng/telemetry lộ ra được nó.
+- [x] **Unit:** `thermal_over` trip tại/trên `max_temp_c`, giữ qua hysteresis khi còn
+      trên `resume_temp_c`, clear tại/dưới nó, và là False khi không có policy / không có
+      section thermal / nhiệt không đọc được; `read_soc_temp_c` parse millidegrees → °C và
+      trả None khi đọc lỗi; parse mặc định `resume = max − 10` và fail-loud khi
+      `max_temp_c ≤ 0` hoặc `resume ≥ max`. (`os/hal/test/test_safety.py`.)
+- [ ] **Runtime (CHƯA verify trên máy):** đường WS-disconnect → `/servo/track/stop` và
+      monitor nhiệt mới ở mức repo; chưa xác nhận trên thiết bị sống (ngắt link gateway;
+      đốt nóng SoC vượt `max_temp_c`).
 
 ## Quan hệ với enforcement hardcode rời rạc hiện có
 

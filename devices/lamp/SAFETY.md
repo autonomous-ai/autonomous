@@ -1,23 +1,30 @@
 ---
 schema: autonomous.safety.v1
+
+# Every machine-enforced safety knob, by capability group. Active lines are
+# enforced; lines tagged (optional)/(reserved) are available but left unset — shown
+# so this file reads as the complete picture. Authoritative field list:
+# contract/SAFETY-SPEC.md. Fail-safe BEHAVIORS that aren't numeric bounds
+# (network/gateway loss, board fault, setup) are not front-matter fields — they
+# live in the "fail-safe states" table in the prose below.
+
 light:
   max_brightness: 180        # 0–255 daytime ceiling; the LED route clamps any higher request
-  # Quiet hours lower the ceiling on real wall-clock time (the device runs all
-  # day; this is not a nightlight). 22:00–07:00 → ring dims to 40, agent-independent.
-  quiet_hours: { start: "22:00", end: "07:00", max_brightness: 40 }
+  # Quiet hours lower the ceiling on real wall-clock time (device runs all day; not a nightlight).
+  quiet_hours: { start: "22:00", end: "07:00", max_brightness: 40 }   # 22:00–07:00 → ring dims to 40, agent-independent
+
 audio:
-  # No loud discretionary output (music) during quiet hours; spoken replies still allowed.
-  quiet_hours: { start: "22:00", end: "07:00" }
+  quiet_hours: { start: "22:00", end: "07:00" }   # suppress loud discretionary output (music) in-window; spoken replies still play
+
 motion:
   max_speed: 120             # deg/s ceiling; the servo route stretches a move's duration so no joint exceeds it
-  stop_always: true          # motion.stop/release are deterministic and never gated
-  # max_accel: <int>         # reserved
+  stop_always: true          # motion.stop/release are deterministic, never gated
+  # max_accel: <int>         # (reserved) — no acceleration model yet
+
 thermal:
-  # SoC over-temp → health event (/health) + stop discretionary tracking. 95°C is
-  # provisional: this SoC idles hot (~80–90°C is normal), so verify the board's own
-  # critical trip in /sys/class/thermal/.../trip_point_*_temp and tune. resume
-  # defaults to max_temp_c - 10 (clears at 85°C).
-  max_temp_c: 95
+  max_temp_c: 95             # SoC °C → health event (/health) + stop tracking. PROVISIONAL: this SoC idles hot (~80–90°C normal); verify the board's critical trip in /sys/class/thermal/.../trip_point_*_temp and tune
+  # resume_temp_c: 85        # (optional) clears the over-state on cool-down; defaults to max_temp_c - 10
+  # (over-current is a separate, reserved fail-safe — no servo current sensor wired; see the table below)
 ---
 
 # SAFETY.md — Autonomous Lamp
@@ -74,7 +81,8 @@ spirit of "what isn't enforced isn't claimed as enforced").
 | Network / gateway loss | Stop any in-flight object-tracking (don't chase a target with no fresh vision updates); local idle presence + reflexes (stop, mute, sleep, wake) stay alive; no new agent-driven motion | **yes** — `os/services` calls HAL `/servo/track/stop` on gateway WebSocket disconnect |
 | Board / driver fault | Disable the faulting capability, keep the rest, report health | **yes** — per-capability `503` isolation in HAL routes + `/health` |
 | Setup incomplete | Setup / identity reflexes only | reserved — not gated in the runtime yet |
-| Thermal / over-current | Halt motion, surface a health event | reserved — **no thermal / current sensor on this hardware** |
+| Thermal (SoC over-temp) | At SoC temp ≥ `thermal.max_temp_c`: health event on `/health` + stop discretionary tracking; clears on cool-down to `resume_temp_c` (hysteresis). Idle stays alive | **yes** (when `thermal` declared) — background monitor reads `/sys/class/thermal` |
+| Over-current (servo) | Halt motion, surface a health event | reserved — **no servo current sensor wired** |
 
 Idle animation is local and self-contained, so the device stays "alive" (breathing,
 emoting) when the cloud is gone rather than freezing — only *agent-driven* tracking and

@@ -76,7 +76,7 @@ pass-through.
 | 1 | `light.max_brightness` ceiling | `clamp_brightness` / `clamp_color` | LED gate (`rgb_service` `_handle_solid`/`_handle_paint`) | **enforced (v1)** |
 | 2 | `quiet_hours` (light + audio) | `active_max_brightness` (time-aware) + `audio_quiet_now` | LED gate + music route | **enforced (v1)** |
 | 3 | `motion.max_speed` + `stop_always` (presence-driven) | `min_move_duration` | servo route | **enforced (v1)** (`max_accel` reserved) |
-| 4 | fail-safe states (network/gateway loss → stop agent-driven tracking; board fault → 503 isolation; setup + thermal reserved) | WS-disconnect hook + per-capability `503` | `os/services` on gateway WS disconnect + HAL routes/`/health` | **partially enforced (v1)** (setup + thermal reserved) |
+| 4 | fail-safe states (network/gateway loss → stop tracking; board fault → 503 isolation; `thermal.max_temp_c` → SoC over-temp health event + stop tracking; setup + servo over-current reserved) | WS-disconnect hook + per-capability `503` + thermal monitor (`thermal_over`/`read_soc_temp_c`) | `os/services` on WS disconnect + HAL routes/`/health` + `server.py` `_thermal_monitor` | **partially enforced (v1)** (setup + over-current reserved) |
 
 Each slice adds fields to the `SafetyPolicy` and gate functions and wires one or more
 routes; the loader and the front-matter contract do not change shape between slices
@@ -172,7 +172,7 @@ capped) — never by truncating the destination. Recovery actions
 
 Fail-safe is **state-driven** rather than per-request clamping: when the device loses a
 critical dependency it falls into a safe posture deterministically, below the agent.
-Two conditions are enforced today; two are reserved.
+Three conditions are enforced today; setup-incomplete and servo over-current are reserved.
 
 - [x] **Network / gateway loss → stop agent-driven tracking.** On gateway WebSocket
       disconnect, `os/services/internal/openclaw/service_ws.go` calls
@@ -185,12 +185,25 @@ Two conditions are enforced today; two are reserved.
 - [x] **Board / driver fault → 503 isolation.** Already met: a faulting capability
       returns `503` per-route while the rest keep serving, surfaced via `/health`. No
       new mechanism — the fail-safe contract reuses the existing isolation.
+- [x] **Thermal (SoC over-temp) → health event + stop tracking.** Presence-driven on
+      `thermal.max_temp_c`: a background monitor (`server.py` `_thermal_monitor`) reads
+      the SoC temp from `/sys/class/thermal` every ~10s via `policy.read_soc_temp_c`; the
+      pure `policy.thermal_over` hysteresis gate trips at `max_temp_c` and clears at
+      `resume_temp_c` (default `max−10`). On trip it sets `state.thermal_over`, logs, and
+      stops discretionary tracking; idle stays alive. Surfaced at `GET /health.thermal`.
+      Threshold is SoC-specific — read the board's own critical trip, not a generic guess.
 - [ ] **Setup incomplete → reserved.** Not gated in the runtime yet (setup/identity
       reflexes only is declared intent, not enforced).
-- [ ] **Thermal / over-current → reserved.** **No thermal / current sensor on this
-      hardware**, so there is nothing to read; reserved for hardware that has one.
-- [ ] **Runtime (NOT device-verified):** the WS-disconnect → `/servo/track/stop` path
-      is repo-level only; not yet confirmed by pulling the gateway link on a live device.
+- [ ] **Over-current (servo) → reserved.** No servo current sensor wired; reserved for
+      hardware/telemetry that exposes it.
+- [x] **Unit:** `thermal_over` trips at/above `max_temp_c`, holds through hysteresis
+      above `resume_temp_c`, clears at/below it, and is False with no policy / no thermal
+      section / unreadable temp; `read_soc_temp_c` parses millidegrees → °C and returns
+      None on any read error; parse defaults `resume = max − 10` and fails loud on
+      `max_temp_c ≤ 0` or `resume ≥ max`. (`os/hal/test/test_safety.py`.)
+- [ ] **Runtime (NOT device-verified):** the WS-disconnect → `/servo/track/stop` path and
+      the thermal monitor are repo-level only; not yet confirmed on a live device (pull the
+      gateway link; heat the SoC past `max_temp_c`).
 
 ## Relationship to existing ad-hoc enforcement
 
