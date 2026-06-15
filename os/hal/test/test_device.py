@@ -150,10 +150,9 @@ class TestRealDeviceFiles(unittest.TestCase):
         lamp = set(load_device("lamp", DEVICES_DIR).capabilities)
         intern = set(load_device("intern-v2", DEVICES_DIR).capabilities)
         # Intern strips Lamp's expressive/actuation capabilities; motion + display
-        # are the headline removals, and Intern adds nothing Lamp lacks.
-        # NOTE: intern-v2's DEVICE.md frontmatter declares `light` (the machine
-        # truth this test tracks). Its prose contradicts this — flagged to the HW
-        # team separately; the device declaration is out of scope here.
+        # are the headline removals, and Intern adds nothing Lamp lacks. Intern-v2
+        # keeps `light` (an LED ring — declared in DEVICE.md, bounded by its own
+        # SAFETY.md#light), so `light` is NOT in the removed set.
         self.assertEqual(lamp - intern, {"vision", "motion", "presence", "display", "media", "connectivity"})
         self.assertEqual(intern - lamp, set())
         self.assertNotIn("motion", intern)
