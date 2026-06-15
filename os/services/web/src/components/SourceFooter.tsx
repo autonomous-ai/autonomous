@@ -7,7 +7,7 @@ import { C } from "@/components/setup/shared";
 export function SourceFooter() {
   return (
     <a
-      href="https://github.com/autonomous-ai/lamp"
+      href="https://github.com/autonomous-ai/autonomous"
       target="_blank"
       rel="noopener noreferrer"
       style={{
@@ -21,7 +21,7 @@ export function SourceFooter() {
       }}
       title="Source code (GPL v3)"
     >
-      ⌥ github.com/autonomous-ai/lamp
+      ⌥ github.com/autonomous-ai/autonomous
     </a>
   );
 }

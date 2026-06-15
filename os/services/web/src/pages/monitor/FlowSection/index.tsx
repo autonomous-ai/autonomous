@@ -494,7 +494,7 @@ export function FlowSection({
               const color = isUnknown ? "var(--lm-text-muted)" : "var(--lm-teal)";
               return (
                 <span
-                  title={isUnknown ? "LeLamp currently sees only strangers" : `LeLamp's current user: ${currentUser}`}
+                  title={isUnknown ? "Device currently sees only strangers" : `Device's current user: ${currentUser}`}
                   style={{
                     fontSize: 11, padding: "3px 9px", borderRadius: 6,
                     background: `${color}18`, color,
@@ -514,8 +514,8 @@ export function FlowSection({
               title={
                 "Xem 'bộ nhớ tóm tắt' mà Agent tự sinh và chèn vào đầu prompt của MỖI turn agent.\n\n" +
                 "• Vì sao cần: khi context vượt ~80k tokens, Agent auto-compact — gộp history cũ thành 1 đoạn summary, rồi dùng summary này thay cho history đến lần compact tiếp theo.\n" +
-                "• Rủi ro: nếu summary vô tình copy/méo rule từ SKILL.md, KNOWLEDGE.md, SOUL.md → agent sẽ theo summary (đứng đầu prompt) thay vì SKILL.md → Lamp trả lời sai lý do không giải thích nổi.\n\n" +
-                "Click để xem: timestamp, summary chars, session file, và TOÀN VĂN summary đang điều khiển Lamp."
+                "• Rủi ro: nếu summary vô tình copy/méo rule từ SKILL.md, KNOWLEDGE.md, SOUL.md → agent sẽ theo summary (đứng đầu prompt) thay vì SKILL.md → trợ lý trả lời sai lý do không giải thích nổi.\n\n" +
+                "Click để xem: timestamp, summary chars, session file, và TOÀN VĂN summary đang điều khiển trợ lý."
               }
               style={flowGhostBtn}
             >📋 Summary</button>

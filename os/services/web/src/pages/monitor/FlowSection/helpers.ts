@@ -75,7 +75,7 @@ export interface PipelineRow {
 //   command_output, patch) → one row each, kind="compaction"|"error"|"other".
 // - Other flow events (chat_send, hw_*, tts_send, …) are NOT aggregated
 //   into the pipeline — they belong to the surrounding flow nodes
-//   (Agent Call, Lamp Hook, etc.) and would clutter the pipeline.
+//   (Agent Call, OS Hook, etc.) and would clutter the pipeline.
 export function aggregateEvents(events: DisplayEvent[]): PipelineRow[] {
   const rows: PipelineRow[] = [];
 

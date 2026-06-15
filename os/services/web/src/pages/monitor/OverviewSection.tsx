@@ -339,7 +339,7 @@ export function OverviewSection({
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 10, color: "var(--lm-text-muted)", marginBottom: 2, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                Lamp is feeling
+                Your device is feeling
               </div>
               <div style={{ fontSize: 18, fontWeight: 700, color: emotion ? emotionColor : "var(--lm-text-muted)", textTransform: "capitalize", transition: "color 0.4s ease" }}>
                 {emotion || "—"}

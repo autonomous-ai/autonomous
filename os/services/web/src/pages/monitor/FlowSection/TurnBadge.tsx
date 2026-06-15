@@ -282,7 +282,7 @@ export function TurnBadge({ turn, pairTint, onViewPipeline }: { turn: Turn; pair
       ) : hasEmptyFinalNoLifecycle ? (
         <div
           title={
-            "Agent sent state:final with empty message for this Lamp run_id, and never opened a lifecycle for it.\n\n" +
+            "Agent sent state:final with empty message for this run_id, and never opened a lifecycle for it.\n\n" +
             "To find the likely paired turn:\n" +
             "  • Scan ±10s in the list for an 'agent uuid' turn with matching input text.\n" +
             "  • If found → Agent likely re-fired this message under its own UUID (source:\"channel\"), or merged it into that concurrent turn. The actual reply lives there.\n" +

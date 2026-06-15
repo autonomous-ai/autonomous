@@ -152,9 +152,9 @@ export const FLOW_NODES: FlowNodeDef[] = [
     ] },
 
   { id: "os_gate",
-    label: "Lamp Hook", short: "HOOK", icon: "🚦", color: "var(--lm-teal)", path: "agent",
+    label: "OS Hook", short: "HOOK", icon: "🚦", color: "var(--lm-teal)", path: "agent",
     shape: "square",
-    desc: "Lamp middleware · parse [HW:] markers · dispatch HW calls\n→ emotion / LED / servo / audio\n→ TTS (suppress if music)\n→ Telegram broadcast\n→ pause ambient if LED changed",
+    desc: "OS Server middleware · parse [HW:] markers · dispatch HW calls\n→ emotion / LED / servo / audio\n→ TTS (suppress if music)\n→ Telegram broadcast\n→ pause ambient if LED changed",
     triggers: [
       "led_set", "led_off", "ambient_pause", "ambient_resume",
       "flow_event:led_set", "flow_event:led_off",

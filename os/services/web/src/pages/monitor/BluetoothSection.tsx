@@ -201,13 +201,13 @@ export function BluetoothSection() {
           <div style={{ display: "flex", gap: 6 }}>
             {active
               ? <Pill text="Private mode" tone="ok" />
-              : <Pill text="Lamp" tone="off" />}
+              : <Pill text="Device" tone="off" />}
           </div>
         </div>
 
         <p style={{ fontSize: 12, color: "var(--lm-text-muted)", marginTop: 0, marginBottom: 12 }}>
-          When on, TTS and STT route through the BT headset instead of the lamp speaker/mic.
-          Background sensing mic stays on the lamp so Lamp keeps listening to the room.
+          When on, TTS and STT route through the BT headset instead of the device speaker/mic.
+          Background sensing mic stays on the device so it keeps listening to the room.
         </p>
 
         {statusError && (
@@ -234,7 +234,7 @@ export function BluetoothSection() {
                   </div>
                   <div style={{ fontSize: 11, color: "var(--lm-text-muted)", marginTop: 2 }}>
                     {d.mac} · {rowBusy
-                      ? (isActive ? "Switching back to lamp..." : "Routing audio...")
+                      ? (isActive ? "Switching back to device..." : "Routing audio...")
                       : (isActive ? "Active" : d.connected ? "Ready" : "Offline")}
                   </div>
                 </div>
