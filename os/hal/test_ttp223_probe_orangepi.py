@@ -5,8 +5,8 @@ import time, gpiod
 from gpiod.line import Bias, Direction, Value
 
 CHIP = "/dev/gpiochip0"
-LINES = [96, 97, 98, 99]
-NAMES = {96: "S1", 97: "S2", 98: "S3", 99: "S4"}
+LINES = [96, 97, 99]
+NAMES = {96: "S1", 97: "S2", 99: "S4"}
 
 settings = gpiod.LineSettings(direction=Direction.INPUT, bias=Bias.PULL_DOWN)
 config = {l: settings for l in LINES}

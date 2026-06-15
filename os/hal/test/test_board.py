@@ -91,7 +91,7 @@ class TestProfiles(unittest.TestCase):
         self.assertIsNone(PROFILES["raspberry_pi_4"].touch)
         self.assertIsNone(PROFILES["raspberry_pi_5"].touch)
         self.assertEqual(PROFILES["orangepi_sun60"].touch.chip, 0)
-        self.assertEqual(PROFILES["orangepi_sun60"].touch.lines, [96, 97, 98, 99])
+        self.assertEqual(PROFILES["orangepi_sun60"].touch.lines, [96, 97, 99])
 
 
 class TestBoardProfileCaching(unittest.TestCase):
