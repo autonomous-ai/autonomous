@@ -3,6 +3,7 @@ import time
 from typing import Any, List, Union
 from ..base import ServiceBase
 from hal.presets import RGB_CMD_PAINT, RGB_CMD_SOLID
+from hal.safety.policy import clamp_color
 from hal.board.board import board_profile
 
 logger = logging.getLogger("hal.rgb")
@@ -153,10 +154,15 @@ class RGBService(ServiceBase):
                  led_dma: int = 10,
                  led_brightness: int = 255,
                  led_invert: bool = False,
-                 led_channel: int = 0):
+                 led_channel: int = 0,
+                 safety_policy=None):
         super().__init__("rgb")
         self.led_count = led_count
         self._driver = None
+        # SAFETY.md brightness ceiling (None = no bound → pass-through). Every
+        # pixel write — routes AND effects — funnels through _handle_solid /
+        # _handle_paint, so clamping here is the single, bypass-proof gate.
+        self._safety = safety_policy
 
         led = board_profile().led
         try:
@@ -204,6 +210,7 @@ class RGBService(ServiceBase):
         if color is None:
             self.logger.error(f"Invalid color format: {color_code}")
             return
+        color = clamp_color(self._safety, color)  # safety gate (brightness ceiling)
         self._driver.fill(color, self.led_count)
         self._driver.show()
         self.logger.debug(f"Applied solid color: {color_code}")
@@ -221,6 +228,7 @@ class RGBService(ServiceBase):
             if color is None:
                 self.logger.warning(f"Invalid color at index {i}: {colors[i]}")
                 continue
+            color = clamp_color(self._safety, color)  # safety gate (brightness ceiling)
             self._driver.setPixelColor(i, color)
         self._driver.show()
         self.logger.debug(f"Applied paint pattern with {max_pixels} colors")

@@ -213,7 +213,7 @@ async def lifespan(app: FastAPI):
         if not RGBService:
             return
         try:
-            svc = RGBService(led_count=64)
+            svc = RGBService(led_count=64, safety_policy=_safety)
             svc.start()
             state.rgb_service = svc
             logger.info("RGBService started")
@@ -692,13 +692,17 @@ def _resolve_device_type() -> str:
     )
 
 
+def _devices_dir() -> str:
+    return os.environ.get("DEVICES_DIR") or os.path.normpath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "..", "devices")
+    )
+
+
 def _device_profile():
     """This device's DeviceProfile. DEVICE.md is REQUIRED — a missing/unparseable
     one is a deploy fault, so fail loudly (no legacy "mount everything" fallback)."""
     from hal.board.device import load_device
-    devices_dir = os.environ.get("DEVICES_DIR") or os.path.normpath(
-        os.path.join(os.path.dirname(__file__), "..", "..", "..", "devices")
-    )
+    devices_dir = _devices_dir()
     try:
         return load_device(_resolve_device_type(), devices_dir)
     except Exception as e:
@@ -729,6 +733,16 @@ _route_available = {
 
 # DEVICE.md is required — _device_profile() fail-louds if it's missing/unparseable.
 _profile = _device_profile()
+
+# Safety bounds (SAFETY.md front matter) resolved once at boot, below the brain.
+# Pass-through when absent (light fail-safe); a present-but-malformed schema
+# fail-louds inside load_safety, like DEVICE.md. Slice 1 = light.max_brightness.
+from hal.safety.policy import load_safety
+_safety = load_safety(os.path.join(_devices_dir(), _resolve_device_type()), _profile.safety_ref)
+logger.info(
+    "Safety policy: device=%s max_brightness=%s",
+    _resolve_device_type(), _safety.max_brightness if _safety else None,
+)
 
 # Board gate: refuse to boot on hardware this device doesn't declare in
 # DEVICE.md `boards`. Wrong/unknown board → wrong pin maps → fail loud before we
@@ -953,6 +967,13 @@ def device():
         "board": _board_id,
         "boards": _profile.boards,
         "safety_ref": _profile.safety_ref,
+        # Resolved, enforced safety bounds (not just the ref). Slice 1 = light
+        # brightness ceiling; null when the device declares no machine bounds.
+        "safety": (
+            {"light": {"max_brightness": _safety.max_brightness}}
+            if (_safety and _safety.max_brightness is not None)
+            else None
+        ),
         "memory": {"backend": _profile.memory_backend} if _profile.memory_backend else None,
         "routes": sorted(_plan.mounted),
         # Declared implementation families (informational hardware manifest; the

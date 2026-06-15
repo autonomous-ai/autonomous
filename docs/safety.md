@@ -6,9 +6,11 @@ runtime**, below the agent. It is the mechanism behind the first principle in
 the engine decides — on every request, regardless of who issued it — whether the
 hardware is allowed to honour them and within what limits.
 
-> **Status:** design + incremental build. Slice 1 (brightness ceiling) is the first
-> vertical slice; later slices reuse the same loader + gate. Each table row below is
-> marked enforced / reserved. This document tracks the code, not the other way around.
+> **Status:** Slice 1 (brightness ceiling) is **implemented and enforced** —
+> `os/hal/safety/policy.py` + the LED gate in `rgb_service.py`, loaded from
+> `devices/lamp/SAFETY.md`. Later slices reuse the same loader + gate. Each table
+> row below is marked enforced / reserved. This document tracks the code, not the
+> other way around.
 
 ## Why an engine, not prompting
 
@@ -66,7 +68,7 @@ unknown-major `schema` aborts boot rather than enforce an ABI it cannot read.
 
 | Slice | Scope | Gate | Enforced where | Status |
 |-------|-------|------|----------------|--------|
-| 1 | `light.max_brightness` ceiling | `clamp_brightness` | LED route | building first |
+| 1 | `light.max_brightness` ceiling | `clamp_brightness` / `clamp_color` | LED gate (`rgb_service` `_handle_solid`/`_handle_paint`) | **enforced (v1)** |
 | 2 | `quiet_hours` (light + audio) | `quiet_now` + reduced ceiling | LED + music routes | reserved |
 | 3 | `motion.max_speed`/`max_accel`, `stop_always` (fail-closed) | `clamp_motion`, stop guarantee | servo route | reserved |
 | 4 | fail-safe states (network loss → hold pose, board fault → disable capability) | state gate | lifespan + routes | reserved |
@@ -97,17 +99,21 @@ network/access-control security — ports, RCE, CORS — not actuation bounds.)
 
 ### Slice 1 — brightness ceiling (checklist)
 
-- [ ] **Unit:** `clamp_brightness(255)` with `max_brightness: 180` → `180`;
-      `clamp_brightness(120)` → `120`; no `max_brightness` declared → returns the
-      request unchanged (pass-through) and logs that no ceiling is set.
-- [ ] **Runtime:** `GET /device` reports the resolved `light.max_brightness`. A
-      `POST` to the LED route at full white (255) lights the ring at the ceiling, not
-      255; a request below the ceiling is untouched.
-- [ ] **Bypass audit:** every code path in `os/hal/routes/led.py` (and any effect that
-      sets pixels) goes through the gate — there is no direct `rgb_service` brightness
-      write that skips `clamp_brightness`. Grep the route + effects module to confirm.
-- [ ] **Determinism:** the clamp is identical whether the request came from the agent,
-      the Web UI, or a raw `curl` — the gate does not consult who asked.
+- [x] **Unit:** `clamp_brightness(255)` with `max_brightness: 180` → `180`;
+      `clamp_brightness(120)` → `120`; no `max_brightness` → unchanged (pass-through).
+      `clamp_color` scales hue-preserving (white→180,180,180; red→180,0,0). Schema
+      missing/malformed/unknown-major fail-loud. (`os/hal/test/test_safety.py`, 21 tests.)
+- [x] **Runtime:** verified on a real Lamp — `GET /device` returns
+      `"safety": {"light": {"max_brightness": 180}}`; `POST /led/solid` at full white
+      (255) reads back `[180,180,180]`, `[100,50,0]` passes unchanged, `[255,0,0]` →
+      `[180,0,0]`.
+- [x] **Bypass audit:** the gate sits in `rgb_service` `_handle_solid` / `_handle_paint`
+      — the single chokepoint every pixel write funnels through. All callers (LED
+      routes, effects, app_state, scene, gpio_button, presence, smooth_animation, main)
+      use `dispatch(RGB_CMD_*)` → those handlers; the only direct `_driver` writes are
+      inside them (post-clamp) and `clear()` (black). Grep confirmed no path skips it.
+- [x] **Determinism:** `clamp_color` is pure and never consults the caller, so the
+      clamp is identical for the agent, the Web UI, or a raw `curl`.
 
 Later slices extend this checklist (quiet-hours: assert reduced ceiling inside the
 window and normal outside, with an injected clock; motion: assert fail-closed when

@@ -1,3 +1,15 @@
+---
+schema: autonomous.safety.v1
+light:
+  max_brightness: 180        # 0–255 ceiling; the LED route clamps any higher request
+motion:                      # reserved (slice 3) — bounds still in board.py for now
+  # max_speed:  <int>
+  # max_accel:  <int>
+  # stop_always: true
+audio:                       # reserved (slice 2)
+  # quiet_hours: { start: "22:00", end: "07:00" }
+---
+
 # SAFETY.md — Autonomous Lamp
 
 The bounds contract. `DEVICE.md` declares what the body *can* do; `SAFETY.md` declares
