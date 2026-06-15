@@ -6,7 +6,7 @@ Lamp has two physical input devices the user can touch directly. They share the 
 
 | Device | Role | Where |
 |---|---|---|
-| **GPIO button** | One mechanical button. Used for decisive actions including destructive ones (reboot/shutdown). The mechanical feel and long-hold detection make accidental destructive actions unlikely. | Both Pi 4/5 and OrangePi sun60 |
+| **GPIO button** | One mechanical button. Used for decisive actions including destructive ones (reboot / shutdown / factory-reset). The mechanical feel and long-hold detection make accidental destructive actions unlikely. | Both Pi 4/5 and OrangePi sun60 |
 | **TTP223 capacitive touchpad** | Four touch pads arranged as a "dog head" surface for petting + soft stop/unmute. No destructive gestures because the IC's FastMode prevents reliable hold detection. | OrangePi sun60 only (4 Pro / A733) |
 
 ## Wiring
@@ -29,9 +29,10 @@ Board detection in both handlers reads `/proc/device-tree/model`:
 | **1 tap** | Stop speaker / unmute mic + announce "I'm listening" | Same — fires ~1.2 s after release (decision-window cost, see below) |
 | **2 taps** (≤ 0.4 s apart, button) / (≤ 1.2 s apart, TTP223) | Ignored (panic-click guard) | Pet response — TTS picks a random phrase from the language pool |
 | **3 taps** (≤ 0.4 s apart, button) | Reboot OS (TTS announce → `sudo reboot`) | n/a — TTP223 stops at 2 (any further taps absorbed by cooldown) |
-| **Hold 5 s** | Shutdown OS (TTS announce → release servos → `sudo shutdown -h now`) | n/a — TTP223 hardware cannot reliably hold (see "FastMode" below) |
+| **Hold 5–10 s, then release** | Shutdown OS (TTS announce → release servos → `sudo shutdown -h now`). LED blinks red while armed. | n/a — TTP223 hardware cannot reliably hold (see "FastMode" below) |
+| **Hold 10 s+, then release** | Factory-reset: wipe device state + reboot into AP setup (TTS announce → release servos → POST `/api/system/factory-reset` on the OS server). LED goes solid red while armed. | n/a |
 
-Destructive gestures (reboot, shutdown) are intentionally only on the GPIO button. Hard actions need a deliberate gesture, and the mechanical button gives unambiguous evidence of intent.
+Destructive gestures (reboot, shutdown, factory-reset) are intentionally only on the GPIO button. Hard actions need a deliberate gesture, and the mechanical button gives unambiguous evidence of intent. The two hold tiers **commit on release, not on a timer firing while held** — so the user can cancel by releasing before crossing a threshold, or keep holding past 10 s to escalate from shutdown to factory-reset (see "GPIO button detection" below).
 
 ## Interrupting Lamp while it speaks (barge-in)
 
@@ -52,20 +53,33 @@ When enabled, tail the log for `Barge-in monitor session end: max_rms_seen=N` (p
 
 ## GPIO button detection (`os/hal/drivers/gpio_button.py`)
 
-Standard edge-counting button driver, mirrors typical patterns:
+Edge-counting driver where **all destructive actions commit on the release edge based on hold duration** — no timer fires while the button is held. This is what lets the user cancel mid-hold (release before a threshold) or escalate (keep holding past 10 s).
 
-1. Each falling edge (press) starts a 5 s long-press timer.
-2. Each rising edge (release) cancels the timer. If the press was shorter than 5 s, increment `click_count` and (re)start a 0.4 s click-window timer.
+1. **Falling edge (press):** record `press_start` (monotonic clock) and spawn a hold-LED watcher thread (one per press, with its own stop `Event`). No action timer is armed.
+2. **Rising edge (release):** stop the LED watcher, then compute `held = now − press_start` and branch:
+   - `held >= 10 s` (`FACTORY_RESET_DURATION`) → scrub any pending clicks, lock LED solid red, run `factory_reset_action` off-thread.
+   - `held >= 5 s` (`LONG_PRESS_DURATION`) → scrub pending clicks, freeze LED red, run `long_press_action` (shutdown) off-thread.
+   - else (short tap) → increment `click_count` and (re)start a 0.4 s click-window timer.
 3. When the click window expires:
    - `count == 1` → `single_click_action`
    - `count == 3` → `triple_click_action`
    - `count == 2` or `>= 4` → ignored (panic-click guard)
-4. If the 5 s long-press timer fires:
-   - Re-read the pin level (defensive — guards against missed release edges that would otherwise trigger shutdown on a slow double-tap)
-   - If pin is still LOW (button held), fire `long_press_action`
-   - Otherwise log and bail
 
-Per-edge debounce is 200 ms.
+A release edge with no matching press (the press was debounce-dropped) is ignored — `press_start` could be stale, so acting on it could fire a destructive action against a minutes-old timestamp. Destructive actions run on their own daemon threads because the `lgpio` callback must return promptly or subsequent edges queue up.
+
+### Hold LED feedback
+
+The watcher thread polls the hold duration and drives the RGB LED at HIGH priority (preempts the current emotion) so the user sees how far they've armed before they release:
+
+| Hold elapsed | LED | Meaning |
+|---|---|---|
+| < 5 s | unchanged | below shutdown threshold — releasing is a tap |
+| 5–10 s | red, blinking 1 Hz | shutdown armed — releasing now shuts down |
+| 10 s+ | red, solid | factory-reset armed — releasing now wipes + reboots |
+
+Same red colour for both armed tiers; blink vs solid is the differentiator. The LED is a silent no-op when the RGB service is unavailable (dev machines) — the button still works.
+
+Per-edge debounce is 200 ms (press and release ticks tracked independently so a quick tap isn't dropped while bouncy repeats of the same edge are filtered).
 
 ## TTP223 detection (`os/hal/drivers/ttp223.py`)
 
@@ -99,22 +113,33 @@ After a session ends:
 
 ## Shared action library (`os/hal/drivers/button_actions.py`)
 
-All three actions live in one place so the GPIO button, TTP223, and any future input (touchpad, remote) get identical behavior:
+The actions live in one place so the GPIO button, TTP223, and any future input (touchpad, remote) get identical behavior:
 
 | Function | What it does | Interrupts in-flight TTS? |
 |---|---|---|
 | `single_click_action(source)` | If mic is muted: unmute. Else stop TTS + stop music. Then speak the localized "I'm listening" cue with retry-on-busy. | Yes — calls `stop_tts()` and the cue itself preempts. |
 | `triple_click_action(source)` | Speak "Rebooting now" → wait 5 s for the cached clip → `sudo reboot`. | Yes |
 | `long_press_action(source)` | Speak "Shutting down now" → wait 5 s → `release_servos()` (so the lamp doesn't slam down mid-pose) → `sudo shutdown -h now`. | Yes |
+| `factory_reset_action(source)` | Speak "Factory reset starting. Rebooting now" → `release_servos()` → POST `/api/system/factory-reset` on the OS server (the server owns the wipe + reboot, see below). | Yes |
 | `head_pat_action(source)` | Pick a random localized pet phrase, speak it via `speak_cached` on a daemon thread. **Non-interrupting**: if TTS is already speaking, the phrase is dropped silently — petting mid-sentence shouldn't truncate Lamp. | No |
+
+### Factory-reset: what gets wiped
+
+`factory_reset_action` only **announces + delegates** — the actual reset lives in the OS server (`os/services/server/system/factoryreset.go`), reachable from the device over loopback without a Bearer token (authoritative because of physical presence: a deliberate 10 s hold). `POST /api/system/factory-reset` is a **soft** reset (state wipe, not a reflash — kernel / OS packages / binaries / HAL `.venv` are untouched):
+
+1. Wipe the active agent backend's state (OpenClaw or Hermes, auto-detected from `config.json` `agent_runtime`).
+2. Wipe the device state paths: `/root/config` (config.json — API keys, channel tokens, MQTT creds), `/root/local/users` + `/root/local/strangers` (face/voice enrollments), `/var/lib/hal/snapshots` (camera snapshots), and `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf` (home WiFi creds → forces AP mode on next boot).
+3. Reboot. The device comes back up in AP mode `<device_type>-XXXX` with a fresh setup wizard (~30 s).
+
+The reset is **single-flight** with a 5-minute cooldown (`FactoryResetMinInterval`) shared across all trigger surfaces (GPIO hold, HTTP, MQTT) — a circuit breaker against runaway callers and accidental repeats.
 
 ## Localized phrases
 
-All four actions are localized per `stt_language` from Lamp's `config.json`. Language constants live in `os/hal/presets.py` (`LANG_EN`, `LANG_VI`, `LANG_ZH_CN`, `LANG_ZH_TW`, `DEFAULT_LANG`). Falls back to `DEFAULT_LANG` (English) when the active language has no translation.
+The action announcements are localized per `stt_language` from Lamp's `config.json`. Language constants live in `os/hal/presets.py` (`LANG_EN`, `LANG_VI`, `LANG_ZH_CN`, `LANG_ZH_TW`, `DEFAULT_LANG`). Falls back to `DEFAULT_LANG` (English) when the active language has no translation.
 
 ### Safety announcements (one phrase per language)
 
-`reboot`, `shutdown`, and the `listening` cue use literal-meaning phrases ("Rebooting now", "Shutting down now") in every language because the user just performed a destructive gesture and needs unambiguous confirmation — this is a safety announcement, not a persona moment.
+`reboot`, `shutdown`, `factory-reset`, and the `listening` cue use literal-meaning phrases ("Rebooting now", "Shutting down now", "Factory reset starting. Rebooting now") in every language because the user just performed a destructive gesture and needs unambiguous confirmation — this is a safety announcement, not a persona moment.
 
 ### Pet responses (15 phrases per language, random pick)
 

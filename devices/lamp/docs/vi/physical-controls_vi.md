@@ -6,7 +6,7 @@ Lamp có hai thiết bị input vật lý mà user có thể chạm trực tiế
 
 | Thiết bị | Vai trò | Có ở |
 |---|---|---|
-| **Nút GPIO** | Một nút bấm cơ. Dùng cho các hành động dứt khoát kể cả destructive (reboot/shutdown). Cảm giác cơ + detect giữ lâu khiến destructive action khó xảy ra do vô tình. | Pi 4/5 và OrangePi sun60 |
+| **Nút GPIO** | Một nút bấm cơ. Dùng cho các hành động dứt khoát kể cả destructive (reboot / shutdown / factory-reset). Cảm giác cơ + detect giữ lâu khiến destructive action khó xảy ra do vô tình. | Pi 4/5 và OrangePi sun60 |
 | **Touchpad cảm ứng TTP223** | Bốn pad chạm xếp như "đầu cún" để vuốt ve + stop/unmute nhẹ. Không có destructive gesture vì FastMode của IC không cho detect giữ lâu tin cậy. | Chỉ OrangePi sun60 (4 Pro / A733) |
 
 ## Wiring
@@ -29,9 +29,10 @@ Cả hai handler đều detect board qua `/proc/device-tree/model`:
 | **1 chạm** | Stop loa / unmute mic + báo "Mình nghe đây" | Y hệt — fire ~1.2 s sau khi nhả (chi phí decision-window, xem dưới) |
 | **2 chạm** (≤ 0.4 s, nút) / (≤ 1.2 s, TTP223) | Bỏ qua (panic-click guard) | Pet response — TTS chọn ngẫu nhiên 1 câu từ pool theo ngôn ngữ |
 | **3 chạm** (≤ 0.4 s, nút) | Reboot OS (TTS báo → `sudo reboot`) | n/a — TTP223 dừng ở 2 (chạm thêm bị cooldown nuốt) |
-| **Giữ 5 s** | Shutdown OS (TTS báo → release servo → `sudo shutdown -h now`) | n/a — phần cứng TTP223 không hold đáng tin được (xem "FastMode" dưới) |
+| **Giữ 5–10 s rồi nhả** | Shutdown OS (TTS báo → release servo → `sudo shutdown -h now`). LED nháy đỏ khi đã arm. | n/a — phần cứng TTP223 không hold đáng tin được (xem "FastMode" dưới) |
+| **Giữ 10 s+ rồi nhả** | Factory-reset: wipe state thiết bị + reboot vào AP setup (TTS báo → release servo → POST `/api/system/factory-reset` trên OS server). LED đỏ đứng khi đã arm. | n/a |
 
-Destructive gesture (reboot, shutdown) cố tình chỉ có trên nút GPIO. Hành động phá huỷ cần cử chỉ chủ ý, và nút cơ học cho bằng chứng intent rõ ràng.
+Destructive gesture (reboot, shutdown, factory-reset) cố tình chỉ có trên nút GPIO. Hành động phá huỷ cần cử chỉ chủ ý, và nút cơ học cho bằng chứng intent rõ ràng. Hai mức giữ **commit khi nhả, không phải khi timer fire lúc đang giữ** — nên user có thể huỷ bằng cách nhả tay trước khi vượt ngưỡng, hoặc giữ tiếp quá 10 s để escalate từ shutdown lên factory-reset (xem "Detect nút GPIO" dưới).
 
 ## Cắt Lamp giữa câu (barge-in)
 
@@ -52,20 +53,33 @@ Khi bật, tail log để xem `Barge-in monitor session end: max_rms_seen=N` (pe
 
 ## Detect nút GPIO (`os/hal/drivers/gpio_button.py`)
 
-Driver đếm edge nút bấm chuẩn:
+Driver đếm edge nơi **mọi destructive action commit ở rising edge (nhả) dựa trên thời lượng giữ** — không timer nào fire lúc đang giữ. Đây chính là cái cho phép user huỷ giữa chừng (nhả trước ngưỡng) hoặc escalate (giữ tiếp quá 10 s).
 
-1. Mỗi falling edge (nhấn) khởi 1 timer long-press 5 s.
-2. Mỗi rising edge (nhả) cancel timer. Nếu giữ < 5 s → `click_count += 1` và (re)start click-window timer 0.4 s.
+1. **Falling edge (nhấn):** ghi `press_start` (đồng hồ monotonic) và spawn thread hold-LED watcher (mỗi lần nhấn 1 thread, có stop `Event` riêng). Không arm timer action nào.
+2. **Rising edge (nhả):** dừng LED watcher, tính `held = now − press_start` rồi rẽ nhánh:
+   - `held >= 10 s` (`FACTORY_RESET_DURATION`) → scrub mọi click đang chờ, khoá LED đỏ đứng, chạy `factory_reset_action` off-thread.
+   - `held >= 5 s` (`LONG_PRESS_DURATION`) → scrub click đang chờ, freeze LED đỏ, chạy `long_press_action` (shutdown) off-thread.
+   - khác (tap ngắn) → `click_count += 1` và (re)start click-window timer 0.4 s.
 3. Khi click window hết:
    - `count == 1` → `single_click_action`
    - `count == 3` → `triple_click_action`
    - `count == 2` hoặc `>= 4` → bỏ qua (panic-click guard)
-4. Nếu timer 5 s fire:
-   - Đọc lại pin level (phòng vệ — chống miss release edge mà gây shutdown nhầm khi double-tap chậm)
-   - Pin vẫn LOW (vẫn giữ) → fire `long_press_action`
-   - Khác → log và bỏ qua
 
-Debounce mỗi edge là 200 ms.
+Release edge không có press khớp (press bị debounce nuốt) thì bỏ qua — `press_start` có thể là cũ, hành động theo nó có thể fire destructive action trên timestamp cũ vài phút. Destructive action chạy trên daemon thread riêng vì callback `lgpio` phải return ngay, nếu không các edge sau sẽ dồn hàng.
+
+### LED feedback khi giữ
+
+Thread watcher poll thời lượng giữ và đẩy LED RGB ở priority HIGH (preempt emotion hiện tại) để user thấy đã arm tới đâu trước khi nhả:
+
+| Thời gian giữ | LED | Ý nghĩa |
+|---|---|---|
+| < 5 s | giữ nguyên | dưới ngưỡng shutdown — nhả ra là 1 tap |
+| 5–10 s | đỏ, nháy 1 Hz | đã arm shutdown — nhả bây giờ là tắt máy |
+| 10 s+ | đỏ, đứng | đã arm factory-reset — nhả bây giờ là wipe + reboot |
+
+Cùng màu đỏ cho cả hai mức arm; nháy vs đứng là cái phân biệt. LED là no-op im lặng khi RGB service không có (máy dev) — nút vẫn hoạt động.
+
+Debounce mỗi edge là 200 ms (tick nhấn và nhả track độc lập để tap nhanh không bị drop trong khi bounce lặp của cùng một edge bị lọc).
 
 ## Detect TTP223 (`os/hal/drivers/ttp223.py`)
 
@@ -99,22 +113,33 @@ Sau khi session kết thúc:
 
 ## Thư viện action chung (`os/hal/drivers/button_actions.py`)
 
-Cả ba action sống ở một chỗ để nút GPIO, TTP223, và mọi input tương lai (touchpad, remote) hành xử giống nhau:
+Các action sống ở một chỗ để nút GPIO, TTP223, và mọi input tương lai (touchpad, remote) hành xử giống nhau:
 
 | Hàm | Làm gì | Cắt TTS đang phát? |
 |---|---|---|
 | `single_click_action(source)` | Mic bị mute → unmute. Khác thì stop TTS + stop music. Rồi nói câu "Mình nghe đây" local với retry-on-busy. | Có — gọi `stop_tts()` và bản thân câu cue cũng preempt. |
 | `triple_click_action(source)` | Nói "Đang khởi động lại" → đợi 5 s cho clip cached → `sudo reboot`. | Có |
 | `long_press_action(source)` | Nói "Đang tắt máy" → đợi 5 s → `release_servos()` (để đèn không slam xuống giữa pose) → `sudo shutdown -h now`. | Có |
+| `factory_reset_action(source)` | Nói "Đang khôi phục cài đặt gốc. Đang khởi động lại" → `release_servos()` → POST `/api/system/factory-reset` trên OS server (server lo phần wipe + reboot, xem dưới). | Có |
 | `head_pat_action(source)` | Chọn ngẫu nhiên 1 câu pet local, nói qua `speak_cached` trên daemon thread. **Không cắt**: nếu TTS đang nói, câu pet bị drop im lặng — vuốt giữa câu không được làm Lamp mất lời. | Không |
+
+### Factory-reset: wipe những gì
+
+`factory_reset_action` chỉ **báo + uỷ quyền** — phần reset thật nằm ở OS server (`os/services/server/system/factoryreset.go`), gọi được từ thiết bị qua loopback không cần Bearer token (authoritative nhờ hiện diện vật lý: giữ 10 s có chủ ý). `POST /api/system/factory-reset` là reset **mềm** (wipe state, không reflash — kernel / package OS / binary / `.venv` HAL không bị đụng):
+
+1. Wipe state của agent backend đang chạy (OpenClaw hoặc Hermes, auto-detect từ `config.json` `agent_runtime`).
+2. Wipe các path state của thiết bị: `/root/config` (config.json — API key, channel token, MQTT creds), `/root/local/users` + `/root/local/strangers` (enrollment khuôn mặt/giọng), `/var/lib/hal/snapshots` (snapshot camera), và `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf` (WiFi nhà → ép vào AP mode lần boot kế).
+3. Reboot. Thiết bị lên lại ở AP mode `<device_type>-XXXX` với setup wizard mới (~30 s).
+
+Reset là **single-flight** + cooldown 5 phút (`FactoryResetMinInterval`) dùng chung cho mọi trigger (giữ GPIO, HTTP, MQTT) — circuit breaker chống caller chạy loạn và lặp do vô tình.
 
 ## Phrase local
 
-Cả 4 action đều local theo `stt_language` từ `config.json` của Lamp. Hằng số ngôn ngữ ở `os/hal/presets.py` (`LANG_EN`, `LANG_VI`, `LANG_ZH_CN`, `LANG_ZH_TW`, `DEFAULT_LANG`). Fallback về `DEFAULT_LANG` (English) khi ngôn ngữ hiện tại chưa có bản dịch.
+Thông báo của các action đều local theo `stt_language` từ `config.json` của Lamp. Hằng số ngôn ngữ ở `os/hal/presets.py` (`LANG_EN`, `LANG_VI`, `LANG_ZH_CN`, `LANG_ZH_TW`, `DEFAULT_LANG`). Fallback về `DEFAULT_LANG` (English) khi ngôn ngữ hiện tại chưa có bản dịch.
 
 ### Thông báo an toàn (1 câu/ngôn ngữ)
 
-`reboot`, `shutdown`, và câu cue `listening` dùng phrase nghĩa-đen ("Đang khởi động lại", "Đang tắt máy") ở mọi ngôn ngữ vì user vừa làm cử chỉ destructive và cần xác nhận rõ ràng — đây là thông báo an toàn, không phải khoảnh khắc persona.
+`reboot`, `shutdown`, `factory-reset`, và câu cue `listening` dùng phrase nghĩa-đen ("Đang khởi động lại", "Đang tắt máy", "Đang khôi phục cài đặt gốc. Đang khởi động lại") ở mọi ngôn ngữ vì user vừa làm cử chỉ destructive và cần xác nhận rõ ràng — đây là thông báo an toàn, không phải khoảnh khắc persona.
 
 ### Phrase pet (15 câu/ngôn ngữ, random)
 
