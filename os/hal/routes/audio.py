@@ -29,40 +29,44 @@ except ImportError:
     pass
 
 
-def _audio_output_card() -> Optional[int]:
-    """Derive ALSA card index from HAL_AUDIO_OUTPUT_ALSA."""
-    if AUDIO_OUTPUT_ALSA:
-        m = re.search(r":(\d+)", AUDIO_OUTPUT_ALSA)
-        if m:
-            return int(m.group(1))
-        m = re.search(r":([^,]+)", AUDIO_OUTPUT_ALSA)
-        if m:
-            card_name = m.group(1).lower()
-            try:
-                with open("/proc/asound/cards") as f:
-                    for line in f:
-                        cm = re.match(r"\s*(\d+)\s+\[(\S+)", line)
-                        if cm and cm.group(2).lower() == card_name:
-                            return int(cm.group(1))
-            except Exception:
-                pass
-    return None
+def _amixer_ctl_device() -> Optional[str]:
+    """Derive the amixer control (-D) device from HAL_AUDIO_OUTPUT_ALSA.
+
+    The env names a PCM (e.g. 'plug:lamp_speaker'), but amixer needs a control
+    device. Our asound.conf defines `ctl.<alias>` alongside every `pcm.<alias>`,
+    so the bare alias ('lamp_speaker') is a valid amixer -D target pointing at the
+    real speaker card. Returning None falls back to amixer's default card (card 0
+    — often the camera mic), so volume changes silently miss the speaker.
+    """
+    val = AUDIO_OUTPUT_ALSA
+    if not val:
+        return None
+    # Strip a leading ALSA plugin prefix (plug:/plughw:/hw:/dmix:) -> bare spec.
+    rest = val.split(":", 1)[1] if ":" in val else val
+    rest = rest.strip()
+    if not rest:
+        return None
+    if "," in rest:  # hw-style "card,device" -> control is the card
+        rest = rest.split(",", 1)[0]
+    if rest.isdigit():  # bare card index -> hw:N
+        return f"hw:{rest}"
+    return rest  # named alias (ctl.<alias>) or card id
 
 
-def _detect_playback_controls() -> tuple[list[str], Optional[int]]:
-    """Return (playback_control_names, card_index) from amixer."""
-    card = _audio_output_card()
-    cmd = ["amixer", "-c", str(card), "scontrols"] if card is not None else ["amixer", "scontrols"]
+def _detect_playback_controls() -> tuple[list[str], Optional[str]]:
+    """Return (playback_control_names, amixer_ctl_device) from amixer."""
+    dev = _amixer_ctl_device()
+    cmd = ["amixer", "-D", dev, "scontrols"] if dev else ["amixer", "scontrols"]
     _CAPTURE_KEYWORDS = {"capture", "mic", "gain control", "agc", "auto gain"}
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             all_controls = re.findall(r"Simple mixer control '([^']+)'", result.stdout)
             playback = [c for c in all_controls if not any(k in c.lower() for k in _CAPTURE_KEYWORDS)]
-            return playback, card
+            return playback, dev
     except Exception:
         pass
-    return [], card
+    return [], dev
 
 
 @router.get("/audio", response_model=AudioDevicesResponse)
@@ -96,10 +100,10 @@ def _db_to_pct(db: float) -> int:
 @router.post("/audio/volume", response_model=StatusResponse)
 def set_volume(req: VolumeRequest):
     """Set system speaker volume (0-100%)."""
-    controls, card = _detect_playback_controls()
+    controls, dev = _detect_playback_controls()
     if not controls:
         raise HTTPException(503, "No audio mixer controls found")
-    cmd_prefix = ["amixer", "-c", str(card)] if card is not None else ["amixer"]
+    cmd_prefix = ["amixer", "-D", dev] if dev else ["amixer"]
     pct = max(0, min(100, req.volume))
     dac_db = _pct_to_db(pct)
     for ctrl in controls:
@@ -127,8 +131,8 @@ def get_volume():
     DAC controls are tried first so round-trip is stable on codecs whose raw%
     range differs from our [-60dB, +2dB] envelope (e.g. WM8960, Rockchip).
     """
-    controls, card = _detect_playback_controls()
-    cmd_prefix = ["amixer", "-c", str(card)] if card is not None else ["amixer"]
+    controls, dev = _detect_playback_controls()
+    cmd_prefix = ["amixer", "-D", dev] if dev else ["amixer"]
     sorted_controls = sorted(
         controls, key=lambda c: 0 if c.upper() in _DAC_CONTROLS else 1
     )

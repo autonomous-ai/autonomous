@@ -118,7 +118,7 @@ class RecordEnrollRequest(BaseModel):
         description="Recording length in seconds. Capped at 60 to bound ALSA hold.",
     )
     origin: Optional[str] = Field(
-        default="web_lamp_mic",
+        default="web_device_mic",
         description="Tagged into stored sample filenames so list_registered "
         "can distinguish web-triggered enrolls from telegram / mic ambient.",
     )
@@ -307,10 +307,12 @@ def speaker_enroll(req: EnrollSpeakerRequest) -> EnrollResponse:
     return EnrollResponse(status="ok", meta=SpeakerMeta(**meta))
 
 
-# ALSA capture device for the USB mic. Defined in /etc/asound.conf as a
-# `plug:` route over the `lamp_usb_mic` card. Same alias the runtime
-# voice_service uses, so enroll and recognize see identical acoustics.
-_LAMP_MIC_ALSA = "plug:lamp_micro2"
+# ALSA capture device for the voice mic — the SAME alias voice_service records
+# through (HAL_AUDIO_INPUT_ALSA), so enroll and recognize see identical
+# acoustics. The alias is defined per device in /etc/asound.conf as a `plug:`
+# route over that device's USB mic card. Read from env (not hardcoded) so it
+# can't drift from the runtime; device-agnostic fallback for dev/test.
+_DEVICE_MIC_ALSA = os.environ.get("HAL_AUDIO_INPUT_ALSA") or "plug:device_micro2"
 
 
 @router.post("/speaker/record-enroll", response_model=EnrollResponse)
@@ -364,7 +366,7 @@ def speaker_record_enroll(req: RecordEnrollRequest) -> EnrollResponse:
     try:
         cmd = [
             "arecord",
-            "-D", _LAMP_MIC_ALSA,
+            "-D", _DEVICE_MIC_ALSA,
             "-f", "S16_LE",
             "-r", "16000",
             "-c", "1",
@@ -391,7 +393,7 @@ def speaker_record_enroll(req: RecordEnrollRequest) -> EnrollResponse:
                 name,
                 [wav_path],
                 source_type="filepath",
-                origin=req.origin or "web_lamp_mic",
+                origin=req.origin or "web_device_mic",
             )
         except EmbeddingAPIUnavailableError as e:
             logger.warning("record-enroll embedding API unavailable for %r: %s", name, e)

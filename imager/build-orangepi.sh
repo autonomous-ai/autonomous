@@ -385,9 +385,9 @@ UNIT
 cat > /opt/hal/.env <<'ENV'
 HAL_MODE=production
 HAL_LOG_LEVEL=INFO
-HAL_AUDIO_INPUT_ALSA=plug:lamp_micro2
-HAL_AUDIO_SENSING_DEVICE=plug:lamp_micro1
-HAL_AUDIO_OUTPUT_ALSA=plug:lamp_speaker
+HAL_AUDIO_INPUT_ALSA=plug:device_micro2
+HAL_AUDIO_SENSING_DEVICE=plug:device_micro1
+HAL_AUDIO_OUTPUT_ALSA=plug:device_speaker
 HAL_VAD_THRESHOLD=1500
 HAL_STT_KEEPALIVE=true
 HAL_SPEECH_HOLDOFF=0.05
