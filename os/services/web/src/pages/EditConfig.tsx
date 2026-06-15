@@ -17,14 +17,14 @@ import { TTSSection } from "@/components/edit/TTSSection";
 import { STTSection, type SttProvider } from "@/components/edit/STTSection";
 import { ChannelSection } from "@/components/edit/ChannelSection";
 import { MqttSection } from "@/components/edit/MqttSection";
-import { Wifi, UserCircle, Lamp, Brain, Volume2, MicVocal, MessageSquare, Globe, Link } from "lucide-react";
+import { Wifi, UserCircle, Cpu, Brain, Volume2, MicVocal, MessageSquare, Globe, Link } from "lucide-react";
 
 // Local subset of the shared SectionId — EditConfig uses `stt` (Language is
 // rendered under id="stt"), not `language` / `deepgram` like Setup.
 type SectionId = Extract<SharedSectionId, "device" | "wifi" | "llm" | "voice" | "face" | "tts" | "stt" | "channel" | "mqtt">;
 const ICON_SIZE = 15;
 const ALL_SECTIONS: { id: SectionId; label: string; icon: React.ReactNode; debugOnly?: boolean }[] = [
-  { id: "device",   label: "Device",   icon: <Lamp size={ICON_SIZE} /> },
+  { id: "device",   label: "Device",   icon: <Cpu size={ICON_SIZE} /> },
   { id: "wifi",     label: "Wi-Fi",    icon: <Wifi size={ICON_SIZE} /> },
   // AI Brain, Language, Lamp's Voice, Channels, MQTT are gated behind
   // ?debug=true. Typical operators only need Device + Wi-Fi + voice/face

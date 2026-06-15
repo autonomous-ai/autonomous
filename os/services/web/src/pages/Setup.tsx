@@ -19,7 +19,7 @@ import { TTSSection } from "@/components/setup/TTSSection";
 import { VoiceSection } from "@/components/setup/VoiceSection";
 import { FaceSection } from "@/components/setup/FaceSection";
 import type { ChannelType, NetworkItem } from "@/types";
-import { Wifi, Lamp, Brain, Volume2, MessageSquare, UserCircle, Mic, Globe, Check } from "lucide-react";
+import { Wifi, Cpu, Brain, Volume2, MessageSquare, UserCircle, Mic, Globe, Check } from "lucide-react";
 
 // SetupMode controls which sections render. Initial = AP/offline (hide
 // online-only enrollments + tests), Continue = LAN/online (the device can hit
@@ -108,7 +108,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // re-adding a SectionCard + a SECTIONS entry brings them back without
   // other plumbing.
   const SECTIONS: { id: SectionId; label: string; icon: React.ReactNode }[] = [
-    { id: "device", label: "Device", icon: <Lamp size={15} /> },
+    { id: "device", label: "Device", icon: <Cpu size={15} /> },
     { id: "wifi",   label: "Wi-Fi",  icon: <Wifi size={15} /> },
     ...(debug ? [
       { id: "llm" as SectionId,     label: "AI Brain",   icon: <Brain size={15} /> },
