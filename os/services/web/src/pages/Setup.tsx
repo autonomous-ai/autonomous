@@ -188,6 +188,14 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
     if (!/^[0-9a-f]{4}$/.test(host.slice(-4))) return "";
     return host;
   }, [mac]);
+  // Device-type prefix ("lamp-" / "intern-") split off the same mac, used as the
+  // router-admin search hint when the full mDNS host isn't usable yet. Follows
+  // whatever device is actually being set up — never a hardcoded class.
+  const deviceTypePrefix = useMemo(() => {
+    const m = (mac || "").trim().toLowerCase();
+    const dash = m.lastIndexOf("-");
+    return dash > 0 ? m.slice(0, dash + 1) : "";
+  }, [mac]);
   const [llmApiKey, setLlmApiKey] = useState(urlParams.llmApiKey || "");
   const [llmUrl, setLlmUrl] = useState(urlParams.llmUrl || "");
   const [llmModel, setLlmModel] = useState(urlParams.llmModel || "");
@@ -764,7 +772,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
                     ) : (
                       <div style={{ fontSize: 12, color: C.textDim }}>
                         Your device is connected. Open your router's admin page to find
-                        the device's IP address (look for "{lampMdnsHost || "lamp-"}").
+                        the device's IP address{deviceTypePrefix ? ` (look for "${deviceTypePrefix}")` : ""}.
                       </div>
                     )}
                   </>
