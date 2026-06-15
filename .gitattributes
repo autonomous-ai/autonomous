@@ -1,8 +1,9 @@
-hardware/cad/*.stp filter=lfs diff=lfs merge=lfs -text
-hardware/cad/*.STP filter=lfs diff=lfs merge=lfs -text
-hardware/cad/*.step filter=lfs diff=lfs merge=lfs -text
-hardware/cad/*.STEP filter=lfs diff=lfs merge=lfs -text
-hardware/cad/*.stl filter=lfs diff=lfs merge=lfs -text
-hardware/cad/*.STL filter=lfs diff=lfs merge=lfs -text
-hardware/cad/*.f3d filter=lfs diff=lfs merge=lfs -text
-hardware/cad/*.f3z filter=lfs diff=lfs merge=lfs -text
+# Lamp CAD binaries (STEP/STL/Fusion) tracked via Git LFS
+devices/lamp/hardware/**/*.stp filter=lfs diff=lfs merge=lfs -text
+devices/lamp/hardware/**/*.STP filter=lfs diff=lfs merge=lfs -text
+devices/lamp/hardware/**/*.step filter=lfs diff=lfs merge=lfs -text
+devices/lamp/hardware/**/*.STEP filter=lfs diff=lfs merge=lfs -text
+devices/lamp/hardware/**/*.stl filter=lfs diff=lfs merge=lfs -text
+devices/lamp/hardware/**/*.STL filter=lfs diff=lfs merge=lfs -text
+devices/lamp/hardware/**/*.f3d filter=lfs diff=lfs merge=lfs -text
+devices/lamp/hardware/**/*.f3z filter=lfs diff=lfs merge=lfs -text
