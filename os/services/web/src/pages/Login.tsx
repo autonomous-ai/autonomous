@@ -65,7 +65,7 @@ export default function Login() {
         </button>
 
         <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 4, color: C.text }}>
-          Lamp sign in
+          Sign in
         </div>
         <div style={{ fontSize: 12, color: C.textDim, marginBottom: 18, lineHeight: 1.5 }}>
           Enter the admin password you set during device setup.

@@ -31,7 +31,7 @@ export function STTSection({
     <SectionCard id="stt" title="Language" active={active}>
       <div style={{ marginBottom: 12 }}>
         <label htmlFor="stt_language" style={{ display: "block", fontSize: 11, color: C.textDim, marginBottom: 5 }}>
-          Language (what the lamp listens for)
+          Language (what your device listens for)
         </label>
         <select
           id="stt_language"

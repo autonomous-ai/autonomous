@@ -30,7 +30,7 @@ export function TTSSection({
   sttLanguage: string;
 }) {
   return (
-    <SectionCard id="tts" title="Lamp's Voice" active={active}>
+    <SectionCard id="tts" title="Voice" active={active}>
       <LockedPasswordField lockedInitially={ttsLoaded.apiKey || llmLoaded.apiKey} label="API Key (optional — leave blank to reuse AI brain key)" id="tts_api_key" value={ttsApiKey} onChange={setTtsApiKey} placeholder="sk-..." />
       <LockedField lockedInitially={ttsLoaded.baseUrl || llmLoaded.baseUrl} label="Base URL (optional — leave blank to reuse AI brain base URL)" id="tts_base_url" value={ttsBaseUrl} onChange={setTtsBaseUrl} placeholder="https://api.openai.com/v1" />
       <div style={{ marginBottom: 12 }}>

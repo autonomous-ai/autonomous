@@ -140,9 +140,9 @@ export function VoiceSection({
             : !voiceLabel.trim() ? C.textMuted : "rgb(52,211,153)",
         }}
       >
-        {voicePhase === "idle" && `Start Recording (${VOICE_DURATION_SEC}s on lamp)`}
+        {voicePhase === "idle" && `Start Recording (${VOICE_DURATION_SEC}s on device)`}
         {voicePhase === "countdown" && `Get ready... ${voiceCountdown}`}
-        {voicePhase === "recording" && `● Recording on lamp — read aloud (${voiceCountdown}s)`}
+        {voicePhase === "recording" && `● Recording on device — read aloud (${voiceCountdown}s)`}
         {voicePhase === "processing" && "Processing..."}
       </button>
       {withVoice.length > 0 && (

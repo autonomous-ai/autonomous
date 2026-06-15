@@ -26,12 +26,12 @@ const ICON_SIZE = 15;
 const ALL_SECTIONS: { id: SectionId; label: string; icon: React.ReactNode; debugOnly?: boolean }[] = [
   { id: "device",   label: "Device",   icon: <Cpu size={ICON_SIZE} /> },
   { id: "wifi",     label: "Wi-Fi",    icon: <Wifi size={ICON_SIZE} /> },
-  // AI Brain, Language, Lamp's Voice, Channels, MQTT are gated behind
+  // AI Brain, Language, Voice, Channels, MQTT are gated behind
   // ?debug=true. Typical operators only need Device + Wi-Fi + voice/face
   // enrollment; deeper provider knobs stay hidden by default.
   { id: "llm",      label: "AI Brain", icon: <Brain size={ICON_SIZE} />, debugOnly: true },
   { id: "stt",      label: "Language", icon: <Globe size={ICON_SIZE} />, debugOnly: true },
-  { id: "tts",      label: "Lamp's Voice", icon: <Volume2 size={ICON_SIZE} />, debugOnly: true },
+  { id: "tts",      label: "Voice", icon: <Volume2 size={ICON_SIZE} />, debugOnly: true },
   { id: "voice",    label: "My Voice", icon: <MicVocal size={ICON_SIZE} /> },
   { id: "face",     label: "Face",     icon: <UserCircle size={ICON_SIZE} /> },
   { id: "channel",  label: "Channels", icon: <MessageSquare size={ICON_SIZE} />, debugOnly: true },
@@ -390,7 +390,7 @@ export default function EditConfig() {
         if (discordBotToken) body.discord_bot_token = discordBotToken;
       }
       await updateDeviceConfig(body);
-      toast.success("Config saved — restart Lamp for changes to take effect.");
+      toast.success("Config saved — restart your device for changes to take effect.");
       // Reset baseline so Save button goes back to disabled until next edit.
       // Non-secret fields adopt their current values as the new baseline.
       initialRef.current = {
@@ -564,7 +564,7 @@ export default function EditConfig() {
               borderRadius: 8, padding: "10px 14px", fontSize: 11.5,
               color: C.textDim, marginBottom: 20, lineHeight: 1.6,
             }}>
-              ↻ &nbsp;Restart Lamp after saving for AI brain and channel changes to take full effect.
+              ↻ &nbsp;Restart your device after saving for AI brain and channel changes to take full effect.
             </div>
 
             {loadingCfg ? <SkeletonBlock /> : (
