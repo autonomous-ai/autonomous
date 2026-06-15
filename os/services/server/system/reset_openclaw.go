@@ -33,7 +33,7 @@ var openclawStatePaths = []string{
 	"/root/.openclaw/.openclaw",         // nested stale workspace from initial install
 	"/root/.openclaw/.cache",            // runtime cache (preventive)
 	// Kept by openclaw reset --scope config+creds+sessions:
-	//   npm/, plugin-skills/, canvas/, plugins/, identity/, lumi-device-key.json
+	//   npm/, plugin-skills/, canvas/, plugins/, identity/, device-key.json
 	// openclaw.json is intentionally wiped and NOT restored — SetupAgent detects
 	// the missing file and calls onboardOpenclaw() to create a fresh one.
 	// openclaw.service is disabled before reboot so it is NOT running when

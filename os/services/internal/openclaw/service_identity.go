@@ -21,7 +21,12 @@ import (
 
 // --- Device identity (Ed25519) for gateway auth ---
 
-const deviceKeyFile = "lumi-device-key.json"
+const deviceKeyFile = "device-key.json"
+
+// legacyDeviceKeyFile is the pre-debrand filename. resolveDeviceKey migrates it
+// to deviceKeyFile so an already-paired device keeps its Ed25519 identity across
+// the rename instead of generating a fresh key (which would force re-registration).
+const legacyDeviceKeyFile = "lumi-device-key.json"
 
 type deviceIdentity struct {
 	PublicKey  ed25519.PublicKey
@@ -29,11 +34,34 @@ type deviceIdentity struct {
 	DeviceID   string // hex(SHA-256(publicKey))
 }
 
+// resolveDeviceKey reads the device key file, migrating a pre-debrand
+// lumi-device-key.json to deviceKeyFile on first sight so an already-paired
+// device keeps its identity. Returns the raw bytes, or an error if neither exists.
+func (s *Service) resolveDeviceKey() ([]byte, error) {
+	keyPath := filepath.Join(s.config.OpenclawConfigDir, deviceKeyFile)
+	if data, err := os.ReadFile(keyPath); err == nil {
+		return data, nil
+	}
+	legacyPath := filepath.Join(s.config.OpenclawConfigDir, legacyDeviceKeyFile)
+	data, err := os.ReadFile(legacyPath)
+	if err != nil {
+		return nil, err
+	}
+	// Best-effort migrate to the new name; if the rewrite fails we still use the
+	// bytes read this boot so identity is never lost.
+	if werr := os.WriteFile(keyPath, data, 0600); werr == nil {
+		_ = chownRuntimeUserIfRoot(keyPath, openclawRuntimeUser)
+		_ = os.Remove(legacyPath)
+		slog.Info("migrated legacy device key", "component", "openclaw", "from", legacyDeviceKeyFile, "to", deviceKeyFile)
+	}
+	return data, nil
+}
+
 // loadOrCreateDeviceIdentity loads the Ed25519 keypair from disk, or generates
 // a new one and persists it for future connections.
 func (s *Service) loadOrCreateDeviceIdentity() (*deviceIdentity, error) {
 	keyPath := filepath.Join(s.config.OpenclawConfigDir, deviceKeyFile)
-	if data, err := os.ReadFile(keyPath); err == nil {
+	if data, err := s.resolveDeviceKey(); err == nil {
 		var stored struct {
 			PrivateKey string `json:"privateKey"` // hex-encoded 64-byte Ed25519 seed+pub
 		}
