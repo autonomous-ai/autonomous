@@ -8,12 +8,13 @@ gateway:
   default: openclaw
   protocol: websocket
 capabilities:
-  audio:     { routes: [audio, speaker, voice], required: true }
-  sensing:   { routes: [sensing], required: false }
-  companion: { routes: [buddy], required: false }
-  system:    { routes: [system], required: true }
-  light:     { routes: [led, scene], driver: ws2812, required: true, safety: SAFETY.md#light }
-  expression: { routes: [emotion], required: true }
+  audio:        { routes: [audio, speaker, voice], required: true }
+  sensing:      { routes: [sensing], required: false }
+  companion:    { routes: [buddy], required: false }
+  system:       { routes: [system], required: true }
+  light:        { routes: [led], driver: ws2812, required: true, safety: SAFETY.md#light }
+  media:        { routes: [music], required: true }
+  connectivity: { routes: [bluetooth], required: true }
 safety_ref: SAFETY.md
 memory:     { backend: local }
 ---
