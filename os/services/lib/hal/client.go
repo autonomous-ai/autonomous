@@ -92,6 +92,15 @@ func StopEffect() {
 	postSilent("/led/effect/stop", "{}")
 }
 
+// SetStatus applies an os-server status state (booting/error/ota/…) by name.
+// HAL owns the appearance (color/effect/speed) for each state via STATUS_LED_PRESETS
+// — overridable per device in presets.json — so the OS sends only the state name,
+// never an RGB. Like SetEffect this is a transient system overlay (HAL applies it
+// without clobbering the user's saved LED state). Fire-and-forget.
+func SetStatus(stateName string) {
+	postSilent("/led/status", fmt.Sprintf(`{"state":%q}`, stateName))
+}
+
 // SetSolid paints the strip a single color and saves it as the user LED state
 // (no transient flag) so subsequent RestoreLED calls repaint to this color.
 // Fire-and-forget: HAL may not be up yet at the moment this is called

@@ -14,6 +14,7 @@ from hal.models import (
     LEDPaintRequest,
     LEDSolidRequest,
     LEDStateResponse,
+    LEDStatusRequest,
     StatusResponse,
 )
 from hal.presets import (
@@ -23,6 +24,7 @@ from hal.presets import (
     LST_SOLID,
     RGB_CMD_PAINT,
     RGB_CMD_SOLID,
+    STATUS_LED_PRESETS,
     VALID_LED_EFFECTS,
 )
 from hal.drivers.rgb.effects import run_effect as _run_effect
@@ -176,6 +178,28 @@ def start_led_effect(req: LEDEffectRequest):
         )
 
     return {"status": "ok", "effect": req.effect, "speed": req.speed}
+
+
+@router.post("/led/status", response_model=LEDEffectResponse)
+def set_led_status(req: LEDStatusRequest):
+    """Apply an os-server status state (booting/error/ota/…) by NAME. The os-server
+    owns the status state machine (WHEN); HAL owns the appearance (WHAT) via
+    STATUS_LED_PRESETS, overridable per device in presets.json. Applied transiently
+    through the normal effect path, so it never clobbers the user's saved LED state."""
+    preset = STATUS_LED_PRESETS.get(req.state)
+    if not preset:
+        raise HTTPException(
+            400,
+            f"Unknown status state '{req.state}'. Available: {sorted(STATUS_LED_PRESETS)}",
+        )
+    return start_led_effect(
+        LEDEffectRequest(
+            effect=preset["effect"],
+            color=preset["color"],
+            speed=preset["speed"],
+            transient=True,
+        )
+    )
 
 
 @router.post("/led/restore", response_model=StatusResponse)

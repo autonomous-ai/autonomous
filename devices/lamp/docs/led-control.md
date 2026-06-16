@@ -121,6 +121,13 @@ LED feedback for system states (all `breathing` at speed 3.0 unless noted):
 
 Managed by `internal/statusled/Service` (lamp) and `lib/hal` directly (bootstrap).
 
+The `internal/statusled` colors above are **not hardcoded in Go** — the OS owns the
+state machine (WHEN a state shows) and sends the state *name* to HAL (`POST /led/status`);
+HAL resolves the color/effect/speed from `STATUS_LED_PRESETS`, overridable per device via
+`presets.json`'s `status_led` section (see [DEVICE-SPEC.md § Per-device presets](../../../contract/DEVICE-SPEC.md#per-device-presets-presetsjson)).
+(The bootstrap OTA-progress colors and the setup-needed white below are still
+hardcoded in Go — a later migration into the same `status_led` family.)
+
 ### Setup-needed solid (lamp)
 
 When lamp starts and `config.SetUpCompleted == false` (device in AP/provisioning mode), `server/server.go` spawns a background goroutine that polls HAL `GET /health` once per second up to 30s, and once `health.led == true` fires `lelamp.SetSolid(255, 255, 255)` — paints the strip solid white as a "device ready, connect to my hotspot" cue. Polling (not a single call) handles the cold-boot race where os-server's :5000 is up before HAL's :5001. No status LED state is used. Booting blue-breathing still shows during init. See [setup-flow.md](setup-flow.md#ap-mode).

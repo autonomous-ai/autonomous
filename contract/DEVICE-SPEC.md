@@ -78,13 +78,17 @@ them; a device with no file keeps the defaults verbatim. This is the same
 ```json
 {
   "led_count": 60,
-  "emotion": { "listening": { "color": [255, 120, 0] } },
-  "scene":   { "relax":     { "brightness": 0.3 } },
-  "aim":     { "desk":      { "base_pitch.pos": 8.0 } }
+  "emotion":    { "listening": { "color": [255, 120, 0] } },
+  "scene":      { "relax":     { "brightness": 0.3 } },
+  "aim":        { "desk":      { "base_pitch.pos": 8.0 } },
+  "status_led": { "booting":   { "color": [0, 60, 200] } }
 }
 ```
 
-- Every section (`led_count`, `emotion`, `scene`, `aim`) is optional.
+- Every section (`led_count`, `emotion`, `scene`, `aim`, `status_led`) is optional.
+  `status_led` restyles the os-server system-status feedback (booting/error/ota/
+  connectivity/hal_down/agent_down/hardware/ready_flash) — the OS owns the state
+  machine, HAL owns the color/effect/speed.
 - Each entry patches the matching base entry **field-by-field** — only the named
   fields change; the rest stay at the default.
 - Naming a preset absent from the base table (a typo), a malformed file, or a

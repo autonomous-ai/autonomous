@@ -51,6 +51,7 @@ class TestApplyDevicePresets(unittest.TestCase):
         self._emotion = copy.deepcopy(presets.EMOTION_PRESETS)
         self._scene = copy.deepcopy(presets.SCENE_PRESETS)
         self._aim = copy.deepcopy(presets.AIM_PRESETS)
+        self._status = copy.deepcopy(presets.STATUS_LED_PRESETS)
 
     def tearDown(self):
         presets.EMOTION_PRESETS.clear()
@@ -59,6 +60,8 @@ class TestApplyDevicePresets(unittest.TestCase):
         presets.SCENE_PRESETS.update(self._scene)
         presets.AIM_PRESETS.clear()
         presets.AIM_PRESETS.update(self._aim)
+        presets.STATUS_LED_PRESETS.clear()
+        presets.STATUS_LED_PRESETS.update(self._status)
 
     def _write(self, tmp, device_type, payload):
         d = os.path.join(tmp, device_type)
@@ -84,6 +87,15 @@ class TestApplyDevicePresets(unittest.TestCase):
         # Untouched field on the same entry survives.
         self.assertEqual(presets.EMOTION_PRESETS["listening"]["effect"],
                          self._emotion["listening"]["effect"])
+
+    def test_overrides_status_led(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, "demo", {"status_led": {"booting": {"color": [10, 20, 30]}}})
+            apply_device_presets("demo", tmp)
+        self.assertEqual(presets.STATUS_LED_PRESETS["booting"]["color"], [10, 20, 30])
+        # effect/speed on the same entry survive the field-by-field merge.
+        self.assertEqual(presets.STATUS_LED_PRESETS["booting"]["effect"],
+                         self._status["booting"]["effect"])
 
     def test_overrides_scene_and_aim(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -142,6 +154,23 @@ class TestApplyDevicePresets(unittest.TestCase):
             self._write(tmp, "demo", payload)
             count = apply_device_presets("demo", tmp)
         self.assertIsInstance(count, int)
+
+
+class TestStatusLedPresetKeys(unittest.TestCase):
+    def test_keys_match_go_status_states(self):
+        # These MUST equal internal/statusled State constants (Go) + the
+        # "ready_flash" agent-ready cue. The Go service sends these names to HAL
+        # POST /led/status; a missing key → that status would 400 and show nothing.
+        expected = {
+            "ota", "error", "booting", "connectivity",
+            "hal_down", "agent_down", "hardware", "ready_flash",
+        }
+        self.assertEqual(set(presets.STATUS_LED_PRESETS), expected)
+        # Every preset must name a real effect + an RGB triple + a speed.
+        for state, p in presets.STATUS_LED_PRESETS.items():
+            self.assertIn(p["effect"], presets.VALID_LED_EFFECTS, state)
+            self.assertEqual(len(p["color"]), 3, state)
+            self.assertIn("speed", p)
 
 
 if __name__ == "__main__":

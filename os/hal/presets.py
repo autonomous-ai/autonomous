@@ -177,3 +177,21 @@ AIM_PRESETS = {
     AIM_DOWN:   {"base_yaw.pos": 3.0,   "base_pitch.pos": -61.93, "elbow_pitch.pos": -71, "wrist_roll.pos": 0.0, "wrist_pitch.pos": -61},
     AIM_USER:   {"base_yaw.pos": 0.0,   "base_pitch.pos": 0.0,   "elbow_pitch.pos": 0.0,  "wrist_roll.pos": 0.0, "wrist_pitch.pos": -45.0},
 }
+
+# System status LED presets — the color/effect/speed the device shows for each
+# os-server status state (booting, error, OTA, …). The os-server owns the state
+# machine (WHEN to show a state); HAL owns the appearance (WHAT it looks like) so
+# a device can restyle status feedback via presets.json without the OS knowing.
+# Applied transiently via POST /led/status {state} (does not clobber user state).
+# Keys MUST stay in sync with internal/statusled State constants (Go) + the
+# "ready_flash" agent-ready cue. Effects are from VALID_LED_EFFECTS.
+STATUS_LED_PRESETS = {
+    "ota":          {"effect": FX_BREATHING,          "color": [0, 255, 0],     "speed": 3.0},  # green — firmware updating
+    "error":        {"effect": FX_BREATHING,          "color": [255, 0, 0],     "speed": 3.0},  # red — system error
+    "booting":      {"effect": FX_BREATHING,          "color": [0, 80, 255],    "speed": 3.0},  # blue — starting up
+    "connectivity": {"effect": FX_BREATHING,          "color": [255, 80, 0],    "speed": 3.0},  # orange — no internet
+    "hal_down":     {"effect": FX_BREATHING,          "color": [180, 0, 255],   "speed": 3.0},  # purple — HAL unreachable
+    "agent_down":   {"effect": FX_BREATHING,          "color": [0, 200, 200],   "speed": 3.0},  # cyan — agent disconnected
+    "hardware":     {"effect": FX_BREATHING,          "color": [255, 255, 0],   "speed": 3.0},  # yellow — hardware fault
+    "ready_flash":  {"effect": FX_NOTIFICATION_FLASH, "color": [255, 255, 255], "speed": 1.0},  # white — agent ready/listening
+}

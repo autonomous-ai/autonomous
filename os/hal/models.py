@@ -139,6 +139,17 @@ class LEDEffectRequest(BaseModel):
     }
 
 
+class LEDStatusRequest(BaseModel):
+    state: str = Field(
+        ...,
+        description="System status state name (booting, error, ota, connectivity, "
+        "hal_down, agent_down, hardware, ready_flash) — resolved to a color/effect "
+        "via STATUS_LED_PRESETS.",
+    )
+
+    model_config = {"json_schema_extra": {"examples": [{"state": "booting"}]}}
+
+
 class LEDEffectResponse(BaseModel):
     status: str
     effect: str

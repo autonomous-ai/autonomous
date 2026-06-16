@@ -10,5 +10,9 @@
   },
   "aim": {
     "desk": { "base_pitch.pos": 8.0, "wrist_pitch.pos": 50.0 }
+  },
+  "status_led": {
+    "booting": { "color": [0, 60, 200] },
+    "error": { "color": [255, 0, 0], "speed": 4.0 }
   }
 }

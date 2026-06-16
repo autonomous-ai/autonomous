@@ -119,6 +119,13 @@ LED phản hồi trạng thái hệ thống (tất cả `breathing` speed 3.0 tr
 
 Quản lý bởi `internal/statusled/Service` (lamp) và `lib/hal` trực tiếp (bootstrap).
 
+Các màu của `internal/statusled` ở trên **không còn hardcode trong Go** — OS giữ máy trạng
+thái (KHI nào hiện trạng thái) và gửi *tên trạng thái* xuống HAL (`POST /led/status`); HAL
+tra màu/effect/speed từ `STATUS_LED_PRESETS`, override per-device qua section `status_led`
+trong `presets.json` (xem [DEVICE-SPEC.md § Per-device presets](../../../../contract/DEVICE-SPEC.md#per-device-presets-presetsjson)).
+(Màu OTA-progress của bootstrap và màu trắng setup-needed bên dưới vẫn còn hardcode trong
+Go — sẽ migrate sau vào cùng họ `status_led`.)
+
 ### Setup-needed solid (lamp)
 
 Khi lamp start và `config.SetUpCompleted == false` (device đang ở AP/provisioning mode), `server/server.go` spawn goroutine background poll `GET /health` của HAL mỗi giây tối đa 30s, khi `health.led == true` thì fire `lelamp.SetSolid(255, 255, 255)` — paint strip trắng solid báo "device ready, vào hotspot đi". Phải poll (không phải call 1 lần) vì cold boot os-server bind :5000 trước HAL :5001. Không dùng status LED state. Blue-breathing booting vẫn show trong lúc init. Xem [setup-flow_vi.md](setup-flow_vi.md#ap-mode).
