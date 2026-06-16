@@ -146,21 +146,17 @@ class TestRealDeviceFiles(unittest.TestCase):
         self.assertIn("display", groups)
         self.assertTrue(lamp.capabilities["audio"].required)
 
-    def test_intern_is_lamp_minus_motion_and_display(self):
-        lamp = set(load_device("lamp", DEVICES_DIR).capabilities)
-        intern = set(load_device("intern-v2", DEVICES_DIR).capabilities)
-        # Intern strips Lamp's perception + actuation + expression: vision/presence
-        # (no camera), motion (no servo), display (no screen), and expression (no
-        # /emotion route — it drives its LED ring via `light` only). motion + display
-        # are the headline removals. Intern-v2 keeps `light`, and shares `media` +
-        # `connectivity` with Lamp, so those are NOT in the removed set; it adds
-        # nothing Lamp lacks.
-        self.assertEqual(lamp - intern, {"vision", "motion", "presence", "display", "expression"})
-        self.assertEqual(intern - lamp, set())
-        self.assertNotIn("motion", intern)
-        self.assertNotIn("display", intern)
-        self.assertIn("audio", intern)
-        self.assertTrue(load_device("intern-v2", DEVICES_DIR).capabilities["audio"].required)
+    def test_intern_v2_capabilities(self):
+        intern = load_device("intern-v2", DEVICES_DIR)
+        groups = set(intern.capabilities)
+        # Intern-v2 declares exactly these: a desk agent with voice, ambient
+        # sensing, an LED ring, music, and Bluetooth — but no camera, no servo,
+        # no screen, and no /emotion route (it drives its LED via `light`).
+        self.assertEqual(groups, {"audio", "sensing", "companion", "system", "light", "media", "connectivity"})
+        self.assertNotIn("vision", groups)
+        self.assertNotIn("motion", groups)
+        self.assertNotIn("display", groups)
+        self.assertTrue(intern.capabilities["audio"].required)
 
 
 class TestSafetyRefs(unittest.TestCase):
