@@ -46,9 +46,10 @@ ZIP_NAME="${DEVICE_TYPE}-${new_version}.zip"
 ZIP_PATH="${ROOT_DIR}/${ZIP_NAME}"
 GCS_PATH="${GCS_PATH:-${BUCKET_PREFIX}/ota/devices/${DEVICE_TYPE}/${new_version}.zip}"
 
-# Ship the runtime contract (DEVICE.md / SOUL.md / SAFETY.md / VERSION) plus the
-# device rootfs overlay (rootfs/ — system config like etc/asound.conf installed
-# onto / at build/OTA). Exclude docs/, hardware/ (CAD!), images/ — never read.
+# Ship the runtime contract (DEVICE.md / SOUL.md / SAFETY.md / VERSION) plus any
+# device rootfs overlay (rootfs/ — system config installed onto / at build/OTA).
+# asound.conf is hardware-team-owned and lives in the base image, NOT here.
+# Exclude docs/, hardware/ (CAD!), images/ — never read at runtime.
 echo "========== Zipping devices/${DEVICE_TYPE} (contract + rootfs) to ${ZIP_NAME} =========="
 rm -f "$ZIP_PATH"
 (cd "$DEVICE_DIR" && zip -r "$ZIP_PATH" . \
