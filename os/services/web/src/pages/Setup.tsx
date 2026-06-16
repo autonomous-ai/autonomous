@@ -21,6 +21,19 @@ import { FaceSection } from "@/components/setup/FaceSection";
 import type { ChannelType, NetworkItem } from "@/types";
 import { Wifi, Cpu, Brain, Volume2, MessageSquare, UserCircle, Mic, Globe, Check, XCircle, CheckCircle2 } from "lucide-react";
 
+// ── Setup wizard version switch ─────────────────────────────────────────────
+// Flip this single constant to swap the whole Setup flow, then rebuild:
+//   1 → V1: two steps. A dedicated "Device" step (admin password + confirm,
+//           hidden by default with an eye toggle) precedes the "Wi-Fi" step.
+//   2 → V2: one step. The admin password ("Device password", shown by default)
+//           is merged into the top of the "Wi-Fi" step; no separate Device step,
+//           no confirm field.
+// Everything that differs between the two versions branches on `isV1`, so
+// reverting business decisions is a one-line change. Default: V2 (current).
+type SetupVersion = 1 | 2;
+const SETUP_VERSION = 2 as SetupVersion;
+const isV1 = SETUP_VERSION === 1;
+
 // SetupMode controls which sections render. Initial = AP/offline (hide
 // online-only enrollments + tests), Continue = LAN/online (the device can hit
 // APIs, so Voice/Face enroll + TTS preview become available).
@@ -152,7 +165,11 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // skip — drives the "Optional" sidebar tag and the Skip button so they don't
   // feel like a blocking requirement. Required steps omit the flag.
   const SECTIONS: { id: SectionId; label: string; icon: React.ReactNode; optional?: boolean }[] = [
-    { id: "device", label: "Device", icon: <Cpu size={15} /> },
+    // V1: dedicated Device step (admin password + confirm). V2: the Device step
+    // is dropped — the admin password moves into the Wi-Fi step, and Device ID /
+    // MAC become read-only metadata kept mounted but hidden (see the form below)
+    // so they still flow through submit.
+    ...(isV1 ? [{ id: "device" as SectionId, label: "Device", icon: <Cpu size={15} /> }] : []),
     { id: "wifi",   label: "Wi-Fi",  icon: <Wifi size={15} /> },
     ...(debug ? [
       { id: "llm" as SectionId,     label: "AI Brain",   icon: <Brain size={15} /> },
@@ -174,7 +191,7 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // the DOM (see `devicePushedConfig` display:none wrappers below) so values
   // still flow through the form; we just hide the menu entries.
   const visibleSections = devicePushedConfig
-    ? SECTIONS.filter((s) => s.id === "device" || s.id === "wifi")
+    ? SECTIONS.filter((s) => s.id === "wifi" || (isV1 && s.id === "device"))
     : SECTIONS;
 
   const [networks, setNetworks] = useState<NetworkItem[]>([]);
@@ -197,19 +214,18 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // the wait feels measured rather than open-ended. Reset + ticked by the
   // effect below whenever we enter the connecting phase.
   const [elapsed, setElapsed] = useState(0);
-  // Always start on Device. The admin-password input lives there (fresh
-  // devices need it; the OS-server push doesn't carry that field via URL), so the
-  // user must see it before submitting. For already-provisioned devices
-  // useConfigPrefill detects cfg.device_id and skips device → wifi.
-  const [activeSection, setActiveSection] = useState<SectionId>("device");
+  // V1 starts on the Device step (admin password lives there). V2 is one step,
+  // starting on Wi-Fi (which now hosts the admin password above the network).
+  const [activeSection, setActiveSection] = useState<SectionId>(isV1 ? "device" : "wifi");
   const contentRef = useRef<HTMLDivElement>(null);
 
   const [deviceId, setDeviceId] = useState(urlParams.deviceId || "");
   const [mac, setMac] = useState("");
   // Admin password the operator picks here. Server bcrypts it into
   // config.admin_password_hash and uses it to gate browser admin access via
-  // /api/login. Confirm field is a UI-only second copy — only adminPassword
-  // ships to the server.
+  // /api/login. V1 hosts it in the Device step (hidden, with a confirm field);
+  // V2 hosts it in the Wi-Fi step (shown by default, no confirm). The confirm
+  // state is only used by V1 — it stays harmlessly empty under V2.
   const [adminPassword, setAdminPassword] = useState("");
   const [adminPasswordConfirm, setAdminPasswordConfirm] = useState("");
   // hasAdminPassword mirrors cfg.has_admin_password from /api/device/config.
@@ -355,11 +371,18 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
     // do here is set the admin password, so that's the gate. (Submit also
     // doesn't require deviceId — it merges server-side — so this keeps per-step
     // gating consistent with submit.)
-    device: hasAdminPassword || (adminPassword.length >= 8 && adminPassword === adminPasswordConfirm),
-    // Wi-Fi step needs a network plus either a typed password or one already on
-    // file (re-setup via #force). Mirrors the submit-time preflight so per-step
-    // gating and the final submit agree on what "done" means.
-    wifi: !!ssid && (!!password || hasNetworkPassword),
+    // V1: Device step is done when the device already has a password on file,
+    //     or the operator typed one ≥8 chars AND it matches the confirm field.
+    // V2: Device is not a step (merged into Wi-Fi) → always satisfied.
+    device: isV1
+      ? (hasAdminPassword || (adminPassword.length >= 8 && adminPassword === adminPasswordConfirm))
+      : true,
+    // Wi-Fi step needs a network + a Wi-Fi password (or one on file). In V2 it
+    // ALSO owns the admin password, so the admin requirement (on file, or ≥8
+    // chars typed) is folded in. V1 leaves the admin gate to the Device step.
+    // Mirrors the submit-time preflight so per-step gating and final submit agree.
+    wifi: !!ssid && (!!password || hasNetworkPassword)
+      && (isV1 || hasAdminPassword || adminPassword.length >= 8),
     llm: !!llmApiKey || llmLoaded.apiKey,
     language: true, // Auto/empty is a valid choice — never block on this.
     channel: channel === "telegram"
@@ -403,7 +426,10 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   useEffect(() => {
     if (!isContinue) return;
     if (!llmApiKey) return; // wait until config has loaded
-    const required: SectionId[] = ["device", "wifi", "llm", "channel", "tts", "voice", "face"];
+    const required: SectionId[] = [
+      ...(isV1 ? ["device" as SectionId] : []),
+      "wifi", "llm", "channel", "tts", "voice", "face",
+    ];
     // Redirect any time all required sections become done — including later
     // ticks when async data (e.g. faceOwners) arrives after first paint. This
     // path is NOT gated by autoScrolledRef on purpose; otherwise the first
@@ -417,7 +443,10 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
       return;
     }
     if (autoScrolledRef.current) return;
-    const order: SectionId[] = ["device", "wifi", "llm", "channel", "language", "tts", "voice", "face"];
+    const order: SectionId[] = [
+      ...(isV1 ? ["device" as SectionId] : []),
+      "wifi", "llm", "channel", "language", "tts", "voice", "face",
+    ];
     const next = order.find((id) => !sectionDone[id]) ?? "tts";
     setActiveSection(next);
     autoScrolledRef.current = true;
@@ -513,10 +542,21 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   // button (which never explains *why* it won't advance). Optional steps
   // (Voice/Face) always pass. Back never validates.
   const STEP_BLOCK_HINTS: Partial<Record<SectionId, string>> = {
-    device: hasAdminPassword
-      ? "Device info is still loading."
-      : "Set an admin password (min 8 characters) and confirm it before continuing.",
-    wifi: "Choose a Wi-Fi network and enter its password before continuing.",
+    // V1 has a dedicated Device step that owns the admin-password hint; its
+    // Wi-Fi hint stays about Wi-Fi only. V2 folds the admin password into the
+    // Wi-Fi step, so its Wi-Fi hint also mentions the password when missing.
+    ...(isV1
+      ? {
+          device: hasAdminPassword
+            ? "Device info is still loading."
+            : "Set an admin password (min 8 characters) and confirm it before continuing.",
+          wifi: "Choose a Wi-Fi network and enter its password before continuing.",
+        }
+      : {
+          wifi: hasAdminPassword
+            ? "Choose a Wi-Fi network and enter its password before continuing."
+            : "Set a password (min 8 characters), then choose a Wi-Fi network and enter its password.",
+        }),
     llm: "Add the AI Brain API key before continuing.",
     channel: "Add the messaging channel token before continuing.",
   };
@@ -553,22 +593,27 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
     // batch land here with hasAdminPassword=false and must pick one now;
     // devices that have a hash skip the check entirely.
     if (!hasAdminPassword) {
+      // The admin-password field lives on a different step per version, so
+      // errors bounce the operator to the step that actually shows it.
+      const pwStep: SectionId = isV1 ? "device" : "wifi";
       if (!adminPassword) {
-        setError("Pick an admin password — you'll use it to sign in later.");
-        setActiveSection("device");
+        setError("Pick a password — you'll use it to sign in later.");
+        setActiveSection(pwStep);
         return;
       }
       // 8-char floor is a frontend-only policy (the backend bcrypts any
       // non-empty value). This protects a device with a camera/mic from a
       // trivially guessable admin login.
       if (adminPassword.length < 8) {
-        setError("Admin password must be at least 8 characters.");
-        setActiveSection("device");
+        setError("Password must be at least 8 characters.");
+        setActiveSection(pwStep);
         return;
       }
-      if (adminPassword !== adminPasswordConfirm) {
+      // V1 only: a confirm field exists, so it must match. V2 shows the
+      // password in clear text and drops confirm entirely.
+      if (isV1 && adminPassword !== adminPasswordConfirm) {
         setError("Admin password and confirmation don't match.");
-        setActiveSection("device");
+        setActiveSection(pwStep);
         return;
       }
     }
@@ -781,9 +826,9 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
             <span style={{ fontSize: 15, fontWeight: 600, color: C.text }}>
               {setupWorking ? "Setting up…" : SECTIONS.find((s) => s.id === activeSection)?.label ?? "Wi-Fi"}
             </span>
-            {/* Submit lives at the bottom of the form alongside Back/Next so the
-                operator follows a single wizard flow per step. */}
-            {!setupWorking && (
+            {/* "Step X / Y" only makes sense for a multi-step wizard. With a
+                single visible step (V2's merged flow) it's noise, so hide it. */}
+            {!setupWorking && visibleSections.length > 1 && (
               <span style={{ fontSize: 12, color: C.textDim }}>
                 Step {currentStepIndex + 1} / {visibleSections.length}
               </span>
@@ -1011,17 +1056,23 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
 
                 <form id="setup-form" onSubmit={handleSubmit} noValidate>
 
-                  <DeviceSection
-                    active={activeSection === "device"}
-                    deviceId={deviceId} setDeviceId={setDeviceId}
-                    mac={mac}
-                    {...(hasAdminPassword ? {} : {
-                      adminPassword,
-                      setAdminPassword,
-                      adminPasswordConfirm,
-                      setAdminPasswordConfirm,
-                    })}
-                  />
+                  {/* V1: DeviceSection is a real step, hosting the admin password
+                      (+ confirm) when the device has none on file. V2: it's kept
+                      mounted but hidden — Device ID / MAC still flow through
+                      submit, while the admin password moves into WifiSection. */}
+                  <div style={isV1 ? undefined : { display: "none" }}>
+                    <DeviceSection
+                      active={isV1 && activeSection === "device"}
+                      deviceId={deviceId} setDeviceId={setDeviceId}
+                      mac={mac}
+                      {...(isV1 && !hasAdminPassword ? {
+                        adminPassword,
+                        setAdminPassword,
+                        adminPasswordConfirm,
+                        setAdminPasswordConfirm,
+                      } : {})}
+                    />
+                  </div>
 
                   <WifiSection
                     active={activeSection === "wifi"}
@@ -1030,6 +1081,10 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
                     passwordConfigured={hasNetworkPassword && !password}
                     loadingList={loadingList}
                     uniqueNetworks={uniqueNetworks}
+                    {...(!isV1 && !hasAdminPassword ? {
+                      adminPassword,
+                      setAdminPassword,
+                    } : {})}
                   />
 
                   {/* When devicePushedConfig is on, the four sections below are

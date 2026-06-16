@@ -1,6 +1,24 @@
-import { Wifi } from "lucide-react";
-import { C, ConfiguredHint, PasswordField, SectionCard, SkeletonBlock, LABEL_STYLE, INPUT_STYLE, FIELD_GAP } from "./shared";
+import { useState } from "react";
+import { Wifi, Eye, EyeOff, Settings } from "lucide-react";
+import { C, ConfiguredHint, PasswordField, SectionCard, SkeletonBlock, LABEL_STYLE, INPUT_STYLE, INPUT_PAD_ONE_ICON, FIELD_GAP } from "./shared";
 import type { NetworkItem } from "@/types";
+
+// Small uppercase group label that separates the Device and Wi-Fi field groups
+// inside the merged (V2) card, so the single card still reads as two distinct
+// sections without needing two separate cards.
+function GroupLabel({ children, first = false }: { children: React.ReactNode; first?: boolean }) {
+  return (
+    <div style={{
+      fontSize: 11, fontWeight: 700, letterSpacing: "0.06em",
+      textTransform: "uppercase", color: C.textMuted,
+      marginTop: first ? 0 : 18, marginBottom: 10,
+      paddingTop: first ? 0 : 16,
+      borderTop: first ? "none" : `1px solid ${C.border}`,
+    }}>
+      {children}
+    </div>
+  );
+}
 
 // 802.11 caps SSID at 32 bytes (not 32 chars). Each Chinese UTF-8 char is
 // 3 bytes, so a short-looking SSID can still overflow. Counting bytes here
@@ -11,6 +29,7 @@ const ssidByteLength = (s: string) => new TextEncoder().encode(s).length;
 export function WifiSection({
   active, ssid, setSsid, password, setPassword, loadingList, uniqueNetworks,
   passwordConfigured = false,
+  adminPassword, setAdminPassword,
 }: {
   active: boolean;
   ssid: string;
@@ -23,7 +42,18 @@ export function WifiSection({
    *  password input + show "configured" indicator. Operator can rotate via
    *  /edit or by clicking "update" → toggles back into the input. */
   passwordConfigured?: boolean;
+  /** Device admin password. Only passed (and only rendered) when the device
+   *  has no admin password on file yet — i.e. first-time setup. Shown in clear
+   *  text on purpose (no hide toggle, no confirm): it's set once here and the
+   *  operator needs to see what they're typing since they'll sign in with it.
+   *  Caller gates this on `!hasAdminPassword`. */
+  adminPassword?: string;
+  setAdminPassword?: (v: string) => void;
 }) {
+  const showAdminPassword = setAdminPassword !== undefined;
+  // Device password is revealed by default (it's set once and the operator
+  // needs to read it back), with an eye toggle to hide if someone's watching.
+  const [adminVisible, setAdminVisible] = useState(true);
   const bytes = ssidByteLength(ssid);
   const overLimit = bytes > SSID_MAX_BYTES;
   // "bytes" is jargon to a normal user, so only surface the counter once the
@@ -31,8 +61,56 @@ export function WifiSection({
   // actionable ("trim it down"). Below the limit we stay silent.
   const showCounter = overLimit;
   return (
-    <SectionCard id="wifi" title="Wi-Fi" active={active} icon={<Wifi size={17} />}
-      description="Pick the home network your device should join, then enter its password.">
+    // When the admin password is folded in (V2), the card covers two groups, so
+    // it gets a neutral title/icon + a description that mentions both. When it's
+    // just Wi-Fi (V1), it keeps the Wi-Fi title/icon and Wi-Fi-only copy.
+    <SectionCard
+      id="wifi"
+      active={active}
+      title={showAdminPassword ? "Set up your device" : "Wi-Fi"}
+      icon={showAdminPassword ? <Settings size={17} /> : <Wifi size={17} />}
+      description={showAdminPassword
+        ? "Create a password and connect your device to Wi-Fi."
+        : "Pick the home network your device should join, then enter its password."}
+    >
+      {/* Device admin password — shown first, in clear text. Set once here; the
+          operator signs in with it later, so no hide toggle / no confirm.
+          Only rendered when the caller passes setAdminPassword (V2 first-time
+          setup); in V1 the password lives in the Device step instead. */}
+      {showAdminPassword && (
+        <>
+          <GroupLabel first>Device</GroupLabel>
+          <div style={{ marginBottom: FIELD_GAP }}>
+            <label htmlFor="admin_password" style={LABEL_STYLE}>
+              Device password
+            </label>
+          <div style={{ position: "relative" }}>
+            <input
+              id="admin_password" type={adminVisible ? "text" : "password"} value={adminPassword ?? ""}
+              onChange={(e) => setAdminPassword!(e.target.value)}
+              placeholder="At least 8 characters" autoComplete="off"
+              style={{ ...INPUT_STYLE, padding: INPUT_PAD_ONE_ICON }}
+            />
+            <button
+              type="button" onClick={() => setAdminVisible((v) => !v)} tabIndex={-1}
+              className="lm-eye-btn"
+              aria-label={adminVisible ? "Hide password" : "Show password"}
+              style={{
+                position: "absolute", right: 5, top: "50%", transform: "translateY(-50%)",
+                height: 32, width: 32, padding: 0, background: "none", border: "none",
+                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+              }}
+            >
+              {adminVisible ? <EyeOff size={15} /> : <Eye size={15} />}
+            </button>
+          </div>
+            <div style={{ marginTop: 6, fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>
+              Keeps your device private and lets you sign in later. Don't lose it.
+            </div>
+          </div>
+          <GroupLabel>Wi-Fi</GroupLabel>
+        </>
+      )}
       <div style={{ marginBottom: FIELD_GAP }}>
         <label htmlFor="ssid" style={LABEL_STYLE}>
           Wi-Fi network
@@ -78,9 +156,9 @@ export function WifiSection({
         )}
       </div>
       {passwordConfigured ? (
-        <ConfiguredHint label="Password" />
+        <ConfiguredHint label="Wi-Fi password" />
       ) : (
-        <PasswordField label="Password" id="password" value={password} onChange={setPassword} placeholder="Wi-Fi password" />
+        <PasswordField label="Wi-Fi password" id="password" value={password} onChange={setPassword} placeholder="Wi-Fi password" />
       )}
     </SectionCard>
   );
