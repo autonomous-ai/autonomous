@@ -62,15 +62,19 @@ Phase 2  chroot qemu-arm64:
          - Node.js 22 from NodeSource + `openclaw@$OPENCLAW_VERSION` npm global
          - openclaw onboard --skip-health (creates /root/.openclaw scaffolding)
          - Discord + Slack plugins baked in: openclaw@$OPENCLAW_VERSION
-         - uv (Python pkg mgr for LeLamp)
+         - uv (Python pkg mgr for HAL)
          - systemd units: os-server, bootstrap, hal, openclaw
          - helper scripts /usr/local/bin/{device-ap-mode, device-sta-mode, connect-wifi,
            software-update} synced from scripts/ in this repo
          - configs: hostapd, dnsmasq, dhcpcd, full prod nginx (CSP + WS + captive-portal
-           + local-only block for /api/system/exec), PulseAudio (WebRTC AEC + anon socket),
-           udev PULSE_IGNORE for I2S codecs
-           (/etc/asound.conf is NOT here — it ships in the device rootfs overlay, Phase 3)
-         - SPI3 overlay baked into orangepiEnv.txt for WS2812 LED ring (/dev/spidev3.0)
+           + local-only block for /api/system/exec), PulseAudio (WebRTC AEC + anon socket)
+           (/etc/asound.conf and udev rules are NOT here — they ship in the device rootfs
+           overlay in Phase 3, and are also baked into the hardware team's base image)
+         - /opt/hal/.env written here (OS-managed): audio routing aliases, VAD threshold,
+           motion/emotion flags, camera config. DEVICE_TYPE + DEVICES_DIR appended separately
+           so they expand from the chroot env (not the heredoc literal).
+         - SPI3 overlay (spi3-cs0-cs1-spidev) for WS2812 LED ring is baked by the hardware
+           team into the base image — NOT written here.
          - mask orangepi-firstrun-config.service (vendor wizard would conflict)
 Phase 3  OTA bake from metadata.json:
          - bootstrap-server + os-server binaries
@@ -193,19 +197,38 @@ imager/
 
 ## Sanity checks after first flash
 
-SSH in (`ssh system@<device_type>-xxxx.local`, e.g. `lamp-a1b2.local`, password `12345`) and verify:
+SSH in as `orangepi` (password `orangepi`) — the vendor user is preserved by the builder:
 
 ```bash
+sshpass -p 'orangepi' ssh -o StrictHostKeyChecking=no orangepi@<IP>
+```
+
+Then verify:
+
+```bash
+# Services
 systemctl is-enabled os-server hal openclaw avahi-daemon
+
+# Binaries
 ls /usr/local/bin/{os-server,bootstrap-server,device-ap-mode,connect-wifi,software-update}
-ls /opt/hal/.venv/bin/uvicorn       # LeLamp uv sync succeeded
-openclaw --version                       # OpenClaw npm global installed
-ls /etc/asound.conf /etc/udev/rules.d/91-pulseaudio-hal-ignore.rules
-findmnt /                                # ext4 root, expanded to full SD
+ls /opt/hal/.venv/bin/uvicorn       # HAL uv sync succeeded
+openclaw --version                  # OpenClaw npm global installed
+
+# Audio + hardware config
+cat /opt/hal/.env                   # must have HAL_AUDIO_* + HAL_VAD_THRESHOLD
+cat /etc/asound.conf                # device_speaker / device_micro1 / device_micro2 aliases
+ls /etc/udev/rules.d/               # 91-pulseaudio-hal-ignore.rules + 99-lamp-device.rules etc.
+grep overlays /boot/orangepiEnv.txt # spi3-cs0-cs1-spidev must appear exactly once, NO uart8
+
+# Filesystem
+findmnt /                           # ext4 root, expanded to full SD
 systemctl is-enabled resize-once 2>&1 | grep -q "not found" && echo OK_resize-once-self-destructed
 ```
 
-> Note: the vendor OrangePi image also has an `orangepi` user (password `orangepi`) that is not removed by the builder. Both `system/12345` and `orangepi/orangepi` work for SSH.
+> **`uart8` overlay breaks GPIO button** — the hardware team's base image previously included `uart8`
+> in the overlays list, which claims PL9 (gpiochip1 line 9 = button). If you see `bad event request`
+> from lgpio, check `/boot/orangepiEnv.txt` and remove `uart8` from the overlays line, then reboot.
+> This has been reported to the hardware team to fix in the base image.
 
 ## Maintenance — Pi vs OPi drift
 
@@ -271,6 +294,11 @@ xz -dc output/<type>/golden-opi-<type>.img.xz | head -c 16M | hexdump -C | head 
 Expected: non-zero bytes near offsets 0x2000 (SPL header) and 0x20000 (U-Boot proper).
 
 ## Recent changes
+
+**2026-06-16** — hal.env OS-managed + hardware team base image bug fixes:
+- `hal.env` is now written by the build script (OS-managed). Hardware team's base image did not bake audio vars, leaving HAL with wrong defaults (VAD threshold 3500, no audio routing). Build script owns `HAL_AUDIO_*`, `HAL_VAD_THRESHOLD`, `HAL_MOTION_ENABLED`, etc.
+- `udev rules` and `SPI3 overlay` remain hardware-team-baked (commented out of build script).
+- **Bug found + confirmed via live testing on Pi Smith**: `uart8` overlay in hardware team's base image claims PL9 (gpiochip1 line 9 = GPIO button) → `bad event request` from lgpio. Reported to hardware team. Workaround: remove `uart8` from `/boot/orangepiEnv.txt` and reboot.
 
 **2026-06-15** — Per-device output subfolder + lamp pre-built base image:
 - OPi build now outputs to `output/<device_type>/` (e.g. `output/lamp/`) — lamp and intern-v2 images no longer clobber each other in `output/`
