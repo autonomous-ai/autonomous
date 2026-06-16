@@ -12,7 +12,9 @@ make build DEVICE_TYPE=lamp OTA_METADATA_URL=…                   # → output/
 make TARGET=rpi DEVICE_TYPE=lamp OTA_METADATA_URL=… build        # → output/golden-lamp.img (Raspberry Pi 5)
 make TARGET=rpi RPI_MODEL=4 DEVICE_TYPE=lamp OTA_METADATA_URL=… build  # → output/golden-lamp.img (Raspberry Pi 4B)
 make upload                             # push image + release note to GCS, versioned (auto-cleans output/ on success)
-make upload-source                      # mirror input/orangepi.7z → GCS (one-time)
+make upload-source                      # mirror stock orangepi.7z → GCS (one-time)
+make upload-source DEVICE_TYPE=lamp     # mirror hardware team's lamp base image → GCS
+make upload-source DEVICE_TYPE=intern-v2  # mirror hardware team's intern-v2 base image → GCS
 make clean                              # nuclear: wipe output/ entirely (input/ kept)
 make clean-all                          # wipe both output/ and input/
 ```
@@ -174,10 +176,27 @@ Versioning: `golden-<target>-<type>-<UTC-timestamp>-<git-short-sha>.img.xz`
 5. Prepends new entry to cumulative `RELEASES.md` ledger (newest-first).
 6. **Auto-cleans** `output/` after all uploads succeed. Skip with `KEEP_OUTPUT=1 make upload`.
 
-### Mirror the source .7z to GCS (one-shot)
+### Mirror source / base images to GCS
+
+`upload-source` handles two cases depending on `DEVICE_TYPE`:
+
+**No `DEVICE_TYPE` (default)** — mirror the stock OrangePi vendor `.7z`. Run once when the
+dev team uploads a new vendor release, so builds don't depend on Google Drive.
 
 ```bash
-make upload-source                 # → gs://$GCS_BUCKET/os/imager/source/Orangepi4pro_*.7z
+make upload-source
+# → gs://$GCS_BUCKET/os/imager/source/Orangepi4pro_1.0.6_...7z
+```
+
+**With `DEVICE_TYPE`** — mirror the hardware team's per-device base image (`input/<type>/golden-opi-dev*.img.xz`).
+Run whenever hardware team provides a new base image. **Overwrites** the previous version on GCS (no history kept — intentional, always reflects the latest blessed base).
+
+```bash
+make upload-source DEVICE_TYPE=lamp
+# → gs://$GCS_BUCKET/os/imager/base/golden-opi-dev-lamp.img.xz
+
+make upload-source DEVICE_TYPE=intern-v2
+# → gs://$GCS_BUCKET/os/imager/base/golden-opi-dev-intern-v2.img.xz
 ```
 
 ## File layout
