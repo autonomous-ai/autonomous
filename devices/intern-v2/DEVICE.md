@@ -8,11 +8,13 @@ gateway:
   default: openclaw
   protocol: websocket
 capabilities:
-  audio:     { routes: [audio, speaker, voice], required: true }
-  sensing:   { routes: [sensing], required: false }
-  companion: { routes: [buddy], required: false }
-  system:    { routes: [system], required: true }
-  light:     { routes: [led], driver: ws2812, required: true, safety: SAFETY.md#light }
+  audio:        { routes: [audio, speaker, voice], required: true }
+  sensing:      { routes: [sensing], required: false }
+  companion:    { routes: [buddy], required: false }
+  system:       { routes: [system], required: true }
+  light:        { routes: [led], driver: ws2812, required: true, safety: SAFETY.md#light }
+  media:        { routes: [music], required: true }
+  connectivity: { routes: [bluetooth], required: true }
 safety_ref: SAFETY.md
 memory:     { backend: local }
 ---
@@ -27,10 +29,10 @@ capabilities.
 ## What makes Intern "not Lamp"
 
 Intern declares `audio`, `sensing`, `companion` (it pairs the Buddy app to drive a
-computer), `light` (the LED ring), and `system` — Lamp's `vision`, `motion`, `display`,
-`presence`, `media`, and `connectivity` are simply absent. The OS
-boots the same runtime, mounts only the audio/sensing/light/system routes Intern declares,
-and never brings up the camera, servo, or display drivers. Ambient sensing is sound-only
+computer), `light` (the LED ring), `media` (music), `connectivity` (Bluetooth), and
+`system` — Lamp's `vision`, `motion`, `display`, and `presence` are simply absent. The OS
+boots the same runtime, mounts only the audio/sensing/light/media/connectivity/system
+routes Intern declares, and never brings up the camera, servo, or display drivers. Ambient sensing is sound-only
 (the mic) — presence and motion perceptions need a camera Intern does not have. There
 is no `if device == intern` anywhere in the OS.
 
