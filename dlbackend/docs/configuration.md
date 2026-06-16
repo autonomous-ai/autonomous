@@ -139,10 +139,12 @@ where `<NAME>` ∈ `YOLO_WORLD`, `YOLOE`, `OWLV2`, `GROUNDING_DINO`. All default
 | `LB__BACKENDS` | `""` | Comma-separated dlserver URLs |
 | `LB__PORT` | `7999` | lbserver port |
 | `LB__HOST` | `0.0.0.0` | lbserver host |
+| `LB__INTERNAL_PREFIX` | `""` | Path prefix prepended to the upstream URL |
 | `LB__HTTP_TIMEOUT` | `120.0` | Upstream HTTP timeout (s) |
 | `LB__WS_OPEN_TIMEOUT` | `120.0` | Upstream WS handshake timeout (s) |
 
-See [crypto-and-loadbalancer.md](crypto-and-loadbalancer.md).
+See [crypto-and-loadbalancer.md](crypto-and-loadbalancer.md) for the proxy/scaling
+topology and [deployment.md](deployment.md) for how to run it.
 
 ## HAL client (`os/hal`)
 

@@ -151,6 +151,13 @@ class AudioEmbedder(PredictorBase[Audio, RawAudioEmbedding]):
             return np.zeros((1, self._window_frames, self._num_mel_bins), dtype=np.float32)
 
         if T < self._window_frames:
+            # Clip shorter than one window: time-STRETCH it to a full window via
+            # per-mel-bin linear interpolation, rather than zero-padding. Fbank
+            # features vary smoothly over time, so stretching preserves the spectral
+            # shape the speaker embedder relies on, whereas appended silence (zeros)
+            # would dilute the embedding and pull short utterances toward a common
+            # "mostly-silence" point. Interpolation is along time only; each mel bin
+            # is interpolated independently (the `for m` loop).
             x_old = np.linspace(0, 1, T)
             x_new = np.linspace(0, 1, self._window_frames)
             interpolated = np.stack(

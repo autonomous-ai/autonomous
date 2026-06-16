@@ -156,7 +156,11 @@ class HumanActionRecognizer(PredictorBase[Video, RawHumanActionDetection]):
         N, T, H, W, C = input_np.shape
         input_np = (input_np - self.MEAN) / self.STD
 
-        # Zeros padding if there are not enough frames
+        # The model needs exactly `max_frames` along the temporal axis (axis=1).
+        # Short clips (only at stream startup, before the buffer fills) are
+        # zero-padded at the TAIL; the few resulting black frames briefly dampen
+        # confidence but clear once enough real frames arrive. Long buffers keep the
+        # MOST RECENT max_frames so predictions track current activity, not history.
         if T < self._max_frames:
             input_np = np.pad(
                 input_np,

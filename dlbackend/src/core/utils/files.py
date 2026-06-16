@@ -10,6 +10,11 @@ from core.enums.files import ModelEnum
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+# Manifest mapping each supported model to its object path within the public
+# weights bucket. The full download URL is `settings.cdn_base` + this path
+# (see `get_default_cdn_url`); the local cache filename is just the basename.
+# Weights are NOT committed to the repo — they are fetched on first use.
+# Keep this in sync with dlbackend/docs/configuration.md ("Model downloading").
 CDN_PATHS: dict[ModelEnum, str] = {
     # Action recognition
     ModelEnum.X3D: "onnx_models/x3d_m_16x5x1_int8.onnx",
@@ -101,6 +106,10 @@ def ensure_downloaded(local_path: Path, remote: str | None = None) -> Path:
 def _download_url(url: str, dest: Path) -> None:
     """Atomic download from a direct URL."""
     dest.parent.mkdir(parents=True, exist_ok=True)
+    # Download to a per-PID temp file then atomically rename into place, so a
+    # crash/kill mid-download never leaves a truncated file that a later run would
+    # mistake for a complete cached model. The PID suffix keeps concurrent workers
+    # from clobbering each other's partial files.
     tmp: Path = dest.with_suffix(dest.suffix + f".part.{os.getpid()}")
     logger.info("Downloading %s → %s", url, dest)
     try:

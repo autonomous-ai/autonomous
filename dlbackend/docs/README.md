@@ -17,6 +17,7 @@ over WebSocket and HTTP behind an optional encrypting load balancer.
 | [api.md](api.md) | Every endpoint: method, path, request/response schema, auth |
 | [perceptions.md](perceptions.md) | The 8 perception subsystems, models, enums, output types |
 | [crypto-and-loadbalancer.md](crypto-and-loadbalancer.md) | `lbserver` round-robin proxy + RSA/AES encryption + nginx |
+| [deployment.md](deployment.md) | Install, single-node + master/slave GPU scaling, RunPod, Docker, TLS |
 | [configuration.md](configuration.md) | All environment variables with defaults |
 | [configuration.md#model-downloading](configuration.md#model-downloading) | How model weights auto-download from the public bucket + per-model URLs |
 

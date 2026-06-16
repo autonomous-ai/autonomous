@@ -37,6 +37,11 @@ class AESGCMSession(CryptoBase[AESGCMCipherPayload, AESGCMPlainPayload]):
 
     @override
     def encrypt(self, payload: AESGCMPlainPayload) -> AESGCMCipherPayload:
+        # A FRESH random nonce per message is mandatory for AES-GCM: reusing a
+        # (key, nonce) pair leaks the XOR of plaintexts and destroys the
+        # authentication guarantee. 96-bit random nonces make collisions
+        # negligible for our message volume. The nonce is not secret — it is sent
+        # alongside the ciphertext — only its uniqueness matters.
         nonce = os.urandom(GCM_NONCE_SIZE)
         aesgcm = AESGCM(self._session_key)
         cipher_data = aesgcm.encrypt(nonce, payload.plain_data, None)

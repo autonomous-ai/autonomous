@@ -212,7 +212,7 @@ start-jupyter:
 	@mkdir -p /workspace/logs/jupyter
 	@(sleep 3 && TOKEN=$$(grep -oP 'token=\K[a-f0-9]+' /workspace/logs/jupyter/current 2>/dev/null | tail -1); \
 	if [ -n "$$TOKEN" ]; then \
-		echo "Jupyter Lab: https://<host>:8888/jupyter/lab?token=$$TOKEN"; \
+		echo "Jupyter Lab: https://<host>:8899/jupyter/lab?token=$$TOKEN"; \
 	else \
 		echo "Jupyter Lab started — grep token from /workspace/logs/jupyter/current"; \
 	fi) &
@@ -224,7 +224,7 @@ start-jupyter:
 
 info:
 	@echo "=== Port Layout ==="
-	@echo "  nginx:     8888"
+	@echo "  nginx:     8899"
 	@echo "  lbserver:  $(LBSERVER_PORT)"
 	@echo "  dlserver:  $(DLSERVER_PORT)"
 	@echo "  jupyter:   $(JUPYTER_PORT)"

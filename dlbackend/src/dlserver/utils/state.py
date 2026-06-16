@@ -2,6 +2,13 @@
 
 Lifespan (server.py) calls setters during startup/shutdown.
 Routers call getters to access the loaded models.
+
+Thread-safety: these module globals are WRITTEN only by the lifespan hook
+(single-threaded, before the server accepts traffic, and again at shutdown after
+it stops). Request handlers only READ them. Because writes never race with reads,
+no lock is needed; do NOT mutate these from within a request handler or that
+invariant breaks. The perception objects themselves handle their own internal
+concurrency (see PredictorBase locking).
 """
 
 from core.perception.action.perception import ActionPerception

@@ -27,6 +27,33 @@ HAL (client)                  lbserver :7999                 dlserver :8001
 - HTTP: all methods proxied; backend unreachable → `502`.
 - WS: full-duplex proxy; backend unreachable → close `1011`.
 - Timeouts: `LB__HTTP_TIMEOUT` and `LB__WS_OPEN_TIMEOUT` (both default `120.0`).
+- Upstream path: each request is forwarded to `<backend>` + `LB__INTERNAL_PREFIX`
+  (default empty) + the original path, so by default the LB hits the dlserver route
+  unchanged.
+
+## Scaling topology
+
+A single node runs the whole stack (nginx → lbserver → one local dlserver). To
+spread load over more GPUs, add **slave** nodes and list every backend in the
+master's `LB__BACKENDS`:
+
+```
+                    ┌──▶ dlserver :8001        (master-local backend)
+client ─▶ nginx ─▶ lbserver ─┼──▶ slave node #1 :8899    (its nginx → its dlserver)
+        :8899     :7999       └──▶ slave node #2 :8899
+                  round-robin (HTTP + WS), per-protocol cursor
+```
+
+- **Master**: `LB__BACKENDS="http://127.0.0.1:8001,https://<slave1>:8899,https://<slave2>:8899"`.
+  The lbserver round-robins each new HTTP request and each new WS connection across
+  all backends (separate cursors for HTTP vs WS).
+- **Slave**: just nginx → a bare dlserver on `:7999` (no load balancer of its own).
+  Its public `:8899` URL is what the master lists as a backend.
+- `DL_API_KEY` must be identical on every node; encryption (below) is terminated at
+  the master's lbserver, so slaves only ever see plaintext.
+
+Operational targets (`make start-runpod-master`, `start-runpod-slave`) are in
+[deployment.md](deployment.md#scaling-across-gpus-master--slaves).
 
 ## Crypto scheme
 
