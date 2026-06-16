@@ -226,13 +226,14 @@ func (b *Bootstrap) checkOnce(ctx context.Context) error {
 	return nil
 }
 
-// progressLED paints an OTA-progress effect, but only on a body with an LED.
-// hal.SetEffect is already best-effort (silent on failure), but a device with no
-// `light` capability has no /led route at all — skip the POST. Fail-open when the
-// device type is unresolved (device.Has returns true), matching legacy behavior.
-func (b *Bootstrap) progressLED(effect string, r, g, blue int, speed float64) {
+// progressLED shows an OTA-progress status by name (ota_progress/ota_error/
+// ota_success); HAL owns the color/effect via STATUS_LED_PRESETS (per-device
+// overridable). Only on a body with an LED — a device with no `light` capability
+// has no /led route at all, so skip the POST. Fail-open when the device type is
+// unresolved (device.Has returns true), matching legacy behavior.
+func (b *Bootstrap) progressLED(state string) {
 	if device.Has(resolveDeviceType(), device.CapLight) {
-		hal.SetEffect(effect, r, g, blue, speed)
+		hal.SetStatus(state)
 	}
 }
 
@@ -323,15 +324,15 @@ func (b *Bootstrap) reconcile(ctx context.Context, key string, target domain.OTA
 	slog.Info("update available", "component", "bootstrap", "key", key, "current", current, "target", targetVersion)
 
 	// Status LED: orange breathing while updating
-	b.progressLED("breathing", 255, 140, 0, 0.4)
+	b.progressLED("ota_progress")
 
 	if err := b.applyUpdate(ctx, key, target); err != nil {
-		b.progressLED("pulse", 255, 30, 30, 1.5) // red pulse on error
+		b.progressLED("ota_error") // red pulse on error
 		return false, err
 	}
 
 	// Brief green flash to confirm success, then stop
-	b.progressLED("notification_flash", 0, 255, 80, 1.0)
+	b.progressLED("ota_success")
 	slog.Info("updated", "component", "bootstrap", "key", key, "version", targetVersion)
 	b.state.Components[key] = targetVersion
 	return true, nil

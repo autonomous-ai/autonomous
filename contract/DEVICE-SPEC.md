@@ -87,8 +87,10 @@ them; a device with no file keeps the defaults verbatim. This is the same
 
 - Every section (`led_count`, `emotion`, `scene`, `aim`, `status_led`) is optional.
   `status_led` restyles the os-server system-status feedback (booting/error/ota/
-  connectivity/hal_down/agent_down/hardware/ready_flash) — the OS owns the state
-  machine, HAL owns the color/effect/speed.
+  connectivity/hal_down/agent_down/hardware/ready_flash + bootstrap OTA
+  ota_progress/ota_error/ota_success + setup) — the OS owns the state machine,
+  HAL owns the color/effect/speed. `setup` is a persistent solid; the rest are
+  transient effect overlays.
 - Each entry patches the matching base entry **field-by-field** — only the named
   fields change; the rest stay at the default.
 - Naming a preset absent from the base table (a typo), a malformed file, or a

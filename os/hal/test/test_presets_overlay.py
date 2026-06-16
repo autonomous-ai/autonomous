@@ -158,17 +158,21 @@ class TestApplyDevicePresets(unittest.TestCase):
 
 class TestStatusLedPresetKeys(unittest.TestCase):
     def test_keys_match_go_status_states(self):
-        # These MUST equal internal/statusled State constants (Go) + the
-        # "ready_flash" agent-ready cue. The Go service sends these names to HAL
-        # POST /led/status; a missing key → that status would 400 and show nothing.
+        # These MUST equal every status name the Go side sends to HAL POST
+        # /led/status; a missing key → that status would 400 and show nothing:
+        #   - internal/statusled State constants + the "ready_flash" ready cue
+        #   - bootstrap OTA progress: ota_progress / ota_error / ota_success
+        #   - server.go setup-ready: setup
         expected = {
             "ota", "error", "booting", "connectivity",
             "hal_down", "agent_down", "hardware", "ready_flash",
+            "ota_progress", "ota_error", "ota_success", "setup",
         }
         self.assertEqual(set(presets.STATUS_LED_PRESETS), expected)
-        # Every preset must name a real effect + an RGB triple + a speed.
+        # Every preset must name a real effect (or the "solid" persistent fill)
+        # + an RGB triple + a speed.
         for state, p in presets.STATUS_LED_PRESETS.items():
-            self.assertIn(p["effect"], presets.VALID_LED_EFFECTS, state)
+            self.assertTrue(p["effect"] == "solid" or p["effect"] in presets.VALID_LED_EFFECTS, state)
             self.assertEqual(len(p["color"]), 3, state)
             self.assertIn("speed", p)
 

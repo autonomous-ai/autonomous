@@ -194,4 +194,11 @@ STATUS_LED_PRESETS = {
     "agent_down":   {"effect": FX_BREATHING,          "color": [0, 200, 200],   "speed": 3.0},  # cyan — agent disconnected
     "hardware":     {"effect": FX_BREATHING,          "color": [255, 255, 0],   "speed": 3.0},  # yellow — hardware fault
     "ready_flash":  {"effect": FX_NOTIFICATION_FLASH, "color": [255, 255, 255], "speed": 1.0},  # white — agent ready/listening
+    # OTA progress (driven by the bootstrap worker, not the statusled state machine)
+    "ota_progress": {"effect": FX_BREATHING,          "color": [255, 140, 0],   "speed": 0.4},  # orange — updating
+    "ota_error":    {"effect": FX_PULSE,              "color": [255, 30, 30],   "speed": 1.5},  # red pulse — update failed
+    "ota_success":  {"effect": FX_NOTIFICATION_FLASH, "color": [0, 255, 80],    "speed": 1.0},  # green flash — update ok
+    # Setup/provisioning "device ready, join the AP" cue. effect "solid" = a
+    # persistent fill (saved as the displayed state), not a transient overlay.
+    "setup":        {"effect": "solid",               "color": [255, 255, 255], "speed": 1.0},  # white solid — AP/setup ready
 }

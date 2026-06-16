@@ -121,12 +121,14 @@ LED feedback for system states (all `breathing` at speed 3.0 unless noted):
 
 Managed by `internal/statusled/Service` (lamp) and `lib/hal` directly (bootstrap).
 
-The `internal/statusled` colors above are **not hardcoded in Go** — the OS owns the
-state machine (WHEN a state shows) and sends the state *name* to HAL (`POST /led/status`);
-HAL resolves the color/effect/speed from `STATUS_LED_PRESETS`, overridable per device via
-`presets.json`'s `status_led` section (see [DEVICE-SPEC.md § Per-device presets](../../../contract/DEVICE-SPEC.md#per-device-presets-presetsjson)).
-(The bootstrap OTA-progress colors and the setup-needed white below are still
-hardcoded in Go — a later migration into the same `status_led` family.)
+None of these colors are hardcoded in Go anymore — `internal/statusled` states, the
+bootstrap OTA-progress colors, and the setup-needed white all flow through HAL. The OS
+owns the state machine (WHEN a state shows) and sends the state *name* to HAL
+(`POST /led/status`: booting/error/ota/connectivity/hal_down/agent_down/hardware/
+ready_flash/ota_progress/ota_error/ota_success/setup); HAL resolves the color/effect/speed
+from `STATUS_LED_PRESETS`, overridable per device via `presets.json`'s `status_led` section
+(see [DEVICE-SPEC.md § Per-device presets](../../../contract/DEVICE-SPEC.md#per-device-presets-presetsjson)).
+`setup` is a persistent solid (saved as the displayed state); the rest are transient overlays.
 
 ### Setup-needed solid (lamp)
 

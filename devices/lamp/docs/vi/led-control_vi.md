@@ -119,12 +119,13 @@ LED phản hồi trạng thái hệ thống (tất cả `breathing` speed 3.0 tr
 
 Quản lý bởi `internal/statusled/Service` (lamp) và `lib/hal` trực tiếp (bootstrap).
 
-Các màu của `internal/statusled` ở trên **không còn hardcode trong Go** — OS giữ máy trạng
-thái (KHI nào hiện trạng thái) và gửi *tên trạng thái* xuống HAL (`POST /led/status`); HAL
-tra màu/effect/speed từ `STATUS_LED_PRESETS`, override per-device qua section `status_led`
-trong `presets.json` (xem [DEVICE-SPEC.md § Per-device presets](../../../../contract/DEVICE-SPEC.md#per-device-presets-presetsjson)).
-(Màu OTA-progress của bootstrap và màu trắng setup-needed bên dưới vẫn còn hardcode trong
-Go — sẽ migrate sau vào cùng họ `status_led`.)
+Không còn màu nào hardcode trong Go nữa — trạng thái `internal/statusled`, màu OTA-progress
+của bootstrap, và màu trắng setup-needed đều đi qua HAL. OS giữ máy trạng thái (KHI nào hiện)
+và gửi *tên trạng thái* xuống HAL (`POST /led/status`: booting/error/ota/connectivity/
+hal_down/agent_down/hardware/ready_flash/ota_progress/ota_error/ota_success/setup); HAL tra
+màu/effect/speed từ `STATUS_LED_PRESETS`, override per-device qua section `status_led` trong
+`presets.json` (xem [DEVICE-SPEC.md § Per-device presets](../../../../contract/DEVICE-SPEC.md#per-device-presets-presetsjson)).
+`setup` là solid bền (lưu thành trạng thái hiển thị); còn lại là overlay transient.
 
 ### Setup-needed solid (lamp)
 

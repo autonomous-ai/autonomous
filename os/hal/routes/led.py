@@ -192,14 +192,15 @@ def set_led_status(req: LEDStatusRequest):
             400,
             f"Unknown status state '{req.state}'. Available: {sorted(STATUS_LED_PRESETS)}",
         )
-    return start_led_effect(
-        LEDEffectRequest(
-            effect=preset["effect"],
-            color=preset["color"],
-            speed=preset["speed"],
-            transient=True,
-        )
-    )
+    effect, color, speed = preset["effect"], preset["color"], preset.get("speed", 1.0)
+    # "solid" is a persistent fill (e.g. the setup-ready white): it is the
+    # displayed state, so it saves user LED state like /led/solid. Every other
+    # status is a transient effect overlay that never clobbers user state.
+    if effect == "solid":
+        set_led_solid(LEDSolidRequest(color=color))
+    else:
+        start_led_effect(LEDEffectRequest(effect=effect, color=color, speed=speed, transient=True))
+    return {"status": "ok", "effect": effect, "speed": speed}
 
 
 @router.post("/led/restore", response_model=StatusResponse)

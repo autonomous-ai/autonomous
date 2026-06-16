@@ -705,7 +705,7 @@ func (s *Server) Serve(closeFn func()) error {
 	// white as a visual "ready for WiFi setup" signal. os-server typically reaches
 	// this point before HAL's FastAPI is up on :5001 (Python boot is
 	// slower — loads rpi_ws281x, SPI, audio, camera), so we poll /health in
-	// the background and fire SetSolid only once LED hardware reports ready.
+	// the background and fire the setup status only once LED hardware reports ready.
 	// Skipped post-setup — agent flash + ambient take over from here.
 	if !s.config.SetUpCompleted {
 		safego.Go("setup-needed-paint", s.waitAndPaintSetupReady)
@@ -831,7 +831,7 @@ func (s *Server) handleMQTTEndpointChange(endpoint string) {
 // over the post-setup user/agent LED state. Best-effort — silent when HAL
 // never reports LED ready within budget (logs a warning).
 //
-// Why this is a poll loop and not a single SetSolid call: os-server binds
+// Why this is a poll loop and not a single fire-and-forget call: os-server binds
 // :5000 faster than HAL's FastAPI binds :5001 on cold boot, so a fire-
 // and-forget paint at L<see Serve> would silently drop on connection refused
 // and leave the strip dark — exactly when the user needs the "ready for AP"
@@ -845,7 +845,7 @@ func (s *Server) waitAndPaintSetupReady() {
 			return
 		}
 		if h, err := hal.GetHealth(); err == nil && h.LED {
-			hal.SetSolid(255, 255, 255)
+			hal.SetStatus("setup")
 			slog.Info("setup-needed white painted", "component", "server")
 			return
 		}
