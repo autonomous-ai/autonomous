@@ -16,6 +16,7 @@ vars stay there, not here.
 | Every endpoint with request/response schemas | [`dlbackend/docs/api.md`](../dlbackend/docs/api.md) |
 | Perception models, enums, output types | [`dlbackend/docs/perceptions.md`](../dlbackend/docs/perceptions.md) |
 | Load balancer + RSA/AES encryption + nginx | [`dlbackend/docs/crypto-and-loadbalancer.md`](../dlbackend/docs/crypto-and-loadbalancer.md) |
+| Deploy: install, GPU scaling, RunPod, Docker, TLS | [`dlbackend/docs/deployment.md`](../dlbackend/docs/deployment.md) |
 | All environment variables with defaults | [`dlbackend/docs/configuration.md`](../dlbackend/docs/configuration.md) |
 
 ## Architecture at a glance
@@ -60,10 +61,10 @@ config knob is in
 
 ## Deployment
 
-`dlbackend/` ships a `Dockerfile` (CUDA + nginx + uvicorn), `nginx.conf` /
-`nginx-ssl.conf` and a `Makefile`; the two processes launch via `python -m dlserver`
-and `python -m lbserver`. RunPod / Docker / nginx specifics:
-[`dlbackend/docs/architecture.md`](../dlbackend/docs/architecture.md).
+`dlbackend/` ships a `Dockerfile` (CUDA + nginx), `nginx.conf` / `nginx-ssl.conf`
+and a `Makefile`; the two processes launch via `python -m dlserver` and
+`python -m lbserver`. Install, single-node vs master/slave GPU scaling, RunPod,
+Docker and TLS: [`dlbackend/docs/deployment.md`](../dlbackend/docs/deployment.md).
 
 ---
 
