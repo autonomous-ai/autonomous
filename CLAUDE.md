@@ -61,7 +61,7 @@ Rules:
 
 ## Device Access Rules
 
-- **Always ask the user before running any `sshpass` or `ssh` command to the Pi.** Do not SSH automatically.
+- **Pi Smith (172.168.20.x):** SSH trực tiếp không cần hỏi — `sshpass -p 'orangepi' ssh -o StrictHostKeyChecking=no orangepi@<IP>`. Các Pi khác vẫn phải hỏi trước.
 - Pi SSH: `ssh pi@<IP>` (credentials stored in team password manager; IP varies per session).
 
 ## Project Overview
