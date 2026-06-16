@@ -1896,19 +1896,19 @@ retry "curl -fsSL -H 'Cache-Control: no-cache' -o '\$META' '\$OTA_METADATA_URL'"
 WEB_URL=\$(jq -r '.web.url // empty'         "\$META")
 OS_SERVER_URL=\$(jq -r '."os-server".url // empty'       "\$META")
 BOOTSTRAP_URL=\$(jq -r '.bootstrap.url // empty' "\$META")
-LELAMP_URL=\$(jq -r '.hal.url // empty'   "\$META")
+HAL_URL=\$(jq -r '.hal.url // empty'   "\$META")
 DEVICES_URL=\$(jq -r --arg t "\$DEVICE_TYPE" '.devices[\$t].url // empty' "\$META")
 BUDDY_URL=\$(jq -r '."claude-desktop-buddy".url // empty' "\$META")
 WEB_VER=\$(jq -r '.web.version // empty'     "\$META")
 OS_SERVER_VER=\$(jq -r '."os-server".version // empty'   "\$META")
 BOOTSTRAP_VER=\$(jq -r '.bootstrap.version // empty' "\$META")
-LELAMP_VER=\$(jq -r '.hal.version // empty' "\$META")
+HAL_VER=\$(jq -r '.hal.version // empty' "\$META")
 BUDDY_VER=\$(jq -r '."claude-desktop-buddy".version // empty' "\$META")
 rm -f "\$META"
 [ -z "\$WEB_URL" ] || [ -z "\$OS_SERVER_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
   echo "ERROR: OTA metadata missing web.url, os-server.url or bootstrap.url"; exit 1
 }
-echo "[overlay] web=\$WEB_VER os-server=\$OS_SERVER_VER bootstrap=\$BOOTSTRAP_VER hal=\$LELAMP_VER buddy=\$BUDDY_VER"
+echo "[overlay] web=\$WEB_VER os-server=\$OS_SERVER_VER bootstrap=\$BOOTSTRAP_VER hal=\$HAL_VER buddy=\$BUDDY_VER"
 
 # ── stage: backend binaries ──────────────────────────────────────────────────
 echo "[overlay] Install backend binaries"
@@ -1919,9 +1919,9 @@ install_binary_from_zip "\$OS_SERVER_URL"      /usr/local/bin/os-server      "os
 echo "[overlay] Install HAL"
 HAL_DIR="/opt/hal"
 mkdir -p "\$HAL_DIR"
-if [ -n "\$LELAMP_URL" ]; then
-  echo "[overlay] HAL: downloading from \$LELAMP_URL"
-  retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/hal.zip '\$LELAMP_URL'" 5
+if [ -n "\$HAL_URL" ]; then
+  echo "[overlay] HAL: downloading from \$HAL_URL"
+  retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/hal.zip '\$HAL_URL'" 5
   echo "[overlay] HAL: extracting zip to \$HAL_DIR"
   unzip -o -q /tmp/hal.zip -d "\$HAL_DIR"
   rm -f /tmp/hal.zip

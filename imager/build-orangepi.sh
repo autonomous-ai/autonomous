@@ -1038,19 +1038,19 @@ retry "curl -fsSL -H 'Cache-Control: no-cache' -o '\$META' '${OTA_METADATA_URL}'
 WEB_URL=\$(jq -r '.web.url // empty'               "\$META")
 OS_SERVER_URL=\$(jq -r '."os-server".url // empty'             "\$META")
 BOOTSTRAP_URL=\$(jq -r '.bootstrap.url // empty'   "\$META")
-LELAMP_URL=\$(jq -r '.hal.url // empty'         "\$META")
+HAL_URL=\$(jq -r '.hal.url // empty'         "\$META")
 BUDDY_URL=\$(jq -r '."claude-desktop-buddy".url // empty' "\$META")
 DEVICES_URL=\$(jq -r --arg t "\$DEVICE_TYPE" '.devices[\$t].url // empty' "\$META")
 WEB_VER=\$(jq -r '.web.version // empty'           "\$META")
 OS_SERVER_VER=\$(jq -r '."os-server".version // empty'         "\$META")
 BOOTSTRAP_VER=\$(jq -r '.bootstrap.version // empty' "\$META")
-LELAMP_VER=\$(jq -r '.hal.version // empty'     "\$META")
+HAL_VER=\$(jq -r '.hal.version // empty'     "\$META")
 BUDDY_VER=\$(jq -r '."claude-desktop-buddy".version // empty' "\$META")
 rm -f "\$META"
 [ -z "\$WEB_URL" ] || [ -z "\$OS_SERVER_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
   echo "ERROR: OTA metadata missing web.url / os-server.url / bootstrap.url"; exit 1
 }
-echo "[overlay] web=\$WEB_VER os-server=\$OS_SERVER_VER bootstrap=\$BOOTSTRAP_VER hal=\$LELAMP_VER buddy=\$BUDDY_VER"
+echo "[overlay] web=\$WEB_VER os-server=\$OS_SERVER_VER bootstrap=\$BOOTSTRAP_VER hal=\$HAL_VER buddy=\$BUDDY_VER"
 
 echo "[overlay] backend binaries"
 install_binary_from_zip "\$BOOTSTRAP_URL" /usr/local/bin/bootstrap-server "bootstrap"
@@ -1058,8 +1058,8 @@ install_binary_from_zip "\$OS_SERVER_URL"      /usr/local/bin/os-server      "os
 
 echo "[overlay] HAL"
 HAL_DIR="/opt/hal"
-if [ -n "\$LELAMP_URL" ]; then
-  retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/hal.zip '\$LELAMP_URL'" 5
+if [ -n "\$HAL_URL" ]; then
+  retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/hal.zip '\$HAL_URL'" 5
   unzip -o -q /tmp/hal.zip -d "\$HAL_DIR"
   rm -f /tmp/hal.zip
   # If zip nested into subdir, hoist up.
@@ -1187,20 +1187,20 @@ cat > /tmp/ota-versions.env <<MANIFEST
 WEB_VER=\${WEB_VER}
 OS_SERVER_VER=\${OS_SERVER_VER}
 BOOTSTRAP_VER=\${BOOTSTRAP_VER}
-LELAMP_VER=\${LELAMP_VER}
+HAL_VER=\${HAL_VER}
 BUDDY_VER=\${BUDDY_VER}
 MANIFEST
 OVERLAY_STAGES
 
 # Capture OTA versions for the build manifest before they get wiped by Phase 5.
-BAKED_WEB_VER=""; BAKED_OS_SERVER_VER=""; BAKED_BOOTSTRAP_VER=""; BAKED_LELAMP_VER=""; BAKED_BUDDY_VER=""
+BAKED_WEB_VER=""; BAKED_OS_SERVER_VER=""; BAKED_BOOTSTRAP_VER=""; BAKED_HAL_VER=""; BAKED_BUDDY_VER=""
 if [ -f "${MNT}/tmp/ota-versions.env" ]; then
   # shellcheck disable=SC1090
   . "${MNT}/tmp/ota-versions.env" || true
   BAKED_WEB_VER="${WEB_VER:-}"
   BAKED_OS_SERVER_VER="${OS_SERVER_VER:-}"
   BAKED_BOOTSTRAP_VER="${BOOTSTRAP_VER:-}"
-  BAKED_LELAMP_VER="${LELAMP_VER:-}"
+  BAKED_HAL_VER="${HAL_VER:-}"
   BAKED_BUDDY_VER="${BUDDY_VER:-}"
   rm -f "${MNT}/tmp/ota-versions.env"
 fi
@@ -1219,7 +1219,7 @@ cat > /output/manifest-opi.json <<MANIFEST_JSON
     "web": "${BAKED_WEB_VER}",
     "os-server": "${BAKED_OS_SERVER_VER}",
     "bootstrap": "${BAKED_BOOTSTRAP_VER}",
-    "hal": "${BAKED_LELAMP_VER}",
+    "hal": "${BAKED_HAL_VER}",
     "claude-desktop-buddy": "${BAKED_BUDDY_VER}"
   },
   "source_image": {
