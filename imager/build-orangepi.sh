@@ -752,8 +752,7 @@ elif [ "\$APP" = "device" ]; then
   mkdir -p "\$DEST"
   unzip -o -q "\$ZIP_TMP" -d "\$DEST"
   rm -f "\$ZIP_TMP"
-  # Re-apply the device rootfs overlay (asound.conf, udev rules, …) so audio/
-  # system config updates land on / before the services restart.
+  # Re-apply the device rootfs overlay onto / before services restart.
   [ -d "\$DEST/rootfs" ] && cp -a "\$DEST/rootfs/." /
   systemctl restart os-server 2>/dev/null || true
   systemctl restart hal 2>/dev/null || true
@@ -968,11 +967,9 @@ SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
 SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
 UDEV_EOF
 
-# ── ALSA aliases ─────────────────────────────────────────────────────────────
-# /etc/asound.conf is NOT written here — it ships per device type in the device
-# rootfs overlay (devices/<type>/rootfs/etc/asound.conf), applied in Phase 3 after
-# the profile is baked. Audio routing differs per device's wiring, so it can't be
-# a board-wide constant.
+# ── ALSA ─────────────────────────────────────────────────────────────────────
+# /etc/asound.conf is hardware-team-owned and baked into the base image.
+# It is NOT shipped in the device profile overlay.
 
 # ── disable conflicting vendor services ──────────────────────────────────────
 echo "[stage] mask conflicting vendor services"
@@ -1118,9 +1115,8 @@ if [ -n "\$DEVICES_URL" ]; then
   unzip -o -q /tmp/device-profile.zip -d "\$DEVICE_PROFILE_DIR"
   rm -f /tmp/device-profile.zip
   echo "[overlay] device profile baked → \$DEVICE_PROFILE_DIR"
-  # Device rootfs overlay: devices/<type>/rootfs/ mirrors the target filesystem
-  # (e.g. rootfs/etc/asound.conf). Copy the whole tree onto / so device-specific
-  # system config (ALSA routing, udev rules, …) matches this device's wiring.
+  # Device rootfs overlay: devices/<type>/rootfs/ mirrors the target filesystem.
+  # Copy the whole tree onto / for device-specific system config (udev rules, …).
   if [ -d "\$DEVICE_PROFILE_DIR/rootfs" ]; then
     cp -a "\$DEVICE_PROFILE_DIR/rootfs/." /
     echo "[overlay] device rootfs overlay applied"
