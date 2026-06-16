@@ -982,11 +982,12 @@ load-module module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-anon-
 PULSE_EOF
 fi
 
-cat > /etc/udev/rules.d/91-pulseaudio-hal-ignore.rules <<'UDEV_EOF'
-# Keep PulseAudio away from the onboard I2S codecs so hal can own them.
-SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
-SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
-UDEV_EOF
+# 91-pulseaudio-hal-ignore.rules — hardware team bakes udev rules into the base image.
+# cat > /etc/udev/rules.d/91-pulseaudio-hal-ignore.rules <<'UDEV_EOF'
+# # Keep PulseAudio away from the onboard I2S codecs so hal can own them.
+# SUBSYSTEM=="sound", ATTR{id}=="sndi2s4", ENV{PULSE_IGNORE}="1"
+# SUBSYSTEM=="sound", ATTR{id}=="wm8960soundcard", ENV{PULSE_IGNORE}="1"
+# UDEV_EOF
 
 # ── ALSA ─────────────────────────────────────────────────────────────────────
 # /etc/asound.conf is hardware-team-owned and baked into the base image.
