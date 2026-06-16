@@ -121,6 +121,15 @@ LED feedback for system states (all `breathing` at speed 3.0 unless noted):
 
 Managed by `internal/statusled/Service` (lamp) and `lib/hal` directly (bootstrap).
 
+None of these colors are hardcoded in Go anymore — `internal/statusled` states, the
+bootstrap OTA-progress colors, and the setup-needed white all flow through HAL. The OS
+owns the state machine (WHEN a state shows) and sends the state *name* to HAL
+(`POST /led/status`: booting/error/ota/connectivity/hal_down/agent_down/hardware/
+ready_flash/ota_progress/ota_error/ota_success/setup); HAL resolves the color/effect/speed
+from `STATUS_LED_PRESETS`, overridable per device via `presets.json`'s `status_led` section
+(see [DEVICE-SPEC.md § Per-device presets](../../../contract/DEVICE-SPEC.md#per-device-presets-presetsjson)).
+`setup` is a persistent solid (saved as the displayed state); the rest are transient overlays.
+
 ### Setup-needed solid (lamp)
 
 When lamp starts and `config.SetUpCompleted == false` (device in AP/provisioning mode), `server/server.go` spawns a background goroutine that polls HAL `GET /health` once per second up to 30s, and once `health.led == true` fires `lelamp.SetSolid(255, 255, 255)` — paints the strip solid white as a "device ready, connect to my hotspot" cue. Polling (not a single call) handles the cold-boot race where os-server's :5000 is up before HAL's :5001. No status LED state is used. Booting blue-breathing still shows during init. See [setup-flow.md](setup-flow.md#ap-mode).
@@ -135,3 +144,9 @@ Auto-pauses on interaction, resumes after 60s of silence.
 ## LED in Emotion
 
 See [emotion-led-mapping.md](emotion-led-mapping.md) for the full emotion → LED color + effect + servo mapping.
+
+## Per-device preset overrides
+
+A device can override these emotion/scene/aim values (and the LED ring size) without
+changing the shared defaults, via a `devices/<type>/presets.json` file. This is a
+platform mechanism — see [DEVICE-SPEC.md § Per-device presets](../../../contract/DEVICE-SPEC.md#per-device-presets-presetsjson).

@@ -92,14 +92,13 @@ func StopEffect() {
 	postSilent("/led/effect/stop", "{}")
 }
 
-// SetSolid paints the strip a single color and saves it as the user LED state
-// (no transient flag) so subsequent RestoreLED calls repaint to this color.
-// Fire-and-forget: HAL may not be up yet at the moment this is called
-// (e.g. the device boots faster than the Python server during AP-mode startup);
-// callers don't care about the outcome.
-func SetSolid(r, g, b int) {
-	body := fmt.Sprintf(`{"color":[%d,%d,%d]}`, r, g, b)
-	postSilent("/led/solid", body)
+// SetStatus applies an os-server status state (booting/error/ota/…) by name.
+// HAL owns the appearance (color/effect/speed) for each state via STATUS_LED_PRESETS
+// — overridable per device in presets.json — so the OS sends only the state name,
+// never an RGB. Like SetEffect this is a transient system overlay (HAL applies it
+// without clobbering the user's saved LED state). Fire-and-forget.
+func SetStatus(stateName string) {
+	postSilent("/led/status", fmt.Sprintf(`{"state":%q}`, stateName))
 }
 
 // RestoreLED hands the strip back to the user's saved LED state (or clears it

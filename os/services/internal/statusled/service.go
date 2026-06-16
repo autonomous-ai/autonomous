@@ -27,22 +27,10 @@ const (
 	StateHardware     State = "hardware"     // Hardware component failure (servo/led/audio/voice)
 )
 
-// stateConfig defines the LED effect for each state.
-type stateConfig struct {
-	Effect  string
-	R, G, B int
-	Speed   float64
-}
-
-var configs = map[State]stateConfig{
-	StateOTA:          {Effect: "breathing", R: 0, G: 255, B: 0, Speed: 3.0},   // green — firmware updating
-	StateError:        {Effect: "breathing", R: 255, G: 0, B: 0, Speed: 3.0},   // red — system error
-	StateBooting:      {Effect: "breathing", R: 0, G: 80, B: 255, Speed: 3.0},  // blue — starting up
-	StateConnectivity: {Effect: "breathing", R: 255, G: 80, B: 0, Speed: 3.0},  // orange — no internet
-	StateHALDown:      {Effect: "breathing", R: 180, G: 0, B: 255, Speed: 3.0}, // purple — HAL down
-	StateAgentDown:    {Effect: "breathing", R: 0, G: 200, B: 200, Speed: 3.0}, // cyan — OpenClaw disconnected
-	StateHardware:     {Effect: "breathing", R: 255, G: 255, B: 0, Speed: 3.0}, // yellow — hardware component failure
-}
+// The color/effect/speed for each state lives in HAL (STATUS_LED_PRESETS,
+// overridable per device via presets.json): this service owns the state machine
+// (WHEN a state shows), HAL owns the appearance (WHAT it looks like). We send the
+// state name; the State constant string values match the HAL preset keys.
 
 // priority determines which state wins when multiple are active.
 var priority = map[State]int{
@@ -124,8 +112,8 @@ func (s *Service) applyHighest() {
 			best = st
 		}
 	}
-	if cfg, ok := configs[best]; ok {
-		hal.SetEffect(cfg.Effect, cfg.R, cfg.G, cfg.B, cfg.Speed)
+	if best != "" {
+		hal.SetStatus(string(best))
 	}
 }
 
@@ -141,7 +129,7 @@ func (s *Service) FlashReady() {
 		s.mu.Unlock()
 		return
 	}
-	hal.SetEffect("notification_flash", 255, 255, 255, 1.0)
+	hal.SetStatus("ready_flash")
 	s.mu.Unlock()
 	slog.Info("status LED ready flash", "component", "statusled")
 	go func() {

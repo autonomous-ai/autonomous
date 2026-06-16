@@ -119,6 +119,14 @@ LED phản hồi trạng thái hệ thống (tất cả `breathing` speed 3.0 tr
 
 Quản lý bởi `internal/statusled/Service` (lamp) và `lib/hal` trực tiếp (bootstrap).
 
+Không còn màu nào hardcode trong Go nữa — trạng thái `internal/statusled`, màu OTA-progress
+của bootstrap, và màu trắng setup-needed đều đi qua HAL. OS giữ máy trạng thái (KHI nào hiện)
+và gửi *tên trạng thái* xuống HAL (`POST /led/status`: booting/error/ota/connectivity/
+hal_down/agent_down/hardware/ready_flash/ota_progress/ota_error/ota_success/setup); HAL tra
+màu/effect/speed từ `STATUS_LED_PRESETS`, override per-device qua section `status_led` trong
+`presets.json` (xem [DEVICE-SPEC.md § Per-device presets](../../../../contract/DEVICE-SPEC.md#per-device-presets-presetsjson)).
+`setup` là solid bền (lưu thành trạng thái hiển thị); còn lại là overlay transient.
+
 ### Setup-needed solid (lamp)
 
 Khi lamp start và `config.SetUpCompleted == false` (device đang ở AP/provisioning mode), `server/server.go` spawn goroutine background poll `GET /health` của HAL mỗi giây tối đa 30s, khi `health.led == true` thì fire `lelamp.SetSolid(255, 255, 255)` — paint strip trắng solid báo "device ready, vào hotspot đi". Phải poll (không phải call 1 lần) vì cold boot os-server bind :5000 trước HAL :5001. Không dùng status LED state. Blue-breathing booting vẫn show trong lúc init. Xem [setup-flow_vi.md](setup-flow_vi.md#ap-mode).
@@ -144,3 +152,9 @@ Mỗi emotion preset có LED color riêng:
 | excited | Cam sáng |
 | shy | Hồng nhạt |
 | shock | Trắng flash |
+
+## Override preset theo từng thiết bị
+
+Một thiết bị có thể ghi đè các giá trị emotion/scene/aim này (và kích thước vòng LED) mà
+không đổi bảng mặc định dùng chung, qua file `devices/<type>/presets.json`. Đây là cơ chế
+nền tảng — xem [DEVICE-SPEC.md § Per-device presets](../../../../contract/DEVICE-SPEC.md#per-device-presets-presetsjson).

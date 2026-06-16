@@ -64,6 +64,44 @@ capabilities:
 `required: true` means "this device is not itself without this capability." Audio is
 `required` on both Lamp and Intern; motion is `required` on neither.
 
+## Per-device presets (`presets.json`)
+
+The emotion / scene / aim preset *values* and the LED ring size live in
+`os/hal/presets.py` as the **platform default** every device inherits. A device
+overrides only the values it wants different by shipping an optional
+`devices/<id>/presets.json` — a sibling of `DEVICE.md`, discovered by convention
+(no front-matter field declares it). At boot HAL (`board/presets_overlay.py`)
+deep-merges it onto the base tables in place, before any route or driver reads
+them; a device with no file keeps the defaults verbatim. This is the same
+"declare what's different" inheritance as `devices/_base`, applied to look-and-feel.
+
+```json
+{
+  "led_count": 60,
+  "emotion":    { "listening": { "color": [255, 120, 0] } },
+  "scene":      { "relax":     { "brightness": 0.3 } },
+  "aim":        { "desk":      { "base_pitch.pos": 8.0 } },
+  "status_led": { "booting":   { "color": [0, 60, 200] } }
+}
+```
+
+- Every section (`led_count`, `emotion`, `scene`, `aim`, `status_led`) is optional.
+  `status_led` restyles the os-server system-status feedback (booting/error/ota/
+  connectivity/hal_down/agent_down/hardware/ready_flash + bootstrap OTA
+  ota_progress/ota_error/ota_success + setup) — the OS owns the state machine,
+  HAL owns the color/effect/speed. `setup` is a persistent solid; the rest are
+  transient effect overlays.
+- Each entry patches the matching base entry **field-by-field** — only the named
+  fields change; the rest stay at the default.
+- Naming a preset absent from the base table (a typo), a malformed file, or a
+  non-positive `led_count` **fails loud at boot**, like an invalid `DEVICE.md`.
+- **HAL-only:** presets are LED/servo look-and-feel; the OS core (Go) never reads
+  them — unlike capabilities there is no second parser to keep in sync. An override
+  only takes effect for routes the device mounts: `emotion` needs the `expression`
+  capability, `scene` needs `light`, `aim` needs `motion`.
+- Copy-paste reference: `devices/_base/presets.example.json` (annotated; the
+  `.example.json` name is never loaded — rename to `presets.json` to activate).
+
 ## Versioning — the frozen contract
 
 `schema` is an ABI. Within a major version fields are only **added**, never removed or

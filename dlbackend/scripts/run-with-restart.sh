@@ -47,8 +47,8 @@ while $RUNNING; do
     "$@" &
     CHILD_PID=$!
     [[ -n "$PID_FILE" ]] && echo "$CHILD_PID" > "$PID_FILE"
-    wait "$CHILD_PID" || true
-    EXIT_CODE=$?
+    EXIT_CODE=0
+    wait "$CHILD_PID" || EXIT_CODE=$?
     CHILD_PID=""
 
     if ! $RUNNING; then
@@ -56,5 +56,6 @@ while $RUNNING; do
     fi
 
     echo "[watchdog] Process exited (code=$EXIT_CODE), restarting in ${COOLDOWN}s..."
-    sleep "$COOLDOWN"
+    sleep "$COOLDOWN" &
+    wait $! 2>/dev/null || true
 done

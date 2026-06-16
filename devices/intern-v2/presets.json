@@ -1,0 +1,4 @@
+{
+  "_comment": "Per-device preset overrides for intern-v2. See contract/DEVICE-SPEC.md § Per-device presets. Intern-v2's LED ring has 8 pixels (vs the platform default of 64).",
+  "led_count": 8
+}
