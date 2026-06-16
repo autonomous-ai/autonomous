@@ -170,7 +170,23 @@ async def proxy_ws(client_ws: WebSocket, path: str) -> None:
     crypto = get_crypto()
     session: AESGCMSession | None = None
 
-    # Handle key exchange before connecting to backend
+    # Handle key exchange BEFORE connecting to the backend. Unlike HTTP, a WS
+    # connection is long-lived, so we establish one AES session up front and reuse it
+    # for every frame in both directions.
+    #
+    # Close-code convention (RFC 6455):
+    #   1008 (policy violation) — client failed to follow the required handshake
+    #       (no key-exchange frame, or it didn't validate) while encryption is
+    #       mandatory. It's the client's fault, so we signal a policy breach.
+    #   1011 (internal error)   — the key-exchange frame WAS well-formed but
+    #       decryption/session setup threw (bad RSA key, tampered payload). The
+    #       failure is server-side crypto, so we signal an internal error.
+    #
+    # require_encryption gating:
+    #   - true  → a missing/invalid handshake closes the socket (fail closed).
+    #   - false → we fall through with session=None and `first_msg` preserved, so
+    #       the connection proceeds as PLAINTEXT (the first message is forwarded
+    #       verbatim to the backend below). This is the dev/back-compat path.
     first_msg: str | None = None
     if crypto is not None:
         try:
@@ -180,17 +196,21 @@ async def proxy_ws(client_ws: WebSocket, path: str) -> None:
                 session = crypto.create_session(key_req.to_raw_key())
                 await client_ws.send_json({"status": "key_exchange_ok"})
                 logger.info("[WS] /%s → %s: Encrypted session established", path, ws_url)
-                first_msg = None  # consumed
+                first_msg = None  # consumed — it was the handshake, not real traffic
             except ValidationError:
+                # First frame wasn't a key exchange. Reject only if encryption is required;
+                # otherwise keep first_msg and treat the connection as plaintext.
                 if settings.crypto.require_encryption:
                     await client_ws.close(code=1008, reason="Key exchange required")
                     return
         except asyncio.TimeoutError:
+            # Client sent nothing within 5s — same policy as a missing handshake.
             if settings.crypto.require_encryption:
                 await client_ws.close(code=1008, reason="Key exchange required")
                 return
             first_msg = None
         except (ValueError, InvalidTag) as e:
+            # Handshake parsed but the wrapped AES key could not be decrypted.
             logger.error("[WS] /%s → %s: Key exchange failed: %s", path, ws_url, e)
             await client_ws.close(code=1011, reason=f"Key exchange failed: {e}")
             return
