@@ -37,24 +37,35 @@ Base URL: `https://storage.googleapis.com/autonomous-models/`
 
 | Model | Download URL |
 |-------|--------------|
-| X3D (action) | `…/onnx_models/x3d_m_16x5x1_int8.onnx` |
+| X3D (action) | `…/onnx_models/x3d_m_16x5x1_int8.onnx` ⚠️ |
 | VideoMAE (action) | `…/onnx_models/videomae_fp32.onnx` |
 | UniformerV2 (action) | `…/onnx_models/uniformerv2-l-224-k400_fp32.onnx` |
 | POSTER V2 (FER) | `…/onnx_models/posterv2_7cls.onnx` |
 | EmoNet-8 (FER) | `…/onnx_models/emonet_8.onnx` |
-| EmoNet-5 (FER) | `…/onnx_models/emonet_5.onnx` |
+| EmoNet-5 (FER) | `…/onnx_models/emonet_5.onnx` ⚠️ |
 | emotion2vec (SER) | `…/onnx_models/emotion2vec.onnx` |
 | RTMPose-m (pose 2D) | `…/onnx_models/rtmpose-m.onnx` |
 | TCPFormer (pose 3D) | `…/onnx_models/tcpformer_h36m_243.onnx` |
-| WeSpeaker ResNet34 (embed) | `…/onnx_models/wespeaker_resnet34.onnx` |
+| WeSpeaker ResNet34 (embed) | `…/onnx_models/wespeaker_resnet34.onnx` ⚠️ |
 | WeSpeaker ECAPA-1024 (embed) | `…/onnx_models/wespeaker_ecapa_tdnn1024.onnx` |
-| WeSpeaker CAM++ (embed) | `…/onnx_models/wespeaker_campplus.onnx` |
+| WeSpeaker CAM++ (embed) | `…/onnx_models/wespeaker_campplus.onnx` ⚠️ |
 | YuNet (face) | `…/onnx_models/face_detection_yunet_2023mar.onnx` |
 | YOLO person | `…/pytorch_models/yolo12x.pt` |
 | YOLO-World (object) | `…/pytorch_models/yolov8x-worldv2.pt` |
 
 (`…` = the base URL above. The mapping lives in `CDN_PATHS` in
 `src/core/utils/files.py` — keep this table in sync with it.)
+
+> ⚠️ **Availability (verified against the public bucket on 2026-06-16):** the four
+> rows marked ⚠️ are **not currently present** in the bucket (HTTP `404`) — including
+> the default action model **X3D** and the default audio embedder **WeSpeaker
+> ResNet34**, so a fresh out-of-the-box run will fail to download them. The other 11
+> files return `200`. Until the weights are uploaded (or `CDN_PATHS` in
+> `src/core/utils/files.py` is corrected to the real filenames — pending confirmation
+> from the maintainers), work around it by either selecting a model whose weights do
+> exist (e.g. `ACTION__MODEL=videomae`, `AUDIO_EMBEDDER__MODEL=ecapa-tdnn1024`) or
+> pointing the model at a local file / alternate source via `<NAME>__CKPT_PATH` or
+> `<NAME>__REMOTE_URL`.
 
 Object detectors **OWLv2** and **Grounding DINO** are pulled from the HuggingFace
 Hub instead (`google/owlv2-large-patch14-ensemble`,
