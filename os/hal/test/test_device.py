@@ -149,11 +149,13 @@ class TestRealDeviceFiles(unittest.TestCase):
     def test_intern_is_lamp_minus_motion_and_display(self):
         lamp = set(load_device("lamp", DEVICES_DIR).capabilities)
         intern = set(load_device("intern-v2", DEVICES_DIR).capabilities)
-        # Intern strips Lamp's expressive/actuation capabilities; motion + display
-        # are the headline removals, and Intern adds nothing Lamp lacks. Intern-v2
-        # keeps `light` (an LED ring — declared in DEVICE.md, bounded by its own
-        # SAFETY.md#light), so `light` is NOT in the removed set.
-        self.assertEqual(lamp - intern, {"vision", "motion", "presence", "display", "media", "connectivity"})
+        # Intern strips Lamp's perception + actuation + expression: vision/presence
+        # (no camera), motion (no servo), display (no screen), and expression (no
+        # /emotion route — it drives its LED ring via `light` only). motion + display
+        # are the headline removals. Intern-v2 keeps `light`, and shares `media` +
+        # `connectivity` with Lamp, so those are NOT in the removed set; it adds
+        # nothing Lamp lacks.
+        self.assertEqual(lamp - intern, {"vision", "motion", "presence", "display", "expression"})
         self.assertEqual(intern - lamp, set())
         self.assertNotIn("motion", intern)
         self.assertNotIn("display", intern)
