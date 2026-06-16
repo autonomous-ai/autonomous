@@ -575,5 +575,5 @@ Version của HAL là file text `VERSION` trong thư mục gốc package. Bootst
 ---
 
 > Tài liệu này mô tả toàn bộ hệ thống OTA và bootstrap.
-> Xem [architecture-decision.md](architecture-decision.md) cho quyết định kiến trúc.
-> Xem [product-vision.md](product-vision.md) cho tầm nhìn sản phẩm.
+> Xem [architecture-decision.md](../../devices/lamp/docs/vi/architecture-decision.md) cho quyết định kiến trúc.
+> Xem [product-vision.md](../../devices/lamp/docs/vi/product-vision.md) cho tầm nhìn sản phẩm.
