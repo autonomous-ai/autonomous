@@ -22,4 +22,4 @@ open an issue and let's fix it.
 - `contract/` is the stable interface everyone builds on — open an issue before changing it.
 - Be kind.
 
-Questions? [Open an issue](https://github.com/autonomous-ai/autonomous/issues).
+Questions? [Open an issue](https://github.com/autonomous-ai/autonomous-os/issues).

@@ -1,7 +1,7 @@
 ---
 name: turn-gate
 description: "Sets Lamp agent busy state immediately when a channel message is received, before lifecycle_start SSE arrives"
-homepage: https://github.com/autonomous-ai/autonomous
+homepage: https://github.com/autonomous-ai/autonomous-os
 metadata:
   { "openclaw": {
       "emoji": "🚦",
