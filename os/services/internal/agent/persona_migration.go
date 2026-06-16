@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"go.autonomous.ai/os/internal/agent/migrate_persona"
+	migratepersona "go.autonomous.ai/os/internal/agent/migrate_persona"
 	"go.autonomous.ai/os/server/config"
 )
 
@@ -154,16 +154,31 @@ func (p *PersonaMigration) Reconcile() {
 		slog.Info("agent runtime switched — migrating persona + memory",
 			"component", "agent", "from", p.Prev, "to", p.Current, "direction", string(p.Direction))
 		rep, err := migratepersona.Run(p.Direction, p.opts)
-		if err != nil {
-			slog.Error("persona migration failed; will retry next boot",
-				"component", "agent", "error", err)
-			return // do not record — leaves Prev intact so the switch retries
+		switch {
+		case err != nil:
+			slog.Error("persona migration failed to run; agent keeps its existing persona",
+				"component", "agent", "from", p.Prev, "to", p.Current, "error", err)
+			return
+		case rep.Summary[migratepersona.StatusError] > 0:
+			slog.Error("persona migration had write errors; agent keeps its existing persona for those",
+				"component", "agent", "from", p.Prev, "to", p.Current,
+				"migrated", rep.Summary[migratepersona.StatusMigrated],
+				"skipped", rep.Summary[migratepersona.StatusSkipped],
+				"error", rep.Summary[migratepersona.StatusError])
+		case rep.Summary[migratepersona.StatusConflict] > 0:
+			slog.Warn("persona migration skipped some items (target exists); agent keeps existing for those",
+				"component", "agent", "from", p.Prev, "to", p.Current,
+				"migrated", rep.Summary[migratepersona.StatusMigrated],
+				"conflict", rep.Summary[migratepersona.StatusConflict])
+		case rep.Summary[migratepersona.StatusMigrated] == 0:
+			slog.Warn("persona migration found nothing to migrate (source files missing?); agent keeps its existing persona",
+				"component", "agent", "from", p.Prev, "to", p.Current,
+				"skipped", rep.Summary[migratepersona.StatusSkipped])
+		default:
+			slog.Info("persona migration complete", "component", "agent",
+				"migrated", rep.Summary[migratepersona.StatusMigrated],
+				"skipped", rep.Summary[migratepersona.StatusSkipped])
 		}
-		slog.Info("persona migration complete", "component", "agent",
-			"migrated", rep.Summary[migratepersona.StatusMigrated],
-			"skipped", rep.Summary[migratepersona.StatusSkipped],
-			"conflict", rep.Summary[migratepersona.StatusConflict],
-			"error", rep.Summary[migratepersona.StatusError])
 	}
 
 	if err := appendAgentRuntime(p.statePath, p.Current); err != nil {
