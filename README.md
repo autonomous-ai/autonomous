@@ -30,7 +30,7 @@ calling `motion.move` runs on it and on Lamp alike — skills address capabiliti
 Autonomous OS is a layered stack: each layer exposes an interface to the one above and
 depends only on the one below, so any layer can be replaced without touching the others.
 
-![Autonomous architecture](docs/architecture/autonomous-stack.svg)
+<img width="1061" height="839" alt="image" src="https://github.com/user-attachments/assets/bcdec37b-1720-4af2-9b8b-c36de0476a8a" />
 
 ### Skills
 
