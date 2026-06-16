@@ -3,7 +3,7 @@
 Wraps three closely-related concerns that all run after STT produces a final
 transcript:
 
-  1. Wake-word resolution    — strip "hey lamp" prefix, classify event type
+  1. Wake-word resolution    — strip "hey <name>" prefix, classify event type
   2. Speaker identification  — prefix "<Name>: " from voice embedding
   3. Speech-emotion submit   — async SER call on the full mic session
 
