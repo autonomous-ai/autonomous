@@ -959,7 +959,6 @@ class VoiceService:
                             "[realtime] Model delegated → will forward to OS server"
                         )
                     else:
-                        rt_handled = True
                         # Flush any remaining text that didn't end with a sentence boundary
                         remaining: str = self.strip_rt_markers(sentence_buf)
                         if remaining and self._tts is not None:
@@ -969,21 +968,37 @@ class VoiceService:
                                     remaining[:80],
                                 )
                                 self._tts.speak(remaining)
+                                first_sentence_sent = True
                             else:
                                 logger.info(
                                     "[realtime] Final fragment → speak_queue: %r",
                                     remaining[:80],
                                 )
                                 self._tts.speak_queue(remaining)
-                        logger.info(
-                            "[realtime] Chit-chat complete — transcript=%r",
-                            rt_transcript[:200] if rt_transcript else "(empty)",
-                        )
-                        # Save turn to realtime memory
-                        if combined or rt_transcript:
-                            self._realtime.save_turn(
-                                user_text=combined or "(audio only)",
-                                agent_text=rt_transcript or "(audio only)",
+                        # Only claim the turn as HANDLED if the model actually
+                        # produced a spoken reply. An empty result — e.g.
+                        # receive() timed out with no output — must NOT be reported
+                        # as handled: that sends [HANDLED] with an empty [REPLY],
+                        # OpenClaw's input-branching reads it as "already answered"
+                        # and stays silent, so the user hears nothing from anyone.
+                        # Leaving rt_handled False (rt_delegated also False) falls
+                        # through to the normal forward below so the main agent answers.
+                        if first_sentence_sent or rt_transcript:
+                            rt_handled = True
+                            logger.info(
+                                "[realtime] Chit-chat complete — transcript=%r",
+                                rt_transcript[:200] if rt_transcript else "(empty)",
+                            )
+                            # Save turn to realtime memory
+                            if combined or rt_transcript:
+                                self._realtime.save_turn(
+                                    user_text=combined or "(audio only)",
+                                    agent_text=rt_transcript or "(audio only)",
+                                )
+                        else:
+                            logger.warning(
+                                "[realtime] Empty output (timeout / no response) — "
+                                "forwarding to OS server for the main agent to handle"
                             )
                 except Exception as e:
                     logger.warning(
@@ -1030,7 +1045,9 @@ class VoiceService:
                     if sensing_msg:
                         self._sensing_sender.send(sensing_msg, event_type=event_type)
                 else:
-                    # Realtime not active — send to the OS server normally
+                    # Realtime not active, OR it was active but produced no output
+                    # (e.g. receive() timed out) — send to the OS server normally so
+                    # the main agent handles the turn instead of nobody answering.
                     self._sensing_sender.send(final_msg, event_type=event_type)
 
             # 2. Submit SER — uses the UNTRIMMED snapshot so laughter / sighs
