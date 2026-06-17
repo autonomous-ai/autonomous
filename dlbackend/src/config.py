@@ -18,7 +18,7 @@ from core.enums.pose import ErgoAssessorEnum, PoseLifter3DEnum
 
 
 class PersonDetectorSetting(BaseModel):
-    enabled: bool = False
+    enabled: bool = True
     model: PersonDetectorEnum = PersonDetectorEnum.YOLO
     model_name: str = "yolo12x.pt"
     confidence_threshold: float = 0.4
@@ -62,7 +62,7 @@ class PoseSetting(BaseModel):
     lifter_3d_remote_url: str | None = None
     lifter_3d_frame_w: int | None = None
     lifter_3d_frame_h: int | None = None
-    ergo_assessor: ErgoAssessorEnum | None = None
+    ergo_assessor: ErgoAssessorEnum | None = ErgoAssessorEnum.RULA
     ergo_confidence_threshold: float | None = None
     batch_size: int | None = None
 
@@ -91,7 +91,7 @@ class AudioProcessorSetting(BaseModel):
 
 
 class AudioEmbedderSetting(BaseModel):
-    enabled: bool = False
+    enabled: bool = True
     model: AudioEmbedderEnum = AudioEmbedderEnum.ECAPA_TDNN_1024
     model_path: str | None = None
     remote_url: str | None = None
@@ -115,9 +115,9 @@ class SingleObjectDetectorSetting(BaseModel):
 
 
 class ObjectDetectorSetting(BaseModel):
-    yolo_world: SingleObjectDetectorSetting = SingleObjectDetectorSetting()
+    yolo_world: SingleObjectDetectorSetting = SingleObjectDetectorSetting(enabled=True)
     yoloe: SingleObjectDetectorSetting = SingleObjectDetectorSetting()
-    owlv2: SingleObjectDetectorSetting = SingleObjectDetectorSetting()
+    owlv2: SingleObjectDetectorSetting = SingleObjectDetectorSetting(enabled=True)
     grounding_dino: SingleObjectDetectorSetting = SingleObjectDetectorSetting()
 
 

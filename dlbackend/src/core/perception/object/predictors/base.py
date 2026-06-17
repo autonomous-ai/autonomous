@@ -64,5 +64,4 @@ class ObjectDetector(PredictorBase[cv2t.MatLike, RawObjectDetection], ABC):
         classes: list[str] | None = None,
         **kwargs: Any,
     ) -> list[RawObjectDetection]:
-        with self._gpu_lock:
-            return super().predict(input, preprocess=preprocess, classes=classes, **kwargs)
+        return super().predict(input, preprocess=preprocess, classes=classes, **kwargs)
