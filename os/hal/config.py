@@ -384,6 +384,16 @@ REALTIME_GEMINI_VOICE: str = os.environ.get("HAL_GEMINI_LIVE_VOICE", "Kore")
 REALTIME_GEMINI_SAMPLE_RATE: int = 16000
 REALTIME_GEMINI_THINKING_LEVEL: str = os.environ.get("HAL_GEMINI_THINKING_LEVEL", "HIGH")
 REALTIME_GEMINI_USE_LANGUAGE_CODES: bool = os.environ.get("HAL_GEMINI_USE_LANGUAGE_CODES", "false").lower() in ("1", "true", "yes")
+# Session resumption lets a reconnect resume the SAME server session (context
+# preserved). It requires the WS endpoint to faithfully forward the resumption
+# handshake — the autonomous `campaign-api` proxy does NOT, so resuming through it
+# yields a zombie session: connected and accepting audio but never producing
+# output. Cold reconnects (a fresh session each time) work through the proxy, so
+# this defaults OFF. Enable only against an endpoint that supports resumption
+# (e.g. a direct Google base_url).
+REALTIME_GEMINI_SESSION_RESUMPTION: bool = os.environ.get(
+    "HAL_GEMINI_SESSION_RESUMPTION", "false"
+).lower() in ("1", "true", "yes")
 
 # --- Realtime: OpenAI Realtime ---
 REALTIME_OPENAI_API_KEY: str = (

@@ -64,6 +64,7 @@ class GeminiConfig(BaseModel):
     sample_rate: int = app_config.REALTIME_GEMINI_SAMPLE_RATE
     language: str | None = _load_language()
     use_language_codes: bool = app_config.REALTIME_GEMINI_USE_LANGUAGE_CODES
+    session_resumption_enabled: bool = app_config.REALTIME_GEMINI_SESSION_RESUMPTION
     thinking_level: GeminiThinkingLevel = GeminiThinkingLevel(
         app_config.REALTIME_GEMINI_THINKING_LEVEL
     )
