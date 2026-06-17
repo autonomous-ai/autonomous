@@ -199,6 +199,14 @@ async def lifespan(app: FastAPI):
     def _init_servo():
         if not AnimationService:
             return
+        # Declaration-driven: the servo route is mounted only when the device
+        # declares the `motion` capability (DEVICE.md → motion: { routes: [servo] }).
+        # Without it, starting AnimationService connects to a servo bus that isn't
+        # there and every animation playback throws DeviceNotConnectedError. Gate on
+        # the mount plan so a device that has no servo (e.g. intern-v2) never starts it.
+        if "servo" not in _plan.mounted:
+            logger.info("AnimationService skipped — device does not declare 'motion' (servo route not mounted)")
+            return
         try:
             svc = AnimationService(
                 port=SERVO_PORT, lamp_id=DEVICE_ID, fps=SERVO_FPS, hold_s=SERVO_HOLD_S
@@ -222,6 +230,13 @@ async def lifespan(app: FastAPI):
 
     def _init_camera():
         if not (LocalVideoCaptureDevice and VideoCaptureDeviceInfo and cv2):
+            return
+        # Gated like servo: the camera route mounts only when the device declares
+        # `vision`. A device with no camera (e.g. intern-v2) must not try to open
+        # one — otherwise it logs a misleading "Camera failed to start" hardware
+        # warning when the camera was simply never part of the spec.
+        if "camera" not in _plan.mounted:
+            logger.info("Camera skipped — device does not declare 'vision' (camera route not mounted)")
             return
         try:
             cap = LocalVideoCaptureDevice(
