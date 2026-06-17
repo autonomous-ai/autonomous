@@ -665,11 +665,11 @@ if [ -z "\$OTA_METADATA_URL" ]; then
 fi
 echo "[software-update] OTA metadata: \$OTA_METADATA_URL"
 [ "\$(id -u)" -ne 0 ] && { echo "Run as root."; exit 1; }
-[ \$# -ne 1 ] && { echo "Usage: software-update <os-server|openclaw|bootstrap|web|hal|claude-desktop-buddy|device>"; exit 1; }
+[ \$# -ne 1 ] && { echo "Usage: software-update <os-server|openclaw|bootstrap|web|hal|autonomous-buddy|device>"; exit 1; }
 APP="\$1"
 case "\$APP" in
-  os-server|openclaw|bootstrap|web|hal|claude-desktop-buddy|device) ;;
-  *) echo "Unknown app: \$APP. Use os-server, openclaw, bootstrap, web, hal, claude-desktop-buddy, or device."; exit 1 ;;
+  os-server|openclaw|bootstrap|web|hal|autonomous-buddy|device) ;;
+  *) echo "Unknown app: \$APP. Use os-server, openclaw, bootstrap, web, hal, autonomous-buddy, or device."; exit 1 ;;
 esac
 
 METADATA_TMP=\$(mktemp)
@@ -750,19 +750,19 @@ elif [ "\$APP" = "hal" ]; then
   cd /
   systemctl restart hal
   echo "hal updated to \$VERSION"
-elif [ "\$APP" = "claude-desktop-buddy" ]; then
-  [ -z "\$URL" ] && { echo "Metadata has no url for claude-desktop-buddy"; exit 1; }
+elif [ "\$APP" = "autonomous-buddy" ]; then
+  [ -z "\$URL" ] && { echo "Metadata has no url for autonomous-buddy"; exit 1; }
   ZIP_TMP=\$(mktemp)
   DIR_TMP=\$(mktemp -d)
-  curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download claude-desktop-buddy"; exit 1; }
-  BUDDY_DIR="/opt/claude-desktop-buddy"
+  curl -fsSL -H "Cache-Control: no-cache" -o "\$ZIP_TMP" "\$URL" || { echo "Failed to download autonomous-buddy"; exit 1; }
+  BUDDY_DIR="/opt/autonomous-buddy"
   mkdir -p "\$BUDDY_DIR"
   unzip -o -q "\$ZIP_TMP" -d "\$DIR_TMP"
   [ -f "\$DIR_TMP/buddy-plugin" ] && cp -f "\$DIR_TMP/buddy-plugin" "\$BUDDY_DIR/buddy-plugin" && chmod +x "\$BUDDY_DIR/buddy-plugin"
   [ ! -f "/root/config/buddy.json" ] && [ -f "\$DIR_TMP/config/buddy.json" ] && mkdir -p /root/config && cp -f "\$DIR_TMP/config/buddy.json" /root/config/buddy.json
   echo "\$VERSION" > "\$BUDDY_DIR/VERSION_BUDDY"
-  systemctl restart claude-desktop-buddy
-  echo "claude-desktop-buddy updated to \$VERSION"
+  systemctl restart autonomous-buddy
+  echo "autonomous-buddy updated to \$VERSION"
 elif [ "\$APP" = "device" ]; then
   [ -z "\$URL" ] && { echo "Metadata has no url for devices.\$DEVICE_TYPE"; exit 1; }
   DEVICES_DIR="\$(grep -E '^DEVICES_DIR=' /opt/hal/.env 2>/dev/null | cut -d= -f2)"
@@ -1058,13 +1058,13 @@ WEB_URL=\$(jq -r '.web.url // empty'               "\$META")
 OS_SERVER_URL=\$(jq -r '."os-server".url // empty'             "\$META")
 BOOTSTRAP_URL=\$(jq -r '.bootstrap.url // empty'   "\$META")
 HAL_URL=\$(jq -r '.hal.url // empty'         "\$META")
-BUDDY_URL=\$(jq -r '."claude-desktop-buddy".url // empty' "\$META")
+BUDDY_URL=\$(jq -r '."autonomous-buddy".url // empty' "\$META")
 DEVICES_URL=\$(jq -r --arg t "\$DEVICE_TYPE" '.devices[\$t].url // empty' "\$META")
 WEB_VER=\$(jq -r '.web.version // empty'           "\$META")
 OS_SERVER_VER=\$(jq -r '."os-server".version // empty'         "\$META")
 BOOTSTRAP_VER=\$(jq -r '.bootstrap.version // empty' "\$META")
 HAL_VER=\$(jq -r '.hal.version // empty'     "\$META")
-BUDDY_VER=\$(jq -r '."claude-desktop-buddy".version // empty' "\$META")
+BUDDY_VER=\$(jq -r '."autonomous-buddy".version // empty' "\$META")
 rm -f "\$META"
 [ -z "\$WEB_URL" ] || [ -z "\$OS_SERVER_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
   echo "ERROR: OTA metadata missing web.url / os-server.url / bootstrap.url"; exit 1
@@ -1158,7 +1158,7 @@ rm -f /tmp/web.zip
 
 if [ -n "\$BUDDY_URL" ]; then
   echo "[overlay] Claude Desktop Buddy"
-  BUDDY_DIR="/opt/claude-desktop-buddy"
+  BUDDY_DIR="/opt/autonomous-buddy"
   mkdir -p "\$BUDDY_DIR" /root/config
   retry "curl -fsSL -H 'Cache-Control: no-cache' -o /tmp/buddy.zip '\$BUDDY_URL'" 5
   unzip -o -q /tmp/buddy.zip -d /tmp/buddy-extract
@@ -1171,7 +1171,7 @@ if [ -n "\$BUDDY_URL" ]; then
     cp -f /tmp/buddy-extract/config/buddy.json /root/config/buddy.json
   echo "\$BUDDY_VER" > "\$BUDDY_DIR/VERSION_BUDDY"
   rm -rf /tmp/buddy-extract
-  cat > /etc/systemd/system/claude-desktop-buddy.service <<'UNIT'
+  cat > /etc/systemd/system/autonomous-buddy.service <<'UNIT'
 [Unit]
 Description=Claude Desktop Buddy (BLE)
 After=bluetooth.target os-server.service
@@ -1180,18 +1180,18 @@ Wants=bluetooth.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/claude-desktop-buddy
-ExecStart=/opt/claude-desktop-buddy/buddy-plugin -config /root/config/buddy.json
+WorkingDirectory=/opt/autonomous-buddy
+ExecStart=/opt/autonomous-buddy/buddy-plugin -config /root/config/buddy.json
 Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=claude-desktop-buddy
+SyslogIdentifier=autonomous-buddy
 
 [Install]
 WantedBy=multi-user.target
 UNIT
-  systemctl enable claude-desktop-buddy
+  systemctl enable autonomous-buddy
 else
   echo "[overlay] no buddy URL — skipping"
 fi
@@ -1238,7 +1238,7 @@ cat > /output/manifest-opi.json <<MANIFEST_JSON
     "os-server": "${BAKED_OS_SERVER_VER}",
     "bootstrap": "${BAKED_BOOTSTRAP_VER}",
     "hal": "${BAKED_HAL_VER}",
-    "claude-desktop-buddy": "${BAKED_BUDDY_VER}"
+    "autonomous-buddy": "${BAKED_BUDDY_VER}"
   },
   "source_image": {
     "file_id": "${OPI_FILE_ID}",
