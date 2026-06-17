@@ -487,6 +487,7 @@ export default function Monitor() {
               ledColor={ledColor}
               sceneInfo={sceneInfo}
               hasEmotion={hasCap(Cap.Expression)}
+              hasMotion={hasCap(Cap.Motion)}
               webVersion={__WEB_VERSION__}
               halVersion={sys?.halVersion ?? null}
               onSceneActivate={(scene) => {

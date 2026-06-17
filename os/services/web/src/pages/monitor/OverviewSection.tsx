@@ -51,6 +51,7 @@ export function OverviewSection({
   ledColor,
   sceneInfo,
   hasEmotion,
+  hasMotion,
   webVersion,
   halVersion,
   onSceneActivate,
@@ -69,6 +70,7 @@ export function OverviewSection({
   ledColor: LEDColor | null;
   sceneInfo: SceneInfo | null;
   hasEmotion: boolean; // device declares the expression capability (/emotion route)
+  hasMotion: boolean; // device declares the motion capability (/servo route)
   webVersion: string;
   halVersion: string | null;
   onSceneActivate: (scene: string) => void;
@@ -323,7 +325,10 @@ export function OverviewSection({
 
       {/* Row 2: Emotion + Hardware + Scene + Servo Pose */}
       <div className="lm-grid-4">
-        {/* Emotion */}
+        {/* Emotion — only for devices that declare the expression capability (the
+            /emotion route). intern-v2 has no expression, so the whole card is hidden
+            rather than showing an agent emotion the device can't actually express. */}
+        {hasEmotion && (
         <div style={{
           ...S.card, padding: "14px 16px",
           background: emotion ? `linear-gradient(135deg, var(--lm-bg) 60%, ${emotionColor}18)` : "var(--lm-bg)",
@@ -348,7 +353,6 @@ export function OverviewSection({
               </div>
             </div>
           </div>
-          {hasEmotion && (
           <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 4, marginTop: 10 }}>
             {ALL_EMOTIONS.map((e) => {
               const active = e === emotion;
@@ -375,8 +379,8 @@ export function OverviewSection({
               );
             })}
           </div>
-          )}
         </div>
+        )}
 
         {/* Hardware */}
         <div style={S.card}>
@@ -425,10 +429,14 @@ export function OverviewSection({
           ) : <span style={{ color: "var(--lm-text-muted)" }}>Loading…</span>}
         </div>
 
-        {/* Scene */}
+        {/* Scene — `scene` is a route WITHIN the `light` capability (lamp declares
+            light:[led,scene]; intern-v2 declares light:[led] only), so the capability
+            list can't distinguish it. Gate on data instead: a device whose light
+            capability omits the scene route leaves /scene 404ing, so sceneInfo stays
+            null and the card never renders (rather than showing "Loading…" forever). */}
+        {sceneInfo && (
         <div style={S.card}>
           <div style={S.cardLabel}>Scene</div>
-          {sceneInfo ? (
             <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 5 }}>
               {sceneInfo.scenes.map((s) => (
                 <span key={s} role="button" onClick={() => onSceneActivate(s)} style={{
@@ -454,10 +462,11 @@ export function OverviewSection({
                 fontWeight: !sceneInfo.active ? 600 : 400,
               }}>Off</span>
             </div>
-          ) : <span style={{ color: "var(--lm-text-muted)" }}>Loading…</span>}
         </div>
+        )}
 
-        {/* Servo */}
+        {/* Servo — only for devices that declare the motion capability (e.g. lamp, not intern-v2) */}
+        {hasMotion && (
         <div style={S.card}>
           <div style={S.cardLabel}>Servo Pose</div>
           {servo ? (
@@ -497,6 +506,7 @@ export function OverviewSection({
             </div>
           ) : <span style={{ color: "var(--lm-text-muted)" }}>Loading…</span>}
         </div>
+        )}
       </div>
 
       {/* Display Eyes — hidden via display:none, code kept for future re-enable */}
