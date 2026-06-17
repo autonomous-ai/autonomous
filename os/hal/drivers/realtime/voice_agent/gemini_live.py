@@ -127,7 +127,16 @@ class GeminiLiveAgent(VoiceAgentBase):
             ]
             live_config.tools = [types.Tool(function_declarations=declarations)]
 
-        if self._resumption_handle is not None:
+        # Session resumption (OPT-IN, default off). When enabled, the FIRST connect
+        # sends handle=None to make the server start emitting resumption handles;
+        # a reconnect then passes the latest handle to resume the SAME session
+        # (context preserved). This only works if the WS endpoint faithfully
+        # forwards the resumption handshake — the `campaign-api` proxy does NOT, and
+        # resuming through it produces a zombie session (connected, accepts audio,
+        # never responds). Cold reconnects work through the proxy, so resumption
+        # stays gated behind HAL_GEMINI_SESSION_RESUMPTION. Enable only against an
+        # endpoint that supports it (e.g. a direct Google base_url).
+        if self._config.session_resumption_enabled:
             live_config.session_resumption = types.SessionResumptionConfig(
                 handle=self._resumption_handle,
             )
@@ -158,8 +167,8 @@ class GeminiLiveAgent(VoiceAgentBase):
             self._exit_stack = None
             self._session = None
 
-    async def _async_send_input(self, input: InputBase) -> None:
-        if self._session is None:
+    async def _async_send_input(self, input: InputBase | None) -> None:
+        if self._session is None or input is None:
             return
         if isinstance(input, AudioInput):
             # When VAD is disabled, send activityStart before first audio
@@ -194,11 +203,21 @@ class GeminiLiveAgent(VoiceAgentBase):
                 video=types.Blob(data=buf.tobytes(), mime_type="image/jpeg")
             )
         elif isinstance(input, FunctionCallResultInput):
+            # input.output is normally a JSON object string, but send_function_result()
+            # is public and may be handed arbitrary text — Gemini's response field
+            # requires a dict, so coerce non-object/invalid payloads instead of
+            # letting json.loads crash the IO loop.
+            try:
+                parsed: Any = json.loads(input.output)
+            except (json.JSONDecodeError, TypeError):
+                parsed = {"result": input.output}
+            if not isinstance(parsed, dict):
+                parsed = {"result": parsed}
             await self._session.send_tool_response(
                 function_responses=[
                     types.FunctionResponse(
                         id=input.call_id,
-                        response=json.loads(input.output),
+                        response=parsed,
                     )
                 ]
             )
@@ -377,7 +396,7 @@ class GeminiLiveAgent(VoiceAgentBase):
                         self._submit_and_wait(
                             self._async_commit(), timeout=self._send_timeout_s
                         )
-                    elif isinstance(event, InputEvent):
+                    elif isinstance(event, InputEvent) and event.input is not None:
                         self._submit_and_wait(
                             self._async_send_input(event.input),
                             timeout=self._send_timeout_s,

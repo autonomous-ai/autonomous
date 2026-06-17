@@ -345,6 +345,25 @@ AGENT_GATEWAY: str = (
 # --- Realtime voice agent ---
 REALTIME_ENABLED: bool = os.environ.get("HAL_REALTIME_ENABLED", "true").lower() in ("1", "true", "yes")
 REALTIME_PROVIDER: str = os.environ.get("HAL_REALTIME_PROVIDER", "gemini")  # none | gemini | openai
+# Max seconds receive() waits for the NEXT output event from the agent's recv
+# queue before giving up on the turn. This is the gap between events, not the
+# whole turn: a streaming reply puts events on the queue sub-second apart and
+# ends with a turn-done signal, so this only fires when the model stays SILENT
+# (a noise/non-directed turn it correctly ignores, or a stall). It is therefore
+# the dead-air the user waits through before the turn falls back to the main
+# agent — keep it just above realtime first-token latency (~1-2s), not minutes.
+REALTIME_RECV_QUEUE_TIMEOUT_S: float = float(
+    os.environ.get("HAL_REALTIME_RECV_QUEUE_TIMEOUT_S", "8.0")
+)
+# A captured session shorter than this AND with no STT transcript is treated as a
+# VAD false-trigger (a noise blip that only grabbed the pre-roll, no sustained
+# speech) and is NOT committed to the realtime model. Committing such turns wastes
+# a model turn and often makes it answer the silence, which then desyncs onto a
+# later real turn. A genuine audio-only turn (real speech STT happened to miss)
+# runs longer than this, so it still commits.
+REALTIME_MIN_COMMIT_DURATION_S: float = float(
+    os.environ.get("HAL_REALTIME_MIN_COMMIT_DURATION_S", "0.8")
+)
 # Turn detection / VAD: "server_vad" | "semantic_vad" | "off"
 # For Gemini: "off" disables automatic activity detection; any other value enables it.
 # For OpenAI: maps to turn_detection type in session config.
@@ -365,6 +384,16 @@ REALTIME_GEMINI_VOICE: str = os.environ.get("HAL_GEMINI_LIVE_VOICE", "Kore")
 REALTIME_GEMINI_SAMPLE_RATE: int = 16000
 REALTIME_GEMINI_THINKING_LEVEL: str = os.environ.get("HAL_GEMINI_THINKING_LEVEL", "HIGH")
 REALTIME_GEMINI_USE_LANGUAGE_CODES: bool = os.environ.get("HAL_GEMINI_USE_LANGUAGE_CODES", "false").lower() in ("1", "true", "yes")
+# Session resumption lets a reconnect resume the SAME server session (context
+# preserved). It requires the WS endpoint to faithfully forward the resumption
+# handshake — the autonomous `campaign-api` proxy does NOT, so resuming through it
+# yields a zombie session: connected and accepting audio but never producing
+# output. Cold reconnects (a fresh session each time) work through the proxy, so
+# this defaults OFF. Enable only against an endpoint that supports resumption
+# (e.g. a direct Google base_url).
+REALTIME_GEMINI_SESSION_RESUMPTION: bool = os.environ.get(
+    "HAL_GEMINI_SESSION_RESUMPTION", "false"
+).lower() in ("1", "true", "yes")
 
 # --- Realtime: OpenAI Realtime ---
 REALTIME_OPENAI_API_KEY: str = (

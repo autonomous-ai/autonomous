@@ -172,7 +172,14 @@ class VoiceService:
                     original_on_speak_end()
                 if hal_config.REALTIME_ENABLED and tts_service.last_spoken_text:
                     text: str = tts_service.last_spoken_text
-                    logger.info("[realtime] Feeding TTS history: %r", text[:100])
+                    # Direction is INTO the realtime model: whatever was just
+                    # spoken (often an OpenClaw reply, not Gemini's own output) is
+                    # pushed to Gemini as history so it stays aware of what the
+                    # device said and won't repeat it. Not a Gemini-generated line.
+                    logger.info(
+                        "[realtime<-tts] Notifying realtime agent of spoken text: %r",
+                        text[:100],
+                    )
                     self._realtime.send_text(f"[TTS HISTORY] {text}")
 
             tts_service._on_speak_end = _tts_speak_end_with_realtime_feedback
@@ -893,7 +900,21 @@ class VoiceService:
             rt_delegated = False
             rt_handled = False
             rt_transcript = ""
-            if hal_config.REALTIME_ENABLED and self._realtime.available and rt_audio_buffer:
+            # Noise/false-trigger guard: a session with no STT transcript AND only
+            # a sliver of audio (just the VAD pre-roll, no sustained speech) is not
+            # worth a model turn — committing it makes the model answer silence,
+            # which then desyncs onto a later real turn. A real audio-only turn runs
+            # longer than the threshold, so it still commits.
+            rt_noise_turn = (
+                not combined
+                and buf_duration < hal_config.REALTIME_MIN_COMMIT_DURATION_S
+            )
+            if (
+                hal_config.REALTIME_ENABLED
+                and self._realtime.available
+                and rt_audio_buffer
+                and not rt_noise_turn
+            ):
                 logger.info(
                     "[realtime] Entering realtime flow — committing audio (stt=%r)",
                     combined[:100] if combined else "(empty)",
@@ -915,6 +936,12 @@ class VoiceService:
                         pass
                     self._realtime.send_text("[TURN CONTEXT] " + " | ".join(turn_ctx))
 
+                    # Drop any output still queued from a previous turn so this
+                    # turn only reads its OWN response. Provider replies arrive
+                    # async and can lag the local-VAD cadence; without this, a
+                    # noise blip reads a stale prior reply in milliseconds and
+                    # speaks it ("Moon talks on its own" + double TTS).
+                    self._realtime.flush_output()
                     self._realtime.commit_audio()
                     logger.info("[realtime] Audio committed — streaming output")
                     text_parts: list[str] = []
@@ -959,7 +986,6 @@ class VoiceService:
                             "[realtime] Model delegated → will forward to OS server"
                         )
                     else:
-                        rt_handled = True
                         # Flush any remaining text that didn't end with a sentence boundary
                         remaining: str = self.strip_rt_markers(sentence_buf)
                         if remaining and self._tts is not None:
@@ -969,21 +995,46 @@ class VoiceService:
                                     remaining[:80],
                                 )
                                 self._tts.speak(remaining)
+                                first_sentence_sent = True
                             else:
                                 logger.info(
                                     "[realtime] Final fragment → speak_queue: %r",
                                     remaining[:80],
                                 )
                                 self._tts.speak_queue(remaining)
-                        logger.info(
-                            "[realtime] Chit-chat complete — transcript=%r",
-                            rt_transcript[:200] if rt_transcript else "(empty)",
-                        )
-                        # Save turn to realtime memory
-                        if combined or rt_transcript:
-                            self._realtime.save_turn(
-                                user_text=combined or "(audio only)",
-                                agent_text=rt_transcript or "(audio only)",
+                        # Only claim the turn as HANDLED if the model actually
+                        # produced a spoken reply. An empty result — e.g.
+                        # receive() timed out with no output — must NOT be reported
+                        # as handled: that sends [HANDLED] with an empty [REPLY],
+                        # OpenClaw's input-branching reads it as "already answered"
+                        # and stays silent, so the user hears nothing from anyone.
+                        # Leaving rt_handled False (rt_delegated also False) falls
+                        # through to the normal forward below so the main agent answers.
+                        if first_sentence_sent or rt_transcript:
+                            rt_handled = True
+                            # Label this `agent_reply`, not `transcript`: it is what
+                            # Moon SAID, not what the user said. Elsewhere `transcript`
+                            # means the user's STT (Session END / STT final), so using
+                            # the same word for the agent's output read as role-reversed.
+                            logger.info(
+                                "[realtime] Chit-chat complete — agent_reply=%r",
+                                rt_transcript[:200] if rt_transcript else "(empty)",
+                            )
+                            # Save turn to realtime memory
+                            if combined or rt_transcript:
+                                self._realtime.save_turn(
+                                    user_text=combined or "(audio only)",
+                                    agent_text=rt_transcript or "(audio only)",
+                                )
+                        else:
+                            # No spoken output from the realtime agent (empty /
+                            # timeout). Do NOT claim a forward here — whether the
+                            # turn actually reaches the OS server is decided below
+                            # by `if combined:`. A pure noise turn with empty STT
+                            # is correctly dropped (nothing to forward).
+                            logger.info(
+                                "[realtime] No realtime output (empty / timeout) — "
+                                "turn falls back to OS server only if STT produced a transcript"
                             )
                 except Exception as e:
                     logger.warning(
@@ -991,6 +1042,13 @@ class VoiceService:
                         e,
                     )
                     rt_delegated = True  # fall through to OS server on error
+            elif hal_config.REALTIME_ENABLED and rt_noise_turn:
+                logger.info(
+                    "[realtime] Skipping commit — noise/false-trigger turn "
+                    "(dur=%.2fs < %.2fs, empty STT)",
+                    buf_duration,
+                    hal_config.REALTIME_MIN_COMMIT_DURATION_S,
+                )
             elif hal_config.REALTIME_ENABLED:
                 logger.warning(
                     "[realtime] Enabled but agent not available — falling back to OS server"
@@ -1030,7 +1088,9 @@ class VoiceService:
                     if sensing_msg:
                         self._sensing_sender.send(sensing_msg, event_type=event_type)
                 else:
-                    # Realtime not active — send to the OS server normally
+                    # Realtime not active, OR it was active but produced no output
+                    # (e.g. receive() timed out) — send to the OS server normally so
+                    # the main agent handles the turn instead of nobody answering.
                     self._sensing_sender.send(final_msg, event_type=event_type)
 
             # 2. Submit SER — uses the UNTRIMMED snapshot so laughter / sighs
