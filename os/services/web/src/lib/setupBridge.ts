@@ -102,7 +102,11 @@ export function emit(event: SetupBridgeEvent, data: Record<string, unknown> = {}
     ts: Date.now(),
     ...data,
   };
-  for (const target of targets()) {
+  const dests = targets();
+  // Log every event so it's visible in the device page's console even when no
+  // opener is listening — handy for debugging the setup flow on the device.
+  console.log(`[setupBridge] ${event} → ${dests.length} target(s) @ ${PARENT_ORIGIN}`, payload);
+  for (const target of dests) {
     try {
       target.postMessage(payload, PARENT_ORIGIN);
     } catch {
