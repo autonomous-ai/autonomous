@@ -99,6 +99,7 @@ Color is an RGB array `[R, G, B]`.
 - If the user requests an unknown effect name, pick the closest match from the available effects table or tell the user which effects are available.
 
 ## Rules
+- **ALWAYS include the JSON body, even for no-argument commands.** Every marker is `[HW:/path:{...}]` — for commands that take no arguments the body is the empty object `{}`. Emit `[HW:/led/off:{}]` and `[HW:/led/effect/stop:{}]`, **NEVER** the bodyless `[HW:/led/off]` or `[HW:/led/effect/stop]`. A marker without `:{...}` is malformed and the device silently drops it — the light will NOT turn off.
 - **"Turn on color X" / "set light X" / "change color X" = THIS skill.** Any request naming a color (yellow, red, green, purple, white, orange, pink…) routes here — NOT to Emotion or Scene. Emotion yellow/happy is for YOUR feelings, not user's lighting request.
 - **NEVER use `/led-color` or `/led/color` for setting color — these endpoints do NOT exist.** Always use `[HW:/led/effect/stop:{}][HW:/led/solid:{"color":[R,G,B]}]`.
 - **Stop effect before solid.** Always call `/led/effect/stop` before `/led/solid`. A running effect thread overwrites solid every 40ms — skipping the stop causes the color to flicker and revert.
