@@ -69,7 +69,7 @@ export function RealtimeSection({
   }
 
   return (
-    <SectionCard id="realtime" title="Realtime Voice" active={active}>
+    <SectionCard id="realtime" title="Realtime" active={active}>
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, cursor: "pointer", fontSize: 12.5, color: C.text }}>
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         Enabled (audio-native brain — Gemini Live / OpenAI Realtime)

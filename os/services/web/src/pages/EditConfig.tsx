@@ -22,7 +22,7 @@ import { Wifi, UserCircle, Cpu, Brain, Volume2, MicVocal, MessageSquare, Globe, 
 
 // Local subset of the shared SectionId — EditConfig uses `stt` (Language is
 // rendered under id="stt"), not `language` / `deepgram` like Setup.
-type SectionId = Extract<SharedSectionId, "device" | "wifi" | "llm" | "voice" | "face" | "tts" | "stt" | "channel" | "mqtt">;
+type SectionId = Extract<SharedSectionId, "device" | "wifi" | "llm" | "voice" | "face" | "tts" | "realtime" | "stt" | "channel" | "mqtt">;
 const ICON_SIZE = 15;
 const ALL_SECTIONS: { id: SectionId; label: string; icon: React.ReactNode; debugOnly?: boolean }[] = [
   { id: "device",   label: "Device",   icon: <Cpu size={ICON_SIZE} /> },
@@ -33,6 +33,7 @@ const ALL_SECTIONS: { id: SectionId; label: string; icon: React.ReactNode; debug
   { id: "llm",      label: "AI Brain", icon: <Brain size={ICON_SIZE} />, debugOnly: true },
   { id: "stt",      label: "Language", icon: <Globe size={ICON_SIZE} />, debugOnly: true },
   { id: "tts",      label: "Voice", icon: <Volume2 size={ICON_SIZE} />, debugOnly: true },
+  { id: "realtime", label: "Realtime", icon: <Volume2 size={ICON_SIZE} />, debugOnly: true },
   { id: "voice",    label: "My Voice", icon: <MicVocal size={ICON_SIZE} /> },
   { id: "face",     label: "Face",     icon: <UserCircle size={ICON_SIZE} /> },
   { id: "channel",  label: "Channels", icon: <MessageSquare size={ICON_SIZE} />, debugOnly: true },
@@ -650,7 +651,7 @@ export default function EditConfig() {
                 />
 
                 <RealtimeSection
-                  active={activeSection === "tts"}
+                  active={activeSection === "realtime"}
                   realtimeLoaded={realtimeLoaded}
                   llmLoaded={llmLoaded}
                   enabled={realtimeEnabled} setEnabled={setRealtimeEnabled}
