@@ -6,10 +6,7 @@ OS Server (Go, port 5000) bridges requests here.
 """
 
 import json
-import logging
-import logging.handlers
 import os
-import secrets
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -33,11 +30,9 @@ from hal.config import (
     CAMERA_INDEX,
     CAMERA_WIDTH,
     DL_API_KEY,
-    DEVICE_AUTH_TOKEN,
     HTTP_HOST,
     HTTP_PORT,
     DEVICE_ID,
-    MODE,
     SERVO_FPS,
     SERVO_HOLD_S,
     SERVO_PORT,
@@ -48,67 +43,12 @@ from hal.config import (
 )
 from hal.models import HealthResponse, StatusResponse
 from hal.presets import SCENE_PRESETS, SERVO_CMD_PLAY
+from hal.server_support.openapi_meta import API_DESCRIPTION, OPENAPI_TAGS
 
-# --- Logging: colored stdout + rotating file ---
-LOG_DIR = Path(os.environ.get("HAL_LOG_DIR", "/var/log/hal"))
-LOG_DIR.mkdir(parents=True, exist_ok=True)
+# --- Logging: colored stdout + rotating file (+ GELF) ---
+from hal.server_support.log_setup import setup_logging
 
-_LEVEL_COLORS = {
-    logging.DEBUG: "\033[37m",  # gray
-    logging.INFO: "\033[32m",  # green
-    logging.WARNING: "\033[33m",  # yellow
-    logging.ERROR: "\033[31m",  # red
-    logging.CRITICAL: "\033[1;31m",  # bold red
-}
-_RESET = "\033[0m"
-
-
-class _ColorFormatter(logging.Formatter):
-    """Adds ANSI colors to levelname for console output."""
-
-    _fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
-
-    def format(self, record):
-        color = _LEVEL_COLORS.get(record.levelno, "")
-        record.levelname = f"{color}{record.levelname}{_RESET}"
-        formatter = logging.Formatter(self._fmt)
-        return formatter.format(record)
-
-
-_root = logging.getLogger()
-_log_level = os.environ.get("HAL_LOG_LEVEL", "INFO").upper()
-_root.setLevel(getattr(logging, _log_level, logging.INFO))
-
-# Console handler (colored)
-_console = logging.StreamHandler()
-_console.setFormatter(_ColorFormatter())
-_root.addHandler(_console)
-
-# File handler: 1 MB per file, keep 3 backups (~4 MB max) -- no color codes
-_file = logging.handlers.RotatingFileHandler(
-    LOG_DIR / "server.log",
-    maxBytes=1 * 1024 * 1024,
-    backupCount=3,
-)
-_file.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
-_root.addHandler(_file)
-
-# GELF handler: send INFO+ logs to centralized Graylog
-try:
-    from hal.drivers.gelf_handler import GELFHandler
-    from hal.config import _os_cfg_get
-
-    _gelf = GELFHandler()
-    _gelf.setFormatter(logging.Formatter("%(message)s"))
-    _device_id = _os_cfg_get("device_id")
-    if _device_id:
-        _gelf.set_host(_device_id)
-    _root.addHandler(_gelf)
-except Exception:
-    pass
-
-logger = logging.getLogger("hal.server")
-logger.info("Logging to %s/server.log", LOG_DIR)
+logger = setup_logging()
 
 # --- Lazy imports for hardware drivers (may not be available on dev machines) ---
 
@@ -599,12 +539,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="HAL Hardware Runtime",
-    description=(
-        "Hardware driver API for the OS. "
-        "Controls servo motors (5-axis Feetech), RGB LEDs (64x WS2812), "
-        "camera, audio (mic/speaker), display, and AI voice pipeline. "
-        "OS Server (Go, port 5000) bridges requests here."
-    ),
+    description=API_DESCRIPTION,
     version=(Path(__file__).parent / "VERSION_HAL").read_text().strip()
     if (Path(__file__).parent / "VERSION_HAL").exists()
     else "dev",
@@ -624,52 +559,7 @@ app = FastAPI(
         {"url": "/api/hardware", "description": "Via OS server admin proxy (browser)"},
         {"url": "/", "description": "Direct (loopback / SSH tunnel)"},
     ],
-    openapi_tags=[
-        {
-            "name": "Servo",
-            "description": "5-axis Feetech servo motor control. Play pre-recorded animations or send direct joint positions.",
-        },
-        {
-            "name": "LED",
-            "description": "WS2812 RGB LED strip (64 LEDs). Set solid color, paint individual pixels, or turn off.",
-        },
-        {
-            "name": "Camera",
-            "description": "USB camera for snapshots and MJPEG streaming.",
-        },
-        {
-            "name": "Audio",
-            "description": "Low-level audio hardware control. Volume (amixer), raw recording (mic), and test tones. No AI -- just hardware.",
-        },
-        {
-            "name": "Emotion",
-            "description": "High-level orchestration: single call coordinates servo animation + LED color + display expression for an emotion.",
-        },
-        {
-            "name": "Scene",
-            "description": "Lighting scene presets (reading, focus, relax, movie, night, energize). Sets LED color temperature and brightness.",
-        },
-        {
-            "name": "Presence",
-            "description": "PIR motion sensor presence detection. Auto-dims lights when user is idle/away.",
-        },
-        {
-            "name": "Display",
-            "description": "Round LCD display: pixel art eye expressions (default) or info mode (time, weather, text).",
-        },
-        {
-            "name": "Voice",
-            "description": "AI voice pipeline. Deepgram STT (always-on listening) + LLM-based TTS (text-to-speech). Requires API keys.",
-        },
-        {
-            "name": "Speaker",
-            "description": "Per-user voice enrollment + recognition via cosine similarity on external-API embeddings.",
-        },
-        {
-            "name": "System",
-            "description": "Health checks and system status.",
-        },
-    ],
+    openapi_tags=OPENAPI_TAGS,
 )
 
 # --- Include route modules (declaration-driven via DEVICE.md) ---
@@ -949,133 +839,19 @@ def custom_swagger_ui() -> HTMLResponse:
     return HTMLResponse(content=html)
 
 
-class ProxyPrefixMiddleware:
-    """ASGI middleware: reads X-Forwarded-Prefix and sets root_path."""
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] == "http":
-            headers = dict(scope.get("headers", []))
-            prefix = headers.get(b"x-forwarded-prefix", b"").decode()
-            if prefix:
-                scope["root_path"] = prefix
-        await self.app(scope, receive, send)
-
-
-app.add_middleware(ProxyPrefixMiddleware)
-
-from ipaddress import ip_address, ip_network
-
-from fastapi.responses import JSONResponse
-
-_LOCAL_NETS = (
-    ip_network("127.0.0.0/8"),
-    ip_network("::1/128"),
-    ip_network("10.0.0.0/8"),
-    ip_network("172.16.0.0/12"),
-    ip_network("192.168.0.0/16"),
+from hal.server_support.http_security import (
+    ProxyPrefixMiddleware,
+    local_only_middleware,
+    request_logging_middleware,
 )
 
-
-def _is_local(value: str | None) -> bool:
-    if not value:
-        return False
-    host = value.split(",")[0].strip()
-    if host.startswith("[") and "]" in host:
-        host = host[1: host.index("]")]
-    elif ":" in host and host.count(":") == 1:
-        host = host.rsplit(":", 1)[0]
-    try:
-        addr = ip_address(host)
-    except ValueError:
-        return host == "localhost"
-    return any(addr in net for net in _LOCAL_NETS)
-
-
-def _is_same_origin(origin_or_referer: str | None, host: str) -> bool:
-    if not origin_or_referer:
-        return False
-    # Strip scheme and path — just compare hostname:port
-    value = origin_or_referer.split(",")[0].strip()
-    for prefix in ("https://", "http://"):
-        if value.startswith(prefix):
-            value = value[len(prefix):]
-    value = value.split("/")[0]  # drop path
-    return value == host
-
-
-def _has_valid_bearer_token(request) -> bool:
-    """Return True if the request carries Authorization: Bearer <DEVICE_AUTH_TOKEN>.
-
-    DEVICE_AUTH_TOKEN is the device-internal auth secret, kept SEPARATE from the
-    LLM provider key (it falls back to the LLM key only for devices provisioned
-    before the split — see config.py / SECURITY.md). Empty token disables this
-    path — falls through to other auth in the middleware. Constant-time compare
-    guards against timing side-channels.
-    """
-    if not DEVICE_AUTH_TOKEN:
-        return False
-    auth = request.headers.get("authorization", "")
-    if not auth.startswith("Bearer "):
-        return False
-    provided = auth[len("Bearer "):].strip()
-    if not provided:
-        return False
-    return secrets.compare_digest(provided, DEVICE_AUTH_TOKEN)
-
-
-@app.middleware("http")
-async def local_only_middleware(request, call_next):
-    if MODE == "production":
-        client = request.client.host if request.client else None
-        xff = request.headers.get("x-forwarded-for")
-        real_ip = request.headers.get("x-real-ip")
-
-        # Localhost callers (Go server, OpenClaw on-device) always pass.
-        if _is_local(client) and not (xff and not _is_local(xff)) and not (real_ip and not _is_local(real_ip)):
-            return await call_next(request)
-
-        # Bearer token matching llm_api_key (config.json). Lets authenticated
-        # server-to-server callers and (future) post-login web sessions pass
-        # without depending on spoof-friendly Origin/Referer headers.
-        if _has_valid_bearer_token(request):
-            return await call_next(request)
-
-        # Browser requests from the same device origin pass (web UI, Swagger API calls).
-        # /docs and /openapi.json are only reachable via iframe from the web UI —
-        # direct URL navigation has no Referer and is blocked here intentionally.
-        host = request.headers.get("host", "")
-        origin = request.headers.get("origin")
-        referer = request.headers.get("referer")
-        if _is_same_origin(origin, host) or _is_same_origin(referer, host):
-            return await call_next(request)
-
-        logger.warning(
-            "Blocked external request: client=%s xff=%s origin=%s referer=%s path=%s",
-            client, xff, origin, referer, request.url.path,
-        )
-        return JSONResponse(
-            status_code=403,
-            content={"detail": "HAL API: requires loopback, valid bearer token, or same-origin"},
-        )
-    return await call_next(request)
-
-
-@app.middleware("http")
-async def request_logging_middleware(request, call_next):
-    start = time.perf_counter()
-    response = await call_next(request)
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    logger.debug(
-        "%s %s -> %d (%.1fms)",
-        request.method,
-        request.url.path,
-        response.status_code,
-        elapsed_ms,
-    )
-    return response
+# Middleware registration order preserved exactly as before the extraction to
+# hal/http_security.py: ProxyPrefix first (sets root_path from
+# X-Forwarded-Prefix), then the local-only / same-origin / bearer gate, then
+# request logging. Identical Starlette stack — only the bodies moved out.
+app.add_middleware(ProxyPrefixMiddleware)
+app.middleware("http")(local_only_middleware)
+app.middleware("http")(request_logging_middleware)
 
 
 # --- System endpoints (stay in server.py) ---
