@@ -394,10 +394,12 @@ async def lifespan(app: FastAPI):
                     music_service=state.music_service,
                     wake_words=wake_words,
                     alsa_device=AUDIO_INPUT_ALSA,
-                    # `presence` gates people perception: speech emotion (reading
-                    # the user's emotion from voice) only runs if the device
-                    # declares it — mirrors face emotion in the sensing loop.
-                    enable_people_perception=("presence" in _profile.capabilities),
+                    # `audio` (the mic) gates VOICE people perception: speaker-ID
+                    # and speech emotion (reading the user's emotion from voice)
+                    # need only a mic, not a camera or the presence people-layer —
+                    # so any device with a mic runs them. (Face emotion in the
+                    # sensing loop stays `presence`-gated; see SensingService below.)
+                    enable_people_perception=("audio" in _profile.capabilities),
                 )
                 state.voice_service.start()
                 logger.info("VoiceService auto-started (%s, wake_words=%s)", stt_provider.name, wake_words)

@@ -35,53 +35,81 @@ var Catalog = []string{
 	"input-branching",
 }
 
-// Capability maps a skill to the DEVICE.md capability it requires. A skill
-// absent from this map is a platform/logic skill with no hardware dependency and
-// is always installed. The requirement is kept here (not in SKILL.md
-// front-matter) so the agentic runtime's skill header stays the standard
-// name/description schema and never sees a non-standard key. Keep in sync with
-// scripts/provision/setup.sh (skill_cap).
-var Capability = map[string]string{
-	"audio":          device.CapAudio,
-	"camera":         device.CapVision,
-	"computer-use":   device.CapCompanion,
-	"display":        device.CapDisplay,
-	"emotion":        device.CapExpression,
-	"led-control":    device.CapLight,
-	"scene":          device.CapLight,
-	"servo-control":  device.CapMotion,
-	"servo-tracking": device.CapMotion,
-	"music":          device.CapMedia,
-	"voice":          device.CapAudio,
-	"sensing":        device.CapSensing,
-	"sensing-track":  device.CapSensing,
-	// People-perception skills — they understand the PERSON (face roster, stranger
-	// detection, who is speaking, the user's mood). That is the `presence`
-	// capability (the ML people-layer over camera/mic), NOT the raw sensor: a
-	// camera that only streams (vision, no presence) must not load face-enroll, and
-	// a device that doesn't perceive people must not get user-emotion-detection,
-	// or the skill loads with no perception events to act on. Keep in sync with the
-	// presence-gated perception loop in os/hal sensing/voice.
-	"face-enroll":            device.CapPresence,
-	"guard":                  device.CapPresence,
-	"speaker-recognizer":     device.CapPresence,
-	"user-emotion-detection": device.CapPresence,
+// Capability maps a skill to the DEVICE.md capabilities it requires, with
+// ANY-OF semantics: a skill is kept when the device declares AT LEAST ONE of the
+// listed capabilities. Most skills list a single capability; a skill that can be
+// driven by more than one sensor lists each (e.g. user-emotion-detection works
+// off a camera OR a mic). A skill absent from this map is a platform/logic skill
+// with no hardware dependency and is always installed. The requirement is kept
+// here (not in SKILL.md front-matter) so the agentic runtime's skill header stays
+// the standard name/description schema and never sees a non-standard key. Keep in
+// sync with scripts/provision/setup.sh (skill_cap).
+var Capability = map[string][]string{
+	"audio":          {device.CapAudio},
+	"camera":         {device.CapVision},
+	"computer-use":   {device.CapCompanion},
+	"display":        {device.CapDisplay},
+	"emotion":        {device.CapExpression},
+	"led-control":    {device.CapLight},
+	"scene":          {device.CapLight},
+	"servo-control":  {device.CapMotion},
+	"servo-tracking": {device.CapMotion},
+	"music":          {device.CapMedia},
+	"voice":          {device.CapAudio},
+	"sensing":        {device.CapSensing},
+	"sensing-track":  {device.CapSensing},
+	// People-perception skills understand the PERSON, split by the SENSOR they need:
+	//
+	//   Camera people-perception (face roster, stranger detection) → `presence`,
+	//   the ML people-layer over the camera, NOT the raw `vision` sensor: a camera
+	//   that only streams (vision, no presence) must not load face-enroll/guard.
+	//
+	//   Voice people-perception (who is speaking) → `audio`, i.e. the mic — a mic
+	//   is all speaker-ID needs, no camera and no presence people-layer. So any
+	//   device with a mic gets it; not a hard requirement (Supported fails open and
+	//   skips it when audio is absent).
+	//
+	//   user-emotion-detection is ONE skill over TWO triggers — facial `[emotion]`
+	//   (camera, gated `presence`) and vocal `[speech_emotion]` (mic, gated
+	//   `audio`). It loads when the device has EITHER sensor: a mic-only device
+	//   (intern-v2) keeps the voice branch, a camera-only device keeps the face
+	//   branch, and a device with both (lamp) gets both.
+	//
+	// Keep in sync with the HAL gates: voice people-perception on `audio`
+	// (server.py VoiceService), camera people-perception on `presence`
+	// (server.py SensingService).
+	"face-enroll":            {device.CapPresence},
+	"guard":                  {device.CapPresence},
+	"speaker-recognizer":     {device.CapAudio},
+	"user-emotion-detection": {device.CapAudio, device.CapPresence},
 }
 
 // Supported filters the catalog to the skills a device with deviceCaps can run:
 // a skill is kept when it requires no capability (platform skill) or the device
-// declares that capability. Fail-open: empty deviceCaps → full catalog (a device
-// that declares no capabilities keeps everything, matching legacy behavior). The
-// maximal reference device (Lamp) declares every capability, so it keeps all.
+// declares AT LEAST ONE of the skill's required capabilities (any-of). Fail-open:
+// empty deviceCaps → full catalog (a device that declares no capabilities keeps
+// everything, matching legacy behavior). The maximal reference device (Lamp)
+// declares every capability, so it keeps all.
 func Supported(deviceCaps map[string]bool) []string {
 	if len(deviceCaps) == 0 {
 		return Catalog
 	}
 	out := make([]string, 0, len(Catalog))
 	for _, name := range Catalog {
-		if cap := Capability[name]; cap == "" || deviceCaps[cap] {
+		reqs := Capability[name]
+		if len(reqs) == 0 || hasAny(deviceCaps, reqs) {
 			out = append(out, name)
 		}
 	}
 	return out
+}
+
+// hasAny reports whether deviceCaps declares at least one of reqs.
+func hasAny(deviceCaps map[string]bool, reqs []string) bool {
+	for _, c := range reqs {
+		if deviceCaps[c] {
+			return true
+		}
+	}
+	return false
 }
