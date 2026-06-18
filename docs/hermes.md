@@ -150,7 +150,8 @@ os-server materializes it to `/usr/local/lib/os-runtimes/hermes/install.sh` and
 switch-runtime runs that local copy — fully offline, no CDN round-trip. (The CDN
 path `${RUNTIMES_BASE_URL}/hermes/install.sh` remains a fallback for backends not
 compiled into the binary.) The installer pulls the Hermes CLI to
-`/usr/local/bin/hermes`, runs `hermes claw migrate` (skills only), seeds
+`/usr/local/bin/hermes`, stops `openclaw` (so the migration does not race its
+running state), runs `hermes claw migrate` (skills only), seeds
 `~/.hermes/.env`, **patches only `.model` + `.custom_providers` in
 `config.yaml`** (via `yq`, preserving anything else the CLI wrote — not a
 full-file overwrite), drops the `runtime-hermes-presync` hook (§11) and **runs
@@ -173,6 +174,18 @@ during install, and again on every later switch:
 | `llm_model` | → | `config.yaml` `.model.default` |
 | `llm_base_url` | → | `config.yaml` `.custom_providers[0].base_url` |
 | `llm_api_key` | → | `.env` `AUTONOMOUS_API_KEY` |
+| `telegram_bot_token` | → | `.env` `TELEGRAM_BOT_TOKEN` |
+| `telegram_user_id` | → | `.env` `TELEGRAM_ALLOWED_USERS` |
+| `slack_bot_token` | → | `.env` `SLACK_BOT_TOKEN` |
+| `slack_app_token` | → | `.env` `SLACK_APP_TOKEN` |
+| `slack_user_id` | → | `.env` `SLACK_ALLOWED_USERS` |
+| `discord_bot_token` | → | `.env` `DISCORD_BOT_TOKEN` |
+| `discord_guild_id` | → | `.env` `DISCORD_GUILD_ID` |
+| `discord_user_id` | → | `.env` `DISCORD_ALLOWED_USERS` |
+| `whatsapp_user_id` | → | `.env` `WHATSAPP_ALLOWED_USERS` |
+
+Only non-empty `config.json` fields are written, so unconfigured channels are
+left untouched.
 
 `.env` `API_SERVER_KEY` must equal `constants.go` `APIKey` (`hermes-api-key`) or
 every turn 401s. Hermes must listen on `127.0.0.1:8642` to match `BaseURL`.

@@ -11,7 +11,7 @@
 # later runtime switches re-sync the latest llm_* from config.json.
 #
 # What it does:
-#   1. install the Hermes CLI + migrate skills from OpenClaw;
+#   1. install the Hermes CLI, stop openclaw, then migrate skills from OpenClaw;
 #   2. seed .env, then patch ONLY .model + .custom_providers in config.yaml
 #      (yq, not a full-file overwrite), then run the presync hook once to pull
 #      the device's real llm_model / llm_base_url / llm_api_key from config.json;
@@ -62,25 +62,28 @@ if [ ! -x "$HERMES_BIN" ]; then
 fi
 "$HERMES_BIN" --version || true
 
+echo "[install-hermes] stop openclaw before migrating (avoid racing its state)"
+systemctl stop openclaw 2>/dev/null || true
+
 echo "[install-hermes] migrate skills from OpenClaw (model config is synced separately)"
-"$HERMES_BIN" claw migrate --preset full --overwrite --skill-conflict rename --yes \
+"$HERMES_BIN" claw migrate --preset full --overwrite --skill-conflict rename --yes --migrate-secrets \
   || echo "[install-hermes] WARN: claw migrate failed (non-fatal — no OpenClaw state yet?)"
 
 mkdir -p "$HERMES_DIR" /var/log/hermes
 touch "$ENV_FILE"
 
 echo "[install-hermes] seed $ENV_FILE"
-for k in API_SERVER_ENABLED API_SERVER_KEY API_SERVER_CORS_ORIGINS TELEGRAM_ALLOWED_USERS; do
+for k in API_SERVER_ENABLED API_SERVER_KEY API_SERVER_CORS_ORIGINS; do
   sed -i "/^${k}=/d" "$ENV_FILE"
 done
 cat >>"$ENV_FILE" <<EOF
 API_SERVER_ENABLED=true
 API_SERVER_KEY=${HERMES_API_SERVER_KEY}
 API_SERVER_CORS_ORIGINS=http://localhost:3000
-TELEGRAM_ALLOWED_USERS=y
 EOF
-# AUTONOMOUS_API_KEY (the LLM provider key) + model + base_url are written by the
-# presync hook from config.json on every switch, so the device's real values win.
+# AUTONOMOUS_API_KEY (LLM key) + model + base_url + TELEGRAM_ALLOWED_USERS are
+# written by the presync hook from config.json on every switch, so the device's
+# real values win.
 
 echo "[install-hermes] patch $CONFIG_YAML — only .model + .custom_providers (presync overwrites model.default/base_url from config.json)"
 # Patch in place: replace ONLY the two keys we own, preserving anything else the
@@ -114,10 +117,9 @@ ENV_FILE="$HERMES_DIR/.env"
 CONFIG_YAML="$HERMES_DIR/config.yaml"
 log() { echo "[hermes-presync] $*"; }
 
+# config.yaml model/provider come from llm_* (structured edits via yq).
 LLM_MODEL="$(jq -r '.llm_model    // empty' "$CONFIG_JSON" 2>/dev/null || true)"
 LLM_BASE_URL="$(jq -r '.llm_base_url // empty' "$CONFIG_JSON" 2>/dev/null || true)"
-LLM_API_KEY="$(jq -r '.llm_api_key  // empty' "$CONFIG_JSON" 2>/dev/null || true)"
-
 if [ -n "$LLM_MODEL" ]; then
   yq -i ".model.default = \"$LLM_MODEL\"" "$CONFIG_YAML"
   log "model.default = $LLM_MODEL"
@@ -126,11 +128,31 @@ if [ -n "$LLM_BASE_URL" ]; then
   yq -i ".custom_providers[0].base_url = \"$LLM_BASE_URL\"" "$CONFIG_YAML"
   log "custom_providers[0].base_url = $LLM_BASE_URL"
 fi
-if [ -n "$LLM_API_KEY" ]; then
-  sed -i '/^AUTONOMOUS_API_KEY=/d' "$ENV_FILE"
-  echo "AUTONOMOUS_API_KEY=$LLM_API_KEY" >>"$ENV_FILE"
-  log "AUTONOMOUS_API_KEY synced"
-fi
+
+# .env secrets/IDs: config.json wins — copy each non-empty config.json field to
+# its Hermes env var (replacing any existing line). Empty/missing fields are
+# skipped, so whatever `hermes claw migrate` already carried over from OpenClaw
+# is kept as the fallback. (Bot tokens like TELEGRAM_BOT_TOKEN usually arrive via
+# migrate, but we still sync them in case OpenClaw had none.)
+sync_env() {
+  local key="$1" var="$2" val
+  val="$(jq -r ".${key} // empty" "$CONFIG_JSON" 2>/dev/null || true)"
+  [ -n "$val" ] || return 0
+  sed -i "/^${var}=/d" "$ENV_FILE"
+  echo "${var}=${val}" >>"$ENV_FILE"
+  log "${var} synced"
+}
+
+sync_env llm_api_key        AUTONOMOUS_API_KEY
+sync_env telegram_bot_token TELEGRAM_BOT_TOKEN
+sync_env telegram_user_id   TELEGRAM_ALLOWED_USERS
+sync_env slack_bot_token    SLACK_BOT_TOKEN
+sync_env slack_app_token    SLACK_APP_TOKEN
+sync_env slack_user_id      SLACK_ALLOWED_USERS
+sync_env discord_bot_token  DISCORD_BOT_TOKEN
+sync_env discord_guild_id   DISCORD_GUILD_ID
+sync_env discord_user_id    DISCORD_ALLOWED_USERS
+sync_env whatsapp_user_id   WHATSAPP_ALLOWED_USERS
 PRESYNC
 chmod +x /usr/local/bin/runtime-hermes-presync
 
@@ -143,7 +165,7 @@ echo "[install-hermes] sync llm_* from config.json now (via runtime-hermes-presy
   || echo "[install-hermes] WARN: presync failed (config.json missing? non-fatal — switch-runtime retries on next switch)"
 
 echo "[install-hermes] install + start hermes gateway as a system service"
-"$HERMES_BIN" gateway install --system --run-as-user root
+yes y | "$HERMES_BIN" gateway install --system --run-as-user root
 "$HERMES_BIN" gateway start --system
 "$HERMES_BIN" gateway status --system || true
 
