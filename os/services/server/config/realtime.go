@@ -205,6 +205,35 @@ var (
 	realtimeOpenAIReasoning = map[string]bool{"minimal": true, "low": true, "medium": true, "high": true, "xhigh": true}
 )
 
+// Ordered option lists — the SINGLE SOURCE the web reads via GET realtime options
+// (so the FE never hardcodes/drifts). Order matters: first reasoning entry is the
+// cheapest (the default). Voices match the maps below; KEEP IN SYNC with the HAL
+// enums (os/hal/drivers/realtime/enums).
+var (
+	RealtimeProviders           = []string{"gemini", "openai", "none"}
+	RealtimeGeminiVoiceList     = []string{"Puck", "Charon", "Kore", "Fenrir", "Aoede"}
+	RealtimeOpenAIVoiceList     = []string{"alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"}
+	RealtimeGeminiThinkingList  = []string{"MINIMAL", "LOW", "MEDIUM", "HIGH"}
+	RealtimeOpenAIReasoningList = []string{"minimal", "low", "medium", "high", "xhigh"}
+)
+
+// RealtimeOptions is the payload for the realtime-options endpoint: valid
+// providers, and the per-provider voice/reasoning lists the web renders.
+type RealtimeOptions struct {
+	Providers []string            `json:"providers"`
+	Voices    map[string][]string `json:"voices"`
+	Reasoning map[string][]string `json:"reasoning"`
+}
+
+// GetRealtimeOptions returns the valid realtime option lists.
+func GetRealtimeOptions() RealtimeOptions {
+	return RealtimeOptions{
+		Providers: RealtimeProviders,
+		Voices:    map[string][]string{"gemini": RealtimeGeminiVoiceList, "openai": RealtimeOpenAIVoiceList},
+		Reasoning: map[string][]string{"gemini": RealtimeGeminiThinkingList, "openai": RealtimeOpenAIReasoningList},
+	}
+}
+
 // ValidateRealtimeProvider accepts the provider selector (gemini|openai|none and
 // the off-synonyms / empty). Anything else is rejected.
 func ValidateRealtimeProvider(provider string) error {
