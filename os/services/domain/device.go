@@ -736,6 +736,20 @@ type MQTTDeviceRenameData struct {
 // presence flags so the web UI can render "configured ✓" + a write-only
 // SecretUpdateField. Non-secret fields (URLs, IDs, model name, language)
 // are returned as-is because they're useful for the UI and not sensitive.
+// RealtimePublic is the read-back view of the realtime voice-agent config — the
+// RESOLVED active-provider values (provider/model/voice/reasoning for whichever
+// provider is active, enabled state, resolved base_url). Mirrors how
+// tts_provider/tts_voice are surfaced; the key is exposed only as HasAPIKey.
+type RealtimePublic struct {
+	Enabled   bool   `json:"enabled"`
+	Provider  string `json:"provider"` // "" when realtime is off
+	Model     string `json:"model"`
+	Voice     string `json:"voice"`
+	Reasoning string `json:"reasoning"`
+	BaseURL   string `json:"base_url"` // resolved (may be llm-derived)
+	HasAPIKey bool   `json:"has_api_key"`
+}
+
 type ConfigPublicResponse struct {
 	Channel            string `json:"channel"`
 	TelegramUserID     string `json:"telegram_user_id"`
@@ -760,6 +774,12 @@ type ConfigPublicResponse struct {
 	MQTTPort           int    `json:"mqtt_port"`
 	FAChannel          string `json:"fa_channel"`
 	FDChannel          string `json:"fd_channel"`
+
+	// Realtime voice-agent config — RESOLVED active-provider values for the web to
+	// render the form. Write back via UpdateConfig's `realtime` field. The api_key
+	// is never returned (only HasAPIKey, the realtime-specific override; the LLM
+	// key fallback is reported by HasLLMAPIKey).
+	Realtime RealtimePublic `json:"realtime"`
 
 	// Presence booleans replace raw secret values. Frontend renders
 	// "configured · update" affordance when true, empty input when false.

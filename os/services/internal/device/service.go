@@ -373,6 +373,15 @@ func (s *Service) GetPublicConfig() domain.ConfigPublicResponse {
 		HasNetworkPassword:  s.config.NetworkPassword != "",
 		HasMQTTPassword:     s.config.MQTTPassword != "",
 		HasAdminPassword:    s.config.AdminPasswordHash != "",
+		Realtime: domain.RealtimePublic{
+			Enabled:   s.config.RealtimeEnabled(),
+			Provider:  s.config.RealtimeProvider(),
+			Model:     s.config.RealtimeModel(),
+			Voice:     s.config.RealtimeVoice(),
+			Reasoning: s.config.RealtimeReasoning(),
+			BaseURL:   s.config.RealtimeBaseURL(),
+			HasAPIKey: s.config.Realtime != nil && s.config.Realtime.APIKey != "",
+		},
 	}
 }
 
