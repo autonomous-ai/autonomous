@@ -160,6 +160,25 @@ type AddChannelRequest struct {
 	WhatsappUserID string `json:"whatsapp_user_id"`
 }
 
+// RefreshChannelRequest carries the credentials needed to re-apply a channel's
+// canonical config block via AgentGateway.RefreshChannelConfig. The caller
+// (device.Service.RefreshChannelConfig) sources the creds from config.json on
+// the device — refresh does NOT carry tokens over MQTT.
+type RefreshChannelRequest struct {
+	Channel string
+
+	// slack
+	SlackBotToken string
+	SlackAppToken string
+	SlackUserID   string
+	// SlackMode selects the Slack transport — see AddChannelRequest.SlackMode for
+	// semantics. Empty / "socket" preserves existing behaviour; "http" switches to
+	// proxy mode and consults SlackSigningSecret / SlackWebhookPath.
+	SlackMode          string
+	SlackSigningSecret string
+	SlackWebhookPath   string
+}
+
 // EffectiveSlackMode resolves SlackMode, defaulting to "socket" so unset
 // payloads keep current behaviour (existing installs unaffected).
 func (r *AddChannelRequest) EffectiveSlackMode() string {
@@ -253,6 +272,23 @@ const (
 	// (gateway has no /slack/events route in that mode) — proxy SHOULD route only to
 	// devices the backend has flipped to slack_mode="http".
 	CommandSlackEvent = "slack_event"
+
+	// CommandSlackCommand is sent by the same Slack proxy (bff-campaign-service)
+	// when Slack delivers a slash-command invocation (/openclaw, /new, ...) for a
+	// workspace this device owns. It is forwarded and verified exactly like
+	// CommandSlackEvent — POSTed verbatim to the local OpenClaw gateway's single
+	// HTTP webhook (default http://127.0.0.1:18789/slack/events), which routes it
+	// to the slash-command handler by body shape and replies to the user via the
+	// command's response_url. The only wire differences from slack_event are the
+	// urlencoded Content-Type the proxy sets in headers and that the event_id slot
+	// carries Slack's trigger_id (slash commands have no event_id).
+	//
+	// Wire format: {"cmd":"slack_command","event_id":"<trigger_id>","body":"<raw urlencoded form>",
+	//               "headers":{"X-Slack-Signature":"v0=...","X-Slack-Request-Timestamp":"...",
+	//                          "Content-Type":"application/x-www-form-urlencoded"}}
+	//
+	// Like slack_event, only relevant for devices in slack_mode="http".
+	CommandSlackCommand = "slack_command"
 )
 
 // Data kinds carried inside CommandData envelope.
@@ -281,6 +317,24 @@ const (
 
 	// KindSkillsInstall installs a role's skill bundle. Data: {"role":"<role>"}.
 	KindSkillsInstall = "skills.install"
+
+	// KindChannelRefreshConfig re-applies the canonical channels.<channel> block on
+	// an already-onboarded device. Targets older customers whose openclaw.json
+	// predates schema additions (e.g. the socketMode block, object-form streaming,
+	// dmPolicy) — backend pushes this so the device rewrites the block using the
+	// current applySlackChannelConfig writer without a full re-onboarding flow.
+	//
+	// Separate from add_channel by design: refresh is config-only (no plugin
+	// install, no CLI bootstrap, no pairing). Today only channel:"slack" is
+	// implemented; other channels return a distinct error code so the backend can
+	// branch. Credentials are read from config.json on the device — they are NOT
+	// carried in the payload.
+	//
+	// Flow:
+	//   server → device : kind=channel.refresh_config data={channel}
+	//   device → server : status=configuring → status=success data={channel, runtime}
+	//                                        | status=failure error=<code>
+	KindChannelRefreshConfig = "channel.refresh_config"
 )
 
 // Connector (MCP) data-kind prefixes. The connector code is the suffix, e.g.
@@ -525,6 +579,23 @@ type MQTTOAuthSetData struct {
 // MQTTOAuthRemoveData is the Data payload for kind:"oauth.remove".
 type MQTTOAuthRemoveData struct {
 	Provider string `json:"provider"`
+}
+
+// MQTTChannelRefreshConfigData is the Data payload for kind:"channel.refresh_config".
+// Channel selects which channels.<channel> block to re-apply. Today only "slack"
+// is implemented; other channels return an error. Credentials are read from
+// config.json on the device — they are NOT carried in this payload.
+type MQTTChannelRefreshConfigData struct {
+	Channel string `json:"channel"`
+}
+
+// MQTTChannelRefreshConfigResultData is the Data payload echoed in fd_channel
+// success/failure messages for kind:"channel.refresh_config". Runtime carries
+// the detected openclaw runtime version string (empty if probing failed) so the
+// backend can correlate refresh outcomes with runtime upgrades.
+type MQTTChannelRefreshConfigResultData struct {
+	Channel string `json:"channel"`
+	Runtime string `json:"runtime,omitempty"`
 }
 
 // OAuthTokenEntry is the on-disk representation of a single provider's token
