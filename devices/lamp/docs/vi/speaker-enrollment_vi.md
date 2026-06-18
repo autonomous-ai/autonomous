@@ -131,7 +131,7 @@ Mọi giọng lạ được gom cụm local để server biết "đây là cùng
 | Ngưỡng match voice stranger | 0.65 | `HAL_VOICE_STRANGER_MATCH_THRESHOLD` | Cosine similarity để gom giọng lạ vào `voice_N` đã có |
 | Số voice stranger tối đa | 50 | `HAL_MAX_VOICE_STRANGERS` | Giới hạn cluster; evict oldest khi vượt |
 | Thư mục voice strangers | `/root/local/voice_strangers` | `HAL_VOICE_STRANGERS_DIR` | Persist embedding cluster (tồn tại qua reboot) |
-| Bật/tắt nhận diện giọng nói | false | `HAL_SPEAKER_RECOGNITION_ENABLED` | Công tắc tổng |
+| Bật/tắt nhận diện giọng nói | true | `HAL_SPEAKER_RECOGNITION_ENABLED` | Công tắc tổng (mặc định bật; gate theo capability `audio`) |
 
 ## Lưu trữ
 
