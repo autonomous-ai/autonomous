@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os/exec"
@@ -66,6 +67,16 @@ func (st *setupState) set(phase, ip, errMsg string) {
 	st.error = errMsg
 	st.mu.Unlock()
 }
+
+// ErrSlackCredentialsMissing is returned by RefreshChannelConfig when the
+// device's config.json has no slack bot token — refresh cannot synthesize it, so
+// the caller must run /api/device/setup or add_channel first.
+var ErrSlackCredentialsMissing = errors.New("slack_credentials_missing")
+
+// ErrChannelNotSupported is returned by RefreshChannelConfig for channels that
+// cannot be refreshed in a config-only way (or unknown channel names). Today
+// only slack is wired into the refresh path.
+var ErrChannelNotSupported = errors.New("channel_not_supported")
 
 type Service struct {
 	config         *config.Config
@@ -308,6 +319,47 @@ func (s *Service) AddChannel(ctx context.Context, data domain.AddChannelRequest)
 		return ch, nil
 	}
 	return s.agentGateway.PairWhatsapp(ctx), nil
+}
+
+// RefreshChannelConfig re-applies the canonical channel config block to
+// openclaw.json on the device. Triggered by the channel.refresh_config MQTT kind
+// to fix older devices whose config predates schema additions (e.g. the
+// socketMode block, object-form streaming, dmPolicy).
+//
+// Reads credentials from config.json (set previously by /api/device/setup or
+// add_channel) — refresh does NOT carry tokens over MQTT. Delegates the
+// write+restart to AgentGateway.RefreshChannelConfig, the separate
+// non-AddChannel code path so the two flows can diverge cleanly.
+//
+// Returns the detected runtime version string ("Y.M.P", empty when undetected)
+// and sentinel errors the MQTT handler maps to stable status codes:
+//   - ErrSlackCredentialsMissing — config.json has no slack bot token
+//   - ErrChannelNotSupported     — unknown channel or one not wired into refresh
+func (s *Service) RefreshChannelConfig(ctx context.Context, channel string) (string, error) {
+	switch channel {
+	case domain.ChannelSlack:
+		// Bot token is the one mandatory credential for both transports.
+		// AppToken is socket-mode-only — refresh succeeds without it when
+		// migrating to HTTP mode (signing_secret comes from LLMAPIKey instead,
+		// which the device always has).
+		if s.config.SlackBotToken == "" {
+			return "", ErrSlackCredentialsMissing
+		}
+		// Refresh defaults to HTTP mode: use the device's llm_api_key (LLMAPIKey
+		// on disk) as the signingSecret so it matches what the backend proxy
+		// re-signs with. Socket-mode installs flip to HTTP the first time the
+		// backend sends channel.refresh_config — no per-device add_channel push.
+		return s.agentGateway.RefreshChannelConfig(ctx, domain.RefreshChannelRequest{
+			Channel:            channel,
+			SlackBotToken:      s.config.SlackBotToken,
+			SlackAppToken:      s.config.SlackAppToken, // ignored in http mode, kept for back-compat
+			SlackUserID:        s.config.SlackUserID,
+			SlackMode:          "http",
+			SlackSigningSecret: s.config.LLMAPIKey,
+		})
+	default:
+		return "", ErrChannelNotSupported
+	}
 }
 
 // PairWhatsapp re-runs the WhatsApp Linked Devices pairing flow without
