@@ -79,7 +79,7 @@ export default function EditConfig() {
   const debug = isDebugMode();
   // Hide sections whose hardware this device lacks (DEVICE.md capabilities via
   // /api/system/info). Fail-open while caps load → no flash of an empty menu.
-  const { hasCap } = useCapabilities();
+  const { caps, hasCap } = useCapabilities();
   const SECTIONS = ALL_SECTIONS.filter(
     (s) => (debug || !s.debugOnly) && (!s.cap || hasCap(s.cap)),
   );
@@ -197,7 +197,15 @@ export default function EditConfig() {
     } catch {}
   }, []);
 
-  useEffect(() => { loadFaceOwners(); }, [loadFaceOwners]);
+  // Load the person roster (`/hw/face/owners`) only when a section that consumes
+  // it is reachable: Face (vision) shows face owners, My Voice (audio) attaches
+  // voice samples to the same records. A device with neither (e.g. motion-only)
+  // would otherwise fire a premature 404. Wait for caps to resolve first
+  // (caps === null = still loading) so the gate is decided, not raced.
+  useEffect(() => {
+    if (caps === null) return;
+    if (caps.has(Cap.Vision) || caps.has(Cap.Audio)) loadFaceOwners();
+  }, [caps, loadFaceOwners]);
 
   useEffect(() => {
     getDeviceConfig()
