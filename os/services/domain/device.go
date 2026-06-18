@@ -262,6 +262,7 @@ const (
 	KindDeviceRename = "device.rename" // rewrite IDENTITY.md Name (WatchIdentity picks up wake-words)
 	KindOAuthSet     = "oauth.set"     // store/replace OAuth token for a provider
 	KindOAuthRemove  = "oauth.remove"  // delete OAuth token for a provider
+	KindRealtimeSet  = "realtime.set"  // persist realtime voice-agent config (provider/voice/reasoning…)
 
 	KindSystemInfo    = "system.info"    // aggregate: versions + network + host
 	KindSystemVersion = "system.version" // lamp + bootstrap + hal + openclaw versions
@@ -618,6 +619,86 @@ type MQTTTTSSetAck struct {
 	Status string          `json:"status"`
 	Error  string          `json:"error,omitempty"`
 	Data   *MQTTTTSSetData `json:"data,omitempty"`
+}
+
+// ===========================================================================
+// realtime.set — configure the realtime voice agent (Gemini Live / OpenAI
+// Realtime) from the backend / web dashboard. Same MQTT shape as tts.set.
+//
+// HOW TO PUSH (for FE / BFF teams)
+// --------------------------------
+// Publish a DOWNLINK to the device's command channel (the same `fa_channel`
+// topic tts.set uses — i.e. the topic the device subscribes to). Envelope:
+//
+//	{ "cmd": "data", "kind": "realtime.set", "data": { ...MQTTRealtimeSetData... } }
+//
+// The device replies on its `fd_channel` (uplink) with MQTTRealtimeSetAck:
+//   1) {"kind":"realtime.set","status":"starting"}            — received
+//   2) {"kind":"realtime.set","status":"success","data":{…}}  — applied, OR
+//      {"kind":"realtime.set","status":"failure","error":"…"} — rejected
+//
+// EFFECT: the device writes the values into the `realtime` block of its
+// config.json and RESTARTS HAL (takes a few seconds). HAL then reads the new
+// block on boot. So `success` means "saved + hal restarting", not "live yet".
+//
+// FIELD SEMANTICS (all fields optional; omit a field = leave it unchanged)
+//   enabled   bool   — turn the realtime brain on/off. false = off (device
+//                      falls back to the classic STT→agent→TTS path).
+//   provider  string — "gemini" | "openai" | "none". "none" = off.
+//   model     string — applied to the ACTIVE provider (the one in `provider`,
+//                      or the current provider if `provider` is omitted).
+//   voice     string — active provider's voice. Valid:
+//                        gemini: Puck | Charon | Kore | Fenrir | Aoede
+//                        openai: alloy | ash | coral | echo | fable | onyx |
+//                                nova | sage | shimmer
+//   reasoning string — active provider's reasoning depth (cost knob). Valid:
+//                        gemini (thinking_level): MINIMAL | LOW | MEDIUM | HIGH
+//                        openai (reasoning_effort): minimal|low|medium|high|xhigh
+//                      Defaults are the CHEAPEST tier (MINIMAL / minimal).
+//   api_key   string — override the realtime provider key. Empty/omitted →
+//                      falls back to the device's llm_api_key.
+//   base_url  string — override the realtime endpoint. Empty/omitted → derived
+//                      from llm_base_url (…/ws/gemini or …/ws/openai).
+//
+// RULES
+//   - When any of model/voice/reasoning is sent, `provider` (or the current
+//     provider) MUST be a concrete gemini|openai — those knobs are per-provider.
+//   - Invalid provider/voice/reasoning → status:"failure" with a descriptive
+//     error; nothing is written.
+//
+// EXAMPLES
+//   Switch to OpenAI Realtime with a voice:
+//     {"cmd":"data","kind":"realtime.set","data":{"provider":"openai","voice":"alloy"}}
+//   Tune Gemini reasoning up (more expensive):
+//     {"cmd":"data","kind":"realtime.set","data":{"provider":"gemini","reasoning":"HIGH"}}
+//   Turn realtime off:
+//     {"cmd":"data","kind":"realtime.set","data":{"enabled":false}}
+// ===========================================================================
+
+// MQTTRealtimeSetData is the nested data payload for cmd:"data", kind:"realtime.set".
+type MQTTRealtimeSetData struct {
+	Enabled   *bool  `json:"enabled,omitempty"`   // nil = leave unchanged
+	Provider  string `json:"provider,omitempty"`  // gemini | openai | none
+	Model     string `json:"model,omitempty"`     // active provider's model
+	Voice     string `json:"voice,omitempty"`     // active provider's voice
+	Reasoning string `json:"reasoning,omitempty"` // gemini thinking_level OR openai reasoning_effort
+	APIKey    string `json:"api_key,omitempty"`   // optional override; empty → llm_api_key
+	BaseURL   string `json:"base_url,omitempty"`  // optional override; empty → llm_base_url-derived
+}
+
+// MQTTRealtimeSetCommand wraps the full realtime.set downlink envelope for unmarshalling.
+type MQTTRealtimeSetCommand struct {
+	Data MQTTRealtimeSetData `json:"data"`
+}
+
+// MQTTRealtimeSetAck is published to fd_channel after applying (or failing) a
+// realtime.set downlink. status: "starting" | "success" | "failure".
+type MQTTRealtimeSetAck struct {
+	MQTTInfoResponse
+	Kind   string               `json:"kind"`
+	Status string               `json:"status"`
+	Error  string               `json:"error,omitempty"`
+	Data   *MQTTRealtimeSetData `json:"data,omitempty"`
 }
 
 // MQTTTTSPreviewData is the nested data payload for cmd:"data", kind:"tts.preview".

@@ -669,6 +669,93 @@ func (s *Service) RePushVoiceConfig() {
 	}()
 }
 
+// UpdateRealtimeConfig applies a realtime.set MQTT downlink to the `realtime`
+// block in config.json, then restarts hal so it reads the new block (HAL reads
+// config.json at import). Mirrors UpdateVoiceConfig. Validates provider and the
+// per-provider voice/reasoning before writing — returns an error (no write) on
+// anything invalid. Empty/omitted fields leave the current value unchanged.
+func (s *Service) UpdateRealtimeConfig(d domain.MQTTRealtimeSetData) error {
+	if err := config.ValidateRealtimeProvider(d.Provider); err != nil {
+		return err
+	}
+	if s.config.Realtime == nil {
+		s.config.Realtime = config.DefaultRealtimeConfig()
+	}
+	rt := s.config.Realtime
+
+	if d.Enabled != nil {
+		rt.Enabled = d.Enabled
+	}
+	if d.Provider != "" {
+		rt.Provider = strings.ToLower(strings.TrimSpace(d.Provider))
+	}
+	if d.APIKey != "" {
+		rt.APIKey = d.APIKey
+	}
+	if d.BaseURL != "" {
+		rt.BaseURL = d.BaseURL
+	}
+
+	// Per-provider knobs apply to the active provider (the one just set, or the
+	// current one). They require a concrete gemini|openai provider.
+	if d.Model != "" || d.Voice != "" || d.Reasoning != "" {
+		target := strings.ToLower(strings.TrimSpace(rt.Provider))
+		if err := config.ValidateRealtimeKnobs(target, d.Voice, d.Reasoning); err != nil {
+			return err
+		}
+		switch target {
+		case "gemini":
+			if rt.Gemini == nil {
+				rt.Gemini = &config.GeminiRealtime{}
+			}
+			if d.Model != "" {
+				rt.Gemini.Model = d.Model
+			}
+			if d.Voice != "" {
+				rt.Gemini.Voice = d.Voice
+			}
+			if d.Reasoning != "" {
+				rt.Gemini.ThinkingLevel = d.Reasoning
+			}
+		case "openai":
+			if rt.OpenAI == nil {
+				rt.OpenAI = &config.OpenAIRealtime{}
+			}
+			if d.Model != "" {
+				rt.OpenAI.Model = d.Model
+			}
+			if d.Voice != "" {
+				rt.OpenAI.Voice = d.Voice
+			}
+			if d.Reasoning != "" {
+				rt.OpenAI.ReasoningEffort = d.Reasoning
+			}
+		}
+	}
+
+	if err := s.config.Save(); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+	slog.Info("realtime config updated", "component", "device",
+		"provider", s.config.RealtimeProvider(), "enabled", s.config.RealtimeEnabled())
+	s.RePushRealtimeConfig()
+	return nil
+}
+
+// RePushRealtimeConfig restarts hal so it picks up the new realtime block from
+// config.json (HAL reads it at import).
+func (s *Service) RePushRealtimeConfig() {
+	go func() {
+		slog.Info("restarting hal for realtime config change", "component", "device", "provider", s.config.RealtimeProvider())
+		out, err := exec.Command("systemctl", "restart", "hal").CombinedOutput()
+		if err != nil {
+			slog.Warn("hal restart failed", "component", "device", "error", err, "output", string(out))
+		} else {
+			slog.Info("hal restarted for realtime config", "component", "device", "provider", s.config.RealtimeProvider())
+		}
+	}()
+}
+
 // sttModelForLanguage maps a BCP-47 language code to the Deepgram SKU exposed
 // by the Autonomous STT proxy. Empty input → empty model so hal falls back
 // to its built-in default (flux-general-en). Vietnamese rides on Nova-3 (added

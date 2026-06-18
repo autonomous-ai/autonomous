@@ -113,6 +113,44 @@ func TestRealtime_MissingSubAndKeyOverride(t *testing.T) {
 	}
 }
 
+// Validation accepts good provider/voice/reasoning and rejects bad ones.
+func TestRealtime_Validate(t *testing.T) {
+	for _, ok := range []string{"gemini", "openai", "none", "off", "", "Gemini"} {
+		if err := ValidateRealtimeProvider(ok); err != nil {
+			t.Errorf("provider %q should be valid: %v", ok, err)
+		}
+	}
+	if ValidateRealtimeProvider("grok") == nil {
+		t.Error("provider grok should be rejected")
+	}
+
+	// gemini knobs
+	if err := ValidateRealtimeKnobs("gemini", "Kore", "MINIMAL"); err != nil {
+		t.Errorf("valid gemini knobs rejected: %v", err)
+	}
+	if ValidateRealtimeKnobs("gemini", "alloy", "") == nil {
+		t.Error("openai voice on gemini should be rejected")
+	}
+	if ValidateRealtimeKnobs("gemini", "", "xhigh") == nil {
+		t.Error("openai reasoning on gemini should be rejected")
+	}
+	// openai knobs
+	if err := ValidateRealtimeKnobs("openai", "alloy", "minimal"); err != nil {
+		t.Errorf("valid openai knobs rejected: %v", err)
+	}
+	if ValidateRealtimeKnobs("openai", "Kore", "") == nil {
+		t.Error("gemini voice on openai should be rejected")
+	}
+	// empty voice/reasoning allowed (keep current)
+	if err := ValidateRealtimeKnobs("gemini", "", ""); err != nil {
+		t.Errorf("empty knobs should be allowed: %v", err)
+	}
+	// knobs require a concrete provider
+	if ValidateRealtimeKnobs("none", "Kore", "") == nil {
+		t.Error("knobs with provider none should be rejected")
+	}
+}
+
 // DefaultRealtimeConfig seeds enabled + gemini with the cost-lean defaults and
 // both provider sub-objects (so switching provider keeps tuned values). api_key /
 // base_url stay empty → LLM fallback.

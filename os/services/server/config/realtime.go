@@ -1,6 +1,9 @@
 package config
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // This file holds the realtime voice-agent (audio-native brain — Gemini Live /
 // OpenAI Realtime) config types, defaults, and accessors. The Config.Realtime
@@ -188,4 +191,53 @@ func (c *Config) RealtimeReasoning() string {
 		return defaultRealtimeOpenAIReasoning
 	}
 	return ""
+}
+
+// --- Validation (for realtime.set MQTT downlinks) ---------------------------
+// Valid knob values per provider — KEEP IN SYNC with os/hal/drivers/realtime/
+// enums (GeminiVoice / GeminiThinkingLevel / OpenAIReasoningEffort) and the
+// OpenAI voice list in os/hal/routes/voice.py. Case-sensitive to match the HAL
+// StrEnums (Gemini voices are Capitalized, OpenAI voices/efforts are lowercase).
+var (
+	realtimeGeminiVoices    = map[string]bool{"Puck": true, "Charon": true, "Kore": true, "Fenrir": true, "Aoede": true}
+	realtimeOpenAIVoices    = map[string]bool{"alloy": true, "ash": true, "coral": true, "echo": true, "fable": true, "onyx": true, "nova": true, "sage": true, "shimmer": true}
+	realtimeGeminiThinking  = map[string]bool{"MINIMAL": true, "LOW": true, "MEDIUM": true, "HIGH": true}
+	realtimeOpenAIReasoning = map[string]bool{"minimal": true, "low": true, "medium": true, "high": true, "xhigh": true}
+)
+
+// ValidateRealtimeProvider accepts the provider selector (gemini|openai|none and
+// the off-synonyms / empty). Anything else is rejected.
+func ValidateRealtimeProvider(provider string) error {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "gemini", "openai", "none", "off", "disabled", "":
+		return nil
+	default:
+		return fmt.Errorf("invalid realtime provider %q (want gemini|openai|none)", provider)
+	}
+}
+
+// ValidateRealtimeKnobs checks voice/reasoning against a CONCRETE provider
+// (gemini|openai). Empty voice/reasoning are allowed (means "keep current"). The
+// per-provider knobs (model/voice/reasoning) only make sense for a concrete
+// provider, so anything else is an error.
+func ValidateRealtimeKnobs(provider, voice, reasoning string) error {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "gemini":
+		if voice != "" && !realtimeGeminiVoices[voice] {
+			return fmt.Errorf("invalid gemini voice %q (Puck|Charon|Kore|Fenrir|Aoede)", voice)
+		}
+		if reasoning != "" && !realtimeGeminiThinking[reasoning] {
+			return fmt.Errorf("invalid gemini thinking_level %q (MINIMAL|LOW|MEDIUM|HIGH)", reasoning)
+		}
+	case "openai":
+		if voice != "" && !realtimeOpenAIVoices[voice] {
+			return fmt.Errorf("invalid openai voice %q (alloy|ash|coral|echo|fable|onyx|nova|sage|shimmer)", voice)
+		}
+		if reasoning != "" && !realtimeOpenAIReasoning[reasoning] {
+			return fmt.Errorf("invalid openai reasoning_effort %q (minimal|low|medium|high|xhigh)", reasoning)
+		}
+	default:
+		return fmt.Errorf("realtime model/voice/reasoning require a concrete provider (gemini|openai), got %q", provider)
+	}
+	return nil
 }

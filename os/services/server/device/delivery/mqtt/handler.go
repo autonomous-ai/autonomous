@@ -212,6 +212,8 @@ func (h *DeviceMQTTHandler) dispatchData(env domain.MQTTDataCommand) error {
 	switch env.Kind {
 	case domain.KindTTSSet:
 		return h.handleTTSSet(env)
+	case domain.KindRealtimeSet:
+		return h.handleRealtimeSet(env)
 	case domain.KindTTSPreview:
 		return h.handleTTSPreview(env)
 	case domain.KindDeviceRename:
