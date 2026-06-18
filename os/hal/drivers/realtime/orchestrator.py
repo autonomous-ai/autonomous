@@ -13,16 +13,17 @@ The caller (voice_service) drives the orchestrator:
      - Yields DelegateSignal if model called delegate_to_main (then stops)
 """
 
+import json
 import logging
 import threading
 from collections.abc import Generator
-from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 
 import hal.config as config
+from drivers.realtime.models.signal import DelegateSignal
 from hal.drivers.realtime.config import GeminiConfig, OpenAIConfig, _load_language
 from hal.drivers.realtime.context_manager import (
     ContextManagerBase,
@@ -74,13 +75,6 @@ DELEGATE_TOOL: dict[str, Any] = {
 }
 
 
-@dataclass
-class DelegateSignal:
-    """Yielded by stream_output() when the model calls delegate_to_main."""
-
-    message: str = ""
-
-
 class RealtimeOrchestrator:
     """Manages a single realtime voice agent session.
 
@@ -119,7 +113,9 @@ class RealtimeOrchestrator:
                 logger.warning("Failed to create summarizer: %s", e)
         context_cls = self.CONTEXT_MANAGERS.get(gateway, OpenClawContextManager)
         self._context: ContextManagerBase = context_cls(
-            workspace_dir=self.WORKSPACE_DIRS.get(gateway, config.OPENCLAW_WORKSPACE_DIR),
+            workspace_dir=self.WORKSPACE_DIRS.get(
+                gateway, config.OPENCLAW_WORKSPACE_DIR
+            ),
             language=_load_language() or "English",
             provider=config.REALTIME_PROVIDER,
             summarizer=summarizer,
@@ -151,7 +147,10 @@ class RealtimeOrchestrator:
             logger.exception("[realtime] Failed to catch up on memory summarization")
 
         instructions: str = self._context.build_instructions()
-        logger.info("[realtime] Context manager built instructions (%d chars)", len(instructions))
+        logger.info(
+            "[realtime] Context manager built instructions (%d chars)",
+            len(instructions),
+        )
 
         if provider == "gemini":
             from hal.drivers.realtime.voice_agent.gemini_live import GeminiLiveAgent
@@ -177,9 +176,13 @@ class RealtimeOrchestrator:
 
         try:
             self._agent.connect()
-            logger.info("[realtime] Realtime orchestrator started (provider=%s)", provider)
+            logger.info(
+                "[realtime] Realtime orchestrator started (provider=%s)", provider
+            )
         except Exception:
-            logger.exception("[realtime] Failed to connect realtime agent — will retry on next audio")
+            logger.exception(
+                "[realtime] Failed to connect realtime agent — will retry on next audio"
+            )
         self._started.set()
 
     def stop(self) -> None:
@@ -236,20 +239,19 @@ class RealtimeOrchestrator:
                 isinstance(output, FunctionCallOutput)
                 and output.name == DELEGATE_TOOL_NAME
             ):
-                # Extract message from tool call arguments
-                import json as _json
-
                 delegate_msg: str = ""
                 try:
-                    args: dict = (
-                        _json.loads(output.arguments) if output.arguments else {}
+                    args: dict[str, Any] = (
+                        json.loads(output.arguments) if output.arguments else {}
                     )
                     delegate_msg = args.get("message", "").strip()
                 except (ValueError, TypeError):
                     pass
 
                 if not delegate_msg:
-                    logger.warning("[realtime] Model called delegate_to_main with empty message — ignoring")
+                    logger.warning(
+                        "[realtime] Model called delegate_to_main with empty message — ignoring"
+                    )
                     self._agent.send(
                         [
                             FunctionCallResultInput(
