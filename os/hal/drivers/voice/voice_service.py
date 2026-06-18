@@ -100,6 +100,7 @@ class VoiceService:
         wake_words: Optional[list] = None,
         alsa_device: Optional[str] = None,
         enable_people_perception: bool = True,
+        enable_expression: bool = False,
     ):
         self._stt = stt_provider
         self._input_device = input_device
@@ -162,6 +163,7 @@ class VoiceService:
         # Realtime voice agent — parallel audio pipeline (Gemini Live / OpenAI Realtime).
         self._realtime = RealtimeOrchestrator(
             gateway=AgentGateway(hal_config.AGENT_GATEWAY),
+            enable_expression=enable_expression,
         )
 
         # Hook into TTS on_speak_end to feed spoken text back to the realtime agent.
