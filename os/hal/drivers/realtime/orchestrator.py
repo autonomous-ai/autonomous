@@ -23,7 +23,6 @@ import numpy as np
 import numpy.typing as npt
 
 import hal.config as config
-from drivers.realtime.models.signal import DelegateSignal
 from hal.drivers.realtime.config import GeminiConfig, OpenAIConfig, _load_language
 from hal.drivers.realtime.context_manager import (
     ContextManagerBase,
@@ -37,6 +36,7 @@ from hal.drivers.realtime.models import (
     OutputBase,
     TextInput,
 )
+from hal.drivers.realtime.models.signal import DelegateSignal
 from hal.drivers.realtime.summarizer import RealtimeSummarizer
 from hal.drivers.realtime.voice_agent.base import VoiceAgentBase
 
@@ -275,7 +275,7 @@ class RealtimeOrchestrator:
                     ]
                 )
                 yield DelegateSignal(message=delegate_msg)
-                return
+                continue
             yield output
 
     def send_text(self, text: str) -> None:
