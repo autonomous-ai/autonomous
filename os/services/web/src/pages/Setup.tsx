@@ -10,7 +10,7 @@ import { useSetupStatusPolling } from "@/hooks/setup/useSetupStatusPolling";
 import { useFaceEnroll } from "@/hooks/setup/useFaceEnroll";
 import { setupBridge } from "@/lib/setupBridge";
 import type { SectionId, LlmLoadedState, ChannelLoadedState } from "@/hooks/setup/types";
-import { C, ADMIN_PASSWORD_MIN } from "@/components/setup/shared";
+import { C, ADMIN_PASSWORD_MIN, INPUT_STYLE } from "@/components/setup/shared";
 import { DeviceSection } from "@/components/setup/DeviceSection";
 import { WifiSection } from "@/components/setup/WifiSection";
 import { LLMSection } from "@/components/setup/LLMSection";
@@ -136,6 +136,61 @@ function CopyAddress({ url }: { url: string }) {
       >
         {copied ? "Copied ✓" : "Copy"}
       </button>
+    </div>
+  );
+}
+
+// ManualReachBox — last-resort recovery shown on the "joining Wi-Fi…" screen
+// when the join is dragging on AND we never captured the device's LAN IP (the
+// AP died before the status poller could read it). Without a lan_ip there's no
+// address to auto-redirect to, so we let the operator type the IP they find in
+// their router's admin page and open it directly. Carries the original query
+// params so the new host rehydrates state + re-auth, mirroring the auto-redirect.
+function ManualReachBox({ carrySearch }: { carrySearch: string }) {
+  const [ip, setIp] = useState("");
+  const trimmed = ip.trim();
+  // Loose IPv4 shape check — enough to avoid opening obviously-bad input without
+  // being strict about ranges (the device's router-assigned IP is whatever DHCP
+  // gave it). Empty stays disabled.
+  const looksValid = /^\d{1,3}(\.\d{1,3}){3}$/.test(trimmed);
+  const open = () => {
+    if (!looksValid) return;
+    window.location.href = `http://${trimmed}${window.location.pathname}${carrySearch}`;
+  };
+  return (
+    <div style={{
+      marginTop: 18, paddingTop: 16,
+      borderTop: `1px solid ${C.border}`, textAlign: "left",
+    }}>
+      <div style={{ fontSize: 13, color: C.textDim, marginBottom: 8, lineHeight: 1.5 }}>
+        Taking a while? Your device is likely on your Wi-Fi now. Find its IP in
+        your router's admin page, then reconnect to your home Wi-Fi and open it
+        here:
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          value={ip}
+          onChange={(e) => setIp(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") open(); }}
+          placeholder="192.168.1.x"
+          inputMode="decimal"
+          autoComplete="off"
+          style={{
+            ...INPUT_STYLE,
+            flex: 1,
+            fontFamily: "ui-monospace, monospace",
+          }}
+        />
+        <button
+          type="button"
+          onClick={open}
+          disabled={!looksValid}
+          className="lm-btn lm-btn-primary"
+          style={{ padding: "9px 16px", flexShrink: 0 }}
+        >
+          Open →
+        </button>
+      </div>
     </div>
   );
 }
@@ -742,10 +797,31 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
         });
       }
       setupBridge.submitted({ ssid: ssid.trim(), channel });
-      const result = await setupDevice(body);
-      setSetupWorking(result);
+      // Switch to the "Setting up…" screen and START the status poller BEFORE
+      // awaiting the (blocking) setup POST. This is critical on single-radio
+      // devices: POST /api/device/setup blocks while wlan0 switches AP→STA, and
+      // the AP at 192.168.100.1 tears down ~2s into that switch — which aborts
+      // the in-flight POST and kills any same-origin request. The poller has to
+      // already be running during that brief AP-alive window to read back the
+      // device's new LAN IP (lan_ip) from setup/status; if we waited for the
+      // POST to resolve first, the AP would be dead and every poll would fail,
+      // stranding the user on "joining Wi-Fi…" forever (the bug we're fixing).
+      setSetupWorking(true);
       setSetupPhase("connecting");
+      try {
+        await setupDevice(body);
+      } catch {
+        // Expected: the AP drops mid-request once the STA association starts, so
+        // the POST often rejects with a network error even on a SUCCESSFUL
+        // setup. Swallow it and let the poller + LAN-IP probe drive the rest —
+        // they're the source of truth for connected/failed now. A genuine
+        // validation failure would have rejected before the AP teardown; that's
+        // surfaced by the status poller reporting phase="failed".
+      }
     } catch (err) {
+      // Only reaches here for synchronous/pre-POST errors (e.g. building the
+      // body). Real submit failures flow through the inner catch + poller.
+      setSetupWorking(false);
       setError(normaliseSetupError(err instanceof Error ? err.message : "Setup failed."));
     }
     setLoading(false);
@@ -976,6 +1052,18 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
                         </div>
                         <CopyAddress url={`http://${setupLanIP}/setup`} />
                       </div>
+                    )}
+
+                    {/* Last-resort recovery. If the join is taking a long time
+                        and we still never captured a LAN IP (the AP died before
+                        the poller could read it — the stranding bug's worst
+                        case), the operator has no auto path forward. After 25s
+                        we reveal a manual escape: look up the device IP in the
+                        router and open it directly. Only shows when there's no
+                        lan_ip to offer above, so it never competes with the
+                        happy-path copy field. */}
+                    {!setupLanIP && elapsed >= 25 && (
+                      <ManualReachBox carrySearch={getInitialSearch()} />
                     )}
                   </>
                 )}

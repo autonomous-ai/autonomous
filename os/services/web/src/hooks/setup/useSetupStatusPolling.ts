@@ -59,8 +59,15 @@ export function useSetupStatusPolling({
         /* AP likely shutting down — keep last known phase */
       }
     };
+    // Poll fast (600ms). The AP at 192.168.100.1 only survives ~2s after the
+    // AP→STA switch begins, and the backend publishes the captured lan_ip during
+    // that window — so a slow 2s cadence can miss the one-or-two polls that land
+    // while the AP is still answering, which is exactly what stranded the user.
+    // Fast polling maximizes the chance we read lan_ip before the AP dies; once
+    // it's dead the catch above just keeps the last phase and the LAN-IP probe
+    // below takes over.
     tick();
-    const id = setInterval(tick, 2000);
+    const id = setInterval(tick, 600);
     return () => { cancelled = true; clearInterval(id); };
   }, [setupWorking, setSetupPhase, setSetupLanIP, setSetupErrorMsg]);
 
