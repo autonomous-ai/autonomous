@@ -16,14 +16,15 @@ The caller (voice_service) drives the orchestrator:
 import json
 import logging
 import threading
+import time
 from collections.abc import Generator
 from typing import Any
 
 import numpy as np
 import numpy.typing as npt
-import requests
 
 import hal.config as config
+import hal.presets as presets
 from hal.drivers.realtime.config import GeminiConfig, OpenAIConfig, _load_language
 from hal.drivers.realtime.context_manager import (
     ContextManagerBase,
@@ -75,8 +76,6 @@ DELEGATE_TOOL: dict[str, Any] = {
     },
 }
 
-# Local HAL endpoint that drives the device's physical face (LED + servo).
-EMOTION_ENDPOINT: str = "http://127.0.0.1:5001/emotion"
 DEFAULT_EMOTION_INTENSITY: float = 0.8
 
 EMOTION_TOOL_NAME: str = "express_emotion"
@@ -84,8 +83,10 @@ EMOTION_TOOL_NAME: str = "express_emotion"
 # Excludes system/background states (idle, listening, sleepy, scan, nod, music_*)
 # which are driven by the device, not the agent.
 EMOTION_TOOL_EMOTIONS: list[str] = [
-    "happy", "excited", "curious", "thinking", "caring", "laugh",
-    "shy", "sad", "shock", "confused", "greeting", "goodbye",
+    presets.EMO_HAPPY, presets.EMO_EXCITED, presets.EMO_CURIOUS,
+    presets.EMO_THINKING, presets.EMO_CARING, presets.EMO_LAUGH,
+    presets.EMO_SHY, presets.EMO_SAD, presets.EMO_SHOCK,
+    presets.EMO_CONFUSED, presets.EMO_GREETING, presets.EMO_GOODBYE,
 ]
 EMOTION_TOOL_DESCRIPTION: str = (
     "Set the device's physical face (LED + servo) to match the emotional tone "
@@ -387,15 +388,39 @@ class RealtimeOrchestrator:
 
     @staticmethod
     def _fire_emotion(emotion: str, intensity: float) -> None:
-        """POST the emotion to the local HAL endpoint (runs in a daemon thread)."""
+        """Drive the device face by calling the HAL emotion handler in-process.
+
+        The realtime agent runs inside the HAL process, so we call the route
+        handler directly instead of looping back over HTTP — no serialization,
+        no network stack, lower latency. Runs in a daemon thread; logs the
+        outcome (status ok / ignored) so device testing can confirm the emotion
+        actually fired and measure how long it took.
+        """
+        started: float = time.monotonic()
         try:
-            requests.post(
-                EMOTION_ENDPOINT,
-                json={"emotion": emotion, "intensity": intensity},
-                timeout=1.0,
+            # Lazy import: the emotion handler pulls in app_state / LED / servo;
+            # keep that out of the driver's module-load graph and avoid any cycle.
+            from hal.models import EmotionRequest
+            from hal.routes.emotion import express_emotion as hal_express_emotion
+
+            result: Any = hal_express_emotion(
+                EmotionRequest(emotion=emotion, intensity=intensity)
+            )
+            took_ms: float = (time.monotonic() - started) * 1000
+            status: str = (
+                result.get("status", "?") if isinstance(result, dict) else "?"
+            )
+            logger.info(
+                "[realtime] emotion expressed (emotion=%s intensity=%.2f status=%s %.0fms)",
+                emotion,
+                intensity,
+                status,
+                took_ms,
             )
         except Exception as e:
-            logger.warning("[realtime] emotion HW call failed: %s", e)
+            logger.warning(
+                "[realtime] emotion expression failed (emotion=%s): %s", emotion, e
+            )
 
     def send_text(self, text: str) -> None:
         """Send a text message to the agent as context (non-blocking).

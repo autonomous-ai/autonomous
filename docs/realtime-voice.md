@@ -41,9 +41,11 @@ one exception to the model's binary "tool OR speech" rule — the model calls it
 *in parallel* with speaking. When `stream_output()` sees the call
 (`_handle_emotion_call`), it:
 
-1. POSTs `{emotion, intensity}` to local HAL `POST /emotion` in a daemon thread
-   (`_fire_emotion`) — runs parallel to the audio already streaming, so the face
-   changes without blocking speech;
+1. calls the HAL emotion handler **in-process** (`_fire_emotion` →
+   `routes/emotion.py` `express_emotion`) on a daemon thread — the realtime agent
+   runs inside the HAL process, so there is no HTTP loopback / serialization. It
+   runs parallel to the audio already streaming, so the face changes without
+   blocking speech;
 2. acknowledges the call with `FunctionCallResultInput(trigger_response=False)`,
    which records the result in history **without** spawning a second model
    response. For OpenAI this skips `response.create` (`openai_realtime.py`); for
