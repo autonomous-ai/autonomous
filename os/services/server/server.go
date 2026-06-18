@@ -229,6 +229,7 @@ func (s *Server) Serve(closeFn func()) error {
 	device.PUT("config", adminAuthMiddleware(s.config), s.deviceHandler.UpdateConfig)
 	device.GET("voices", s.deviceHandler.GetVoices)
 	device.GET("tts-providers", s.deviceHandler.GetTTSProviders)
+	device.GET("realtime-options", s.deviceHandler.GetRealtimeOptions)
 
 	network := api.Group("network")
 	network.GET("", s.networkHandler.GetNetworks)

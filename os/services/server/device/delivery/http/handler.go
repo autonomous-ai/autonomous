@@ -179,6 +179,12 @@ func (h *DeviceHandler) GetTTSProviders(c *gin.Context) {
 	c.JSON(http.StatusOK, serializers.ResponseSuccess(domain.TTSProviders))
 }
 
+// GetRealtimeOptions returns the valid realtime providers + per-provider voice /
+// reasoning lists, so the web never hardcodes them (single source = config).
+func (h *DeviceHandler) GetRealtimeOptions(c *gin.Context) {
+	c.JSON(http.StatusOK, serializers.ResponseSuccess(config.GetRealtimeOptions()))
+}
+
 // ChangeChannel godoc
 //
 //	@Summary	change messaging channel

@@ -107,6 +107,12 @@ export default function EditConfig() {
   const [ttsProviders, setTtsProviders] = useState<string[]>([]);
   const [ttsVoice, setTtsVoice] = useState("alloy");
   const [ttsVoices, setTtsVoices] = useState<string[]>([]);
+  const [realtimeEnabled, setRealtimeEnabled] = useState(true);
+  const [realtimeProvider, setRealtimeProvider] = useState("gemini");
+  const [realtimeVoice, setRealtimeVoice] = useState("Kore");
+  const [realtimeReasoning, setRealtimeReasoning] = useState("MINIMAL");
+  const [realtimeApiKey, setRealtimeApiKey] = useState("");
+  const [realtimeBaseUrl, setRealtimeBaseUrl] = useState("");
   const [channel, setChannel] = useState<ChannelType>("telegram");
   const [teleToken, setTeleToken] = useState("");
   const [teleUserId, setTeleUserId] = useState("");
@@ -138,6 +144,7 @@ export default function EditConfig() {
   const [wifiLoaded, setWifiLoaded] = useState({ ssid: false, password: false });
   const [llmLoaded, setLlmLoaded] = useState({ apiKey: false, baseUrl: false, model: false });
   const [ttsLoaded, setTtsLoaded] = useState({ apiKey: false, baseUrl: false });
+  const [realtimeLoaded, setRealtimeLoaded] = useState({ apiKey: false });
   const [sttLoaded, setSttLoaded] = useState({ deepgram: false, apiKey: false, baseUrl: false });
 
   // Baseline snapshot of non-secret fields captured after load (and after every
@@ -189,6 +196,14 @@ export default function EditConfig() {
         setTtsBaseUrl(cfg.tts_base_url ?? "");
         setTtsProvider(cfg.tts_provider || "openai");
         setTtsVoice(cfg.tts_voice || "alloy");
+        if (cfg.realtime) {
+          setRealtimeEnabled(cfg.realtime.enabled ?? true);
+          setRealtimeProvider(cfg.realtime.provider || "gemini");
+          if (cfg.realtime.voice) setRealtimeVoice(cfg.realtime.voice);
+          if (cfg.realtime.reasoning) setRealtimeReasoning(cfg.realtime.reasoning);
+          setRealtimeBaseUrl(cfg.realtime.base_url ?? "");
+          setRealtimeLoaded({ apiKey: !!cfg.realtime.has_api_key });
+        }
         setChannel((cfg.channel as ChannelType) || "telegram");
         setTeleUserId(cfg.telegram_user_id ?? "");
         setSlackUserId(cfg.slack_user_id ?? "");
@@ -371,6 +386,12 @@ export default function EditConfig() {
       };
       if (password) body.password = password;
       if (adminPassword) body.admin_password = adminPassword;
+      // Realtime block — server applies + restarts hal. api_key only when typed.
+      const realtime: Record<string, unknown> = { enabled: realtimeEnabled, provider: realtimeProvider };
+      if (realtimeProvider !== "none") { realtime.voice = realtimeVoice; realtime.reasoning = realtimeReasoning; }
+      if (realtimeBaseUrl) realtime.base_url = realtimeBaseUrl;
+      if (realtimeApiKey) realtime.api_key = realtimeApiKey;
+      body.realtime = realtime;
       if (llmApiKey) body.llm_api_key = llmApiKey;
       if (ttsApiKey) body.tts_api_key = ttsApiKey;
       if (mqttPassword) body.mqtt_password = mqttPassword;
@@ -625,6 +646,18 @@ export default function EditConfig() {
                   ttsVoice={ttsVoice} setTtsVoice={setTtsVoice}
                   ttsVoices={ttsVoices}
                   sttLanguage={sttLanguage}
+                />
+
+                <RealtimeSection
+                  active={activeSection === "tts"}
+                  realtimeLoaded={realtimeLoaded}
+                  llmLoaded={llmLoaded}
+                  enabled={realtimeEnabled} setEnabled={setRealtimeEnabled}
+                  provider={realtimeProvider} setProvider={setRealtimeProvider}
+                  voice={realtimeVoice} setVoice={setRealtimeVoice}
+                  reasoning={realtimeReasoning} setReasoning={setRealtimeReasoning}
+                  apiKey={realtimeApiKey} setApiKey={setRealtimeApiKey}
+                  baseUrl={realtimeBaseUrl} setBaseUrl={setRealtimeBaseUrl}
                 />
 
                 <STTSection
