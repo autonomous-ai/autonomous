@@ -27,6 +27,7 @@ import requests
 
 from hal import app_state as hal_app_state
 from hal import config as hal_config
+from hal import presets
 from hal.drivers.realtime.enums import AgentGateway
 from hal.drivers.realtime.models import TextOutput as RTTextOutput
 from hal.drivers.realtime.models.signal import DelegateSignal
@@ -100,6 +101,7 @@ class VoiceService:
         wake_words: Optional[list] = None,
         alsa_device: Optional[str] = None,
         enable_people_perception: bool = True,
+        enable_expression: bool = False,
     ):
         self._stt = stt_provider
         self._input_device = input_device
@@ -162,6 +164,7 @@ class VoiceService:
         # Realtime voice agent — parallel audio pipeline (Gemini Live / OpenAI Realtime).
         self._realtime = RealtimeOrchestrator(
             gateway=AgentGateway(hal_config.AGENT_GATEWAY),
+            enable_expression=enable_expression,
         )
 
         # Hook into TTS on_speak_end to feed spoken text back to the realtime agent.
@@ -192,6 +195,23 @@ class VoiceService:
     def set_wake_words(self, words: list) -> None:
         """Update wake word list at runtime (called when agent is renamed)."""
         self._decorator.set_wake_words(words)
+
+    @staticmethod
+    def _set_emotion_local(emotion: str) -> None:
+        """Set a device emotion by calling the HAL handler in-process.
+
+        VoiceService runs inside the HAL process, so we call the route handler
+        directly instead of an HTTP loopback to our own :5001/emotion — no
+        serialization, no network stack. (Cross-process calls to the os-server
+        on :5000 stay over HTTP — those are a different process.)
+        """
+        try:
+            from hal.models import EmotionRequest
+            from hal.routes.emotion import express_emotion
+
+            express_emotion(EmotionRequest(emotion=emotion))
+        except Exception as e:
+            logger.warning("emotion '%s' trigger failed: %s", emotion, e)
 
     @property
     def available(self) -> bool:
@@ -713,14 +733,7 @@ class VoiceService:
                 self._backchannel.on_partial(text)
                 if not listening_emotion_sent[0]:
                     listening_emotion_sent[0] = True
-                    try:
-                        requests.post(
-                            "http://127.0.0.1:5001/emotion",
-                            json={"emotion": "listening"},
-                            timeout=0.3,
-                        )
-                    except Exception as e:
-                        logger.warning("listening emotion trigger failed: %s", e)
+                    self._set_emotion_local(presets.EMO_LISTENING)
                 return
             # Accumulate final segments — don't send yet, wait for session close.
             # Flux model fires multiple EndOfTurn events for natural pauses within
@@ -1123,12 +1136,8 @@ class VoiceService:
                     try:
                         from hal import app_state
 
-                        if app_state._current_emotion == "listening":
-                            requests.post(
-                                "http://127.0.0.1:5001/emotion",
-                                json={"emotion": "idle"},
-                                timeout=0.3,
-                            )
+                        if app_state._current_emotion == presets.EMO_LISTENING:
+                            self._set_emotion_local(presets.EMO_IDLE)
                     except Exception as e:
                         logger.warning("listening idle-reset failed: %s", e)
 
