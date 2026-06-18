@@ -36,18 +36,20 @@ func TestSupported_FailOpen(t *testing.T) {
 // A reduced device drops only the hardware skills it can't support; platform
 // skills (no capability requirement) always survive.
 func TestSupported_ReducedDevicePrunesHardware(t *testing.T) {
-	// A speaker-only box: audio + sensing, no motion/light/display/vision/presence/media.
+	// A speaker-only box (like intern-v2): audio + sensing, no
+	// motion/light/display/vision/presence/media.
 	got := Supported(map[string]bool{"audio": true, "sensing": true})
 
-	// People-perception skills (face-enroll, guard, speaker-recognizer,
-	// user-emotion-detection) need `presence`, which this box lacks — so they
-	// prune even though it has audio/sensing.
-	for _, gone := range []string{"servo-control", "servo-tracking", "led-control", "display", "emotion", "scene", "camera", "music", "face-enroll", "guard", "speaker-recognizer", "user-emotion-detection", "computer-use"} {
+	// Camera people-perception (face-enroll, guard) needs `presence`, which this
+	// box lacks — so they prune. Voice people-perception (speaker-recognizer,
+	// user-emotion-detection) gates on `audio` (the mic), which this box HAS — so
+	// they survive (see the kept list below).
+	for _, gone := range []string{"servo-control", "servo-tracking", "led-control", "display", "emotion", "scene", "camera", "music", "face-enroll", "guard", "computer-use"} {
 		if contains(got, gone) {
 			t.Errorf("expected %q pruned (device lacks its capability)", gone)
 		}
 	}
-	for _, kept := range []string{"audio", "voice", "sensing", "sensing-track"} {
+	for _, kept := range []string{"audio", "voice", "sensing", "sensing-track", "speaker-recognizer", "user-emotion-detection"} {
 		if !contains(got, kept) {
 			t.Errorf("expected %q kept (audio/sensing satisfied)", kept)
 		}
@@ -68,12 +70,44 @@ func TestCapability_Consistency(t *testing.T) {
 		"motion": true, "light": true, "display": true, "expression": true, "media": true,
 		"connectivity": true, "companion": true, "system": true,
 	}
-	for skill, cap := range Capability {
-		if !known[cap] {
-			t.Errorf("skill %q maps to unknown capability %q", skill, cap)
+	for skill, caps := range Capability {
+		if len(caps) == 0 {
+			t.Errorf("skill %q maps to an empty capability list (drop it from the map to mark it a platform skill)", skill)
+		}
+		for _, cap := range caps {
+			if !known[cap] {
+				t.Errorf("skill %q maps to unknown capability %q", skill, cap)
+			}
 		}
 		if !contains(Catalog, skill) {
 			t.Errorf("skill %q in Capability map is not in Catalog", skill)
+		}
+	}
+}
+
+// user-emotion-detection is one skill over two sensors (face + voice). It must
+// survive on a device with EITHER the mic (audio) or the camera people-layer
+// (presence) — and only fully prune when the device has neither.
+func TestSupported_UserEmotionDetectionAnyOfSensor(t *testing.T) {
+	cases := []struct {
+		name string
+		caps map[string]bool
+		want bool
+	}{
+		{"mic-only (intern-v2): voice branch", map[string]bool{"audio": true, "sensing": true}, true},
+		{"camera-only: face branch", map[string]bool{"vision": true, "presence": true}, true},
+		{"both (lamp)", map[string]bool{"audio": true, "presence": true}, true},
+		{"neither sensor", map[string]bool{"light": true, "system": true}, false},
+	}
+	for _, tc := range cases {
+		got := contains(Supported(tc.caps), "user-emotion-detection")
+		if got != tc.want {
+			t.Errorf("%s: user-emotion-detection present=%v, want %v", tc.name, got, tc.want)
+		}
+		// speaker-recognizer is voice-only: present iff the device has a mic.
+		wantSpeaker := tc.caps["audio"]
+		if gotSpeaker := contains(Supported(tc.caps), "speaker-recognizer"); gotSpeaker != wantSpeaker {
+			t.Errorf("%s: speaker-recognizer present=%v, want %v (audio=%v)", tc.name, gotSpeaker, wantSpeaker, tc.caps["audio"])
 		}
 	}
 }

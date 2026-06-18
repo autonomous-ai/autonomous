@@ -94,6 +94,7 @@ Transcript gửi OS server vẫn có thể là `Unknown Speaker:` trong khi SER 
 
 | Điều kiện | Ghi chú |
 |-----------|---------|
+| Device không khai báo capability `audio` | Voice people-perception (speaker-ID + SER) gate theo **mic** → `VoiceService` khởi tạo với `enable_people_perception=False`, service SER không chạy. Gate là `audio` chứ **không** phải `presence` (SER chỉ cần mic). Face emotion ở vòng sensing vẫn gate theo `presence`. |
 | `SPEECH_EMOTION_ENABLED = False` | Hoặc dlbackend không cấu hình |
 | Buffer STT quá ngắn | `_session_wav_for_ser` trả `None` (< `SPEAKER_MIN_AUDIO_S`) |
 | `duration_s < SPEECH_EMOTION_MIN_AUDIO_S` | `submit()` bỏ qua (mặc định 3.0s) |

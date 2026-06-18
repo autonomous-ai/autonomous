@@ -146,8 +146,9 @@ class VoiceService:
         if not SILERO_VAD_ENABLED:
             logger.info("Silero VAD disabled via HAL_SILERO_ENABLED=false")
 
-        # Speaker decoration (wake-word + speaker recognizer + SER). SER (speech
-        # emotion) is people perception — gated on the `presence` capability.
+        # Speaker decoration (wake-word + speaker recognizer + SER). Speaker-ID and
+        # SER (speech emotion) are voice people-perception — gated on the `audio`
+        # capability (the mic), passed in via enable_people_perception.
         self._decorator = SpeakerDecorator(
             wake_words=list(wake_words) if wake_words else list(DEFAULT_WAKE_WORDS),
             nudge_cooldown_s=ENROLL_NUDGE_COOLDOWN_S,
