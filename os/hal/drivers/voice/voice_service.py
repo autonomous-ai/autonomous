@@ -20,22 +20,19 @@ import subprocess
 import threading
 import time
 from collections import deque
-from datetime import datetime
 from typing import Optional
 
 import requests
 
-from hal import app_state as hal_app_state
 from hal import config as hal_config
 from hal import presets
 from hal.drivers.realtime.enums import AgentGateway
-from hal.drivers.realtime.models import TextOutput as RTTextOutput
-from hal.drivers.realtime.models.signal import DelegateSignal
 from hal.drivers.realtime.orchestrator import RealtimeOrchestrator
 from hal.drivers.realtime.utils import pcm16_bytes_to_float32, resample_float32
 from hal.drivers.voice._internal import config as voice_cfg
 from hal.drivers.voice._internal.audio_dsp import resample_to_stt, rms
 from hal.drivers.voice._internal.audio_recorder import ArecordStream
+from hal.drivers.voice._internal.realtime_turn import run_realtime_turn
 from hal.drivers.voice._internal.sensing_sender import SensingSender
 from hal.drivers.voice._internal.speaker_decorate import SpeakerDecorator
 from hal.drivers.voice._internal.vad_filters import SileroVADFilter, WebRTCVADFilter
@@ -888,164 +885,14 @@ class VoiceService:
 
             # --- Realtime voice agent (runs first, before speaker ID / OS server) ---
             # Runs even if STT transcript is empty — the model has the raw audio.
-            rt_delegated = False
-            rt_handled = False
-            rt_transcript = ""
-            # Noise/false-trigger guard: a session with no STT transcript AND only
-            # a sliver of audio (just the VAD pre-roll, no sustained speech) is not
-            # worth a model turn — committing it makes the model answer silence,
-            # which then desyncs onto a later real turn. A real audio-only turn runs
-            # longer than the threshold, so it still commits.
-            rt_noise_turn = (
-                not combined
-                and buf_duration < hal_config.REALTIME_MIN_COMMIT_DURATION_S
+            rt = run_realtime_turn(
+                self._realtime,
+                self._tts,
+                self.strip_rt_markers,
+                combined,
+                rt_audio_buffer,
+                buf_duration,
             )
-            if (
-                hal_config.REALTIME_ENABLED
-                and self._realtime.available
-                and rt_audio_buffer
-                and not rt_noise_turn
-            ):
-                logger.info(
-                    "[realtime] Entering realtime flow — committing audio (stt=%r)",
-                    combined[:100] if combined else "(empty)",
-                )
-                try:
-                    # Inject per-turn context before committing
-                    turn_ctx: list[str] = [
-                        f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S %A')}",
-                    ]
-                    try:
-                        if hal_app_state.sensing_service:
-                            cu: str = (
-                                hal_app_state.sensing_service._perception_orchestrator.current_user
-                                or ""
-                            )
-                            if cu:
-                                turn_ctx.append(f"Current user: {cu}")
-                    except Exception:
-                        pass
-                    self._realtime.send_text("[TURN CONTEXT] " + " | ".join(turn_ctx))
-
-                    # Drop any output still queued from a previous turn so this
-                    # turn only reads its OWN response. Provider replies arrive
-                    # async and can lag the local-VAD cadence; without this, a
-                    # noise blip reads a stale prior reply in milliseconds and
-                    # speaks it ("Moon talks on its own" + double TTS).
-                    self._realtime.flush_output()
-                    self._realtime.commit_audio()
-                    logger.info("[realtime] Audio committed — streaming output")
-                    text_parts: list[str] = []
-                    sentence_buf: str = ""
-                    first_sentence_sent: bool = False
-                    SENTENCE_ENDS = (".", "!", "?", "。", "！", "？")
-
-                    rt_delegate_msg: str = ""
-                    for output in self._realtime.stream_output():
-                        if isinstance(output, DelegateSignal):
-                            rt_delegated = True
-                            rt_delegate_msg = output.message
-                            continue
-                        if rt_delegated:
-                            continue
-                        if isinstance(output, RTTextOutput):
-                            text_parts.append(output.text)
-                            sentence_buf += output.text
-                            # Flush complete sentences to TTS as they arrive
-                            if self._tts is not None and sentence_buf.rstrip().endswith(
-                                SENTENCE_ENDS
-                            ):
-                                sentence: str = self.strip_rt_markers(sentence_buf)
-                                if sentence:
-                                    if not first_sentence_sent:
-                                        logger.info(
-                                            "[realtime] First sentence → speak: %r",
-                                            sentence[:80],
-                                        )
-                                        self._tts.speak(sentence)
-                                        first_sentence_sent = True
-                                    else:
-                                        logger.info(
-                                            "[realtime] Next sentence → speak_queue: %r",
-                                            sentence[:80],
-                                        )
-                                        self._tts.speak_queue(sentence)
-                                sentence_buf = ""
-
-                    rt_transcript = self.strip_rt_markers("".join(text_parts))
-
-                    if rt_delegated:
-                        logger.info(
-                            "[realtime] Model delegated → will forward to OS server"
-                        )
-                    else:
-                        # Flush any remaining text that didn't end with a sentence boundary
-                        remaining: str = self.strip_rt_markers(sentence_buf)
-                        if remaining and self._tts is not None:
-                            if not first_sentence_sent:
-                                logger.info(
-                                    "[realtime] Final fragment → speak: %r",
-                                    remaining[:80],
-                                )
-                                self._tts.speak(remaining)
-                                first_sentence_sent = True
-                            else:
-                                logger.info(
-                                    "[realtime] Final fragment → speak_queue: %r",
-                                    remaining[:80],
-                                )
-                                self._tts.speak_queue(remaining)
-                        # Only claim the turn as HANDLED if the model actually
-                        # produced a spoken reply. An empty result — e.g.
-                        # receive() timed out with no output — must NOT be reported
-                        # as handled: that sends [HANDLED] with an empty [REPLY],
-                        # OpenClaw's input-branching reads it as "already answered"
-                        # and stays silent, so the user hears nothing from anyone.
-                        # Leaving rt_handled False (rt_delegated also False) falls
-                        # through to the normal forward below so the main agent answers.
-                        if first_sentence_sent or rt_transcript:
-                            rt_handled = True
-                            # Label this `agent_reply`, not `transcript`: it is what
-                            # Moon SAID, not what the user said. Elsewhere `transcript`
-                            # means the user's STT (Session END / STT final), so using
-                            # the same word for the agent's output read as role-reversed.
-                            logger.info(
-                                "[realtime] Chit-chat complete — agent_reply=%r",
-                                rt_transcript[:200] if rt_transcript else "(empty)",
-                            )
-                            # Save turn to realtime memory
-                            if combined or rt_transcript:
-                                self._realtime.save_turn(
-                                    user_text=combined or "(audio only)",
-                                    agent_text=rt_transcript or "(audio only)",
-                                )
-                        else:
-                            # No spoken output from the realtime agent (empty /
-                            # timeout). Do NOT claim a forward here — whether the
-                            # turn actually reaches the OS server is decided below
-                            # by `if combined:`. A pure noise turn with empty STT
-                            # is correctly dropped (nothing to forward).
-                            logger.info(
-                                "[realtime] No realtime output (empty / timeout) — "
-                                "turn falls back to OS server only if STT produced a transcript"
-                            )
-                except Exception as e:
-                    logger.warning(
-                        "[realtime] Processing failed: %s — will forward to OS server",
-                        e,
-                    )
-                    rt_delegated = True  # fall through to OS server on error
-            elif hal_config.REALTIME_ENABLED and rt_noise_turn:
-                logger.info(
-                    "[realtime] Skipping commit — noise/false-trigger turn "
-                    "(dur=%.2fs < %.2fs, empty STT)",
-                    buf_duration,
-                    hal_config.REALTIME_MIN_COMMIT_DURATION_S,
-                )
-            elif hal_config.REALTIME_ENABLED:
-                logger.warning(
-                    "[realtime] Enabled but agent not available — falling back to OS server"
-                )
 
             # --- Speaker recognition + OS server send ---
             from hal.drivers.voice.speech_emotion.constants import UNKNOWN_USER_LABEL
@@ -1060,18 +907,18 @@ class VoiceService:
                 user = se_user if se_user else UNKNOWN_USER_LABEL
                 logger.info("Final message → OS server (%s): %r", event_type, final_msg)
 
-                if rt_handled:
+                if rt.handled:
                     # Realtime already spoke — send as "voice_handled" to skip dead-air filler.
                     # Include skill hint so OpenClaw reads input-branching and responds NO_REPLY.
                     self._sensing_sender.send(
-                        f"[skills: input-branching]\n[HANDLED] {final_msg}\n[REPLY] {rt_transcript}",
+                        f"[skills: input-branching]\n[HANDLED] {final_msg}\n[REPLY] {rt.transcript}",
                         event_type="voice_agent_handled",
                         skip_echo=True,
                     )
-                elif rt_delegated:
+                elif rt.delegated:
                     # Delegated — send voice agent's summary + STT transcript to the OS server
-                    if rt_delegate_msg:
-                        sensing_msg: str = f"[voice-instruction] {rt_delegate_msg}\n[transcript] {final_msg}"
+                    if rt.delegate_msg:
+                        sensing_msg: str = f"[voice-instruction] {rt.delegate_msg}\n[transcript] {final_msg}"
                     else:
                         sensing_msg = final_msg
                     logger.info(
