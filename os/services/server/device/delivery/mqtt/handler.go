@@ -228,6 +228,8 @@ func (h *DeviceMQTTHandler) dispatchData(env domain.MQTTDataCommand) error {
 		return h.handleSystemNetwork(env)
 	case domain.KindSkillsInstall:
 		return h.handleSkillsInstall(env)
+	case domain.KindChannelRefreshConfig:
+		return h.handleChannelRefreshConfig(env)
 	default:
 		slog.Warn("unknown data kind", "component", "mqtt", "kind", env.Kind)
 		return h.publishDataResult(env.Kind, "failure", "unknown kind: "+env.Kind, nil)
@@ -251,6 +253,8 @@ func (h *DeviceMQTTHandler) HandleMessage(topic string, payload []byte) error {
 		return h.handleAddChannel(cmd)
 	case domain.CommandSlackEvent:
 		return h.handleSlackEvent(cmd)
+	case domain.CommandSlackCommand:
+		return h.handleSlackCommand(cmd)
 	case domain.CommandWhatsappPair:
 		return h.handleWhatsappPair(cmd)
 	case domain.CommandData:
