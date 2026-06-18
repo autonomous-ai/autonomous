@@ -118,8 +118,43 @@ Summarize chạy lúc `start()` (bù phần chưa tóm tắt) và `stop()` (flus
 
 ## Cấu hình
 
-Tất cả qua biến môi trường (`os/hal/config.py`); phần lớn fallback về `config.json`
-của thiết bị (`llm_api_key`, `llm_base_url`, `agent_runtime`).
+Realtime agent được cấu hình từ **block `realtime` trong `config.json`** của thiết
+bị (các knob hướng người vận hành), với biến môi trường `HAL_*` của HAL là override
+cho dev và default built-in là sàn. Thứ tự ưu tiên mỗi knob:
+
+```
+biến HAL_*  >  block "realtime" trong config.json  >  default built-in
+```
+
+os-server **seed** block này vào `config.json` lúc start lần đầu — và khi upgrade
+nếu thiếu — nên file luôn có realtime config sửa được. HAL **tự đọc** trực tiếp
+(giống `llm_api_key` / `stt_language`), không push xuống. Vì HAL đọc `config.json`
+lúc import, đổi config phải **restart HAL** mới ăn.
+
+### Block `realtime` trong `config.json`
+
+Model ở Go tại `os/services/server/config/realtime.go`; đọc ở HAL tại
+`os/hal/config.py`. Field chung ở trên; knob theo provider nằm trong sub-object
+`gemini` / `openai`, `provider` chọn cái đang active (`none` hoặc vắng → tắt
+realtime). `api_key` / `base_url` rỗng → fallback `llm_api_key` / `llm_base_url`.
+
+```json
+"realtime": {
+  "enabled": true,
+  "provider": "gemini",
+  "gemini": { "model": "gemini-3.1-flash-live-preview", "voice": "Kore", "thinking_level": "MINIMAL" },
+  "openai": { "model": "gpt-realtime-2", "voice": "alloy", "reasoning_effort": "minimal" }
+}
+```
+
+Knob reasoning (`thinking_level` / `reasoning_effort`) default về mức **rẻ nhất**
+(`MINIMAL` / `minimal`), không phải mức max của provider — muốn reasoning sâu hơn
+thì set tường minh. Các knob KHÔNG có trong block (turn detection, session
+resumption, memory, summarizer) vẫn chỉ theo env/default.
+
+### Biến môi trường (`os/hal/config.py`)
+
+Mỗi knob có thể bị `HAL_*` env override (thắng block, và là đường cho dev-box):
 
 | Biến | Mặc định | Ghi chú |
 |------|----------|---------|
@@ -134,12 +169,12 @@ của thiết bị (`llm_api_key`, `llm_base_url`, `agent_runtime`).
 | `HAL_GEMINI_LIVE_MODEL` | `gemini-3.1-flash-live-preview` | |
 | `HAL_GEMINI_LIVE_VOICE` | `Kore` | |
 | `HAL_GEMINI_LIVE_BASE_URL` | `<llm_base_url>/ws/gemini` | |
-| `HAL_GEMINI_THINKING_LEVEL` | `HIGH` | |
+| `HAL_GEMINI_THINKING_LEVEL` | `MINIMAL` | `MINIMAL` \| `LOW` \| `MEDIUM` \| `HIGH` — default rẻ (trước là `HIGH`) |
 | `OPENAI_API_KEY` | — | Key OpenAI; fallback về `llm_api_key` |
 | `HAL_OPENAI_REALTIME_MODEL` | `gpt-realtime-2` | |
 | `HAL_OPENAI_REALTIME_VOICE` | `alloy` | |
 | `HAL_OPENAI_REALTIME_BASE_URL` | `<llm_base_url>/ws/openai` | |
-| `HAL_OPENAI_REASONING_EFFORT` | `xhigh` | |
+| `HAL_OPENAI_REASONING_EFFORT` | `minimal` | `minimal` \| `low` \| `medium` \| `high` \| `xhigh` — default rẻ (trước là `xhigh`) |
 | `HAL_REALTIME_MEMORY_PATH` | `<workspace>/realtime/memory.jsonl` | |
 | `HAL_REALTIME_MAX_MEMORY_ENTRIES` / `_TRIM_KEEP` | `1000` / `500` | |
 | `HAL_REALTIME_SUMMARIZER_ENABLED` | `true` | |

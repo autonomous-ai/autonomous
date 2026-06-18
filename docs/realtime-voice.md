@@ -121,8 +121,45 @@ Summarization runs at `start()` (catch-up) and `stop()` (flush).
 
 ## Configuration
 
-All via environment variables (`os/hal/config.py`); most fall back to the
-device's `config.json` (`llm_api_key`, `llm_base_url`, `agent_runtime`).
+The realtime agent is configured from the **`realtime` block in the device's
+`config.json`** (operator-facing knobs), with HAL's `HAL_*` environment variables
+as a dev override and built-in defaults as the floor. Precedence per knob:
+
+```
+HAL_* env var  >  config.json "realtime" block  >  built-in default
+```
+
+os-server **seeds** the block into `config.json` on first start — and on upgrade
+when it's absent — so the file always carries an editable realtime config. HAL
+reads it directly (same as `llm_api_key` / `stt_language`), no push down. Because
+HAL reads `config.json` at import, a config change needs a **HAL restart** to take
+effect.
+
+### `config.json` `realtime` block
+
+Modelled in Go at `os/services/server/config/realtime.go`; read in HAL at
+`os/hal/config.py`. Shared fields sit at the top; per-provider knobs live in
+`gemini` / `openai` sub-objects, with `provider` selecting the active one
+(`none` or absent → realtime off). Empty `api_key` / `base_url` fall back to
+`llm_api_key` / `llm_base_url`.
+
+```json
+"realtime": {
+  "enabled": true,
+  "provider": "gemini",
+  "gemini": { "model": "gemini-3.1-flash-live-preview", "voice": "Kore", "thinking_level": "MINIMAL" },
+  "openai": { "model": "gpt-realtime-2", "voice": "alloy", "reasoning_effort": "minimal" }
+}
+```
+
+The reasoning knobs (`thinking_level` / `reasoning_effort`) default to the
+**cheapest** tier (`MINIMAL` / `minimal`), not the providers' max — raise them
+explicitly for deeper reasoning. Knobs NOT in the block (turn detection, session
+resumption, memory, summarizer) stay env/default-only.
+
+### Environment variables (`os/hal/config.py`)
+
+Each knob's `HAL_*` env var overrides the block (and is the dev-box path):
 
 | Variable | Default | Notes |
 |----------|---------|-------|
@@ -137,12 +174,12 @@ device's `config.json` (`llm_api_key`, `llm_base_url`, `agent_runtime`).
 | `HAL_GEMINI_LIVE_MODEL` | `gemini-3.1-flash-live-preview` | |
 | `HAL_GEMINI_LIVE_VOICE` | `Kore` | |
 | `HAL_GEMINI_LIVE_BASE_URL` | `<llm_base_url>/ws/gemini` | |
-| `HAL_GEMINI_THINKING_LEVEL` | `HIGH` | |
+| `HAL_GEMINI_THINKING_LEVEL` | `MINIMAL` | `MINIMAL` \| `LOW` \| `MEDIUM` \| `HIGH` — cost-lean default (was `HIGH`) |
 | `OPENAI_API_KEY` | — | OpenAI key; falls back to `llm_api_key` |
 | `HAL_OPENAI_REALTIME_MODEL` | `gpt-realtime-2` | |
 | `HAL_OPENAI_REALTIME_VOICE` | `alloy` | |
 | `HAL_OPENAI_REALTIME_BASE_URL` | `<llm_base_url>/ws/openai` | |
-| `HAL_OPENAI_REASONING_EFFORT` | `xhigh` | |
+| `HAL_OPENAI_REASONING_EFFORT` | `minimal` | `minimal` \| `low` \| `medium` \| `high` \| `xhigh` — cost-lean default (was `xhigh`) |
 | `HAL_REALTIME_MEMORY_PATH` | `<workspace>/realtime/memory.jsonl` | |
 | `HAL_REALTIME_MAX_MEMORY_ENTRIES` / `_TRIM_KEEP` | `1000` / `500` | |
 | `HAL_REALTIME_SUMMARIZER_ENABLED` | `true` | |
