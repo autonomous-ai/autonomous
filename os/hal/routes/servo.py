@@ -280,11 +280,9 @@ def move_servo(req: ServoMoveRequest):
     errors = {}
 
     try:
-        if eff_duration > 0:
-            state.animation_service.move_to(req.positions, duration=eff_duration)
-        else:
-            with state.animation_service.bus_lock:
-                state.animation_service.robot.send_action(req.positions)
+        # move_and_hold preempts any in-flight emotion animation so it can't
+        # overwrite the commanded pose (race fix); it also keeps the pose afterwards.
+        state.animation_service.move_and_hold(req.positions, duration=eff_duration)
     except Exception as e:
         errors["move"] = str(e)
 
@@ -525,11 +523,9 @@ def nudge_servo(req: ServoNudgeRequest):
         if req.pitch != 0:
             positions["base_pitch.pos"] = current.get("base_pitch.pos", 0) + req.pitch
 
-        if req.duration > 0:
-            state.animation_service.move_to(positions, duration=req.duration)
-        else:
-            with state.animation_service.bus_lock:
-                state.animation_service.robot.send_action(positions)
+        # move_and_hold preempts any in-flight emotion animation so it can't
+        # overwrite the nudged pose (race fix); it also keeps the pose afterwards.
+        state.animation_service.move_and_hold(positions, duration=req.duration)
 
         return {"status": "ok", "direction": f"nudge yaw={req.yaw} pitch={req.pitch}", "positions": positions}
     except Exception as e:
