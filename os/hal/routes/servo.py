@@ -378,6 +378,9 @@ def release_servos():
         time.sleep(0.05)
     else:
         state.logger.warning("rest_raw not reached within 3s; releasing torque anyway")
+    # DIAGNOSTIC: per-joint gap (actual vs rest_raw) to size the poll tolerance.
+    state.logger.info("release gap raw: " + ", ".join(
+        f"{k}:Δ{actual.get(k, 0) - v}" for k, v in rest_raw.items()))
     bus = state.animation_service.robot.bus
     errors = {}
     with state.animation_service.bus_lock:
