@@ -78,6 +78,12 @@ class GeminiLiveAgent(VoiceAgentBase):
     def sample_rate(self) -> int:
         return self._config.sample_rate
 
+    @property
+    def output_sample_rate(self) -> int:
+        # Gemini Live always streams native audio output at 24 kHz, regardless of
+        # the 16 kHz input rate (`sample_rate`).
+        return 24000
+
     def _build_config(self) -> types.LiveConnectConfig:
         lang: str | None = self._config.language
         lang_codes: list[str] | None = (
@@ -127,7 +133,16 @@ class GeminiLiveAgent(VoiceAgentBase):
             ]
             live_config.tools = [types.Tool(function_declarations=declarations)]
 
-        if self._resumption_handle is not None:
+        # Session resumption (OPT-IN, default off). When enabled, the FIRST connect
+        # sends handle=None to make the server start emitting resumption handles;
+        # a reconnect then passes the latest handle to resume the SAME session
+        # (context preserved). This only works if the WS endpoint faithfully
+        # forwards the resumption handshake — the `campaign-api` proxy does NOT, and
+        # resuming through it produces a zombie session (connected, accepts audio,
+        # never responds). Cold reconnects work through the proxy, so resumption
+        # stays gated behind HAL_GEMINI_SESSION_RESUMPTION. Enable only against an
+        # endpoint that supports it (e.g. a direct Google base_url).
+        if self._config.session_resumption_enabled:
             live_config.session_resumption = types.SessionResumptionConfig(
                 handle=self._resumption_handle,
             )
@@ -158,8 +173,8 @@ class GeminiLiveAgent(VoiceAgentBase):
             self._exit_stack = None
             self._session = None
 
-    async def _async_send_input(self, input: InputBase) -> None:
-        if self._session is None:
+    async def _async_send_input(self, input: InputBase | None) -> None:
+        if self._session is None or input is None:
             return
         if isinstance(input, AudioInput):
             # When VAD is disabled, send activityStart before first audio
@@ -194,11 +209,21 @@ class GeminiLiveAgent(VoiceAgentBase):
                 video=types.Blob(data=buf.tobytes(), mime_type="image/jpeg")
             )
         elif isinstance(input, FunctionCallResultInput):
+            # input.output is normally a JSON object string, but send_function_result()
+            # is public and may be handed arbitrary text — Gemini's response field
+            # requires a dict, so coerce non-object/invalid payloads instead of
+            # letting json.loads crash the IO loop.
+            try:
+                parsed: Any = json.loads(input.output)
+            except (json.JSONDecodeError, TypeError):
+                parsed = {"result": input.output}
+            if not isinstance(parsed, dict):
+                parsed = {"result": parsed}
             await self._session.send_tool_response(
                 function_responses=[
                     types.FunctionResponse(
                         id=input.call_id,
-                        response=json.loads(input.output),
+                        response=parsed,
                     )
                 ]
             )
@@ -377,7 +402,7 @@ class GeminiLiveAgent(VoiceAgentBase):
                         self._submit_and_wait(
                             self._async_commit(), timeout=self._send_timeout_s
                         )
-                    elif isinstance(event, InputEvent):
+                    elif isinstance(event, InputEvent) and event.input is not None:
                         self._submit_and_wait(
                             self._async_send_input(event.input),
                             timeout=self._send_timeout_s,
@@ -418,7 +443,15 @@ class GeminiLiveAgent(VoiceAgentBase):
                     self._connected.clear()
                     self._session = None
                 except genai_errors.APIError as e:
-                    logger.warning("[realtime] Recv API error (attempt %d/%d): %s", attempt + 1, self._max_retries, e)
+                    # The genai SDK surfaces a normal WS close (code 1000 — idle /
+                    # session-duration timeout) as an APIError whose str is
+                    # "1000 None", not as ConnectionClosed. Mirror the 1000 special
+                    # case in the ConnectionClosed branch above: log at INFO so a
+                    # benign idle-reconnect doesn't show up as a red WARNING.
+                    if str(e).split(" ", 1)[0] == "1000":
+                        logger.info("[realtime] Session closed normally (idle) — reconnecting")
+                    else:
+                        logger.warning("[realtime] Recv API error (attempt %d/%d): %s", attempt + 1, self._max_retries, e)
                     self._connected.clear()
                     self._session = None
                 except Exception as e:

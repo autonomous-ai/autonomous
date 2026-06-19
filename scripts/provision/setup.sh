@@ -663,12 +663,20 @@ EOF
   SKILLS_CATALOG="audio camera computer-use connectors display emotion face-enroll guard led-control music music-suggestion scene sensing sensing-track servo-control servo-tracking voice wellbeing mood speaker-recognizer user-emotion-detection habit input-branching"
   # skill -> required DEVICE.md capability (keep in sync with skills.Capability in
   # internal/skills/skills.go). Empty = platform skill, always seeded.
-  skill_cap() {
+  # Echo the capabilities a skill requires (space-separated, ANY-OF: the skill is
+  # kept when the device declares at least one). Empty = platform skill, always
+  # seeded. Keep in sync with skills.Capability in internal/skills/skills.go.
+  skill_caps() {
     case "$1" in
       audio|voice)                    echo audio ;;
       camera)                         echo vision ;;
-      # people-perception skills (understand the person) → presence, not raw sensor
-      face-enroll|guard|speaker-recognizer|user-emotion-detection) echo presence ;;
+      # People-perception split by sensor: camera people-perception (face roster,
+      # stranger detection) → presence; voice people-perception (who is speaking)
+      # → audio (the mic). user-emotion-detection runs off EITHER sensor (face via
+      # presence, voice via audio), so it lists both. See skills.Capability.
+      face-enroll|guard)              echo presence ;;
+      speaker-recognizer)             echo audio ;;
+      user-emotion-detection)         echo "audio presence" ;;
       computer-use)                   echo companion ;;
       display)                        echo display ;;
       emotion)                        echo expression ;;
@@ -689,10 +697,16 @@ EOF
   ' "$DEVICE_MD" 2>/dev/null)"
   mkdir -p "$OPENCLAW_HOME/workspace/skills"
   for skill_name in $SKILLS_CATALOG; do
-    cap="$(skill_cap "$skill_name")"
-    if [ -n "$cap" ] && [ -n "$DEVICE_CAPS" ] && ! echo "$DEVICE_CAPS" | grep -qx "$cap"; then
-      echo "[stage] skill $skill_name needs capability '$cap' not declared in DEVICE.md — skipping"
-      continue
+    caps_required="$(skill_caps "$skill_name")"
+    if [ -n "$caps_required" ] && [ -n "$DEVICE_CAPS" ]; then
+      cap_matched=""
+      for c in $caps_required; do
+        if echo "$DEVICE_CAPS" | grep -qx "$c"; then cap_matched=1; break; fi
+      done
+      if [ -z "$cap_matched" ]; then
+        echo "[stage] skill $skill_name needs one of '$caps_required' not declared in DEVICE.md — skipping"
+        continue
+      fi
     fi
     skill_dir="$OPENCLAW_HOME/workspace/skills/$skill_name"
     mkdir -p "$skill_dir"
@@ -771,7 +785,7 @@ server {
   # via the Lamp /api/hardware/* proxy) so no CDN whitelist or
   # `'unsafe-inline'` is needed for the in-iframe docs to render. React app
   # 'unsafe-inline' stays only on style-src for its inline style props.
-  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' ws: wss:; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'" always;
+  add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' ws: wss: http:; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'" always;
 
   location / {
     try_files \$uri /index.html;

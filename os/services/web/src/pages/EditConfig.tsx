@@ -1,24 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTheme } from "@/lib/useTheme";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useCapabilities } from "@/hooks/useCapabilities";
+import { Cap } from "@/pages/monitor/types";
 import type { SectionId as SharedSectionId } from "@/hooks/setup/types";
 import { C } from "@/components/setup/shared";
 import { SettingsPanel, type SettingsSectionId } from "@/components/edit/SettingsPanel";
-import { Wifi, UserCircle, Cpu, Brain, Volume2, MicVocal, MessageSquare, Globe, Link } from "lucide-react";
+import { Wifi, UserCircle, Cpu, Brain, Volume2, MicVocal, MessageSquare, Globe, Link, Zap, Server } from "lucide-react";
 
 // Local subset of the shared SectionId — EditConfig uses `stt` (Language is
-// rendered under id="stt"), not `language` / `deepgram` like Setup.
-type SectionId = Extract<SharedSectionId, "device" | "wifi" | "llm" | "voice" | "face" | "tts" | "stt" | "channel" | "mqtt">;
+// rendered under id="stt"), not `language` / `deepgram` like Setup. `runtime` is
+// EditConfig-only (agent backend switch), so it's not in the shared union.
+type SectionId = Extract<SharedSectionId, "device" | "wifi" | "llm" | "voice" | "face" | "tts" | "realtime" | "stt" | "channel" | "mqtt"> | "runtime";
 const ICON_SIZE = 15;
 const GROUP_ICON_SIZE = 15;
 
-type SectionItem = { id: SectionId; label: string; icon: React.ReactNode; debugOnly?: boolean };
+// `cap` declares the device capability a section's hardware needs; the section is
+// hidden when the device lacks it (mirrors the Monitor nav gating). `debugOnly`
+// hides the section/group unless ?debug=true.
+type SectionItem = { id: SectionId; label: string; icon: React.ReactNode; debugOnly?: boolean; cap?: string };
 // Settings navigation is organized as a collapsible tree (parent groups +
 // indented children), mirroring the Device tree in the Monitor sidebar. Group
 // `debugOnly` hides the whole group unless ?debug=true; per-child `debugOnly`
-// hides individual leaves. AI Brain, Language, Voice, Channels, MQTT stay gated
-// behind ?debug=true — typical operators only need Device + Wi-Fi + voice/face
-// enrollment; deeper provider knobs stay hidden by default.
+// hides individual leaves. AI Brain, Language, Voice, Realtime, Runtime,
+// Channels, MQTT stay gated behind ?debug=true — typical operators only need
+// Device + Wi-Fi + voice/face enrollment; deeper provider knobs stay hidden by
+// default.
 type SectionGroup = { group: string; label: string; icon: React.ReactNode; debugOnly?: boolean; children: SectionItem[] };
 
 const NAV_GROUPS: SectionGroup[] = [
@@ -32,16 +39,18 @@ const NAV_GROUPS: SectionGroup[] = [
   {
     group: "ai", label: "AI", icon: <Brain size={GROUP_ICON_SIZE} />, debugOnly: true,
     children: [
-      { id: "llm", label: "AI Brain", icon: <Brain size={ICON_SIZE} /> },
-      { id: "stt", label: "Language", icon: <Globe size={ICON_SIZE} /> },
-      { id: "tts", label: "Voice",    icon: <Volume2 size={ICON_SIZE} /> },
+      { id: "llm",      label: "AI Brain", icon: <Brain size={ICON_SIZE} /> },
+      { id: "runtime",  label: "Runtime",  icon: <Server size={ICON_SIZE} /> },
+      { id: "stt",      label: "Language", icon: <Globe size={ICON_SIZE} />, cap: Cap.Audio },
+      { id: "tts",      label: "Voice",    icon: <Volume2 size={ICON_SIZE} />, cap: Cap.Audio },
+      { id: "realtime", label: "Realtime", icon: <Zap size={ICON_SIZE} />, cap: Cap.Audio },
     ],
   },
   {
     group: "identity", label: "Identity", icon: <UserCircle size={GROUP_ICON_SIZE} />,
     children: [
-      { id: "voice", label: "My Voice", icon: <MicVocal size={ICON_SIZE} /> },
-      { id: "face",  label: "Face",     icon: <UserCircle size={ICON_SIZE} /> },
+      { id: "voice", label: "My Voice", icon: <MicVocal size={ICON_SIZE} />, cap: Cap.Audio },
+      { id: "face",  label: "Face",     icon: <UserCircle size={ICON_SIZE} />, cap: Cap.Vision },
     ],
   },
   {
@@ -53,18 +62,18 @@ const NAV_GROUPS: SectionGroup[] = [
   },
 ];
 
-// Flattened view (debug-filtered): the legacy list of visible sections. Used for
-// hash resolution, active-label lookup, and the mobile tab strip.
-function visibleSections(debug: boolean): SectionItem[] {
+// Flattened view (debug + capability filtered): used for hash resolution,
+// active-label lookup, and the mobile tab strip.
+function visibleSections(debug: boolean, hasCap: (c: string) => boolean): SectionItem[] {
   return NAV_GROUPS
     .filter((g) => debug || !g.debugOnly)
-    .flatMap((g) => g.children.filter((c) => debug || !c.debugOnly));
+    .flatMap((g) => g.children.filter((c) => (debug || !c.debugOnly) && (!c.cap || hasCap(c.cap))));
 }
 
-function visibleGroups(debug: boolean): SectionGroup[] {
+function visibleGroups(debug: boolean, hasCap: (c: string) => boolean): SectionGroup[] {
   return NAV_GROUPS
     .filter((g) => debug || !g.debugOnly)
-    .map((g) => ({ ...g, children: g.children.filter((c) => debug || !c.debugOnly) }))
+    .map((g) => ({ ...g, children: g.children.filter((c) => (debug || !c.debugOnly) && (!c.cap || hasCap(c.cap))) }))
     .filter((g) => g.children.length > 0);
 }
 
@@ -138,12 +147,22 @@ function SettingsNavGroup({ group, activeSection, onSelect }: {
 export default function EditConfig() {
   const [theme, toggleTheme, themeClass] = useTheme();
   const debug = isDebugMode();
-  const SECTIONS = visibleSections(debug);
-  const GROUPS = visibleGroups(debug);
+  // Hide sections whose hardware this device lacks (DEVICE.md capabilities via
+  // /api/system/info). Fail-open while caps load → no flash of an empty menu.
+  const { hasCap } = useCapabilities();
+  const SECTIONS = visibleSections(debug, hasCap);
+  const GROUPS = visibleGroups(debug, hasCap);
   const [activeSection, setActiveSection] = useState<SectionId>(() => {
     const hash = window.location.hash.replace("#", "") as SectionId;
-    return SECTIONS.some((s) => s.id === hash) ? hash : "device";
+    return NAV_GROUPS.some((g) => g.children.some((c) => c.id === hash)) ? hash : "device";
   });
+
+  // If the active section is for hardware this device lacks (caps loaded after
+  // mount, or a deep-linked #hash to a gated section), fall back to General.
+  useEffect(() => {
+    if (!SECTIONS.some((s) => s.id === activeSection)) setActiveSection("device");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [SECTIONS.length, activeSection]);
 
   const activeSectionLabel = SECTIONS.find((s) => s.id === activeSection)?.label ?? "Settings";
   useDocumentTitle(["Settings", activeSectionLabel]);

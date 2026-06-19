@@ -10,6 +10,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+from hal import config as app_config
 from hal.drivers.realtime.models import (
     AgentInputEvent,
     AgentOutputEvent,
@@ -54,7 +55,13 @@ class VoiceAgentBase(ABC):
     @property
     @abstractmethod
     def sample_rate(self) -> int:
-        """Sample rate expected by this provider (Hz)."""
+        """Sample rate expected by this provider (Hz) — the INPUT/mic rate."""
+
+    @property
+    def output_sample_rate(self) -> int:
+        """Sample rate of the model's OWN audio output (Hz), for native playback.
+        Defaults to the input rate; providers override when they differ."""
+        return self.sample_rate
 
     def connect(self) -> None:
         """Connect to the provider and start send/recv loops."""
@@ -92,6 +99,29 @@ class VoiceAgentBase(ABC):
         if self.available:
             self._send_queue.put(AudioCommitEvent())
 
+    def flush_output(self) -> None:
+        """Drop any output events left on the recv queue from a previous turn.
+
+        Provider responses land on `_recv_queue` asynchronously and can lag the
+        caller's local-VAD turn cadence. If the queue is not cleared, the next
+        turn's `receive()` reads a STALE prior response (read in milliseconds,
+        well before this turn's real reply) and speaks it — the "agent talks on
+        its own after a noise blip" + double-reply bug. Call right before
+        `commit_audio()` so every turn starts from an empty queue and only ever
+        reads its own response.
+        """
+        dropped = 0
+        while True:
+            try:
+                self._recv_queue.get_nowait()
+            except queue.Empty:
+                break
+            dropped += 1
+        if dropped:
+            logger.info(
+                "[realtime] Flushed %d stale output event(s) before new turn", dropped
+            )
+
     def send(self, inputs: list[InputBase]) -> None:
         """Queue inputs for sending (non-blocking)."""
         if self.available:
@@ -106,9 +136,17 @@ class VoiceAgentBase(ABC):
         """
         while True:
             try:
-                event = self._recv_queue.get(timeout=30)
+                event = self._recv_queue.get(
+                    timeout=app_config.REALTIME_RECV_QUEUE_TIMEOUT_S
+                )
             except queue.Empty:
-                logger.warning("receive() timed out waiting for output")
+                # No output within the gap window — almost always the model
+                # staying silent on a noise / non-directed turn (correct), not an
+                # error. End the turn quietly so it can fall back to the main agent.
+                logger.info(
+                    "receive() got no output within %.1fs — ending turn (model stayed silent)",
+                    app_config.REALTIME_RECV_QUEUE_TIMEOUT_S,
+                )
                 break
             if isinstance(event, TurnDoneEvent):
                 if stop_on_done:

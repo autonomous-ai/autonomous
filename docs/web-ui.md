@@ -125,7 +125,7 @@ Monitor polls system/HW APIs every **3 seconds**. Flow uses file-backed hybrid m
 
 | Endpoint | Data |
 |----------|------|
-| `GET /api/system/info` | CPU load, RAM (KB), temperature, uptime, goroutines, version, deviceId, capabilities (declared capability names — the Monitor gates hardware tabs on these) |
+| `GET /api/system/info` | CPU load, RAM (KB), temperature, uptime, goroutines, version, deviceId, capabilities (declared capability names — both the Monitor and the Edit/Settings page gate hardware tabs on these; see the shared `useCapabilities` hook) |
 | `GET /api/system/network` | SSID, IP, public IP, Tailscale IP, signal (dBm), internet (bool) |
 | `GET /api/openclaw/status` | name, connected (bool), sessionKey (bool), version, emotion, uptime (OS server WS uptime, secs), agentUptime (OpenClaw process uptime from hello-ok `server.uptimeMs`, secs — survives OS server restarts) |
 | `GET /api/openclaw/recent` | Latest flow events from today's JSONL file (`local/flow_events_<date>.jsonl`) |
@@ -202,6 +202,12 @@ Cards included:
 **Display Eyes**
 - Currently displayed expression (mode)
 - List of available expressions
+
+> **Capability-gated cards.** Overview hardware cards are hidden on devices that
+> don't have the underlying capability, so the page only shows what the device can
+> actually do (e.g. intern-v2 has no servo, scene, or expression):
+> - **Emotion** and **Servo Pose** gate on the declared capability (`expression` / `motion`) from `GET /api/system/info` → `capabilities`.
+> - **Scene** is a route *within* the `light` capability (lamp declares `light:[led,scene]`; intern-v2 declares `light:[led]`), so it can't be told apart by the capability list — it renders only once `GET /hw/scene` returns scenes.
 
 **System quick stats**
 - CPU, RAM, Temp, Uptime as pills

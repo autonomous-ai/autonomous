@@ -11,14 +11,17 @@ import { WifiSection } from "@/components/edit/WifiSection";
 import { VoiceSection as EditVoiceSection } from "@/components/edit/VoiceSection";
 import { FaceSection as EditFaceSection } from "@/components/edit/FaceSection";
 import { TTSSection } from "@/components/edit/TTSSection";
+import { RealtimeSection } from "@/components/edit/RealtimeSection";
+import { AgentRuntimeSection } from "@/components/edit/AgentRuntimeSection";
 import { STTSection, type SttProvider } from "@/components/edit/STTSection";
 import { ChannelSection } from "@/components/edit/ChannelSection";
 import { MqttSection } from "@/components/edit/MqttSection";
 
 // The set of sections this panel can render. Controlled by the parent now (the
 // page shell owns the sidebar / active-section state). `stt` is the Language
-// section (rendered under id="stt"), matching the legacy /edit layout.
-export type SettingsSectionId = "device" | "wifi" | "llm" | "voice" | "face" | "tts" | "stt" | "channel" | "mqtt";
+// section (rendered under id="stt"), matching the legacy /edit layout. `runtime`
+// is the agent-backend switch (its own Switch button, not part of Save).
+export type SettingsSectionId = "device" | "wifi" | "llm" | "runtime" | "voice" | "face" | "tts" | "realtime" | "stt" | "channel" | "mqtt";
 
 // Header-row label lookup. Kept local so the panel can render the active-section
 // title above the form without depending on the page's NAV_GROUPS config.
@@ -26,9 +29,11 @@ const SECTION_LABELS: Record<SettingsSectionId, string> = {
   device: "General",
   wifi: "Wi-Fi",
   llm: "AI Brain",
+  runtime: "Runtime",
   voice: "My Voice",
   face: "Face",
   tts: "Voice",
+  realtime: "Realtime",
   stt: "Language",
   channel: "Channels",
   mqtt: "MQTT",
@@ -92,6 +97,12 @@ export function SettingsPanel({ activeSection }: { activeSection: SettingsSectio
   const [ttsProviders, setTtsProviders] = useState<string[]>([]);
   const [ttsVoice, setTtsVoice] = useState("alloy");
   const [ttsVoices, setTtsVoices] = useState<string[]>([]);
+  const [realtimeEnabled, setRealtimeEnabled] = useState(true);
+  const [realtimeProvider, setRealtimeProvider] = useState("gemini");
+  const [realtimeVoice, setRealtimeVoice] = useState("Kore");
+  const [realtimeReasoning, setRealtimeReasoning] = useState("MINIMAL");
+  const [realtimeApiKey, setRealtimeApiKey] = useState("");
+  const [realtimeBaseUrl, setRealtimeBaseUrl] = useState("");
   const [channel, setChannel] = useState<ChannelType>("telegram");
   const [teleToken, setTeleToken] = useState("");
   const [teleUserId, setTeleUserId] = useState("");
@@ -123,6 +134,7 @@ export function SettingsPanel({ activeSection }: { activeSection: SettingsSectio
   const [wifiLoaded, setWifiLoaded] = useState({ ssid: false, password: false });
   const [llmLoaded, setLlmLoaded] = useState({ apiKey: false, baseUrl: false, model: false });
   const [ttsLoaded, setTtsLoaded] = useState({ apiKey: false, baseUrl: false });
+  const [realtimeLoaded, setRealtimeLoaded] = useState({ apiKey: false });
   const [sttLoaded, setSttLoaded] = useState({ deepgram: false, apiKey: false, baseUrl: false });
 
   // Baseline snapshot of non-secret fields captured after load (and after every
@@ -174,6 +186,14 @@ export function SettingsPanel({ activeSection }: { activeSection: SettingsSectio
         setTtsBaseUrl(cfg.tts_base_url ?? "");
         setTtsProvider(cfg.tts_provider || "openai");
         setTtsVoice(cfg.tts_voice || "alloy");
+        if (cfg.realtime) {
+          setRealtimeEnabled(cfg.realtime.enabled ?? true);
+          setRealtimeProvider(cfg.realtime.provider || "gemini");
+          if (cfg.realtime.voice) setRealtimeVoice(cfg.realtime.voice);
+          if (cfg.realtime.reasoning) setRealtimeReasoning(cfg.realtime.reasoning);
+          setRealtimeBaseUrl(cfg.realtime.base_url ?? "");
+          setRealtimeLoaded({ apiKey: !!cfg.realtime.has_api_key });
+        }
         setChannel((cfg.channel as ChannelType) || "telegram");
         setTeleUserId(cfg.telegram_user_id ?? "");
         setSlackUserId(cfg.slack_user_id ?? "");
@@ -351,6 +371,12 @@ export function SettingsPanel({ activeSection }: { activeSection: SettingsSectio
       };
       if (password) body.password = password;
       if (adminPassword) body.admin_password = adminPassword;
+      // Realtime block — server applies + restarts hal. api_key only when typed.
+      const realtime: Record<string, unknown> = { enabled: realtimeEnabled, provider: realtimeProvider };
+      if (realtimeProvider !== "none") { realtime.voice = realtimeVoice; realtime.reasoning = realtimeReasoning; }
+      if (realtimeBaseUrl) realtime.base_url = realtimeBaseUrl;
+      if (realtimeApiKey) realtime.api_key = realtimeApiKey;
+      body.realtime = realtime;
       if (llmApiKey) body.llm_api_key = llmApiKey;
       if (ttsApiKey) body.tts_api_key = ttsApiKey;
       if (mqttPassword) body.mqtt_password = mqttPassword;
@@ -411,9 +437,12 @@ export function SettingsPanel({ activeSection }: { activeSection: SettingsSectio
     sttProvider, sttLanguage, sttLoaded,
     ttsApiKey, ttsBaseUrl, ttsProvider, ttsVoice, deviceId,
     mqttEndpoint, mqttUsername, mqttPassword, mqttPort, faChannel, fdChannel,
+    realtimeEnabled, realtimeProvider, realtimeVoice, realtimeReasoning, realtimeApiKey, realtimeBaseUrl,
   ]);
 
-  const showSave = activeSection !== "face" && activeSection !== "voice";
+  // Save is hidden for sections that aren't part of the form's PUT flow: Face/My
+  // Voice enroll via their own buttons, and Runtime switches via its own action.
+  const showSave = activeSection !== "face" && activeSection !== "voice" && activeSection !== "runtime";
 
   return (
     <div className="lm-fade-in" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "24px 32px" }}>
@@ -491,6 +520,8 @@ export function SettingsPanel({ activeSection }: { activeSection: SettingsSectio
               llmModel={llmModel} setLlmModel={setLlmModel}
             />
 
+            <AgentRuntimeSection active={activeSection === "runtime"} />
+
             <EditVoiceSection
               active={activeSection === "voice"}
               sttLanguage={sttLanguage}
@@ -515,6 +546,18 @@ export function SettingsPanel({ activeSection }: { activeSection: SettingsSectio
               ttsVoice={ttsVoice} setTtsVoice={setTtsVoice}
               ttsVoices={ttsVoices}
               sttLanguage={sttLanguage}
+            />
+
+            <RealtimeSection
+              active={activeSection === "realtime"}
+              realtimeLoaded={realtimeLoaded}
+              llmLoaded={llmLoaded}
+              enabled={realtimeEnabled} setEnabled={setRealtimeEnabled}
+              provider={realtimeProvider} setProvider={setRealtimeProvider}
+              voice={realtimeVoice} setVoice={setRealtimeVoice}
+              reasoning={realtimeReasoning} setReasoning={setRealtimeReasoning}
+              apiKey={realtimeApiKey} setApiKey={setRealtimeApiKey}
+              baseUrl={realtimeBaseUrl} setBaseUrl={setRealtimeBaseUrl}
             />
 
             <STTSection

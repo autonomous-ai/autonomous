@@ -38,7 +38,8 @@ from hal.presets import AIM_PRESETS, EMOTION_PRESETS, SCENE_PRESETS, STATUS_LED_
 
 logger = logging.getLogger(__name__)
 
-# LED ring size when a device declares none. The lamp reference ring is 64.
+# LED ring size when a device declares none. The lamp reference ring is 64;
+# devices with a different ring (e.g. intern-v2's 8) override via presets.json.
 DEFAULT_LED_COUNT = 64
 
 # Override section name -> the base table it patches. Mutated in place so every

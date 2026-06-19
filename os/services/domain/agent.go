@@ -103,6 +103,16 @@ type AgentGateway interface {
 	// plugin.
 	AddChannel(ctx context.Context, data AddChannelRequest) error
 
+	// RefreshChannelConfig re-applies the canonical channels.<channel> block in
+	// openclaw.json using the same writer AddChannel uses, then restarts the
+	// gateway. Unlike AddChannel this path is config-only: no plugin install, no
+	// CLI bootstrap, no pairing. Returns the detected runtime version string
+	// ("Y.M.P", empty when undetected) so callers can echo it in fd_channel
+	// responses, and errors out (without restarting) when openclaw.json does not
+	// yet exist — refresh is only meaningful on already-onboarded devices. Today
+	// only the slack channel is implemented; other channels return an error.
+	RefreshChannelConfig(ctx context.Context, req RefreshChannelRequest) (runtime string, err error)
+
 	// HasWhatsappSession reports whether a Baileys session already exists on
 	// disk for the given account ("default" when empty). When true, AddChannel
 	// callers can emit a single PairingStatusSuccess event and skip the
@@ -185,6 +195,18 @@ type AgentGateway interface {
 
 	// ConsumeWebChatRun checks and removes a web-chat-marked runID. One-shot.
 	ConsumeWebChatRun(runID string) bool
+
+	// MarkSilentRun marks a runID whose spoken reply must be suppressed even
+	// though the agent still processes the turn (e.g. voice_agent_handled: the
+	// realtime voice agent already replied, so the body stays silent but still
+	// absorbs the exchange for memory).
+	MarkSilentRun(runID string)
+
+	// IsSilentRun checks if a runID is a silent run (non-consuming).
+	IsSilentRun(runID string) bool
+
+	// ConsumeSilentRun checks and removes a silent-marked runID. One-shot.
+	ConsumeSilentRun(runID string) bool
 
 	// SetPendingChatTrace records the idempotencyKey and exact message text of
 	// an outbound chat.send so a later UUID lifecycle (drained from OpenClaw's

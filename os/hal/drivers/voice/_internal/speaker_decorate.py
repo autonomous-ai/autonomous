@@ -48,15 +48,15 @@ class SpeakerDecorator:
     @staticmethod
     def _init_speaker(enable_people_perception: bool = True):
         # Speaker recognition (identifying WHO is speaking from their voiceprint)
-        # is people perception — the `presence` capability, via the mic. A device
-        # that doesn't declare `presence` must not run it even with a mic.
+        # is voice people-perception — gated on the `audio` capability (the mic).
+        # It needs only a mic, so any device that declares `audio` runs it.
         if not enable_people_perception:
-            logger.info("Speaker recognition off — device does not declare 'presence' (people perception)")
+            logger.info("Speaker recognition off — device does not declare 'audio' (no mic for voice people-perception)")
             return None
         if not SPEAKER_RECOGNITION_ENABLED:
             logger.info(
-                "Speaker recognizer disabled by HAL_SPEAKER_RECOGNITION_ENABLED=false. "
-                "This is the default value.",
+                "Speaker recognizer disabled by HAL_SPEAKER_RECOGNITION_ENABLED=false "
+                "(default is true — this is an explicit opt-out).",
             )
             return None
         try:
@@ -76,12 +76,11 @@ class SpeakerDecorator:
 
     @staticmethod
     def _init_speech_emotion(enable_people_perception: bool = True):
-        # Speech emotion (reading the user's emotion from voice) is people
-        # perception — the `presence` capability, via the mic instead of the
-        # camera. A device that doesn't declare `presence` must not run it even
-        # if it has a mic: it listens for commands, it doesn't profile the user.
+        # Speech emotion (reading the user's emotion from voice) is voice
+        # people-perception — gated on the `audio` capability (the mic), not the
+        # camera. Any device with a mic runs it; it is not a hard requirement.
         if not enable_people_perception:
-            logger.info("Speech emotion recognition off — device does not declare 'presence' (people perception)")
+            logger.info("Speech emotion recognition off — device does not declare 'audio' (no mic for voice people-perception)")
             return None
         if not SPEECH_EMOTION_ENABLED:
             logger.info("Speech emotion recognition disabled by HAL_SPEECH_EMOTION_ENABLED=false")

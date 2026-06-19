@@ -27,11 +27,14 @@ class ArecordStream:
         self._bytes_per_frame = 2 * channels  # int16 = 2 bytes
 
     def __enter__(self):
+        # Capture stderr (don't DEVNULL it): when arecord dies, its ALSA error
+        # message — device busy / USB dropout / xrun — is the only clue to the
+        # root cause. read() surfaces it instead of a bare "stdout EOF".
         self._proc = subprocess.Popen(
             ["arecord", "-D", self._device, "-f", "S16_LE",
              "-r", str(self._rate), "-c", str(self._channels),
              "-t", "raw", "-q"],
-            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         return self
 
@@ -48,8 +51,18 @@ class ArecordStream:
         n_bytes = frames * self._bytes_per_frame
         raw = self._proc.stdout.read(n_bytes)
         if not raw:
-            # arecord process died — raise so the main loop can restart it
-            raise IOError("arecord process exited (stdout EOF)")
+            # arecord process died — surface its ALSA stderr + exit code so the
+            # root cause (device busy / USB dropout / xrun) is visible, instead of
+            # swallowing it. Raise so the main loop can restart capture.
+            rc = self._proc.poll()
+            err = ""
+            try:
+                err = (self._proc.stderr.read() or b"").decode("utf-8", "replace").strip()
+            except Exception:
+                pass
+            raise IOError(
+                f"arecord process exited (stdout EOF, rc={rc}): {err or 'no stderr'}"
+            )
         if len(raw) < n_bytes:
             raw = raw + b"\x00" * (n_bytes - len(raw))
         data = self._np.frombuffer(raw, dtype=self._np.int16).reshape(frames, self._channels)

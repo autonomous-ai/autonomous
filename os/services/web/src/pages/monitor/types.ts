@@ -215,6 +215,7 @@ export function hashToSection(hash: string, area: Area): Section | null {
 // so a tab's hardware requirement is a named constant, not a scattered literal.
 // Keep in sync with the capability vocabulary (capabilities.v1).
 export const Cap = {
+  Audio: "audio",
   Vision: "vision",
   Motion: "motion",
   Sensing: "sensing",

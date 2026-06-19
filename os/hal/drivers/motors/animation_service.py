@@ -550,6 +550,39 @@ class AnimationService:
             logger.warning(f"move_to: could not read full state after move: {e}")
         self._current_state = target_positions.copy()
 
+    def move_and_hold(self, target_positions: Dict[str, float], duration: float = DEFAULT_MOVE_DURATION):
+        """Take over the servo for an explicit /servo/move or /servo/nudge.
+
+        Clearing the active recording makes the animation loop go passive
+        (_continue_playback returns early when there is no recording), so a
+        concurrently-playing emotion animation STOPS and can no longer overwrite
+        the commanded pose frame-by-frame — the race that made `nudge`/`move`
+        silently lose to an in-flight emotion. After the move the servo holds the
+        commanded pose until the next play/emotion/idle command (or stays held
+        when /servo/hold is active).
+        """
+        # Preempt: drop any recording the event loop is playing so it stops
+        # sending its frames. _continue_playback short-circuits on empty state.
+        self._current_recording = None
+        self._current_actions = []
+        self._current_frame_index = 0
+        self._interpolation_frames = 0
+        self._interpolation_target = None
+        self._idle_settled = True
+
+        if duration > 0:
+            self.move_to(target_positions, duration=duration)
+        else:
+            with self.bus_lock:
+                self.robot.send_action(target_positions)
+            # Keep _current_state in sync so the next play interpolates from here.
+            try:
+                with self.bus_lock:
+                    pos = _motor_positions_from_bus(self.robot)
+                self._current_state = pos if pos else dict(target_positions)
+            except Exception:
+                self._current_state = dict(target_positions)
+
     def move_to_raw(self, target_raw: Dict[str, int], duration: float = DEFAULT_MOVE_DURATION):
         """Smoothly move servos to raw encoder positions via direct STS3215 register writes.
 

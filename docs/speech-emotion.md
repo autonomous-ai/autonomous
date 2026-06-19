@@ -284,6 +284,7 @@ So **no match** and **embedding API error** both dedup under the `unknown` key w
 
 ### When SER is not submitted
 
+- The device declares no `audio` capability — voice people-perception (speaker-ID + SER) is gated on the mic, so `VoiceService` is constructed with `enable_people_perception=False` and the SER service never initializes. (This is the `audio` capability, not `presence`: a mic is all SER needs. Facial emotion in the sensing loop stays `presence`-gated.)
 - `SPEECH_EMOTION_ENABLED=false` or `SpeechEmotionService` not `available`
 - `audio_buffer` empty or shorter than `SPEAKER_MIN_AUDIO_S` (gates `_session_wav_for_ser`)
 - `duration_s < SPEECH_EMOTION_MIN_AUDIO_S` (gates `submit()` itself — default 3.0 s)

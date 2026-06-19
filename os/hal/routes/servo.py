@@ -208,20 +208,20 @@ def resume_servos():
     state.animation_service._running.clear()
     if state.animation_service._event_thread and state.animation_service._event_thread.is_alive():
         state.animation_service._event_thread.join(timeout=3.0)
-    # Re-enable torque and reconfigure servos (release left torque disabled)
+    # Re-enable torque and reconfigure servos (release left torque disabled).
+    # REQUIRED — without this the arm stays limp and idle can't move it.
     try:
         state.animation_service._configure_servos_raw()
     except Exception as e:
         state.logger.warning("resume: raw configure failed: %s", e)
-    # Move to wake position before entering idle (arm lifts from release pose)
-    try:
-        state.animation_service.move_to_raw(RESUME_STARTUP_RAW, duration=STARTUP_MOVE_DURATION)
-        state.logger.info("Servo moved to resume startup position")
-    except Exception as e:
-        state.logger.warning("resume: startup move failed: %s", e)
-    # Sync state from hardware now that arm is at a known position
+    # Sync state from the (released/folded) hardware pose so the idle dispatch
+    # below interpolates the lift FROM where the arm actually is — no jerk.
     state.animation_service._sync_state_from_hardware()
-    # Normal interpolation duration (arm arrives from a controlled position)
+    # Let the idle dispatch lift the arm via normal interpolation instead of a
+    # separate 5s startup ramp (PR 174 added that move_to_raw, which made resume
+    # take ~5-8s). _resume_duration controls that single folded→idle lift; use
+    # the normal move duration (~2s). NOTE: PR 174's 5s ramp was for smoothness
+    # on the new servo — if the lift looks jerky, raise this back up.
     state.animation_service._resume_duration = state.animation_service.duration
     # Restart event loop
     state.animation_service._running.set()
@@ -280,11 +280,9 @@ def move_servo(req: ServoMoveRequest):
     errors = {}
 
     try:
-        if eff_duration > 0:
-            state.animation_service.move_to(req.positions, duration=eff_duration)
-        else:
-            with state.animation_service.bus_lock:
-                state.animation_service.robot.send_action(req.positions)
+        # move_and_hold preempts any in-flight emotion animation so it can't
+        # overwrite the commanded pose (race fix); it also keeps the pose afterwards.
+        state.animation_service.move_and_hold(req.positions, duration=eff_duration)
     except Exception as e:
         errors["move"] = str(e)
 
@@ -344,42 +342,31 @@ def release_servos():
     state.animation_service._running.clear()
     if state.animation_service._event_thread and state.animation_service._event_thread.is_alive():
         state.animation_service._event_thread.join(timeout=3.0)
-    # Gravity-rest pose for lumi_final in raw encoder units.
-    # Pre-computed from calibration JSON: raw = round(deg * 4095/360 + mid)
-    # where mid = (range_min + range_max) / 2.
+    # Gravity-rest pose in raw encoder units. RE-CALIBRATED from the measured
+    # torque-off settle: PR 174's deep fold (base_pitch -75°, elbow -65°) was
+    # UNREACHABLE for the new servo — it sagged ~17°/12° short, so cutting torque
+    # dropped the arm AND the reach-poll always timed out (release took ~7s).
+    # These are where the arm actually hangs with torque off, so the servo
+    # reaches them (gravity-assisted) and STAYS put when torque cuts — no drop.
     # base_pitch/elbow_pitch/wrist_pitch exceed calibrated range_min so we
     # use move_to_raw (direct STS3215 writes) to bypass lerobot's software clamp.
     rest_raw = {
-        "base_yaw":    2075,  #   3.00° — mid=2041.5
-        "base_pitch":  1456,  # -75.26° — mid=2312.5
-        "elbow_pitch": 1626,  # -65.02° — mid=2366.5
-        "wrist_roll":  2070,  #   0.00° — mid=2070.0
-        "wrist_pitch": 2108,  # -42.16° — mid=2588.0
+        "base_yaw":    2063,  #   +1.9° — mid=2041.5
+        "base_pitch":  1645,  #  -58.7° — mid=2312.5
+        "elbow_pitch": 1748,  #  -54.4° — mid=2366.5
+        "wrist_roll":  2067,  #   -0.3° — mid=2070.0
+        "wrist_pitch": 2125,  #  -40.7° — mid=2588.0
     }
     try:
-        state.animation_service.move_to_raw(rest_raw, duration=4.0)
+        state.animation_service.move_to_raw(rest_raw, duration=2.0)
     except Exception as e:
         state.logger.warning(f"Could not move to rest before release: {e}")
-    # Poll PRESENT_POSITION until all joints physically reach rest_raw before cutting torque.
-    # move_to_raw only writes GOAL_POSITION — under load the servo lags the command.
-    _PRESENT_REG = 56
-    _tol_raw = 23  # ~2 degrees (4095/360 * 2)
-    _bus = state.animation_service.robot.bus
-    _deadline = time.perf_counter() + 3.0
-    while time.perf_counter() < _deadline:
-        with state.animation_service.bus_lock:
-            actual = {}
-            for _name, _motor in _bus.motors.items():
-                _data, _result, _ = _bus.packet_handler.read2ByteTxRx(
-                    _bus.port_handler, _motor.id, _PRESENT_REG
-                )
-                if _result == 0:
-                    actual[_name] = _data
-        if all(abs(actual.get(k, 0) - v) <= _tol_raw for k, v in rest_raw.items()):
-            break
-        time.sleep(0.05)
-    else:
-        state.logger.warning("rest_raw not reached within 3s; releasing torque anyway")
+    # Brief settle so the servo's PID converges to the commanded gravity-rest
+    # before torque is cut. No reach-poll: under torque there is always a small
+    # steady-state GOAL↔PRESENT gap, so polling for exact arrival just timed out
+    # (the old 3s waste). rest_raw IS the torque-off settle pose, so cutting
+    # torque a few degrees short of it causes no meaningful drop.
+    time.sleep(0.4)
     bus = state.animation_service.robot.bus
     errors = {}
     with state.animation_service.bus_lock:
@@ -525,11 +512,13 @@ def nudge_servo(req: ServoNudgeRequest):
         if req.pitch != 0:
             positions["base_pitch.pos"] = current.get("base_pitch.pos", 0) + req.pitch
 
-        if req.duration > 0:
-            state.animation_service.move_to(positions, duration=req.duration)
-        else:
-            with state.animation_service.bus_lock:
-                state.animation_service.robot.send_action(positions)
+        # Safety speed cap (SAFETY.md motion.max_speed) — stretch the duration so no
+        # joint exceeds the deg/s ceiling. nudge previously sent at duration=0 (an
+        # instant jump = unbounded speed); clamp it the same way /servo/move does.
+        eff_duration = min_move_duration(state.safety_policy, positions, current, req.duration)
+        # move_and_hold preempts any in-flight emotion animation so it can't
+        # overwrite the nudged pose (race fix); it also keeps the pose afterwards.
+        state.animation_service.move_and_hold(positions, duration=eff_duration)
 
         return {"status": "ok", "direction": f"nudge yaw={req.yaw} pitch={req.pitch}", "positions": positions}
     except Exception as e:

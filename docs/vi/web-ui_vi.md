@@ -125,7 +125,7 @@ Monitor poll API system/HW mỗi **3 giây**. Flow dùng hybrid theo file: REST 
 
 | Endpoint | Dữ liệu |
 |----------|---------|
-| `GET /api/system/info` | CPU load, RAM (KB), nhiệt độ, uptime, goroutines, version, deviceId, capabilities (tên các capability đã khai báo — Monitor ẩn/hiện tab phần cứng theo danh sách này) |
+| `GET /api/system/info` | CPU load, RAM (KB), nhiệt độ, uptime, goroutines, version, deviceId, capabilities (tên các capability đã khai báo — cả Monitor lẫn trang Edit/Settings đều ẩn/hiện tab phần cứng theo danh sách này; xem hook dùng chung `useCapabilities`) |
 | `GET /api/system/network` | SSID, IP, public IP, Tailscale IP, signal (dBm), internet (bool) |
 | `GET /api/openclaw/status` | name, connected (bool), sessionKey (bool), version, emotion, uptime (uptime kết nối WS phía OS server, giây), agentUptime (uptime tiến trình OpenClaw lấy từ `server.uptimeMs` trong hello-ok, giây — không reset khi OS server restart) |
 | `GET /api/openclaw/recent` | Các flow event mới nhất từ JSONL của ngày hiện tại (`local/flow_events_<date>.jsonl`) |
@@ -201,6 +201,12 @@ Gồm các card:
 **Display Eyes**
 - Expression đang hiển thị (mode)
 - Danh sách expressions available
+
+> **Card gate theo capability.** Các card phần cứng ở Overview bị ẩn trên thiết bị
+> không có capability tương ứng, nên trang chỉ hiển thị thứ thiết bị thực sự làm được
+> (ví dụ intern-v2 không có servo, scene, hay expression):
+> - **Emotion** và **Servo Pose** gate theo capability đã khai báo (`expression` / `motion`) lấy từ `GET /api/system/info` → `capabilities`.
+> - **Scene** là route *bên trong* capability `light` (lamp khai báo `light:[led,scene]`; intern-v2 khai báo `light:[led]`), nên không phân biệt được qua danh sách capability — card chỉ render khi `GET /hw/scene` trả về danh sách scene.
 
 **System quick stats**
 - CPU, RAM, Temp, Uptime dạng pill

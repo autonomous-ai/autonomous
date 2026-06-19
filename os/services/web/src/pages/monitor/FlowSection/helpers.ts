@@ -1020,21 +1020,21 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
     if (ev.type === "hw_led" || (ev.type === "flow_event" && ev.detail?.node === "hw_led")) {
       const { path, body } = parseHWEvent(ev, "/led/solid");
       if (body && body.startsWith("{")) {
-        pushUnique(info.hw_led, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5001${path} -d '${body}'`);
+        pushUnique(info.hw_led, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5001${path} -H "Content-Type: application/json" -d '${body}'`);
         pushUnique(info.os_gate, `💡 → LED ${path}`);
       }
     }
     if (ev.type === "hw_servo" || (ev.type === "flow_event" && ev.detail?.node === "hw_servo")) {
       const { path, body } = parseHWEvent(ev, "/servo/play");
       if (body && body.startsWith("{")) {
-        pushUnique(info.hw_servo, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5001${path} -d '${body}'`);
+        pushUnique(info.hw_servo, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5001${path} -H "Content-Type: application/json" -d '${body}'`);
         pushUnique(info.os_gate, `🤖 → servo ${path}`);
       }
     }
     if (ev.type === "hw_audio" || (ev.type === "flow_event" && ev.detail?.node === "hw_audio")) {
       const { path, body } = parseHWEvent(ev, "/audio/play");
       if (body && body.startsWith("{")) {
-        pushUnique(info.hw_audio, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5001${path} -d '${body}'`);
+        pushUnique(info.hw_audio, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5001${path} -H "Content-Type: application/json" -d '${body}'`);
         pushUnique(info.os_gate, `🎵 → audio ${path}`);
       }
     }
@@ -1042,7 +1042,7 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
       const { path, body } = parseHWEvent(ev, "/wellbeing/log");
       if (body && body.startsWith("{")) {
         // Wellbeing log goes to the OS server (port 5000), not the device (5001), via the /api/ prefix.
-        pushUnique(info.hw_wellbeing, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -d '${body}'`);
+        pushUnique(info.hw_wellbeing, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -H "Content-Type: application/json" -d '${body}'`);
         const m = body.match(/"action"\s*:\s*"([^"]+)"/);
         pushUnique(info.os_gate, `💧 → wellbeing ${m ? m[1] : path}`);
       }
@@ -1050,7 +1050,7 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
     if (ev.type === "hw_mood" || (ev.type === "flow_event" && ev.detail?.node === "hw_mood")) {
       const { path, body } = parseHWEvent(ev, "/mood/log");
       if (body && body.startsWith("{")) {
-        pushUnique(info.hw_mood, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -d '${body}'`);
+        pushUnique(info.hw_mood, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -H "Content-Type: application/json" -d '${body}'`);
         const kindMatch = body.match(/"kind"\s*:\s*"([^"]+)"/);
         const moodMatch = body.match(/"mood"\s*:\s*"([^"]+)"/);
         const kind = kindMatch ? kindMatch[1] : "log";
@@ -1061,7 +1061,7 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
     if (ev.type === "hw_music_suggestion" || (ev.type === "flow_event" && ev.detail?.node === "hw_music_suggestion")) {
       const { path, body } = parseHWEvent(ev, "/music-suggestion/log");
       if (body && body.startsWith("{")) {
-        pushUnique(info.hw_music_suggestion, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -d '${body}'`);
+        pushUnique(info.hw_music_suggestion, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -H "Content-Type: application/json" -d '${body}'`);
         const triggerMatch = body.match(/"trigger"\s*:\s*"([^"]+)"/);
         pushUnique(info.os_gate, `🎼 → music-suggest ${triggerMatch ? triggerMatch[1] : path}`);
       }
@@ -1069,7 +1069,7 @@ export function extractNodeInfo(events: DisplayEvent[]): NodeInfoMap {
     if (ev.type === "hw_posture" || (ev.type === "flow_event" && ev.detail?.node === "hw_posture")) {
       const { path, body } = parseHWEvent(ev, "/posture/log");
       if (body && body.startsWith("{")) {
-        pushUnique(info.hw_posture, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -d '${body}'`);
+        pushUnique(info.hw_posture, `⚡ HW marker → curl -s -X POST http://127.0.0.1:5000/api${path} -H "Content-Type: application/json" -d '${body}'`);
         const kindMatch = body.match(/"kind"\s*:\s*"([^"]+)"/);
         pushUnique(info.os_gate, `🪑 → posture ${kindMatch ? kindMatch[1] : path}`);
       }
