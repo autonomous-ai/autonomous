@@ -714,6 +714,12 @@ class VoiceService:
         # speaker at session end. This list is LOCAL to _stream_session — a
         # fresh empty list every call, no cross-session carry-over.
         audio_buffer: list[bytes] = []
+        # Index of the last frame with speech energy — bound HERE (not only in
+        # the streaming loop below) so the finally → finalize_session path is
+        # safe even when an exception fires during connect or pre-flush, before
+        # the streaming loop runs (e.g. a stale keepalive WS raising on send).
+        # -1 = no speech seen → finalize_session skips the trailing-silence trim.
+        last_speech_idx: int = -1
         pre_frames_from_vad = len(speech_pre_buffer or [])
         logger.info(
             "Session START — pre_from_vad=%d frames, device_rate=%dHz",
@@ -806,8 +812,8 @@ class VoiceService:
             # trailing silence from the speaker-recognition buffer at session
             # end. SILENCE_TIMEOUT_S holds the session open for ~2.5s after
             # the user stops, so without this the voiceprint ends up 30-50%
-            # silence and the embedding degrades.
-            last_speech_idx: int = len(audio_buffer) - 1
+            # silence and the embedding degrades. (Pre-initialized to -1 above.)
+            last_speech_idx = len(audio_buffer) - 1
             # Signal the OS server to show listening LED as soon as mic session opens (before transcript arrives)
             try:
                 requests.post(
