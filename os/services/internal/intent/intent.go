@@ -413,9 +413,12 @@ var rules = []rule{
 		capability: device.CapLight,
 		match:      anyOf("turn off the light", "light off"),
 		exec: func(string) *Result {
+			// No emotion after /led/off: any emotion (even idle) re-lights the
+			// strip with its own color, undoing the off the user just asked for
+			// (the off user-state then makes LED restore "keep emotion color",
+			// so it never goes back to black). Turn off → stay off.
 			post("/led/off", "")
-			postEmotion(`{"emotion":"idle","intensity":0.3}`)
-			return &Result{TTSText: "Light off!", LEDOff: true, Actions: []string{"POST /led/off", `POST /emotion {"emotion":"idle","intensity":0.3}`}}
+			return &Result{TTSText: "Light off!", LEDOff: true, Actions: []string{"POST /led/off"}}
 		},
 	},
 
