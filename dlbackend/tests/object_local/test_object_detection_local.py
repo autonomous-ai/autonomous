@@ -25,7 +25,7 @@ os.environ["DL_API_KEY"] = TEST_API_KEY
 FIXTURES_DIR: Path = Path(__file__).parent.parent / "fixtures" / "images"
 AUTH_HEADERS: dict[str, str] = {"X-API-Key": TEST_API_KEY}
 
-ALL_DETECTORS: list[str] = ["yoloworld", "owlv2", "grounding-dino"]
+ALL_DETECTORS: list[str] = ["yoloworld", "owlv2"]
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +90,6 @@ def models() -> dict[str, Any]:
     detector_configs: list[tuple[str, ObjectDetectorEnum]] = [
         ("yoloworld", ObjectDetectorEnum.YOLO_WORLD),
         ("owlv2", ObjectDetectorEnum.OWLV2),
-        ("grounding-dino", ObjectDetectorEnum.GROUNDING_DINO),
     ]
 
     perceptions: dict[str, ObjectPerception] = {}

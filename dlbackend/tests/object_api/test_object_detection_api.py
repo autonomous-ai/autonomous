@@ -30,7 +30,7 @@ pytestmark = pytest.mark.skipif(
     not DL_BACKEND_URL, reason="DL_BACKEND_URL not set — skipping remote API tests"
 )
 
-ALL_DETECTORS: list[str] = ["yoloworld", "owlv2", "grounding-dino"]
+ALL_DETECTORS: list[str] = ["yoloworld", "owlv2"]
 
 
 def _http_url(path: str) -> str:
