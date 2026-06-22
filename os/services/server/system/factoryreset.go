@@ -172,6 +172,32 @@ func wipePath(prefix, p string) {
 // fires. 409 Conflict if another reset is already running; 429 Too Many
 // Requests inside the cooldown window.
 func FactoryReset(c *gin.Context) {
+	// Audit who triggered this destructive action. Logged BEFORE runFactoryReset
+	// so even a rejected attempt (cooldown / single-flight / failed auth) leaves a
+	// trail. RemoteAddr is the TCP peer (always 127.0.0.1 for nginx-proxied
+	// requests); X-Forwarded-For / X-Real-IP carry the real client behind nginx.
+	// A pure-loopback caller (no XFF/X-Real-IP) bypassed auth — i.e. an on-device
+	// process (the GPIO button handler, the agent, a local curl, or localhost web
+	// UI). The Authorization scheme (never the token itself) + os_session cookie
+	// presence distinguish a remote admin Bearer call from a logged-in web UI.
+	authScheme := ""
+	if h := c.GetHeader("Authorization"); h != "" {
+		if i := strings.IndexByte(h, ' '); i > 0 {
+			authScheme = h[:i] // e.g. "Bearer" — token deliberately not logged
+		} else {
+			authScheme = "present"
+		}
+	}
+	_, cookieErr := c.Cookie("os_session")
+	log.Printf("[factory-reset] TRIGGER received — remote=%s xff=%q x-real-ip=%q user-agent=%q auth=%q session-cookie=%v",
+		c.Request.RemoteAddr,
+		c.GetHeader("X-Forwarded-For"),
+		c.GetHeader("X-Real-IP"),
+		c.Request.UserAgent(),
+		authScheme,
+		cookieErr == nil,
+	)
+
 	var opts FactoryResetOptions
 	_ = c.ShouldBindJSON(&opts) // body is optional; empty body is fine
 
