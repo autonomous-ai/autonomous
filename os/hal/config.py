@@ -44,6 +44,10 @@ TTS_SPEED: float = float(os.environ.get("HAL_TTS_SPEED", "1.3"))
 TTS_VOICE: str = os.environ.get("TTS_VOICE", "nova")
 # TTS instructions — style/vibe prompt for voice (e.g. "Speak warmly like a caring friend")
 TTS_INSTRUCTIONS: str = os.environ.get("HAL_TTS_INSTRUCTIONS", "Friendly")
+# Stream ElevenLabs TTS over WebSocket (stream-input) instead of HTTP chunked
+# streaming. Default off → the unchanged HTTP path. Only affects the elevenlabs
+# provider; OpenAI is HTTP-only. Opt in with HAL_TTS_ELEVENLABS_WS=true.
+TTS_ELEVENLABS_WS: bool = os.environ.get("HAL_TTS_ELEVENLABS_WS", "false").lower() in ("1", "true", "yes")
 
 # --- Vision tracking ---
 # Use the local YOLOv8n model for COCO-class targets (person, cup, etc.).
