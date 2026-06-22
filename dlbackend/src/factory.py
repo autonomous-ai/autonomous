@@ -175,7 +175,6 @@ def build_object_perceptions() -> dict[str, ObjectPerception]:
     detector_settings: dict[ObjectDetectorEnum, Any] = {
         ObjectDetectorEnum.YOLO_WORLD: settings.object_detector.yolo_world,
         ObjectDetectorEnum.OWLV2: settings.object_detector.owlv2,
-        ObjectDetectorEnum.GROUNDING_DINO: settings.object_detector.grounding_dino,
     }
 
     perceptions: dict[str, ObjectPerception] = {}

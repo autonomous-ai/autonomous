@@ -51,8 +51,6 @@ CDN_PATHS: dict[ModelEnum, str] = {
     ModelEnum.YOLO_WORLD_PTH: "pytorch_models/yolov8x-worldv2.pt",
     ModelEnum.OWLV2_ONNX: "onnx_models/owlv2_raw.onnx",
     ModelEnum.OWLV2_NMS_ONNX: "onnx_models/owlv2.onnx",
-    ModelEnum.GROUNDING_DINO_ONNX: "onnx_models/grounding_dino_raw.onnx",
-    ModelEnum.GROUNDING_DINO_NMS_ONNX: "onnx_models/grounding_dino.onnx",
 }
 
 

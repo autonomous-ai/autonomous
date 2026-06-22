@@ -45,5 +45,3 @@ class ModelEnum(StrEnum):
     YOLO_WORLD_PTH = "yolo_world_pth"
     OWLV2_ONNX = "owlv2_onnx"
     OWLV2_NMS_ONNX = "owlv2_nms_onnx"
-    GROUNDING_DINO_ONNX = "grounding_dino_onnx"
-    GROUNDING_DINO_NMS_ONNX = "grounding_dino_nms_onnx"

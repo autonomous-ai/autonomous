@@ -2,6 +2,8 @@
 
 Each individual export function handles checkpoint resolution internally
 via ensure_downloaded — no need to check for local pretrained files here.
+
+Detection models are exported twice: raw (no NMS) and with NMS baked in.
 """
 
 import logging
@@ -10,7 +12,6 @@ from pathlib import Path
 from . import (
     export_emonet,
     export_emotion2vec,
-    export_grounding_dino,
     export_owlv2,
     export_posterv2,
     export_tcpformer,
@@ -30,11 +31,11 @@ def _run(name: str, fn, required: bool = True) -> bool:
     try:
         fn()
         return True
-    except Exception:
+    except Exception as e:
         if required:
             logger.exception("FAILED: %s", name)
             return False
-        logger.warning("SKIPPED (optional): %s", name)
+        logger.warning("SKIPPED (optional): %s with error=%s", name, e)
         return True
 
 
@@ -83,48 +84,67 @@ def export_all(output_dir: Path | None = None):
     results["uniformerv2"] = _run(
         "uniformerv2",
         lambda: export_uniformerv2.export(
-            "large-k400", output=_output(output_dir, "uniformerv2-l-224-k400_fp32.onnx"),
+            "large-k400",
+            output=_output(output_dir, "uniformerv2-l-224-k400_fp32.onnx"),
         ),
     )
 
+    # --- Object detection: raw (no NMS) + NMS baked ---
+
     # OWLv2
-    results["owlv2"] = _run(
-        "owlv2",
+    results["owlv2_raw"] = _run(
+        "owlv2 (raw)",
         lambda: export_owlv2.export(
             "google/owlv2-large-patch14-ensemble",
             output=_output(output_dir, "owlv2_raw.onnx"),
             nms=False,
         ),
-        required=False,
+        required=True,
     )
-
-    # Grounding DINO
-    results["grounding_dino"] = _run(
-        "grounding_dino",
-        lambda: export_grounding_dino.export(
-            "IDEA-Research/grounding-dino-tiny",
-            output=_output(output_dir, "grounding_dino_raw.onnx"),
-            nms=False,
+    results["owlv2_nms"] = _run(
+        "owlv2 (nms)",
+        lambda: export_owlv2.export(
+            "google/owlv2-large-patch14-ensemble",
+            output=_output(output_dir, "owlv2.onnx"),
+            nms=True,
         ),
-        required=False,
+        required=True,
     )
 
     # YOLO (person detection)
-    results["yolo"] = _run(
-        "yolo",
+    results["yolo_raw"] = _run(
+        "yolo (raw)",
         lambda: export_yolo.export(
-            output=_output(output_dir, "yolo12x_raw.onnx"), nms=False,
+            output=_output(output_dir, "yolo12x_raw.onnx"),
+            nms=False,
         ),
-        required=False,
+        required=True,
+    )
+    results["yolo_nms"] = _run(
+        "yolo (nms)",
+        lambda: export_yolo.export(
+            output=_output(output_dir, "yolo12x.onnx"),
+            nms=True,
+        ),
+        required=True,
     )
 
     # YOLO-World
-    results["yolo_world"] = _run(
-        "yolo_world",
+    results["yolo_world_raw"] = _run(
+        "yolo_world (raw)",
         lambda: export_yolo_world.export(
-            output=_output(output_dir, "yolov8x-worldv2_raw.onnx"), nms=False,
+            output=_output(output_dir, "yolov8x-worldv2_raw.onnx"),
+            nms=False,
         ),
-        required=False,
+        required=True,
+    )
+    results["yolo_world_nms"] = _run(
+        "yolo_world (nms)",
+        lambda: export_yolo_world.export(
+            output=_output(output_dir, "yolov8x-worldv2.onnx"),
+            nms=True,
+        ),
+        required=True,
     )
 
     # Summary
@@ -133,7 +153,7 @@ def export_all(output_dir: Path | None = None):
     logger.info("=" * 60)
     for name, ok in results.items():
         status = "PASSED" if ok else "FAILED"
-        logger.info("  %-20s %s", name, status)
+        logger.info("  %-25s %s", name, status)
 
 
 def entry():
@@ -142,8 +162,12 @@ def entry():
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(description="Export all models to ONNX")
-    parser.add_argument("--output-dir", type=Path, default=None,
-                        help="Directory for ONNX outputs. If omitted, uses default model cache path.")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Directory for ONNX outputs. If omitted, uses default model cache path.",
+    )
     args = parser.parse_args()
 
     export_all(output_dir=args.output_dir)

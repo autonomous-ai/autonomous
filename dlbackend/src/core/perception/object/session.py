@@ -16,6 +16,7 @@ from core.models.object import (
 from core.perception.base import PerceptionSessionBase
 from core.perception.object.predictors.base import ObjectDetector
 from core.types import Omit, omit
+from core.utils.common import get_or_default
 
 
 class ObjectPerceptionSession(
@@ -30,8 +31,9 @@ class ObjectPerceptionSession(
     def __init__(
         self,
         object_detector: ObjectDetector,
-        config: ObjectPerceptionSessionConfig = DEFAULT_CONFIG,
+        config: ObjectPerceptionSessionConfig | None = None,
     ) -> None:
+        config = get_or_default(config, ObjectPerceptionSessionConfig())
         super().__init__(config)
 
         self._object_detector: ObjectDetector = object_detector

@@ -99,7 +99,8 @@ class YOLOWorldONNX(torch.nn.Module):
 
 
 def export(checkpoint: str | None = None, output: str | None = None, imgsz: int = 640, opset: int = 17, nms: bool = False):
-    output = output or str(get_default_model_path(ModelEnum.YOLO_WORLD_ONNX))
+    model_enum = ModelEnum.YOLO_WORLD_NMS_ONNX if nms else ModelEnum.YOLO_WORLD_ONNX
+    output = output or str(get_default_model_path(model_enum))
     dest = Path(output).expanduser().resolve()
     dest.parent.mkdir(parents=True, exist_ok=True)
 

@@ -119,7 +119,6 @@ class SingleObjectDetectorSetting(BaseModel):
 class ObjectDetectorSetting(BaseModel):
     yolo_world: SingleObjectDetectorSetting = SingleObjectDetectorSetting(enabled=True)
     owlv2: SingleObjectDetectorSetting = SingleObjectDetectorSetting(enabled=True)
-    grounding_dino: SingleObjectDetectorSetting = SingleObjectDetectorSetting()
 
 
 class LBSetting(BaseModel):

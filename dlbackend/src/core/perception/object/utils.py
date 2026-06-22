@@ -71,15 +71,6 @@ def create_object_detector(
             )
         else:
             from core.perception.object.predictors.torch.owlv2 import OWLv2Detector as detector_cls
-    elif model_name == ObjectDetectorEnum.GROUNDING_DINO:
-        if use_onnx:
-            from core.perception.object.predictors.onnx.grounding_dino import (
-                GroundingDINOONNXDetector as detector_cls,
-            )
-        else:
-            from core.perception.object.predictors.torch.grounding_dino import (
-                GroundingDINODetector as detector_cls,
-            )
     else:
         raise ValueError(f"Unknown object detector: {model_name}")
 
