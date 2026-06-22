@@ -239,4 +239,7 @@ class TTP223Handler:
             # sessions; treating both as one tap is friendlier than
             # ignoring. Threshold-reached pet is fired inline by
             # _on_session_end and never reaches this branch.
-            single_click_action(source="TTP223")
+            # Disabled: TTP223 false-triggers on this HW → a phantom tap would
+            # stop_tts and cut speech mid-sentence. Re-enable once touch is fixed.
+            # single_click_action(source="TTP223")
+            pass
