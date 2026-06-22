@@ -50,7 +50,7 @@ class VoiceService:
     # Strip HW markers, audio tags, and system tags from realtime agent output.
     RT_MARKER_RE: re.Pattern[str] = re.compile(
         r"\[HW:/[^\]]*\]"
-        r"|\[(?:laughs|LAUGHS|sighs|chuckle|light chuckle|giggle|big laugh|gasps|gulps|breathes|clears throat|whispers|pauses|hesitates|stammers)"
+        r"|\[(?:laughs|LAUGHS|sighs|chuckle|light chuckle|giggle|big laugh|gasps|gulps|breathes|clears throat|whispers|pause|pauses|hesitates|stammers|thinking|thinks|thought|thoughtful|pondering|ponders|reasoning)"
         r"[^\]]*\]"
         r"|\[(?:cheerfully|playfully|quietly|nervously|deadpan|flatly|dramatic tone|resigned tone|excited|calm|tired|sad|sorrowful|nervous|frustrated)"
         r"[^\]]*\]"
