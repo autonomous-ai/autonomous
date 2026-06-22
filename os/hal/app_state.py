@@ -181,8 +181,23 @@ def _is_nonblack(color) -> bool:
     return color and any(c > 0 for c in color)
 
 
+def _led_off_by_user() -> bool:
+    """True when the user explicitly turned the LED off (LST_OFF).
+
+    Emotions, TTS/music speaking waves, and the post-emotion restore all honor
+    this so the strip stays DARK until the user turns it back on. Any explicit
+    on command (solid / effect / scene) overwrites the saved state via
+    _save_user_led_state, so off is sticky only until then — not forever.
+    """
+    return bool(_user_led_state and _user_led_state.get("type") == LST_OFF)
+
+
 def _get_current_led_color() -> tuple:
     """Return the current LED color for the speaking wave effect."""
+    # User turned the LED off → the wave must render on black (invisible), not
+    # the warm fallback below, so speaking/music never re-lights a dark strip.
+    if _led_off_by_user():
+        return (0, 0, 0)
     if _user_led_state:
         stype = _user_led_state.get("type")
         if stype == LST_SOLID and _is_nonblack(_user_led_state.get("color")):
@@ -236,11 +251,16 @@ def _restore_user_led():
         return
 
     state = _user_led_state
-    if state is None or state.get("type") == LST_OFF:
-        logger.info(
-            "LED restore: no active user state (state=%s) -- keeping emotion color",
-            state,
-        )
+    if state is not None and state.get("type") == LST_OFF:
+        # User explicitly turned the LED off — restore to BLACK, not the
+        # lingering emotion color. Otherwise an emotion that briefly lit the
+        # strip would "stick" and the device never goes dark after "turn off".
+        _stop_current_effect()
+        rgb_service.clear()
+        logger.info("LED restore: user state OFF -- cleared to black")
+        return
+    if state is None:
+        logger.info("LED restore: no active user state -- keeping emotion color")
         return
 
     stype = state.get("type")
@@ -444,6 +464,17 @@ def _apply_emotion_led_display(emotion: str, intensity: float = 1.0) -> Optional
         return None
     if _tts_speaking:
         logger.info("Emotion LED skipped (%s) -- TTS speaking_wave active", emotion)
+        if display_service:
+            try:
+                display_service.set_expression(emotion)
+            except Exception as e:
+                logger.warning("Emotion display failed: %s", e)
+        return None
+    if _led_off_by_user():
+        # User turned the LED off — no emotion (background OR expressed) may
+        # re-light it. The face/display expression still updates; only the
+        # strip stays dark until an explicit on command.
+        logger.info("Emotion LED skipped (%s) -- LED off by user", emotion)
         if display_service:
             try:
                 display_service.set_expression(emotion)
