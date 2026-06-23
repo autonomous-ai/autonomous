@@ -35,6 +35,7 @@ class ONNXObjectDetector(ObjectDetector, ABC):
 
     ONNX_INPUT_NAMES: list[str] = ["images"]
     ONNX_OUTPUT_NAMES: list[str] = ["boxes", "probs", "labels"]
+    WARMUP_IMGSZ: int = 640
 
     def __init__(
         self,
@@ -64,13 +65,29 @@ class ONNXObjectDetector(ObjectDetector, ABC):
 
         self._model_path = ensure_downloaded(self._model_path, remote=self._remote_url)
         self._logger.info("Loading ONNX model from %s", self._model_path)
-        self._session = prepare_ort_session(self._model_path)
         self._start_tokenizer()
         self._class_names = self._load_classes(self._classes_path)
+
+        warmup = self._build_warmup_inputs()
+        self._session = prepare_ort_session(self._model_path, warmup_inputs=warmup)
+
         self._running = True
         self._logger.info(
             "Ready — %d default classes, nms=%s", len(self._class_names), self._nms
         )
+
+    def _build_warmup_inputs(self) -> dict[str, np.ndarray] | None:
+        """Build dummy ONNX inputs for warmup inference at startup."""
+        try:
+            sz = self.WARMUP_IMGSZ
+            dummy = np.zeros((sz, sz, 3), dtype=np.uint8)
+            preprocessed = self.preprocess([dummy])
+            img_batch = np.stack(preprocessed, axis=0)
+            classes = self._class_names[:1] or ["dummy"]
+            return self._build_onnx_inputs(img_batch, classes)
+        except Exception as e:
+            self._logger.warning("Could not build warmup inputs: %s", e)
+            return None
 
     def _start_tokenizer(self) -> None:
         """Load any tokenizer/processor needed for text encoding.

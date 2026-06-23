@@ -1,7 +1,7 @@
 .PHONY: install install-cpu install-gpu install-tensorrt install-lb install-dev \
        start start-dlserver start-lbserver \
        start-runpod-master start-runpod-master-ssl start-runpod-slave start-runpod-slave-ssl \
-       start-nginx start-nginx-ssl gen-ssl-cert \
+       start-nginx start-nginx-ssl stop-nginx gen-ssl-cert \
        start-runpod-dlserver start-runpod-lbserver stop-runpod-dlserver stop-runpod-lbserver start-jupyter \
        info \
        test test-api test-local \
@@ -143,22 +143,28 @@ gen-ssl-cert:
 		echo "SSL cert already exists at $(SSL_DIR)"; \
 	fi
 
-start-nginx:
+stop-nginx:
+	@nginx -s stop 2>/dev/null || true
+	@pkill -f "nginx: master" 2>/dev/null || true
+	@sleep 1
+	@if pgrep -f "nginx: master" >/dev/null 2>&1; then \
+		pkill -9 -f "nginx: master" 2>/dev/null || true; \
+		sleep 1; \
+	fi
+	@echo "nginx stopped"
+
+start-nginx: stop-nginx
 	@if ! command -v nginx > /dev/null 2>&1; then \
 		apt-get update && apt-get install -y nginx; \
 	fi
 	cp $(NGINX_CONF) /etc/nginx/dlbackend-nginx.conf
-	nginx -s stop 2>/dev/null || true
-	pkill nginx 2>/dev/null || true
 	nginx -c /etc/nginx/dlbackend-nginx.conf
 
-start-nginx-ssl: gen-ssl-cert
+start-nginx-ssl: gen-ssl-cert stop-nginx
 	@if ! command -v nginx > /dev/null 2>&1; then \
 		apt-get update && apt-get install -y nginx; \
 	fi
 	cp $(NGINX_SSL_CONF) /etc/nginx/dlbackend-nginx-ssl.conf
-	nginx -s stop 2>/dev/null || true
-	pkill nginx 2>/dev/null || true
 	nginx -c /etc/nginx/dlbackend-nginx-ssl.conf
 
 start-runpod-dlserver: install stop-runpod-dlserver
