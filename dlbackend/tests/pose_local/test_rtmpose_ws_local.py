@@ -217,3 +217,53 @@ class TestPoseEstimationWebSocket:
             with client.websocket_connect("/hal/api/dl/pose-estimation/ws") as ws:
                 ws.send_text(json.dumps({"type": "heartbeat", "task": "pose"}))
                 ws.receive_json()
+
+
+# ---------------------------------------------------------------------------
+# Performance / accuracy tests using real fixture images
+# ---------------------------------------------------------------------------
+
+FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures" / "images"
+
+
+def _load_image_b64(path: Path) -> str:
+    """Read an image from disk and return its base64-encoded JPEG string."""
+    frame = cv2.imread(str(path))
+    assert frame is not None, f"Could not load image: {path}"
+    _, buf = cv2.imencode(".jpg", frame)
+    return base64.b64encode(buf.tobytes()).decode()
+
+
+@pytest.fixture(scope="session")
+def person_frame_b64() -> str:
+    return _load_image_b64(FIXTURES_DIR / "person_drinking.jpg")
+
+
+class TestPosePerformance:
+    def test_person_keypoints_detected(self, client, person_frame_b64: str) -> None:
+        """Send a real person image and verify keypoint quality."""
+        with client.websocket_connect(
+            "/hal/api/dl/pose-estimation/ws", headers=AUTH_HEADERS
+        ) as ws:
+            ws.send_text(
+                json.dumps(
+                    {
+                        "type": "frame",
+                        "task": "pose",
+                        "frame_b64": person_frame_b64,
+                    }
+                )
+            )
+            resp = ws.receive_json()
+
+            assert "pose_2d" in resp
+            joints = resp["pose_2d"]["joints"]
+            confs = resp["pose_2d"]["confs"]
+
+            assert len(joints) == 17, f"Expected 17 keypoints, got {len(joints)}"
+
+            high_conf_count = sum(1 for c in confs if c > 0.3)
+            assert high_conf_count >= 10, (
+                f"Expected at least 10 keypoints with confidence > 0.3, "
+                f"got {high_conf_count} (confs: {confs})"
+            )

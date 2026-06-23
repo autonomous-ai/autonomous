@@ -80,20 +80,22 @@ class TestRecognizerPrediction:
         assert abs(total - 1.0) < 1e-4
 
     def test_happy_detected(self, recognizer, happy_audio):
-        """'happy' should be in top-3 (excluding <unk>)."""
+        """'happy' should be the top emotion with high confidence."""
         results = recognizer.predict([happy_audio])
         probs = results[0].expression_probs
         ranked = np.argsort(probs)[::-1]
-        top_names = [recognizer.class_names[i] for i in ranked if recognizer.class_names[i] != "<unk>"][:3]
-        assert "happy" in top_names, f"Expected 'happy' in top-3, got: {top_names}"
+        top_names = [recognizer.class_names[i] for i in ranked if recognizer.class_names[i] != "<unk>"]
+        assert top_names[0] == "happy", f"Expected 'happy' as top-1, got: {top_names[0]}"
+        happy_idx = recognizer.class_names.index("happy")
+        assert float(probs[happy_idx]) > 0.5, f"Happy confidence too low: {probs[happy_idx]:.3f}"
 
     def test_sad_detected(self, recognizer, sad_audio):
-        """'sad' should be in top-5 (excluding <unk>) — short clips have low certainty."""
+        """'sad' should be the top emotion."""
         results = recognizer.predict([sad_audio])
         probs = results[0].expression_probs
         ranked = np.argsort(probs)[::-1]
-        top_names = [recognizer.class_names[i] for i in ranked if recognizer.class_names[i] != "<unk>"][:5]
-        assert "sad" in top_names, f"Expected 'sad' in top-5, got: {top_names}"
+        top_names = [recognizer.class_names[i] for i in ranked if recognizer.class_names[i] != "<unk>"]
+        assert top_names[0] == "sad", f"Expected 'sad' as top-1, got: {top_names[0]}"
 
 
 class TestPerceptionPrediction:
@@ -113,25 +115,26 @@ class TestPerceptionPrediction:
         assert abs(total - 1.0) < 1e-4
 
     def test_predict_audio_happy(self, perception, happy_audio):
-        """'happy' should be in top-3 emotions (excluding <unk>)."""
+        """'happy' should be the top emotion with high confidence."""
         detection = asyncio.run(perception.predict_audio(happy_audio))
-        top_names = [e.emotion for e in detection.emotions if e.emotion != "<unk>"][:3]
-        assert "happy" in top_names, f"Expected 'happy' in top-3, got: {top_names}"
+        top = [e for e in detection.emotions if e.emotion != "<unk>"]
+        assert top[0].emotion == "happy", f"Expected 'happy' as top-1, got: {top[0].emotion}"
+        assert top[0].confidence > 0.5, f"Happy confidence too low: {top[0].confidence:.3f}"
 
     def test_predict_audio_sad(self, perception, sad_audio):
-        """'sad' should be in top-5 emotions (excluding <unk>)."""
+        """'sad' should be the top emotion."""
         detection = asyncio.run(perception.predict_audio(sad_audio))
-        top_names = [e.emotion for e in detection.emotions if e.emotion != "<unk>"][:5]
-        assert "sad" in top_names, f"Expected 'sad' in top-5, got: {top_names}"
+        top = [e for e in detection.emotions if e.emotion != "<unk>"]
+        assert top[0].emotion == "sad", f"Expected 'sad' as top-1, got: {top[0].emotion}"
 
     def test_batch_both_detected(self, perception, happy_audio, sad_audio):
-        """Both happy and sad should be in top-3 of their respective audio."""
+        """Both happy and sad should be top-1 for their respective audio."""
         happy_det = asyncio.run(perception.predict_audio(happy_audio))
         sad_det = asyncio.run(perception.predict_audio(sad_audio))
-        happy_top = [e.emotion for e in happy_det.emotions if e.emotion != "<unk>"][:3]
-        sad_top = [e.emotion for e in sad_det.emotions if e.emotion != "<unk>"][:5]
-        assert "happy" in happy_top, f"Expected 'happy' in top-3, got: {happy_top}"
-        assert "sad" in sad_top, f"Expected 'sad' in top-5, got: {sad_top}"
+        happy_top = [e for e in happy_det.emotions if e.emotion != "<unk>"][0]
+        sad_top = [e for e in sad_det.emotions if e.emotion != "<unk>"][0]
+        assert happy_top.emotion == "happy", f"Expected 'happy', got: {happy_top.emotion}"
+        assert sad_top.emotion == "sad", f"Expected 'sad', got: {sad_top.emotion}"
 
 
 class TestSession:
@@ -141,8 +144,8 @@ class TestSession:
         result = asyncio.run(session.update(happy_audio))
         assert result is not None
         assert len(result.emotions) > 0
-        top_names = [e.emotion for e in result.emotions if e.emotion != "<unk>"][:3]
-        assert "happy" in top_names, f"Expected 'happy' in top-3, got: {top_names}"
+        top = [e for e in result.emotions if e.emotion != "<unk>"][0]
+        assert top.emotion == "happy", f"Expected 'happy' as top-1, got: {top.emotion}"
 
     def test_session_threshold_filters(self, perception, happy_audio):
         config = AudioEmotionPerceptionSessionConfig(confidence_threshold=0.99)
