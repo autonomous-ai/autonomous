@@ -175,25 +175,49 @@ distilled `MEMORY.md`/`USER.md` mới là dạng mang đi được.
 
 ---
 
-## 6. Hooks — VẪN MỞ cho Hermes (ví dụ mẫu của một gap)
+## 6. Hooks — reimplement phía OS cho Hermes (ví dụ mẫu)
 
 Hooks OpenClaw (`hooks/<name>/{HOOK.md, handler.ts}`) là handler TypeScript fire
 trên event `message:preprocessed` của OpenClaw — `emotion-acknowledge` (mặt
 "thinking" ngay khi nhận tin) và `turn-gate` (set busy cho turn từ kênh). Chúng
-**riêng-runtime**, không portable.
+**riêng-runtime**, không portable. Backend mới **không** thừa kế chúng.
 
-Backend mới **không** thừa kế chúng. Lựa chọn:
-- **Hook native của backend** — nếu backend có hệ hook (Hermes có Python plugin
-  hook trên `pre_gateway_dispatch` / gateway `agent:start`, discover từ
-  `~/.hermes/plugins`; **không có** loader drop-in `~/.hermes/hooks/HOOK.yaml`
-  trong bản đang ship — verify loader thật của backend trước khi giả định).
-- **Xử ở OS** — với thiết bị voice, hành vi giá trị nhất (mặt thinking lúc
-  turn-start) nên làm trong `os-server` (Go), nơi phủ các turn do os-server tự
-  khởi tạo (voice/sensing) bất kể backend. Turn từ kênh (Telegram) vẫn cần hook
-  native của backend.
+**Vì sao OpenClaw cần hook còn Hermes thì không.** Trong OpenClaw mọi turn chạy
+bên trong daemon; os-server đẩy tin qua WebSocket rồi mất dấu, nên chỗ duy nhất để
+chen "thinking" đúng thời điểm là hook. Với Hermes, điểm chặn đã nằm phía Go —
+**mọi turn gửi tới Hermes đều đi qua `internal/hermes/chat.go:sendChat`** (voice,
+sensing, web, và cả Telegram — receive loop nằm phía Lumi, xem `telegramRunOrigin`).
+Nên ta reimplement hook native bằng Go và fire từ `sendChat`, thay vì materialize
+file hook vào workspace (Hermes không có onboarding Go để làm việc đó, và không có
+loader `~/.hermes/hooks/HOOK.yaml` để chạy — `handler.ts` mà `claw migrate` copy
+vào là đồ chết dưới Hermes).
 
-> Trạng thái: hooks Hermes **chưa implement**. Đây là gap parity còn lại sau khi
-> skills/config/identity/persona đã đóng.
+Đã làm:
+- **`emotion-acknowledge` → Go native** trong `internal/hermes/emotion_ack.go`
+  (`fireAckEmotion`, gọi từ `sendChat`). Mirror `handler.ts` 1:1: cùng emotion
+  (`thinking`, intensity `0.7`), cùng skip prefix
+  (`[sensing:`/`[activity]`/`[emotion]`/`[speech_emotion]` + rỗng), và cap-gate đi
+  qua **registry dùng chung** `skills.SupportedHooks`
+  (→ `HookCapability["emotion-acknowledge"] = expression`), resolve một lần lúc
+  khởi tạo (`Service.ackHookEnabled`). Skip `[HANDLED]` của hook TS ánh xạ sang
+  check Go-native `IsSilentRun(runID)` — os-server báo turn realtime-handled qua
+  `MarkSilentRun`, không phải marker trong body.
+- **`turn-gate` → không mirror (thừa).** `sendChat` đã set busy
+  (`busySince`/`activeTurn`) trước round-trip mạng, nên gate riêng sẽ trùng lặp.
+
+> ⚠️ **Coupling bảo trì — không có liên kết compile-time.** `hooks/emotion-acknowledge/
+> handler.ts` (OpenClaw) và `internal/hermes/emotion_ack.go` (Hermes) là hai bản
+> cài đặt độc lập của cùng một hành vi. **Sửa cái này phải sửa cái kia** — skip
+> rules, tên/intensity emotion, và cap-gate phải y hệt, nếu không hai backend lệch
+> nhau trong im lặng. Giữ comment chéo trong cả hai file.
+
+**Khi nào *mới cần* hook native (Python).** Chỉ cho turn phát sinh **bên trong**
+backend và không bao giờ qua `sendChat` — ví dụ heartbeat của backend, hoặc một
+kênh backend tự lắng nghe trực tiếp (không do Lumi proxy). Lamp hiện chưa có turn
+loại này, nên path Python-plugin (`pre_gateway_dispatch` trong `~/.hermes/plugins/`,
+do Hermes discover; **không có** loader `~/.hermes/hooks/HOOK.yaml` trong bản ship
+— verify loader thật trước khi giả định) được **hoãn theo YAGNI**, không phải gap
+parity. Chỉ làm khi xuất hiện nguồn turn như vậy.
 
 ---
 
@@ -237,6 +261,8 @@ Dùng metadata nền tảng runtime-agnostic trong `internal/skills`:
 - [ ] Skills: copy-import + **restore-trong-presync** (guard) + `skill_watcher.go`
       (song song openclaw, share `internal/skills/skillzip.go`).
 - [ ] Hooks: native-backend hoặc OS-side — đã quyết & ghi (không thiếu âm thầm).
+      Nếu reimplement OS-side bằng Go (không liên kết compile-time với hook TS),
+      thêm comment chéo trong cả hai file để sửa cái này cảnh báo cái kia.
 - [ ] `reset_<name>.go` + `factoryreset.go` case; **`agent_state.json` wipe cùng
       `config.json`**.
 - [ ] Gate capability qua `skills.Supported` / `SupportedHooks`.
@@ -249,10 +275,11 @@ Dùng metadata nền tảng runtime-agnostic trong `internal/skills`:
 
 **Xong:** nối switch, install nhúng + presync (config self-heal, restore skills),
 migrate persona/memory (SOUL + inline identity, MEMORY + daily + KNOWLEDGE, USER),
-`UpdateIdentityName`, skill watcher, factory-reset khoá-bước `agent_state.json`.
+`UpdateIdentityName`, skill watcher, factory-reset khoá-bước `agent_state.json`,
+hooks (`emotion-acknowledge` reimplement OS-side bằng Go; `turn-gate` thừa — §6).
 
-**Còn mở / no-op:** hooks (`emotion-acknowledge`, `turn-gate` — §6),
-`WriteMCPEntry`/`RemoveMCPEntry` (`TODO(hermes-mcp)`), `CompactSession`,
+**Còn mở / no-op:** hook native (Python) cho nguồn turn nội-bộ-backend (hoãn YAGNI
+— §6), `WriteMCPEntry`/`RemoveMCPEntry` (`TODO(hermes-mcp)`), `CompactSession`,
 `FetchChatHistory`, và nhóm model-sync (`StartModelSync`, `UpdatePrimaryModel`,
 `StartPrimaryModelWatch`, `RefreshModelsConfig` — phần lớn N/A vì os-server gửi
 model cố định tới custom provider campaign-api).
