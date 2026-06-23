@@ -143,10 +143,17 @@ run_presync() {
 # start_new — enable + start NEW; succeeds only when it actually reaches active.
 # `enable --now` returning 0 just means systemd attempted the start; a unit that
 # crashes immediately (e.g. missing binary) can still exit 0, so we assert
-# is-active separately.
+# We poll is-active for a bit after enable --now, to allow slow backends to become active.
+START_GRACE_SECS="${START_GRACE_SECS:-30}"
 start_new() {
   log "starting $NEW ($NEW_UNIT.service)"
   systemctl enable --now "${NEW_UNIT}.service" || true
+  local i=0
+  while [ "$i" -lt "$START_GRACE_SECS" ]; do
+    systemctl is-active --quiet "${NEW_UNIT}.service" && return 0
+    sleep 1
+    i=$((i + 1))
+  done
   systemctl is-active --quiet "${NEW_UNIT}.service"
 }
 
