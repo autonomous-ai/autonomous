@@ -30,6 +30,14 @@
 #    internal/hermes/constants.go BaseURL.
 set -euo pipefail
 
+# Tee all output (stdout+stderr) to a log file so the install can be followed
+# live (`tail -f $HERMES_LOG`) and inspected after the fact. Console output is
+# preserved. Override the path with HERMES_LOG=... before invoking if needed.
+HERMES_LOG="${HERMES_LOG:-/var/log/hermes/install.log}"
+mkdir -p "$(dirname "$HERMES_LOG")"
+exec > >(tee -a "$HERMES_LOG") 2>&1
+echo "[install-hermes] ===== install start $(date -u '+%Y-%m-%dT%H:%M:%SZ') (log: $HERMES_LOG) ====="
+
 HERMES_BIN="/usr/local/bin/hermes"
 HERMES_DIR="/root/.hermes"
 ENV_FILE="$HERMES_DIR/.env"
@@ -194,3 +202,4 @@ mkdir -p /usr/local/lib/os-runtimes/hermes
 echo "hermes-gateway" >/usr/local/lib/os-runtimes/hermes/service
 
 echo "[install-hermes] done — hermes gateway installed + started as a system service (hermes-gateway.service)."
+echo "[install-hermes] ===== install finished $(date -u '+%Y-%m-%dT%H:%M:%SZ') ====="
