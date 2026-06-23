@@ -17,7 +17,7 @@ import argparse
 import logging
 from copy import deepcopy
 from pathlib import Path
-from typing import override
+from typing_extensions import override
 
 import torch
 import torch.nn.functional as F

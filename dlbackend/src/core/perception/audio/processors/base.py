@@ -1,7 +1,7 @@
 """Audio processor base class."""
 
 from abc import ABC
-from typing import override
+from typing_extensions import override
 
 from core.models.media import Audio
 from core.perception.base.processor import InputProcessorBase
