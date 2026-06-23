@@ -129,6 +129,10 @@ func (s *Service) sendChat(message string, imageBase64 string, fixedReqID string
 	s.busySince.Store(time.Now().UnixMilli())
 	s.activeTurn.Store(true)
 
+	// Flash the "thinking" face for visible turns (OpenClaw emotion-acknowledge
+	// hook parity). Skips passive sensing + realtime-handled turns. See emotion_ack.go.
+	s.fireAckEmotion(idempotencyKey, message)
+
 	s.SetPendingChatTrace(idempotencyKey, message)
 
 	slog.Info("hermes >>> SEND  user message", "component", "hermes",

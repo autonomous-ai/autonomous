@@ -177,25 +177,54 @@ the distilled `MEMORY.md`/`USER.md` is the portable form.
 
 ---
 
-## 6. Hooks — STILL OPEN for Hermes (a worked example of a gap)
+## 6. Hooks — OS-side reimplementation for Hermes (a worked example)
 
 OpenClaw hooks (`hooks/<name>/{HOOK.md, handler.ts}`) are TypeScript handlers that
 fire on OpenClaw's `message:preprocessed` event — `emotion-acknowledge` (instant
 "thinking" face on message arrival) and `turn-gate` (set busy for channel turns).
-They are **runtime-specific** and not portable.
+They are **runtime-specific** and not portable. A new backend does **not** inherit
+them.
 
-A new backend does **not** inherit them. Options:
-- **Backend-native hooks** — if the backend has a hook system (Hermes has Python
-  plugin hooks on `pre_gateway_dispatch` / gateway `agent:start`, discovered from
-  `~/.hermes/plugins`; there is **no** drop-in `~/.hermes/hooks/HOOK.yaml` loader
-  in the shipped build — verify your backend's actual loader before assuming).
-- **OS-side handling** — for a voice device the highest-value behavior (thinking
-  face on turn start) is best done in `os-server` (Go), where it covers
-  os-server-initiated voice/sensing turns regardless of backend. Channel-initiated
-  turns (Telegram) still need a backend-native hook.
+**Why OpenClaw needs hooks but Hermes does not.** In OpenClaw every turn runs
+inside the daemon; os-server pushes the message over WebSocket and loses the
+thread, so the only place to inject "thinking" at the right moment is the hook.
+With Hermes the interception point is already on the Go side — **every turn sent
+to Hermes flows through `internal/hermes/chat.go:sendChat`** (voice, sensing, web,
+and Telegram, whose receive loop is Lumi-side — see `telegramRunOrigin`). So we
+reimplement the hook natively in Go and fire from `sendChat`, instead of
+materializing hook files into a workspace (Hermes has no Go onboarding to do that,
+and no `~/.hermes/hooks/HOOK.yaml` loader to execute them — the `handler.ts`
+copied in by `claw migrate` is dead weight under Hermes).
 
-> Status: Hermes hooks are **not yet implemented**. This is the remaining parity
-> gap after skills/config/identity/persona were closed.
+What was done:
+- **`emotion-acknowledge` → native Go** in `internal/hermes/emotion_ack.go`
+  (`fireAckEmotion`, called from `sendChat`). It mirrors `handler.ts` 1:1: same
+  emotion (`thinking`, intensity `0.7`), same skip prefixes
+  (`[sensing:`/`[activity]`/`[emotion]`/`[speech_emotion]` + empty), and the
+  capability gate goes through the **shared registry** `skills.SupportedHooks`
+  (→ `HookCapability["emotion-acknowledge"] = expression`), resolved once at
+  construction (`Service.ackHookEnabled`). The TS hook's `[HANDLED]` text skip
+  maps to the Go-native `IsSilentRun(runID)` check — os-server signals
+  realtime-handled turns via `MarkSilentRun`, not a body marker.
+- **`turn-gate` → not mirrored (redundant).** `sendChat` already marks the turn
+  busy (`busySince`/`activeTurn`) before the network round-trip, so a separate
+  gate would duplicate it.
+
+> ⚠️ **Maintenance coupling — no compile-time link.** `hooks/emotion-acknowledge/
+> handler.ts` (OpenClaw) and `internal/hermes/emotion_ack.go` (Hermes) are two
+> independent implementations of the same behavior. **When you change one, change
+> the other** — skip rules, emotion name/intensity, and capability gate must stay
+> identical, or the two backends drift apart silently. Keep the cross-reference
+> comments in both files.
+
+**When a backend-native (Python) hook *would* be needed.** Only for turns that
+originate **inside** the backend and never pass through `sendChat` — e.g. a
+backend heartbeat or a channel the backend listens on directly (not proxied by
+Lumi). The lamp has none of these today, so the Python-plugin path
+(`pre_gateway_dispatch` in `~/.hermes/plugins/`, discovered by Hermes; there is
+**no** `~/.hermes/hooks/HOOK.yaml` loader in the shipped build — verify the actual
+loader before assuming) is **deferred as YAGNI**, not a parity gap. Build it only
+when such a turn source appears.
 
 ---
 
@@ -239,6 +268,8 @@ Use the runtime-agnostic platform metadata in `internal/skills`:
 - [ ] Skills: copy-import + **restore-in-presync** (guarded) + `skill_watcher.go`
       (parallel to openclaw, shared `internal/skills/skillzip.go`).
 - [ ] Hooks: backend-native or OS-side — decided & documented (not silently absent).
+      If reimplemented OS-side in Go (no compile-time link to the TS hook), add
+      cross-reference comments in both files so a change to one flags the other.
 - [ ] `reset_<name>.go` + `factoryreset.go` case; **`agent_state.json` wiped with
       `config.json`**.
 - [ ] Capability gating via `skills.Supported` / `SupportedHooks`.
@@ -253,10 +284,12 @@ Use the runtime-agnostic platform metadata in `internal/skills`:
 **Done:** switch wiring, embedded install + presync (config self-heal, skill
 restore), persona/memory migration (SOUL + inline identity, MEMORY + daily +
 KNOWLEDGE, USER), `UpdateIdentityName`, skill watcher, factory-reset
-`agent_state.json` lockstep.
+`agent_state.json` lockstep, hooks (`emotion-acknowledge` reimplemented OS-side in
+Go; `turn-gate` redundant — §6).
 
-**Still open / no-op:** hooks (`emotion-acknowledge`, `turn-gate` — §6),
-`WriteMCPEntry`/`RemoveMCPEntry` (`TODO(hermes-mcp)`), `CompactSession`,
+**Still open / no-op:** backend-native (Python) hooks for backend-internal turn
+sources (deferred YAGNI — §6), `WriteMCPEntry`/`RemoveMCPEntry`
+(`TODO(hermes-mcp)`), `CompactSession`,
 `FetchChatHistory`, and the model-sync group (`StartModelSync`,
 `UpdatePrimaryModel`, `StartPrimaryModelWatch`, `RefreshModelsConfig` — largely
 N/A because os-server sends a fixed request model to the campaign-api custom
