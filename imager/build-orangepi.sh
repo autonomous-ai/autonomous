@@ -311,14 +311,16 @@ openclaw plugins install @openclaw/slack@${OPENCLAW_VERSION} --force 2>&1 || ech
 
 # ── Hermes agentic backend (pre-install) ─────────────────────────────────────
 # Pre-bake Hermes so switch-runtime skips the CDN download on first switch.
-# gateway start --system requires live systemd (absent in chroot) and will fail;
-# we run with || true then manually create the switch-runtime discovery files
-# (service + verify) that install.sh writes AFTER gateway start.
+# install.sh runs gateway install --system (unit + enable symlink) then
+# gateway start --system (fails in chroot — no live systemd, || true).
+# We explicitly disable after so hermes-gateway does NOT auto-start on boot;
+# default runtime stays openclaw. switch-runtime enables it on first switch.
 echo "[stage] Hermes pre-install"
 HERMES_INSTALLER_TMP=\$(mktemp)
 if retry "curl -fsSL https://cdn.autonomous.ai/os/runtimes/hermes/install.sh -o '\$HERMES_INSTALLER_TMP'" 3; then
   chmod +x "\$HERMES_INSTALLER_TMP"
   bash "\$HERMES_INSTALLER_TMP" || true
+  systemctl disable hermes-gateway 2>/dev/null || true
   if [ -x /usr/local/bin/hermes ]; then
     mkdir -p /usr/local/lib/os-runtimes/hermes
     echo "hermes-gateway" > /usr/local/lib/os-runtimes/hermes/service
@@ -327,7 +329,7 @@ if retry "curl -fsSL https://cdn.autonomous.ai/os/runtimes/hermes/install.sh -o 
 command -v hermes >/dev/null 2>&1
 VERIFY_HERMES
     chmod +x /usr/local/lib/os-runtimes/hermes/verify
-    echo "[stage] Hermes pre-install OK — binary ready, gateway starts on first switch"
+    echo "[stage] Hermes pre-install OK — binary ready, not auto-started (switch-runtime enables on first switch)"
   else
     echo "[stage] WARN: hermes binary not found after install (non-fatal)"
   fi
