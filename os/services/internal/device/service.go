@@ -1008,6 +1008,14 @@ func (s *Service) UpdateAgentRuntime(d domain.AgentRuntimeSetData) (bool, error)
 	if err := materializeInstaller(runtime); err != nil {
 		return false, fmt.Errorf("materialize %s installer: %w", runtime, err)
 	}
+	// Refresh the pre-start hook on disk too, so a plain os-server OTA delivers
+	// its latest version (config self-heal) even when the backend is already
+	// installed and install.sh is therefore skipped. switch-runtime runs it
+	// right before the backend starts. Non-fatal: a backend without a presync, or
+	// a transient write error, must not block the switch.
+	if err := materializePresync(runtime); err != nil {
+		slog.Warn("materialize presync hook failed (non-fatal)", "component", "device", "runtime", runtime, "error", err)
+	}
 
 	slog.Info("running switch-runtime", "component", "device", "from", old, "to", runtime)
 
