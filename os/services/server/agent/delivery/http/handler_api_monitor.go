@@ -51,7 +51,9 @@ func (h *AgentHandler) Status(c *gin.Context) {
 	// Get real emotion from HAL (source of truth) instead of parsed text
 	emotion := h.fetchHALEmotion()
 
-	version := openclaw.GetOpenClawVersion()
+	// Active backend's own version (OpenClaw → "2026.5.27", Hermes → "0.17.0"),
+	// so the web Overview shows the running runtime's version, not always OpenClaw's.
+	version := h.agentGateway.Version()
 
 	// uptime: seconds since the WS connection last became ready (resets when
 	// the OS server reconnects). agentUptime: actual OpenClaw process uptime sourced from

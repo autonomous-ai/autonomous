@@ -484,7 +484,11 @@ type MQTTInfoResponse struct {
 	HalVersion      string `json:"hal_version,omitempty"`
 	OpenClawVersion string `json:"openclaw_version,omitempty"`
 	AgentRuntime    string `json:"agent_runtime,omitempty"`
-	LocalIP         string `json:"local_ip,omitempty"`
+	// AgentVersion is the ACTIVE backend's own version (openclaw "2026.5.27",
+	// hermes "0.17.0"), so the field tracks whichever runtime agent_runtime names.
+	// openclaw_version stays for back-compat (always the OpenClaw cache).
+	AgentVersion string `json:"agent_version,omitempty"`
+	LocalIP      string `json:"local_ip,omitempty"`
 }
 
 // NewDeviceMessage creates a base message with required fields populated from config.
