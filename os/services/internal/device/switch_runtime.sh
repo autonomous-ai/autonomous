@@ -106,45 +106,101 @@ rollback() {
 }
 trap rollback EXIT
 
-# 1. Ensure the target backend is installed. Its installer owns creating its
-#    unit (and declaring a non-default unit name; see unit_for). (openclaw.service
-#    is baked by setup.sh, so this is skipped for openclaw — uniform path, no
-#    special-case.) Prefer the binary-embedded installer materialized by os-server
-#    (offline); fall back to the CDN.
-NEW_UNIT="$(unit_for "$NEW")"
-if ! unit_exists "$NEW_UNIT"; then
-  LOCAL_INSTALLER="/usr/local/lib/os-runtimes/${NEW}/install.sh"
-  if [ -x "$LOCAL_INSTALLER" ]; then
-    log "$NEW not installed — running embedded $LOCAL_INSTALLER"
-    "$LOCAL_INSTALLER"
+# install_new — run the target backend's installer (binary-embedded copy first,
+# CDN fallback) and re-resolve its unit name (the installer may have just declared
+# a non-default one). Used both for a first-time install and to self-heal an
+# orphaned/half-installed backend. Mutates the global NEW_UNIT.
+install_new() {
+  local local_installer="/usr/local/lib/os-runtimes/${NEW}/install.sh"
+  if [ -x "$local_installer" ]; then
+    log "running embedded installer $local_installer"
+    "$local_installer"
   else
-    log "$NEW not installed — fetching ${RUNTIMES_BASE_URL}/${NEW}/install.sh"
+    log "fetching installer ${RUNTIMES_BASE_URL}/${NEW}/install.sh"
     curl -fsSL "${RUNTIMES_BASE_URL}/${NEW}/install.sh" | bash
   fi
-  NEW_UNIT="$(unit_for "$NEW")" # re-read: the installer may have just declared it
+  NEW_UNIT="$(unit_for "$NEW")"
+}
+
+# backend_installed — true only when the backend is BOTH declared (unit file
+# present) AND actually usable. Usability is verified via an optional installer-
+# provided hook at /usr/local/lib/os-runtimes/<name>/verify (e.g. hermes writes
+# one that runs `command -v hermes`). This catches the orphaned-unit trap: a stale
+# <name>.service left behind while the backend's binary is gone/broken — the old
+# unit-presence-only gate treated that as "installed" and NEVER reinstalled, so a
+# half-removed backend could never recover. Backends without a verify hook (e.g.
+# openclaw, whose unit is baked by setup.sh) fall back to unit-presence alone.
+backend_installed() {
+  unit_exists "$NEW_UNIT" || return 1
+  local verify="/usr/local/lib/os-runtimes/${NEW}/verify"
+  [ -x "$verify" ] || return 0
+  "$verify" >/dev/null 2>&1
+}
+
+# run_presync — optional pre-start hook dropped by the installer (e.g. hermes
+# syncs llm_* from config.json into its own config here). No-op if absent.
+HOOK="/usr/local/bin/runtime-${NEW}-presync"
+run_presync() {
+  [ -x "$HOOK" ] || return 0
+  log "running pre-start hook $HOOK"
+  "$HOOK" || log "WARN: $HOOK failed (non-fatal)"
+}
+
+# start_new — enable + start NEW; succeeds only when it actually reaches active.
+# `enable --now` returning 0 just means systemd attempted the start; a unit that
+# crashes immediately (e.g. missing binary) can still exit 0, so we assert
+# is-active separately.
+start_new() {
+  log "starting $NEW ($NEW_UNIT.service)"
+  systemctl enable --now "${NEW_UNIT}.service" || true
+  systemctl is-active --quiet "${NEW_UNIT}.service"
+}
+
+NEW_UNIT="$(unit_for "$NEW")"
+
+# 1. Ensure the target backend is installed AND usable. Its installer owns
+#    creating its unit (and declaring a non-default unit name; see unit_for).
+#    (openclaw.service is baked by setup.sh and ships no verify hook, so this is a
+#    no-op for openclaw — uniform path, no special-case.)
+installed_this_run=0
+if ! backend_installed; then
+  log "$NEW not fully installed (unit missing or verify failed) — installing"
+  install_new
+  installed_this_run=1
 fi
 if ! unit_exists "$NEW_UNIT"; then
   log "ERROR: ${NEW_UNIT}.service still absent after install — aborting (not restarting os-server)"
   exit 1
 fi
 
-# 2. Optional backend pre-start hook (generic: run it if present + executable).
-HOOK="/usr/local/bin/runtime-${NEW}-presync"
-if [ -x "$HOOK" ]; then
-  log "running pre-start hook $HOOK"
-  "$HOOK" || log "WARN: $HOOK failed (non-fatal)"
+# 2. Optional backend pre-start hook (run before NEW starts).
+run_presync
+
+# 3. Start NEW. If it does not reach active and we have NOT already installed it
+#    this run, the unit is most likely orphaned (binary missing/broken from a
+#    prior half-install or removal) — reinstall once and retry before giving up to
+#    the rollback trap. This self-heals an orphaned unit even without a verify
+#    hook, so OLD devices recover too.
+if ! start_new; then
+  if [ "$installed_this_run" = 0 ]; then
+    log "WARN: ${NEW_UNIT}.service did not start — unit looks orphaned, reinstalling"
+    install_new
+    if ! unit_exists "$NEW_UNIT"; then
+      log "ERROR: ${NEW_UNIT}.service absent after reinstall — aborting"
+      exit 1
+    fi
+    run_presync
+    if ! start_new; then
+      log "ERROR: ${NEW_UNIT}.service still not active after reinstall — aborting"
+      exit 1
+    fi
+  else
+    log "ERROR: ${NEW_UNIT}.service not active after fresh install — aborting"
+    exit 1
+  fi
 fi
 
-# 3. Toggle units: start the new one, stop the old one (os-server tells us which).
-log "starting $NEW ($NEW_UNIT.service)"
-systemctl enable --now "${NEW_UNIT}.service"
-# Verify NEW actually came up before we stop OLD. `enable --now` returning 0 only
-# means systemd attempted the start; a unit that crashes immediately can still
-# exit 0 here. If NEW isn't active, abort — the EXIT trap rolls back to OLD.
-if ! systemctl is-active --quiet "${NEW_UNIT}.service"; then
-  log "ERROR: ${NEW_UNIT}.service not active after start — aborting"
-  exit 1
-fi
+# 3b. NEW is confirmed active — now stop the old backend (os-server tells us which).
 if [ -n "$OLD" ] && [ "$OLD" != "$NEW" ]; then
   OLD_UNIT="$(unit_for "$OLD")"
   log "stopping $OLD ($OLD_UNIT.service)"

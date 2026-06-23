@@ -201,5 +201,16 @@ echo "[install-hermes] declare unit name for switch-runtime (hermes-gateway)"
 mkdir -p /usr/local/lib/os-runtimes/hermes
 echo "hermes-gateway" >/usr/local/lib/os-runtimes/hermes/service
 
+# Drop a verify hook so switch-runtime can distinguish a real install from an
+# orphaned hermes-gateway.service whose hermes binary is gone/broken. When this
+# fails, switch-runtime reinstalls instead of skipping. Keep it cheap + offline —
+# just confirm the CLI is on PATH.
+echo "[install-hermes] declare verify hook for switch-runtime (command -v hermes)"
+cat >/usr/local/lib/os-runtimes/hermes/verify <<'VERIFY'
+#!/usr/bin/env bash
+command -v hermes >/dev/null 2>&1
+VERIFY
+chmod +x /usr/local/lib/os-runtimes/hermes/verify
+
 echo "[install-hermes] done — hermes gateway installed + started as a system service (hermes-gateway.service)."
 echo "[install-hermes] ===== install finished $(date -u '+%Y-%m-%dT%H:%M:%SZ') ====="
