@@ -59,6 +59,12 @@ def create_backend(
     """Factory: create a TTS backend by provider name."""
     provider = (provider or PROVIDER_OPENAI).lower().strip()
     if provider == PROVIDER_ELEVENLABS:
+        # WebSocket (stream-input) variant behind a flag; default is HTTP.
+        import hal.config as _cfg
+        if getattr(_cfg, "TTS_ELEVENLABS_WS", False):
+            from hal.drivers.voice.tts.elevenlabs_ws import ElevenLabsWSTTSBackend
+            logger.info("ElevenLabs TTS: using WebSocket backend (HAL_TTS_ELEVENLABS_WS=true)")
+            return ElevenLabsWSTTSBackend(api_key=api_key, base_url=base_url)
         from hal.drivers.voice.tts.elevenlabs import ElevenLabsTTSBackend
         return ElevenLabsTTSBackend(api_key=api_key, base_url=base_url)
     # Default: openai-compatible

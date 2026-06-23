@@ -140,7 +140,7 @@ class TTP223Handler:
         for line in self._lines:
             try:
                 lgpio.gpio_claim_alert(
-                    self._handle, line, lgpio.BOTH_EDGES, lgpio.SET_PULL_DOWN
+                    self._handle, line, lgpio.BOTH_EDGES, lgpio.SET_PULL_UP
                 )
                 cb = lgpio.callback(
                     self._handle, line, lgpio.BOTH_EDGES, self._on_edge
@@ -241,5 +241,5 @@ class TTP223Handler:
             # _on_session_end and never reaches this branch.
             # Disabled: TTP223 false-triggers on this HW → a phantom tap would
             # stop_tts and cut speech mid-sentence. Re-enable once touch is fixed.
-            # single_click_action(source="TTP223")
-            pass
+            single_click_action(source="TTP223")
+            # pass

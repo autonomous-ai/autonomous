@@ -23,6 +23,7 @@ which brain is active.
 | unset | falls back to `gateway.default` in `devices/<type>/DEVICE.md`, then OpenClaw if that is empty too |
 | `"openclaw"` | OpenClaw (default) |
 | `"hermes"` | Hermes (`hermes.ProvideService`) |
+| `"picoclaw"` | accepted as a valid runtime (the `picoclaw.setup` switch + `switch-runtime` install it), but has **no `factory.go` case yet** — os-server's gateway client currently falls back to OpenClaw. Wiring `internal/picoclaw` + a resolver case is the remaining "adding a new backend" work (§11). |
 | anything else | OpenClaw (logged as `FALLBACK — unknown runtime=…`) |
 
 When `agent_runtime` is unset in `config.json`, the backend is taken from the
@@ -150,9 +151,9 @@ os-server materializes it to `/usr/local/lib/os-runtimes/hermes/install.sh` and
 switch-runtime runs that local copy — fully offline, no CDN round-trip. (The CDN
 path `${RUNTIMES_BASE_URL}/hermes/install.sh` remains a fallback for backends not
 compiled into the binary.) The installer pulls the Hermes CLI to
-`/usr/local/bin/hermes`, stops `openclaw` (so the migration does not race its
-running state), runs `hermes claw migrate` (skills only), seeds
-`~/.hermes/.env`, **patches only `.model` + `.custom_providers` in
+`/usr/local/bin/hermes` **stage by stage** (see below), stops `openclaw` (so the
+migration does not race its running state), runs `hermes claw migrate` (skills
+only), seeds `~/.hermes/.env`, **patches only `.model` + `.custom_providers` in
 `config.yaml`** (via `yq`, preserving anything else the CLI wrote — not a
 full-file overwrite), drops the `runtime-hermes-presync` hook (§11) and **runs
 it once inline**, then installs + starts the gateway as a **system service** via
@@ -160,6 +161,26 @@ it once inline**, then installs + starts the gateway as a **system service** via
 --system` (unit: **`hermes-gateway.service`**). Because presync runs during
 install, a direct `bash install.sh` is fully configured and running without
 relying on switch-runtime.
+
+> **Staged CLI install (skips `node-deps`).** Rather than the monolithic
+> `curl | bash --skip-setup`, the installer downloads the upstream installer
+> (`https://hermes-agent.nousresearch.com/install.sh`) to a temp file and drives
+> only these stages, in order:
+> `prerequisites repository venv python-deps path config`
+> (each via `bash <installer> --stage <name> --non-interactive`). It deliberately
+> **skips the `node-deps` stage**: that stage runs an `npm install` of
+> browser-tool native modules (node-gyp) that hangs indefinitely on the ARM board,
+> and a voice device never uses browser tools — the gateway is Python-only and
+> doesn't need them. After the loop it stamps
+> `echo git > /usr/local/lib/hermes-agent/.install_method` so a later
+> `hermes update` recognizes this as a git install.
+
+> **Install log lives off zram.** The installer tees all stdout+stderr to
+> `$HERMES_LOG`, default **`/root/.hermes/install.log`** (persistent rootfs) —
+> **not** under `/var/log`, which on these boards is a volatile zram mount
+> (log2ram) wiped on reboot, exactly losing the install log when you need it.
+> Follow it live with `tail -f /root/.hermes/install.log`; override the path with
+> `HERMES_LOG=…` in the environment before invoking.
 
 > Unit name: the gateway runs as `hermes-gateway.service`. The installer declares
 > this in `/usr/local/lib/os-runtimes/hermes/service` so `switch-runtime` enables
@@ -196,17 +217,37 @@ future work).
 
 ## 11. Switching backends at runtime
 
-You do not edit `config.json` by hand. Three triggers — **MQTT** `agent_runtime.set`
-(`{"runtime":"hermes"}`), **HTTP** `POST /api/device/agent-runtime`, and the
-**web** Settings → *Runtime* section — all funnel into one method,
+You do not edit `config.json` by hand. Three triggers — **MQTT** `hermes.setup` /
+`picoclaw.setup` / `openclaw.setup` (the kind itself names the target backend — no
+`runtime` field; each maps `hermes.setup → hermes`, `picoclaw.setup → picoclaw`,
+`openclaw.setup → openclaw`, the last being the revert-to-baseline path), **HTTP**
+`POST /api/device/agent-runtime` (`{"runtime":"hermes"}`), and the **web**
+Settings → *Runtime* section — all funnel into one method,
 `device.Service.UpdateAgentRuntime` (`internal/device/service.go`). It validates
-the runtime, persists `config.agent_runtime`, and launches the switcher in its
-own transient systemd unit (`systemd-run`, so the os-server restart at the end
-can't kill it mid-flight):
+the runtime, resolves the currently-active `old` runtime, then launches the
+switcher in its own transient systemd unit **and blocks on its exit code**
+(`systemd-run --wait`, so it learns whether the switch landed or rolled back):
 
 ```
 switch-runtime <new> <old>
 ```
+
+**`config.agent_runtime` is persisted only AFTER the switch lands, never before.**
+`UpdateAgentRuntime` runs `switch-runtime` first and writes `config.agent_runtime
+= <new>` (under the config lock) **only if it exits 0**. On failure `config.json`
+stays at `<old>` — so a crash or reboot mid-switch resolves the still-installed old
+backend instead of a half-installed new one, and there is nothing to revert
+(neither memory nor disk was ever moved to `<new>`). `switch-runtime` itself never
+reads or writes `config.json`; os-server owns it entirely.
+
+Because `UpdateAgentRuntime` waits for the real result, the MQTT path can ack the
+**actual** outcome: `hermes.setup` / `picoclaw.setup` reply `success` only after the
+switch lands, or `failure` (with the rollback reason) if it doesn't — no optimistic
+"success". On a confirmed switch the device acks success **first**, then restarts
+os-server itself (`device.Service.RestartForAgentRuntime`) so `factory.go`
+re-resolves the gateway. The restart is intentionally deferred until after the ack:
+if `switch-runtime` restarted os-server itself (as it used to), it would kill the
+goroutine before the ack went out.
 
 `switch-runtime` is **generic and backend-agnostic** — it is embedded in os-server
 (`internal/device/switch_runtime.sh` via `go:embed`) and written to
@@ -216,22 +257,40 @@ it:
 
 1. resolves `X`'s unit name (default `X.service`, or whatever the installer
    declared in `/usr/local/lib/os-runtimes/X/service` — hermes →
-   `hermes-gateway`) and ensures it exists, else runs `X`'s installer — the
-   binary-embedded copy at `/usr/local/lib/os-runtimes/X/install.sh` first, else
-   `curl ${RUNTIMES_BASE_URL}/X/install.sh | bash` (openclaw is skipped —
-   `openclaw.service` is baked by setup.sh);
+   `hermes-gateway`) and checks whether `X` is **installed AND usable** — not just
+   that the unit file exists. A backend counts as installed only when the unit is
+   present **and** an optional installer-provided verify hook at
+   `/usr/local/lib/os-runtimes/X/verify` passes (hermes drops one that runs
+   `command -v hermes`); backends without a verify hook (e.g. openclaw, whose
+   `openclaw.service` is baked by setup.sh) fall back to unit-presence alone. If it
+   is not installed/usable, it runs `X`'s installer — the binary-embedded copy at
+   `/usr/local/lib/os-runtimes/X/install.sh` first, else
+   `curl ${RUNTIMES_BASE_URL}/X/install.sh | bash`. This closes the orphaned-unit
+   trap: a stale `<X>.service` left behind with the backend's binary gone/broken
+   used to read as "installed" and never reinstall;
 2. runs the optional `/usr/local/bin/runtime-X-presync` hook (hermes's syncs
    `llm_*`, per §10);
-3. `systemctl enable --now <X-unit>`, then stop the old unit with up to 3
-   `disable --now <old-unit>` retries (verifying it went inactive between tries);
-   after 3 attempts it proceeds regardless so a stuck old runtime never blocks
-   the switch;
-4. `systemctl restart os-server`, so `factory.go` re-resolves the gateway.
+3. `systemctl enable --now <X-unit>` **and asserts it actually reached active**
+   (a unit can `enable --now` cleanly yet crash immediately, e.g. a missing
+   binary). If it does **not** start and the installer hadn't already run this run,
+   the unit looks orphaned from a prior half-install — switch-runtime
+   **reinstalls once and retries** (re-running the presync hook) before giving up;
+   this self-heals even backends without a verify hook. Once `<X>` is confirmed
+   active it stops the old unit with up to 3 `disable --now <old-unit>` retries
+   (verifying it went inactive between tries); after 3 attempts it proceeds
+   regardless so a stuck old runtime never blocks the switch;
+4. exits `0`. It does **not** restart os-server (it used to) — os-server, which is
+   blocked on `--wait`, acks the outcome and then restarts itself. On any failure
+   before the switch is confirmed, its rollback trap restarts the **old** systemd
+   unit only and exits non-zero. It does **not** touch `config.json` — os-server
+   owns `config.agent_runtime` and never persisted `<new>` (it persists only on a
+   clean exit 0), so on failure config is already `<old>` on disk and there is
+   nothing to revert.
 
 Confirm the swap from the new `AGENT BACKEND ACTIVE → …` banner + a healthy
 `/health` poll in the logs.
 
-**Adding a new backend** (picoclaw, claudecode, …) is just an `install.sh` next
+**Adding a new backend** (claudecode, …) is just an `install.sh` next
 to that backend's implementation (`internal/<name>/install.sh`), `go:embed`-ed +
 registered in `lib/runtimereg` from the package's `init()` (it must create
 `<name>.service`, optionally drop `runtime-<name>-presync`), plus a
