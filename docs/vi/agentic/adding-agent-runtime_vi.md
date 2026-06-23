@@ -29,7 +29,7 @@ install, migration, skills, hooks, reset.
   `config.agent_runtime` > DEVICE.md `gateway.default` > openclaw.
 - Switch lúc runtime đi qua một core — `device.Service.UpdateAgentRuntime` — kích
   bởi 3 trigger (MQTT `agent_runtime.set`, HTTP `/api/device/agent-runtime`, web
-  Runtime section). Xem `docs/vi/hermes_vi.md` §10–§11.
+  Runtime section). Xem `docs/vi/agentic/hermes_vi.md` §10–§11.
 
 ---
 
@@ -241,7 +241,7 @@ Dùng metadata nền tảng runtime-agnostic trong `internal/skills`:
       `config.json`**.
 - [ ] Gate capability qua `skills.Supported` / `SupportedHooks`.
 - [ ] Notify agent khi skill đổi qua `SendSystemChatMessage`.
-- [ ] Docs: cập nhật backend doc kiểu `docs/hermes.md` + checklist này nếu hợp đồng đổi.
+- [ ] Docs: cập nhật backend doc kiểu `docs/agentic/hermes.md` + checklist này nếu hợp đồng đổi.
 
 ---
 

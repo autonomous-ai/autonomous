@@ -8,11 +8,11 @@ với backend mà `config.agent_runtime` chọn thông qua một interface duy n
 não nào đang chạy.
 
 - **`openclaw`** (mặc định): WebSocket bền tới daemon OpenClaw. Xem `docs/os-server.md` + `internal/openclaw`.
-- **`hermes`**: client HTTP + SSE tới Hermes API server cục bộ. Xem `docs/hermes.md` + `internal/hermes`.
+- **`hermes`**: client HTTP + SSE tới Hermes API server cục bộ. Xem `docs/agentic/hermes.md` + `internal/hermes`.
 - **`picoclaw`**: client WebSocket bền tới runtime PicoClaw cục bộ. Tài liệu này. Code: `os/services/internal/picoclaw/`.
 
 > Code là nguồn chân lý. Tài liệu này mô tả `internal/picoclaw/` đúng như đã
-> triển khai; giữ đồng bộ khi thay đổi (EN: `docs/picoclaw.md`, VI: file này).
+> triển khai; giữ đồng bộ khi thay đổi (EN: `docs/agentic/picoclaw.md`, VI: file này).
 
 > **Nhóm docs agentic-backend:** [`adding-agent-runtime_vi.md`](adding-agent-runtime_vi.md)
 > (hợp đồng generic + cách thêm) · [`hermes_vi.md`](hermes_vi.md) (Hermes) ·

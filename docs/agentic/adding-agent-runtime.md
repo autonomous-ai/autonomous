@@ -29,7 +29,7 @@ wire the switch, install, migration, skills, hooks, and reset.
   `config.agent_runtime` > DEVICE.md `gateway.default` > openclaw.
 - Switching at runtime goes through one core — `device.Service.UpdateAgentRuntime`
   — fired by 3 triggers (MQTT `agent_runtime.set`, HTTP `/api/device/agent-runtime`,
-  web Runtime section). See `docs/hermes.md` §10–§11.
+  web Runtime section). See `docs/agentic/hermes.md` §10–§11.
 
 ---
 
@@ -243,7 +243,7 @@ Use the runtime-agnostic platform metadata in `internal/skills`:
       `config.json`**.
 - [ ] Capability gating via `skills.Supported` / `SupportedHooks`.
 - [ ] Notify the agent on skill change via `SendSystemChatMessage`.
-- [ ] Docs: update `docs/hermes.md`-style backend doc + this checklist if the
+- [ ] Docs: update `docs/agentic/hermes.md`-style backend doc + this checklist if the
       contract changed.
 
 ---

@@ -12,7 +12,7 @@ import (
 // os-server materializes it to disk and switch-runtime runs it the first time a
 // device switches to hermes. See install.sh for the contract (installs the
 // gateway as hermes-gateway.service, declares that unit name for switch-runtime,
-// drops + runs runtime-hermes-presync) and docs/hermes.md §10–§11.
+// drops + runs runtime-hermes-presync) and docs/agentic/hermes.md §10–§11.
 //
 //go:embed install.sh
 var InstallScript []byte

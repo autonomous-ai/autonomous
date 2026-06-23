@@ -8,11 +8,11 @@ hardware markers, Flow Monitor SSE, sensing drain, Telegram fan-out) never knows
 which brain is active.
 
 - **`openclaw`** (default): persistent WebSocket to the OpenClaw daemon. See `docs/os-server.md` + `internal/openclaw`.
-- **`hermes`**: HTTP + SSE client against a local Hermes API server. See `docs/hermes.md` + `internal/hermes`.
+- **`hermes`**: HTTP + SSE client against a local Hermes API server. See `docs/agentic/hermes.md` + `internal/hermes`.
 - **`picoclaw`**: persistent WebSocket client against a local PicoClaw runtime. This doc. Code: `os/services/internal/picoclaw/`.
 
 > Source of truth is the code. This documents `internal/picoclaw/` as
-> implemented; keep it in sync on change (EN: this file, VI: `docs/vi/picoclaw_vi.md`).
+> implemented; keep it in sync on change (EN: this file, VI: `docs/vi/agentic/picoclaw_vi.md`).
 
 > **Agentic-backend docs:** [`adding-agent-runtime.md`](adding-agent-runtime.md)
 > (generic contract + how to add one) · [`hermes.md`](hermes.md) (Hermes) ·

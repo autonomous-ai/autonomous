@@ -11,7 +11,7 @@ which brain is active.
 - **`hermes`**: HTTP + SSE client against a local Hermes API server (OpenAI *Responses API* style). This doc. Code: `os/services/internal/hermes/`.
 
 > Source of truth is the code. This documents `internal/hermes/` as implemented;
-> keep it in sync on change (EN: this file, VI: `docs/vi/hermes_vi.md`).
+> keep it in sync on change (EN: this file, VI: `docs/vi/agentic/hermes_vi.md`).
 
 > **Agentic-backend docs:** [`adding-agent-runtime.md`](adding-agent-runtime.md)
 > (generic contract + how to add one) · this file (Hermes) ·
@@ -28,7 +28,7 @@ which brain is active.
 | unset | falls back to `gateway.default` in `devices/<type>/DEVICE.md`, then OpenClaw if that is empty too |
 | `"openclaw"` | OpenClaw (default) |
 | `"hermes"` | Hermes (`hermes.ProvideService`) |
-| `"picoclaw"` | PicoClaw (`picoclaw.ProvideService`) — persistent WebSocket client; assumes the PicoClaw service is already running. See `docs/picoclaw.md` + `internal/picoclaw`. |
+| `"picoclaw"` | PicoClaw (`picoclaw.ProvideService`) — persistent WebSocket client; assumes the PicoClaw service is already running. See `docs/agentic/picoclaw.md` + `internal/picoclaw`. |
 | anything else | OpenClaw (logged as `FALLBACK — unknown runtime=…`) |
 
 When `agent_runtime` is unset in `config.json`, the backend is taken from the
@@ -197,7 +197,7 @@ by the **presync hook** (`internal/hermes/presync.sh`), **not** by `install.sh`.
 every switch** (`materializePresync`, registered via `runtimereg.RegisterPresync`),
 so a plain os-server OTA refreshes it on disk — unlike a copy written once by
 `install.sh`, which `switch-runtime` skips on a later switch (the *activation gap*;
-see `docs/adding-agent-runtime.md` §3). The hook runs right before the gateway
+see `docs/agentic/adding-agent-runtime.md` §3). The hook runs right before the gateway
 starts (and inline during install) and does three things, in order:
 
 1. **Restores skills** — when `~/.hermes/skills/openclaw-imports` is empty (first

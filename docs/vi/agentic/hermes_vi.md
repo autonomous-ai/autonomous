@@ -11,7 +11,7 @@ nào đang chạy.
 - **`hermes`**: client HTTP + SSE tới một Hermes API server cục bộ (kiểu OpenAI *Responses API*). Tài liệu này. Code: `os/services/internal/hermes/`.
 
 > Nguồn sự thật là code. Tài liệu này mô tả `internal/hermes/` đúng như đã hiện
-> thực; phải đồng bộ khi code đổi (EN: `docs/hermes.md`, VI: file này).
+> thực; phải đồng bộ khi code đổi (EN: `docs/agentic/hermes.md`, VI: file này).
 
 > **Nhóm docs agentic-backend:** [`adding-agent-runtime_vi.md`](adding-agent-runtime_vi.md)
 > (hợp đồng generic + cách thêm) · file này (Hermes) ·
@@ -28,7 +28,7 @@ nào đang chạy.
 | không set | fallback về `gateway.default` trong `devices/<type>/DEVICE.md`, rồi OpenClaw nếu cái đó cũng trống |
 | `"openclaw"` | OpenClaw (mặc định) |
 | `"hermes"` | Hermes (`hermes.ProvideService`) |
-| `"picoclaw"` | PicoClaw (`picoclaw.ProvideService`) — client WebSocket bền; giả định service PicoClaw đã chạy sẵn. Xem `docs/picoclaw.md` + `internal/picoclaw`. |
+| `"picoclaw"` | PicoClaw (`picoclaw.ProvideService`) — client WebSocket bền; giả định service PicoClaw đã chạy sẵn. Xem `docs/agentic/picoclaw.md` + `internal/picoclaw`. |
 | giá trị khác | OpenClaw (log là `FALLBACK — unknown runtime=…`) |
 
 Khi `agent_runtime` không được set trong `config.json`, backend lấy từ
@@ -188,7 +188,7 @@ materialize hook ra `/usr/local/bin/runtime-hermes-presync` mỗi switch**
 (`materializePresync`, đăng ký qua `runtimereg.RegisterPresync`), nên OTA os-server
 thường cũng refresh nó trên disk — khác với bản `install.sh` ghi một lần mà
 `switch-runtime` skip ở switch sau (*activation gap*; xem
-`docs/vi/adding-agent-runtime_vi.md` §3). Hook chạy ngay trước khi gateway start
+`docs/vi/agentic/adding-agent-runtime_vi.md` §3). Hook chạy ngay trước khi gateway start
 (và inline lúc install), làm 3 việc theo thứ tự:
 
 1. **Restore skills** — khi `~/.hermes/skills/openclaw-imports` rỗng (cài đầu HOẶC
