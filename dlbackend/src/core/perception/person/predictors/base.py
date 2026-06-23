@@ -5,6 +5,7 @@ from abc import ABC
 
 import cv2
 import cv2.typing as cv2t
+import numpy as np
 
 from core.models.person import RawPersonDetection
 from core.perception.base import PredictorBase
@@ -52,7 +53,9 @@ class PersonDetector(PredictorBase[cv2t.MatLike, RawPersonDetection], ABC):
                 cropped_input.append(None)
                 continue
 
-            largest_id: int = int(pixel_area.argmax(0))
+            # Find largest among those passing the area filter
+            filtered_area = np.where(filter_mask, pixel_area, 0.0)
+            largest_id: int = int(filtered_area.argmax(0))
 
             x1, y1, x2, y2 = pixel_xyxy[largest_id]
 

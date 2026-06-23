@@ -37,7 +37,7 @@ class HumanActionRecognizer(PredictorBase[Video, RawHumanActionDetection]):
     ONNX_OUTPUT_NAME: str = "pred"
 
     MEAN: npt.NDArray[np.float32] = np.array([0, 0, 0], dtype=np.float32)
-    STD: npt.NDArray[np.float32] = np.array([0, 0, 0], dtype=np.float32)
+    STD: npt.NDArray[np.float32] = np.array([1, 1, 1], dtype=np.float32)
 
     def __init__(
         self,
