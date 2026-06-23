@@ -158,6 +158,17 @@ class ONNXObjectDetector(ObjectDetector, ABC):
 
         return self._postprocess_batch(raw_outputs, effective_classes, orig_hws)
 
+    def _get_label_pool(self, classes: list[str]) -> list[str]:
+        """Return the class list that label indices map into.
+
+        For zero-shot models (OWLv2, YOLO-World), labels index into the
+        user-supplied ``classes``. For fixed-class models (YOLO COCO),
+        labels index into the full model class list (``self._class_names``).
+
+        Override in fixed-class subclasses to return ``self._class_names``.
+        """
+        return classes
+
     def _postprocess_batch(
         self,
         raw_outputs: list[npt.NDArray],
@@ -174,6 +185,9 @@ class ONNXObjectDetector(ObjectDetector, ABC):
         all_probs = cast(npt.NDArray[np.float32], raw_outputs[1])   # [B, N, K]
         all_labels = cast(npt.NDArray[np.int64], raw_outputs[2])    # [B, N]
 
+        label_pool = self._get_label_pool(classes)
+        requested = set(classes)
+
         results: list[RawObjectDetection] = []
         for i in range(all_boxes.shape[0]):
             boxes = all_boxes[i]
@@ -181,7 +195,7 @@ class ONNXObjectDetector(ObjectDetector, ABC):
             labels = all_labels[i]
 
             # Filter padding (-1) and invalid labels
-            valid = (labels >= 0) & (labels < len(classes))
+            valid = (labels >= 0) & (labels < len(label_pool))
             boxes = boxes[valid]
             probs = probs[valid]
             labels = labels[valid]
@@ -206,14 +220,29 @@ class ONNXObjectDetector(ObjectDetector, ABC):
             labels = labels[keep]
             conf = conf[keep]
 
+            # Map label indices to names
+            names = [label_pool[int(idx)] for idx in labels]
+
+            # Filter to only requested classes (relevant for fixed-class models)
+            if requested != set(label_pool):
+                keep_cls = [i for i, n in enumerate(names) if n in requested]
+                if not keep_cls:
+                    results.append(RawObjectDetection(
+                        bbox_xywh=np.zeros((0, 4), dtype=np.float32),
+                        class_names=[],
+                        confidence=np.zeros(0, dtype=np.float32),
+                    ))
+                    continue
+                boxes = boxes[keep_cls]
+                conf = conf[keep_cls]
+                names = [names[i] for i in keep_cls]
+
             # Runtime NMS
             if self._nms and len(boxes) > 0:
                 keep_nms = nms_xywh(boxes, conf)
                 boxes = boxes[keep_nms]
-                labels = labels[keep_nms]
                 conf = conf[keep_nms]
-
-            names = [classes[int(idx)] for idx in labels]
+                names = [names[i] for i in keep_nms]
 
             # Convert from model-space normalized [0,1] to original-image
             # normalized [0,1] via pixel coords as intermediate.
