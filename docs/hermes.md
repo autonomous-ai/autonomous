@@ -152,15 +152,13 @@ switch-runtime runs that local copy — fully offline, no CDN round-trip. (The C
 path `${RUNTIMES_BASE_URL}/hermes/install.sh` remains a fallback for backends not
 compiled into the binary.) The installer pulls the Hermes CLI to
 `/usr/local/bin/hermes` **stage by stage** (see below), stops `openclaw` (so the
-migration does not race its running state), runs `hermes claw migrate` (skills
-only), seeds `~/.hermes/.env`, **patches only `.model` + `.custom_providers` in
-`config.yaml`** (via `yq`, preserving anything else the CLI wrote — not a
-full-file overwrite), drops the `runtime-hermes-presync` hook (§11) and **runs
-it once inline**, then installs + starts the gateway as a **system service** via
-`hermes gateway install --system --run-as-user root` + `hermes gateway start
---system` (unit: **`hermes-gateway.service`**). Because presync runs during
-install, a direct `bash install.sh` is fully configured and running without
-relying on switch-runtime.
+skill import doesn't race its running state), seeds the `API_SERVER_*` keys in
+`~/.hermes/.env`, then **delegates all `config.yaml` + skill setup to the presync
+hook**, which it invokes inline, and finally installs + starts the gateway as a
+**system service** via `hermes gateway install --system --run-as-user root` +
+`hermes gateway start --system` (unit: **`hermes-gateway.service`**). Because the
+presync hook does the config + skills (see below) and the installer runs it
+inline, a direct `bash install.sh` is fully configured and running.
 
 > **Staged CLI install (skips `node-deps`).** Rather than the monolithic
 > `curl | bash --skip-setup`, the installer downloads the upstream installer
@@ -186,27 +184,44 @@ relying on switch-runtime.
 > this in `/usr/local/lib/os-runtimes/hermes/service` so `switch-runtime` enables
 > the right unit (§11); `reset_hermes.go` targets the same unit.
 
-`hermes claw migrate` does **not** carry the model config across, so the presync
-hook syncs the device's `llm_*` from `config.json` into the Hermes config — once
-during install, and again on every later switch:
+### The presync hook owns `config.yaml` + skills
+
+The Hermes model config in `config.yaml` and the OpenClaw-imported skills are owned
+by the **presync hook** (`internal/hermes/presync.sh`), **not** by `install.sh`.
+**os-server materializes the hook to `/usr/local/bin/runtime-hermes-presync` on
+every switch** (`materializePresync`, registered via `runtimereg.RegisterPresync`),
+so a plain os-server OTA refreshes it on disk — unlike a copy written once by
+`install.sh`, which `switch-runtime` skips on a later switch (the *activation gap*;
+see `docs/adding-agent-runtime.md` §3). The hook runs right before the gateway
+starts (and inline during install) and does three things, in order:
+
+1. **Restores skills** — when `~/.hermes/skills/openclaw-imports` is empty (first
+   install OR after a factory reset wiped it), runs `hermes claw migrate` (it
+   **copies** OpenClaw skills, no transform). Guarded on the dir being empty so a
+   normal switch is a no-op (no re-import churn). `claw migrate` also touches
+   SOUL/MEMORY, but harmlessly: the Go persona migration (§12) runs afterwards and
+   rewrites those cleanly, so only the skills persist.
+2. **Ensures the `config.yaml` model structure** (idempotent — self-heals after a
+   factory reset's `hermes setup --reset` blanks it). It coerces a reset-left
+   `model: ''` back to a map, then asserts:
+   - `.model.provider = custom:autonomous`
+   - `.model.default = "Auto-AI"` — the **fixed** campaign-api model alias. os-server
+     sends a fixed request model (`constants.go` `Model`) per turn, so this is **not**
+     taken from `llm_model` (that is OpenClaw's primary model, irrelevant to Hermes).
+   - `.custom_providers[0]` → `name: autonomous`, `key_env: AUTONOMOUS_API_KEY`,
+     `api_mode: anthropic_messages`, `base_url` (default campaign-api, overridden below).
+3. **Syncs per-device values** from `config.json` (only non-empty fields, so
+   unconfigured channels are untouched):
 
 | `config.json` | → | Hermes |
 |---|---|---|
-| `llm_model` | → | `config.yaml` `.model.default` |
 | `llm_base_url` | → | `config.yaml` `.custom_providers[0].base_url` |
 | `llm_api_key` | → | `.env` `AUTONOMOUS_API_KEY` |
 | `telegram_bot_token` | → | `.env` `TELEGRAM_BOT_TOKEN` |
 | `telegram_user_id` | → | `.env` `TELEGRAM_ALLOWED_USERS` |
-| `slack_bot_token` | → | `.env` `SLACK_BOT_TOKEN` |
-| `slack_app_token` | → | `.env` `SLACK_APP_TOKEN` |
-| `slack_user_id` | → | `.env` `SLACK_ALLOWED_USERS` |
-| `discord_bot_token` | → | `.env` `DISCORD_BOT_TOKEN` |
-| `discord_guild_id` | → | `.env` `DISCORD_GUILD_ID` |
-| `discord_user_id` | → | `.env` `DISCORD_ALLOWED_USERS` |
+| `slack_bot_token` / `slack_app_token` / `slack_user_id` | → | `.env` `SLACK_BOT_TOKEN` / `SLACK_APP_TOKEN` / `SLACK_ALLOWED_USERS` |
+| `discord_bot_token` / `discord_guild_id` / `discord_user_id` | → | `.env` `DISCORD_BOT_TOKEN` / `DISCORD_GUILD_ID` / `DISCORD_ALLOWED_USERS` |
 | `whatsapp_user_id` | → | `.env` `WHATSAPP_ALLOWED_USERS` |
-
-Only non-empty `config.json` fields are written, so unconfigured channels are
-left untouched.
 
 `.env` `API_SERVER_KEY` must equal `constants.go` `APIKey` (`hermes-api-key`) or
 every turn 401s. Hermes must listen on `127.0.0.1:8642` to match `BaseURL`.
