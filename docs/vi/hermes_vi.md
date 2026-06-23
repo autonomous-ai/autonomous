@@ -194,18 +194,27 @@ là phần làm sau).
 ## 11. Switch backend lúc runtime
 
 Bạn không sửa tay `config.json`. Ba trigger — **MQTT** `hermes.setup` /
-`picoclaw.setup` (chính kind đã đặt tên backend đích — không có field `runtime`;
-mỗi kind map `hermes.setup → hermes`, `picoclaw.setup → picoclaw`), **HTTP**
+`picoclaw.setup` / `openclaw.setup` (chính kind đã đặt tên backend đích — không có
+field `runtime`; mỗi kind map `hermes.setup → hermes`, `picoclaw.setup → picoclaw`,
+`openclaw.setup → openclaw`, cái cuối là đường revert về baseline), **HTTP**
 `POST /api/device/agent-runtime` (`{"runtime":"hermes"}`), và section **web**
 Settings → *Runtime* — đều dồn vào một hàm,
 `device.Service.UpdateAgentRuntime` (`internal/device/service.go`). Nó validate
 runtime, lưu `config.agent_runtime`, rồi chạy switcher trong một transient unit
-systemd riêng (`systemd-run`, để cú restart os-server ở cuối không giết nó giữa
-chừng):
+systemd riêng **và block chờ exit code** (`systemd-run --wait`, để biết switch
+thành công hay bị rollback):
 
 ```
 switch-runtime <new> <old>
 ```
+
+Vì `UpdateAgentRuntime` chờ kết quả thật, đường MQTT ack đúng **kết quả thực**:
+`hermes.setup` / `picoclaw.setup` trả `success` chỉ sau khi switch thành công,
+hoặc `failure` (kèm lý do rollback) nếu không — không còn "success" lạc quan. Khi
+switch thành công, thiết bị ack success **trước**, rồi tự restart os-server
+(`device.Service.RestartForAgentRuntime`) để `factory.go` resolve lại gateway.
+Restart bị hoãn lại tới sau khi ack có chủ đích: nếu `switch-runtime` tự restart
+os-server (như trước kia), nó sẽ giết goroutine trước khi ack kịp gửi.
 
 `switch-runtime` **generic, không biết backend cụ thể** — nó được embed trong
 os-server (`internal/device/switch_runtime.sh` qua `go:embed`) và ghi ra
@@ -223,7 +232,12 @@ và **không cần đụng imager/setup.sh bao giờ**. Với backend đích `X`
 3. `systemctl enable --now <X-unit>`, rồi stop unit cũ với tối đa 3 lần thử
    `disable --now <old-unit>` (kiểm tra đã inactive giữa các lần); sau 3 lần thì
    đi tiếp bất kể, để runtime cũ bị kẹt không chặn việc switch;
-4. `systemctl restart os-server`, để `factory.go` resolve lại gateway.
+4. thoát `0`. Nó **không** restart os-server (trước kia thì có) — os-server đang
+   block ở `--wait` sẽ ack kết quả rồi tự restart. Nếu lỗi trước khi bước 3 xong,
+   trap của nó rollback units + `config.agent_runtime` về `<old>` và thoát khác 0,
+   và `UpdateAgentRuntime` revert luôn `config.agent_runtime` trong bộ nhớ cho khớp
+   (os-server không đọc lại `config.json` lúc runtime, nên phải revert bản in-memory
+   tường minh).
 
 Xác nhận đã switch qua banner `AGENT BACKEND ACTIVE → …` mới + một lần poll
 `/health` khỏe trong log.

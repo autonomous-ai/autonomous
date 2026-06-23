@@ -10,14 +10,17 @@ import (
 // handleRuntimeSetup applies a `hermes.setup` / `picoclaw.setup` downlink — swap
 // the active agentic backend. The kind itself names the target runtime (passed
 // in by the dispatcher), so unlike the former generic agent_runtime.set there is
-// no runtime field to read off the wire. Same shape as realtime.set: ack
-// immediately, apply async, then ack the outcome. The apply persists
-// config.agent_runtime and spawns switch-runtime.sh, which toggles the systemd
-// units (start target / stop the other) and restarts os-server so
-// agent/factory.go re-resolves the gateway. Because os-server restarts itself,
-// the "success" ack is published BEFORE the restart fires — the worker should
-// expect a short reconnect after it. Every ack echoes the triggering kind so the
-// worker can match hermes.setup vs picoclaw.setup.
+// no runtime field to read off the wire.
+//
+// Flow: ack "starting" immediately, then in a goroutine run the switch and WAIT
+// for its real outcome. UpdateAgentRuntime blocks until switch-runtime finishes,
+// so the success/failure ack here reflects what actually happened — not an
+// optimistic guess. On a confirmed switch we ack "success" and THEN restart
+// os-server (the ack must reach the wire first, since the restart kills us); the
+// worker sees the swap land via the brief reconnect + new AGENT BACKEND ACTIVE
+// banner. On failure switch-runtime has already rolled back, so we ack "failure".
+// Every ack echoes the triggering kind so the worker can match hermes.setup vs
+// picoclaw.setup.
 
 func (h *DeviceMQTTHandler) publishRuntimeSetupAck(kind, status, errMsg string, data *domain.AgentRuntimeSetData) {
 	ack := domain.AgentRuntimeSetAck{
@@ -44,17 +47,25 @@ func (h *DeviceMQTTHandler) handleRuntimeSetup(env domain.MQTTDataCommand, runti
 	h.publishRuntimeSetupAck(kind, "starting", "", nil)
 
 	go func() {
-		if err := h.deviceService.UpdateAgentRuntime(req); err != nil {
-			slog.Error("runtime setup: UpdateAgentRuntime failed", "component", "mqtt", "kind", kind, "error", err)
+		switched, err := h.deviceService.UpdateAgentRuntime(req)
+		if err != nil {
+			// switch-runtime already rolled back; report the real failure.
+			slog.Error("runtime setup: switch failed", "component", "mqtt", "kind", kind, "error", err)
 			h.publishRuntimeSetupAck(kind, "failure", err.Error(), &req)
 			return
 		}
-		// UpdateAgentRuntime saved config + spawned switch-runtime.sh, which will
-		// restart os-server shortly. ACK success NOW, before the restart kills us
-		// — the worker confirms the swap from the next AGENT BACKEND ACTIVE banner.
-		slog.Info("runtime setup: applied — switch script spawned, os-server restart imminent",
-			"component", "mqtt", "kind", kind, "runtime", runtime)
+		// Switch confirmed landed (or was a no-op). Ack success — it must reach the
+		// wire BEFORE the os-server restart below, which kills us.
+		slog.Info("runtime setup: switch confirmed", "component", "mqtt", "kind", kind, "runtime", runtime, "switched", switched)
 		h.publishRuntimeSetupAck(kind, "success", "", &req)
+
+		if switched {
+			// Restart os-server so factory.go re-resolves the gateway to the new
+			// backend. Deferred until after the ack on purpose.
+			if rerr := h.deviceService.RestartForAgentRuntime(); rerr != nil {
+				slog.Error("runtime setup: os-server restart failed", "component", "mqtt", "kind", kind, "error", rerr)
+			}
+		}
 	}()
 
 	return nil

@@ -190,7 +190,17 @@ echo "[install-hermes] sync llm_* from config.json now (via runtime-hermes-presy
   || echo "[install-hermes] WARN: presync failed (config.json missing? non-fatal — switch-runtime retries on next switch)"
 
 echo "[install-hermes] install + start hermes gateway as a system service"
+# Auto-answer the installer's interactive [Y/n] prompts. `yes` outruns the prompt
+# count and takes SIGPIPE/EPIPE the moment `hermes gateway install` exits (you see
+# "yes: standard output: Broken pipe"). Under `pipefail` that broken pipe makes the
+# pipeline non-zero even when the install SUCCEEDED, which `set -e` then turns into
+# a failed install — and switch-runtime rolls the whole switch back to openclaw
+# despite hermes-gateway being up. Drop pipefail for just this line so the pipeline
+# status reflects `hermes gateway install` (the rightmost command); a genuine
+# install failure is still non-zero and still aborts via `set -e`.
+set +o pipefail
 yes y | "$HERMES_BIN" gateway install --system --run-as-user root
+set -o pipefail
 "$HERMES_BIN" gateway start --system
 "$HERMES_BIN" gateway status --system || true
 

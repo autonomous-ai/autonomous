@@ -24,13 +24,18 @@
 # written to /usr/local/bin/switch-runtime on demand, so it is versioned and
 # OTA-updated together with the binary.
 #
-# os-server invokes it (with the previous runtime as $2 so we know what to stop):
-#   systemd-run --collect --unit=os-runtime-switch \
+# os-server invokes it (with the previous runtime as $2 so we know what to stop)
+# in its own transient unit AND BLOCKS on the exit code:
+#   systemd-run --collect --wait --unit=os-runtime-switch \
 #     /usr/local/bin/switch-runtime <new> <old>
-# in its own transient unit, so the os-server restart at the end can't kill it.
+# --wait lets os-server learn whether the switch landed or rolled back, so it can
+# ack the real hermes.setup / picoclaw.setup outcome. This script does NOT restart
+# os-server (it used to); os-server restarts itself AFTER acking, which is also
+# what makes factory.go re-resolve the gateway.
 #
 # config.agent_runtime itself is persisted by os-server BEFORE this runs; this
-# script only owns the systemd + backend-install side effects.
+# script only owns the systemd + backend-install side effects (and, on failure,
+# rolling those + config.agent_runtime back).
 set -euo pipefail
 
 NEW="${1:-}"
@@ -207,11 +212,13 @@ if [ -n "$OLD" ] && [ "$OLD" != "$NEW" ]; then
   stop_unit_retry "$OLD_UNIT"
 fi
 
-# 4. Restart os-server so internal/agent/factory.go re-resolves the gateway.
-# Past the point of no return: NEW is up and OLD is stopped, so disarm the
-# rollback trap (the os-server restart below does not kill us — we run in our own
-# transient unit).
+# 4. Switch is structurally complete: NEW is up and OLD is stopped. Disarm the
+# rollback trap. We deliberately do NOT restart os-server here — os-server runs
+# this switcher with `systemd-run --wait` and is BLOCKED on our exit code so it
+# can report the real outcome (hermes.setup / picoclaw.setup success vs failure)
+# before it restarts ITSELF. Restarting os-server from inside this script would
+# kill that waiting goroutine mid-ack. So we just exit 0; the caller owns the
+# os-server restart (device.Service.RestartForAgentRuntime), which is what makes
+# factory.go re-resolve the gateway.
 switched=1
-log "restarting os-server"
-systemctl restart os-server
-log "done — now running $NEW"
+log "done — $NEW up, $OLD stopped; os-server restart deferred to caller"
