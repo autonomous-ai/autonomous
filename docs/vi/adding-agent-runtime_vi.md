@@ -15,6 +15,11 @@ Nguồn chân lý cho hợp đồng: `os/services/domain/agent.go` (interface
 `AgentGateway`). Doc này giải thích phần *nào* quan trọng và *cách* nối switch,
 install, migration, skills, hooks, reset.
 
+> **Nhóm docs agentic-backend:** file này (hợp đồng generic + cách thêm) ·
+> [`hermes_vi.md`](hermes_vi.md) (Hermes, backend đầy đủ) ·
+> [`picoclaw_vi.md`](picoclaw_vi.md) (PicoClaw, hiện chỉ-client). Protocol/quirk
+> đặc thù từng backend nằm ở các file kia; cơ chế generic + checklist nằm ở đây.
+
 ---
 
 ## 0. Mô hình tư duy
@@ -68,6 +73,32 @@ Hợp đồng installer (`switch_runtime.sh` kỳ vọng):
   khác `<name>.service`.
 - tuỳ chọn drop `verify` hook ở `/usr/local/lib/os-runtimes/<name>/verify`
   (exit 0 = "đã cài & dùng được"). Giữ **rẻ** — xem §3 vì sao không được check quá tay.
+
+### Luồng switch (chuyện gì xảy ra khi switch)
+
+`device.Service.UpdateAgentRuntime` validate runtime, ghi nhận `old` đang chạy, rồi
+chạy switcher dưới `systemd-run --wait` và **block chờ exit code**.
+`config.agent_runtime` **chỉ được ghi sau khi exit 0 sạch** — nên crash/reboot giữa
+chừng resolve về `old` vẫn đang cài, không có gì để revert. `switch-runtime <new>
+<old>` (generic, `internal/device/switch_runtime.sh`, materialize qua `go:embed` ra
+`/usr/local/bin/switch-runtime`):
+
+1. phân giải tên unit của `<new>` (mặc định `<new>.service`, hoặc tên khai trong
+   `/usr/local/lib/os-runtimes/<new>/service`) và kiểm tra **đã cài VÀ dùng được** —
+   unit tồn tại **và** `verify` hook pass (không có verify → chỉ cần unit). Nếu chưa
+   thì chạy installer (bản embed trước, CDN fallback). Gỡ bẫy unit-mồ-côi (một
+   `.service` còn sót mà binary đã mất).
+2. chạy `/usr/local/bin/runtime-<new>-presync` (os-server materialize — §3).
+3. `enable --now <new-unit>` rồi **assert nó thực sự active** (unit có thể enable
+   sạch nhưng crash ngay vì thiếu binary). Nếu không lên mà vòng này chưa cài lại,
+   **cài lại một lần rồi thử lại**. Xong mới stop unit cũ (tối đa 3 lần `disable
+   --now`).
+4. thoát 0 — **không** restart os-server (os-server đang block ở `--wait` sẽ ack kết
+   quả thật rồi tự restart để `factory.go` resolve lại gateway). Khi lỗi, trap
+   rollback chỉ restart unit **cũ**. Nó không bao giờ đụng `config.json`.
+
+Nên `switch-runtime` hoàn toàn không-biết-backend — **không cần đụng
+imager/setup.sh/switcher khi thêm backend.**
 
 ---
 

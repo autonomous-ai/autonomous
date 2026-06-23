@@ -14,6 +14,16 @@ não nào đang chạy.
 > Code là nguồn chân lý. Tài liệu này mô tả `internal/picoclaw/` đúng như đã
 > triển khai; giữ đồng bộ khi thay đổi (EN: `docs/picoclaw.md`, VI: file này).
 
+> **Nhóm docs agentic-backend:** [`adding-agent-runtime_vi.md`](adding-agent-runtime_vi.md)
+> (hợp đồng generic + cách thêm) · [`hermes_vi.md`](hermes_vi.md) (Hermes) ·
+> file này (PicoClaw).
+>
+> **Trạng thái: chỉ-client / chưa hoàn chỉnh.** PicoClaw mới được nối như *client*
+> gateway — **chưa có install, presync, migrate persona/memory, import/watch skill,
+> onboarding**. Mọi thứ ngoài hot-path WS đều no-op (§7). Coi như chưa đạt parity;
+> checklist trong `adding-agent-runtime_vi.md` là danh sách gap nếu sau này nâng nó
+> thành backend đầy đủ.
+
 ## 1. Khi nào và chọn ra sao
 
 `agent_runtime` trong `config.json` chọn backend; việc phân giải nằm ở

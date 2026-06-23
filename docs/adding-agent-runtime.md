@@ -15,6 +15,11 @@ Source of truth for the contract: `os/services/domain/agent.go` (the
 `AgentGateway` interface). This doc explains *which* parts matter and *how* to
 wire the switch, install, migration, skills, hooks, and reset.
 
+> **Agentic-backend docs:** this file (generic contract + how to add one) ·
+> [`hermes.md`](hermes.md) (Hermes, a full backend) · [`picoclaw.md`](picoclaw.md)
+> (PicoClaw, currently client-only). Per-backend protocol/quirks live in those;
+> the generic mechanics + checklist live here.
+
 ---
 
 ## 0. Mental model

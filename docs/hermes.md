@@ -13,6 +13,11 @@ which brain is active.
 > Source of truth is the code. This documents `internal/hermes/` as implemented;
 > keep it in sync on change (EN: this file, VI: `docs/vi/hermes_vi.md`).
 
+> **Agentic-backend docs:** [`adding-agent-runtime.md`](adding-agent-runtime.md)
+> (generic contract + how to add one) · this file (Hermes) ·
+> [`picoclaw.md`](picoclaw.md) (PicoClaw). Generic switch/install/migration
+> mechanics live in the first; per-backend protocol lives in the others.
+
 ## 1. When and how it is selected
 
 `agent_runtime` in `config.json` picks the backend; resolution lives in
