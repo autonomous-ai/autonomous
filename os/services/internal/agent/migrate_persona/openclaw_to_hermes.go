@@ -66,6 +66,45 @@ func buildIdentityBlock(identityPath string) string {
 		body + "\n"
 }
 
+// ensureIdentityInlined appends block to the Hermes SOUL.md when it isn't already
+// present — idempotent and independent of copyPersona's Overwrite rules, so the
+// inline lands even though `hermes claw migrate` (install.sh) usually writes
+// SOUL.md first (which makes the copyPersona above conflict-skip). No-op when block
+// is empty (no filled IDENTITY fields) or SOUL.md is absent.
+func (m *openclawToHermes) ensureIdentityInlined(soulPath, block string) {
+	const kind = "identity-inline"
+	if block == "" {
+		m.record(kind, "", soulPath, StatusSkipped, "no filled IDENTITY.md fields", nil)
+		return
+	}
+	raw, err := os.ReadFile(soulPath)
+	if err != nil {
+		m.record(kind, "", soulPath, StatusSkipped, "soul not present to inline into", nil)
+		return
+	}
+	if strings.Contains(string(raw), identityCardHeading) {
+		m.record(kind, "", soulPath, StatusSkipped, "identity already inlined", nil)
+		return
+	}
+	if !m.opts.Execute {
+		m.record(kind, "", soulPath, StatusMigrated, "would inline identity", nil)
+		return
+	}
+	details := map[string]any{}
+	if bak, berr := m.backup(soulPath); berr != nil {
+		m.record(kind, "", soulPath, StatusError, "backup failed: "+berr.Error(), nil)
+		return
+	} else if bak != "" {
+		details["backup"] = bak
+	}
+	updated := strings.TrimRight(string(raw), "\n") + block
+	if werr := os.WriteFile(soulPath, []byte(updated), 0o644); werr != nil {
+		m.record(kind, "", soulPath, StatusError, "write: "+werr.Error(), nil)
+		return
+	}
+	m.record(kind, "", soulPath, StatusMigrated, "identity inlined into soul", details)
+}
+
 // openclawToHermes migrates persona + memory from an OpenClaw workspace into a
 // Hermes home, following the upstream mapping:
 //
@@ -84,22 +123,21 @@ func (m *openclawToHermes) Migrate() (*Report, error) {
 	ws := m.opts.OpenclawWorkspace
 	hermesMem := filepath.Join(m.opts.HermesRoot, "memories")
 
-	// Persona: SOUL.md → <hermes>/SOUL.md. Rebrand, then INLINE the owner's
-	// IDENTITY.md fields (name/vibe) into the soul: Hermes reads SOUL.md as its
-	// identity and has no slot for a standalone IDENTITY.md, so inlining is what
-	// keeps the custom name (e.g. "Ngân") instead of reverting to SOUL's default.
-	identityBlock := buildIdentityBlock(filepath.Join(ws, "IDENTITY.md"))
-	soulTransform := func(text string) string {
-		text = rebrandToHermes(text)
-		if identityBlock == "" || strings.Contains(text, identityCardHeading) {
-			return text
-		}
-		return text + identityBlock
-	}
+	// Persona: SOUL.md → <hermes>/SOUL.md (rebranded).
+	soulDest := filepath.Join(m.opts.HermesRoot, "SOUL.md")
 	m.copyPersona("soul",
 		filepath.Join(ws, "SOUL.md"),
-		filepath.Join(m.opts.HermesRoot, "SOUL.md"),
-		soulTransform)
+		soulDest,
+		rebrandToHermes)
+
+	// Inline the owner's IDENTITY.md fields (name/vibe) INTO the Hermes soul:
+	// Hermes reads SOUL.md as its identity and has no slot for a standalone
+	// IDENTITY.md. This runs as a separate idempotent append — NOT through the copy
+	// above — because `hermes claw migrate` (install.sh) usually writes SOUL.md
+	// first, so the copyPersona conflict-skips (Overwrite=false) and a transform
+	// there would never land. ensureIdentityInlined appends to whatever SOUL.md
+	// exists, so the custom name (e.g. "Ngân") survives the switch regardless.
+	m.ensureIdentityInlined(soulDest, buildIdentityBlock(filepath.Join(ws, "IDENTITY.md")))
 
 	// Long-term memory: MEMORY.md (+ daily memory/*.md) → memories/MEMORY.md.
 	memSources := []string{filepath.Join(ws, "MEMORY.md")}
