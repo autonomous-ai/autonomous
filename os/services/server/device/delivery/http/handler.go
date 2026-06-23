@@ -2,8 +2,10 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -196,11 +198,13 @@ func (h *DeviceHandler) GetAgentRuntime(c *gin.Context) {
 	}))
 }
 
-// SetAgentRuntime swaps the agentic backend (openclaw ⇄ hermes). It persists the
-// choice and spawns switch-runtime, which toggles the systemd units and restarts
-// os-server — so the HTTP connection drops shortly after this returns 200. The
-// web should treat 200 as "accepted, reconnecting" and re-poll GetAgentRuntime /
-// the agent banner once os-server is back.
+// SetAgentRuntime swaps the agentic backend (openclaw / hermes / picoclaw). The
+// switch now BLOCKS until it lands (UpdateAgentRuntime waits on switch-runtime,
+// which may install the backend), so we validate the runtime synchronously for the
+// 400 and run the switch in the background, returning 200 "accepted" right away.
+// On a successful switch os-server restarts itself, so the HTTP connection drops
+// shortly after — the web should treat 200 as "accepted, reconnecting" and re-poll
+// GetAgentRuntime / the agent banner once os-server is back.
 //
 //	@Router	/device/agent-runtime [post]
 func (h *DeviceHandler) SetAgentRuntime(c *gin.Context) {
@@ -209,10 +213,23 @@ func (h *DeviceHandler) SetAgentRuntime(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, serializers.ResponseError(err.Error()))
 		return
 	}
-	if err := h.service.UpdateAgentRuntime(req); err != nil {
-		c.JSON(http.StatusBadRequest, serializers.ResponseError(err.Error()))
+	if !domain.IsValidAgentRuntime(req.Runtime) {
+		c.JSON(http.StatusBadRequest, serializers.ResponseError(
+			fmt.Sprintf("invalid runtime %q (want %s)", req.Runtime, strings.Join(domain.AgentRuntimes, "|"))))
 		return
 	}
+	go func() {
+		switched, err := h.service.UpdateAgentRuntime(req)
+		if err != nil {
+			slog.Error("agent-runtime switch failed", "component", "device-http", "error", err)
+			return
+		}
+		if switched {
+			if rerr := h.service.RestartForAgentRuntime(); rerr != nil {
+				slog.Error("agent-runtime os-server restart failed", "component", "device-http", "error", rerr)
+			}
+		}
+	}()
 	c.JSON(http.StatusOK, serializers.ResponseSuccess(true))
 }
 

@@ -198,18 +198,28 @@ future work).
 ## 11. Switching backends at runtime
 
 You do not edit `config.json` by hand. Three triggers — **MQTT** `hermes.setup` /
-`picoclaw.setup` (the kind itself names the target backend — no `runtime` field;
-each maps `hermes.setup → hermes`, `picoclaw.setup → picoclaw`), **HTTP**
+`picoclaw.setup` / `openclaw.setup` (the kind itself names the target backend — no
+`runtime` field; each maps `hermes.setup → hermes`, `picoclaw.setup → picoclaw`,
+`openclaw.setup → openclaw`, the last being the revert-to-baseline path), **HTTP**
 `POST /api/device/agent-runtime` (`{"runtime":"hermes"}`), and the **web**
 Settings → *Runtime* section — all funnel into one method,
 `device.Service.UpdateAgentRuntime` (`internal/device/service.go`). It validates
-the runtime, persists `config.agent_runtime`, and launches the switcher in its
-own transient systemd unit (`systemd-run`, so the os-server restart at the end
-can't kill it mid-flight):
+the runtime, persists `config.agent_runtime`, then launches the switcher in its
+own transient systemd unit **and blocks on its exit code** (`systemd-run --wait`,
+so it learns whether the switch landed or rolled back):
 
 ```
 switch-runtime <new> <old>
 ```
+
+Because `UpdateAgentRuntime` waits for the real result, the MQTT path can ack the
+**actual** outcome: `hermes.setup` / `picoclaw.setup` reply `success` only after the
+switch lands, or `failure` (with the rollback reason) if it doesn't — no optimistic
+"success". On a confirmed switch the device acks success **first**, then restarts
+os-server itself (`device.Service.RestartForAgentRuntime`) so `factory.go`
+re-resolves the gateway. The restart is intentionally deferred until after the ack:
+if `switch-runtime` restarted os-server itself (as it used to), it would kill the
+goroutine before the ack went out.
 
 `switch-runtime` is **generic and backend-agnostic** — it is embedded in os-server
 (`internal/device/switch_runtime.sh` via `go:embed`) and written to
@@ -229,7 +239,12 @@ it:
    `disable --now <old-unit>` retries (verifying it went inactive between tries);
    after 3 attempts it proceeds regardless so a stuck old runtime never blocks
    the switch;
-4. `systemctl restart os-server`, so `factory.go` re-resolves the gateway.
+4. exits `0`. It does **not** restart os-server (it used to) — os-server, which is
+   blocked on `--wait`, acks the outcome and then restarts itself. On any failure
+   before step 3 completes, its trap rolls the units + `config.agent_runtime` back
+   to `<old>` and exits non-zero, and `UpdateAgentRuntime` reverts its in-memory
+   `config.agent_runtime` to match (os-server never re-reads `config.json` at
+   runtime, so the in-memory copy is reverted explicitly).
 
 Confirm the swap from the new `AGENT BACKEND ACTIVE → …` banner + a healthy
 `/health` poll in the logs.
