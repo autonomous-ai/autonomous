@@ -23,8 +23,9 @@ from typing_extensions import override
 
 from core.enums.files import ModelEnum
 from core.export.utils.evaluation import evaluate_image
-from core.utils.files import get_default_model_path
 from core.export.utils.nms import onnx_nms, xyxy_to_xywh_normalized
+from core.export.utils.onnx import run_shape_inference
+from core.utils.files import get_default_model_path
 
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -118,6 +119,7 @@ def export(model_id: str, output: str | None = None, opset: int = 17, nms: bool 
             opset_version=opset,
             do_constant_folding=True,
         )
+    run_shape_inference(dest)
 
     size_mb = dest.stat().st_size / 1024 / 1024
     logger.info(f"Exported to {dest} ({size_mb:.1f} MB)")

@@ -27,6 +27,7 @@ from ultralytics.nn.text_model import build_text_model
 from core.enums.files import ModelEnum
 from core.export.utils.evaluation import evaluate_image
 from core.export.utils.nms import onnx_nms, xyxy_to_xywh_normalized
+from core.export.utils.onnx import run_shape_inference
 from core.utils.files import ensure_downloaded, get_default_cdn_url, get_default_model_path
 
 _PATCHED = False
@@ -161,6 +162,7 @@ def export(checkpoint: str | None = None, output: str | None = None, imgsz: int 
             opset_version=opset,
             do_constant_folding=True,
         )
+    run_shape_inference(dest)
 
     size_mb = dest.stat().st_size / 1024 / 1024
     logger.info(f"Exported to {dest} ({size_mb:.1f} MB)")

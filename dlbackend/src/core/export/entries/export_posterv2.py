@@ -15,6 +15,7 @@ from core.enums.files import ModelEnum
 from core.export.components.posterv2 import Posterv2
 from core.export.components.posterv2.utils import RecorderMeter, RecorderMeter1
 from core.export.utils.evaluation import evaluate_image
+from core.export.utils.onnx import run_shape_inference
 from core.utils.files import ensure_downloaded, get_default_cdn_url, get_default_model_path
 
 _main = _sys.modules["__main__"]
@@ -81,6 +82,7 @@ def export(checkpoint: str | None = None, output: str | None = None, num_classes
         output_names=["probs"],
         dynamic_axes={"images": {0: "batch"}, "probs": {0: "batch"}},
     )
+    run_shape_inference(dest)
 
     size_mb = dest.stat().st_size / 1024 / 1024
     logger.info(f"Exported to {dest} ({size_mb:.1f} MB)")

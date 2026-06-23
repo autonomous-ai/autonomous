@@ -12,6 +12,7 @@ from typing_extensions import override
 from core.enums.files import ModelEnum
 from core.export.components.emotion2vec import Emotion2vec
 from core.export.utils.evaluation import evaluate_audio
+from core.export.utils.onnx import run_shape_inference
 from core.utils.files import get_default_model_path
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -142,6 +143,7 @@ def export(model_id: str, output: str | None = None, opset: int = 17):
             dest.unlink()
         os.replace(intermediate, dest)
 
+    run_shape_inference(dest)
     _materialize_labels(token_list, dest.parent)
 
     size_mb = dest.stat().st_size / 1024 / 1024

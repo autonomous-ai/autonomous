@@ -10,6 +10,7 @@ from typing_extensions import override
 from core.enums.files import ModelEnum
 from core.export.components.emonet import EmoNet
 from core.export.utils.evaluation import evaluate_image
+from core.export.utils.onnx import run_shape_inference
 from core.utils.files import ensure_downloaded, get_default_cdn_url, get_default_model_path
 
 logger: logging.Logger = logging.getLogger(__name__)
@@ -74,6 +75,7 @@ def export(
         },
         opset_version=opset,
     )
+    run_shape_inference(dest)
 
     size_mb = dest.stat().st_size / 1024 / 1024
     logger.info(f"Exported to {dest} ({size_mb:.1f} MB)")
