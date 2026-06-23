@@ -26,6 +26,10 @@ def prepare_ort_session(
     opts.inter_op_num_threads = 0
     opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
     opts.add_session_config_entry("session.dynamic_block_base", "4")
+    # Force single-threaded execution to prevent CUDA stream collisions
+    # under concurrent requests (the global _gpu_lock serializes at Python level,
+    # but ORT's internal thread pool can still launch parallel CUDA kernels)
+    opts.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
 
     available: list[str] = ort.get_available_providers()
     providers: list[str | tuple[str, dict]] = []
@@ -56,8 +60,9 @@ def prepare_ort_session(
                 "CUDAExecutionProvider",
                 {
                     "arena_extend_strategy": "kNextPowerOfTwo",
-                    "cudnn_conv_algo_search": "DEFAULT",
+                    "cudnn_conv_algo_search": "EXHAUSTIVE",
                     "do_copy_in_default_stream": True,
+                    "cudnn_conv_use_max_workspace": True,
                 },
             )
         )
