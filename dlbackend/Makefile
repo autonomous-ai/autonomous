@@ -176,7 +176,7 @@ start-runpod-dlserver: install stop-runpod-dlserver
 		--pid-file $(DLSERVER_PID) --wrapper-pid-file $(DLSERVER_WRAPPER_PID) --cooldown 5 \
 		--log-dir /workspace/logs/dlserver -- \
 		python -m dlserver --host 127.0.0.1 --port $(DLSERVER_PORT) --log-dir /workspace/logs/dlserver \
-		</dev/null &
+		</dev/null >/dev/null 2>&1 &
 	@echo "dlserver started on port $(DLSERVER_PORT) (auto-restart enabled)"
 
 stop-runpod-dlserver:
@@ -198,7 +198,7 @@ start-runpod-lbserver: install-lb stop-runpod-lbserver
 		--pid-file $(LBSERVER_PID) --wrapper-pid-file $(LBSERVER_WRAPPER_PID) --cooldown 5 \
 		--log-dir /workspace/logs/lbserver -- \
 		python -m lbserver --host 127.0.0.1 --port $(LBSERVER_PORT) --log-dir /workspace/logs/lbserver \
-		</dev/null &
+		</dev/null >/dev/null 2>&1 &
 	@echo "lbserver started on port $(LBSERVER_PORT) (auto-restart enabled)"
 
 stop-runpod-lbserver:
