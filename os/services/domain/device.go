@@ -3,6 +3,7 @@ package domain
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"go.autonomous.ai/os/server/config"
@@ -300,16 +301,20 @@ const (
 	KindOAuthRemove  = "oauth.remove"  // delete OAuth token for a provider
 	KindRealtimeSet  = "realtime.set"  // persist realtime voice-agent config (provider/voice/reasoning…)
 
-	// KindHermesSetup / KindPicoclawSetup switch the active agentic backend. The
-	// kind itself names the target runtime — the worker (stand-to-earn-worker's
-	// steoauthkind.HermesSetup / PicoclawSetup) publishes the backend-specific
-	// kind instead of a generic envelope carrying a runtime field. Both funnel
-	// into device.Service.UpdateAgentRuntime, which persists config.agent_runtime
-	// then runs switch-runtime.sh (toggle systemd units + restart os-server so
+	// KindHermesSetup / KindPicoclawSetup / KindOpenclawSetup switch the active
+	// agentic backend. The kind itself names the target runtime — the worker
+	// (stand-to-earn-worker's steoauthkind.HermesSetup / PicoclawSetup /
+	// OpenclawSetup) publishes the backend-specific kind instead of a generic
+	// envelope carrying a runtime field. All funnel into
+	// device.Service.UpdateAgentRuntime, which persists config.agent_runtime then
+	// runs switch-runtime.sh (toggle systemd units + restart os-server so
 	// agent/factory.go re-resolves the gateway). The device acks each on
 	// fd_channel with the same kind. Replaces the former generic agent_runtime.set.
+	// openclaw.setup is the revert path (hermes/picoclaw → openclaw, the baked
+	// baseline).
 	KindHermesSetup   = "hermes.setup"
 	KindPicoclawSetup = "picoclaw.setup"
+	KindOpenclawSetup = "openclaw.setup"
 
 	// AgentRuntimeOpenClaw / AgentRuntimeHermes / AgentRuntimePicoclaw are the
 	// swappable agentic backends. Source of truth mirrored by
@@ -807,6 +812,7 @@ type MQTTRealtimeSetAck struct {
 //
 //	{ "cmd": "data", "kind": "hermes.setup" }    // switch to hermes
 //	{ "cmd": "data", "kind": "picoclaw.setup" }  // switch to picoclaw
+//	{ "cmd": "data", "kind": "openclaw.setup" }  // revert to openclaw (baseline)
 type AgentRuntimeSetData struct {
 	Runtime string `json:"runtime"` // "openclaw" | "hermes" | "picoclaw"
 }
@@ -814,6 +820,19 @@ type AgentRuntimeSetData struct {
 // AgentRuntimes is the valid set, surfaced to the web settings dropdown via
 // GET /api/device/agent-runtime so the UI never hardcodes the list.
 var AgentRuntimes = []string{AgentRuntimeOpenClaw, AgentRuntimeHermes, AgentRuntimePicoclaw}
+
+// IsValidAgentRuntime reports whether r is a switchable backend (case-insensitive,
+// trimmed). Used to validate hermes.setup / picoclaw.setup and the HTTP runtime
+// switch before any side effects.
+func IsValidAgentRuntime(r string) bool {
+	r = strings.ToLower(strings.TrimSpace(r))
+	for _, v := range AgentRuntimes {
+		if v == r {
+			return true
+		}
+	}
+	return false
+}
 
 // AgentRuntimeStatus is returned by GET /api/device/agent-runtime: the active
 // backend plus the selectable options.
