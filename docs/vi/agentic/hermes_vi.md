@@ -188,8 +188,21 @@ materialize hook ra `/usr/local/bin/runtime-hermes-presync` mỗi switch**
 (`materializePresync`, đăng ký qua `runtimereg.RegisterPresync`), nên OTA os-server
 thường cũng refresh nó trên disk — khác với bản `install.sh` ghi một lần mà
 `switch-runtime` skip ở switch sau (*activation gap*; xem
-`docs/vi/agentic/adding-agent-runtime_vi.md` §3). Hook chạy ngay trước khi gateway start
-(và inline lúc install), làm 3 việc theo thứ tự:
+`docs/vi/agentic/adding-agent-runtime_vi.md` §3).
+
+**Hook cũng chạy mỗi lần os-server boot**, không chỉ khi switch: `EnsureOnboarding`
+(`internal/hermes/onboarding.go`) chạy `PresyncScript` embed mỗi boot và restart
+`hermes-gateway` **chỉ khi** `config.yaml` thật sự đổi (guard bằng content-hash —
+không restart loop). Việc này khắc ngách: device **boot thẳng vào Hermes**
+(`DEVICE.md gateway.default: hermes`, hoặc imager pre-install) mà chưa từng switch
+từ OpenClaw, hoặc `llm_*` đổi khi Hermes đang chạy, sẽ giữ `config.yaml` cũ không
+bao giờ lấy `llm_api_key`/`base_url` thật từ `config.json`. Nó cho Hermes khả năng
+self-heal config lúc boot giống OpenClaw (`ensureAgentDefaults` + `StartModelSync`),
+tái dùng đúng script presync thay vì viết lại sync trong Go. (Xoay `llm_*` live
+không reboot thì vẫn chờ boot kế — trigger theo config-change là follow-up khả dĩ.)
+
+Hook chạy ngay trước khi gateway start (lúc switch và boot, và inline lúc install),
+làm 3 việc theo thứ tự:
 
 1. **Restore skills** — khi `~/.hermes/skills/openclaw-imports` rỗng (cài đầu HOẶC
    sau factory-reset wipe), chạy `hermes claw migrate` (nó **copy** skills openclaw,

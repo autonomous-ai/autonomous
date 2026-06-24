@@ -17,9 +17,9 @@ func (s *Service) SetupAgent(_ domain.SetupRequest) error {
 	return nil
 }
 
-// AddChannel — channels run inside Lumi (Telegram receive loop) when on
+// AddChannel — channels run inside Device (Telegram receive loop) when on
 // Hermes, not as plugins inside the agent runtime. No-op here; channel
-// credentials live in the regular Lumi config (TelegramBotToken, etc.).
+// credentials live in the regular Device config (TelegramBotToken, etc.).
 func (s *Service) AddChannel(_ context.Context, _ domain.AddChannelRequest) error {
 	slog.Info("AddChannel: no-op (hermes backend)", "component", "hermes")
 	return nil
@@ -58,16 +58,14 @@ func (s *Service) RestartAgent() error {
 }
 
 // RefreshModelsConfig — Hermes config (~/.hermes/...) is owned externally; we
-// don't patch it from Lumi. No-op.
+// don't patch it from Device. No-op.
 func (s *Service) RefreshModelsConfig() error {
 	return nil
 }
 
-// EnsureOnboarding — user has confirmed Hermes is provisioned with skills and
-// soul. No-op so the os-server boot path stays generic.
-func (s *Service) EnsureOnboarding() error {
-	return nil
-}
+// EnsureOnboarding for Hermes lives in onboarding.go — it runs the embedded
+// presync hook each boot to self-heal config.yaml from config.json (llm_* +
+// provider structure), and restarts hermes-gateway only when the config changed.
 
 // FetchChatHistory — Hermes per-conversation history is server-side, but we
 // don't currently walk the previous_response_id chain (hermes.md §17 decided
@@ -107,7 +105,7 @@ func (s *Service) StartPrimaryModelWatch(ctx context.Context) {
 	<-ctx.Done()
 }
 
-// GetConfiguredChannel — Lumi config is the source of truth under Hermes.
+// GetConfiguredChannel — Device config is the source of truth under Hermes.
 // Returns "telegram" when a bot token is set, otherwise the generic label.
 func (s *Service) GetConfiguredChannel() string {
 	if s.config.TelegramBotToken != "" {
