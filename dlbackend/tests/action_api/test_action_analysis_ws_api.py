@@ -269,7 +269,6 @@ class TestActionPerformance:
         await ws.send(json.dumps({
             "type": "config",
             "task": "action",
-            "whitelist": ["drinking", "drinking beer", "drinking shots", "tasting beer"],
             "threshold": 0.1,
         }))
         await ws.recv()
@@ -295,7 +294,6 @@ class TestActionPerformance:
         await ws.send(json.dumps({
             "type": "config",
             "task": "action",
-            "whitelist": ["eating", "eating cake", "eating ice cream", "eating chips"],
             "threshold": 0.1,
         }))
         await ws.recv()
