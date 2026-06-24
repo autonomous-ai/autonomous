@@ -108,7 +108,7 @@ Or edit `~/.config/claude-code-buddy.json` by hand (all default `true`):
 
 ## Status
 
-The plugin sends events now. The device-side receivers (`/notify` and `/usage`) are still being rolled out, so depending on your device firmware those events may not produce feedback yet. Connecting and config changes work either way.
+The plugin sends events now. The device-side receivers (`/claude-code/notify` and `/claude-code/usage`) exist and log each push, but the device-side rendering (the HAL bridge to LED / display / voice) is still being rolled out, so depending on your device firmware those events may not produce feedback yet. Connecting and config changes work either way.
 
 ---
 

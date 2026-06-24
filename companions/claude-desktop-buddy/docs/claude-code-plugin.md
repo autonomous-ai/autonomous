@@ -21,9 +21,9 @@ produces for the BLE feed.
  │  (Hardware Buddy)   │           │   BLE ─► state machine ─► bridge ─┐    │
  └────────────────────┘           │                                   ▼    │
                                    │                          device feedback│
- ┌────────────────────┐  HTTP      │   httpserver.go :5002 ───────────┘     │
- │  Claude Code        │  POST     │   /notify  /usage  (planned)           │
- │  (claude-code-buddy)│ ─────────►│   /status /health /approve /deny        │
+ ┌────────────────────┐  HTTP      │   httpapi/ :5002 ────────────────┘     │
+ │  Claude Code        │  POST     │   /claude-code/*    (notify/usage)     │
+ │  (claude-code-buddy)│ ─────────►│   /status /health /claude-desktop/*    │
  └────────────────────┘  :5002     └──────────────────────────────────────┘
 ```
 
@@ -37,7 +37,7 @@ only POSTs events, and the device decides how to react.
 The plugin sends JSON to `http://<device>:5002`. The daemon replies `{"ok":true}`
 on success.
 
-### `POST /notify`
+### `POST /claude-code/notify`
 
 A discrete signal: Claude finished, needs you, or a custom message.
 
@@ -58,12 +58,12 @@ A discrete signal: Claude finished, needs you, or a custom message.
 | `sound` | bool | Whether the device adds an audible cue |
 
 ```bash
-curl -s -X POST http://my-device.local:5002/notify \
+curl -s -X POST http://my-device.local:5002/claude-code/notify \
   -H 'Content-Type: application/json' \
   -d '{"title":"Claude is done","subtitle":"auth refactor","level":"done","sound":true}'
 ```
 
-### `POST /usage`
+### `POST /claude-code/usage`
 
 Current Claude Code usage, pushed when it crosses your threshold (or on demand).
 
@@ -86,15 +86,16 @@ Current Claude Code usage, pushed when it crosses your threshold (or on demand).
 | `sound` | bool | Whether the device adds an audible cue |
 
 ```bash
-curl -s -X POST http://my-device.local:5002/usage \
+curl -s -X POST http://my-device.local:5002/claude-code/usage \
   -H 'Content-Type: application/json' \
   -d '{"five_hour":72,"seven_day":40,"reset_5h":"3:00 PM","reset_7d":"Mon","sound":false}'
 ```
 
 ### Existing daemon endpoints
 
-These are already served by `httpserver.go` and are used by the BLE/approval flow:
-`GET /status`, `GET /health`, `POST /approve`, `POST /deny`. See
+These are served by the daemon's `httpapi/` package and used by the BLE/approval
+flow: `GET /status`, `GET /health`, `POST /claude-desktop/approve`,
+`POST /claude-desktop/deny`. See
 [`architecture.md`](architecture.md#the-approval-round-trip).
 
 ## Discovery and config
@@ -111,7 +112,7 @@ These are already served by `httpserver.go` and are used by the BLE/approval flo
 
 | Piece | Role |
 |-------|------|
-| **Hooks** | `Stop` → `POST /notify` (`level":"done"`) plus a `POST /usage`; `Notification` → `POST /notify` (`level":"attention"`) |
+| **Hooks** | `Stop` → `POST /claude-code/notify` (`level":"done"`) plus a `POST /claude-code/usage`; `Notification` → `POST /claude-code/notify` (`level":"attention"`) |
 | `scripts/buddy_client.py` | Minimal HTTP client that performs the POSTs (Python 3 stdlib only) |
 | `scripts/discover.py` | mDNS resolver for `_autonomous._tcp` |
 | Command `/claude-code-buddy:usage` | Push current usage to the device now |
@@ -137,12 +138,12 @@ push on demand with `/claude-code-buddy:usage` or `/claude-code-buddy:notify` (o
 plain language: "push my usage to my device", "notify my device"). The full plugin
 setup guide lives at [`../claude-code-buddy/GUIDE.md`](../claude-code-buddy/GUIDE.md).
 
-## Status / not yet implemented
+## Status / remaining work
 
-> **The daemon-side receivers for `/notify` and `/usage` are planned and not yet
-> implemented.** Today `httpserver.go` serves only `GET /status`, `GET /health`,
-> `POST /approve`, and `POST /deny`. The plugin sends the `/notify` and `/usage`
-> pushes described above, but until the daemon adds those handlers the device will
-> not turn them into LED / display / voice feedback. Discovery (mDNS) and the
-> plugin's Mac-side config work regardless. This document specifies the **intended
-> contract**; it does not claim the HTTP path works end-to-end yet.
+> **The daemon-side endpoints `POST /claude-code/notify` and
+> `POST /claude-code/usage` now exist.** They accept the pushes described above,
+> **log** the payload, and return `{"ok":true}`. What is still **not** done is
+> bridging those logged events to the device's actual feedback — there is no HAL
+> bridge yet, so the pushes do not produce LED / round-display / voice output. The
+> remaining work is the device-side rendering (wiring the logged payloads through
+> HAL). Discovery (mDNS) and the plugin's Mac-side config work regardless.

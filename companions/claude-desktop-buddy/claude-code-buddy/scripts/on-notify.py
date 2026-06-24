@@ -91,7 +91,7 @@ def main():
     # Mark the cycle as ran before sending (same as on-stop-done): the cooldown
     # throttles the ping regardless of whether the device is reachable.
     mark_ran()
-    send("/notify", {
+    send("/claude-code/notify", {
         "title": title,
         "subtitle": subtitle,
         "level": "attention",

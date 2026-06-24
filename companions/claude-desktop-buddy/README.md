@@ -23,8 +23,9 @@ by voice.
  │  • chat events     │ ◄─────── │            │                 │        │
  │  • permission ask  │  ack /   │            ▼                 ▼        │
  └───────────────────┘  perm.    │      HTTP :5002        LeLamp :5001   │
-                                  │   /status /approve     LED/display/  │
-                                  │   /deny  (OpenClaw)    TTS · Lamp :5000│
+                                  │   /status               LED/display/  │
+                                  │   /claude-desktop/*     TTS · Lamp    │
+                                  │   (OpenClaw)            :5000          │
                                   └──────────────────────────────────────┘
 ```
 
@@ -72,7 +73,8 @@ journalctl -u claude-desktop-buddy -f      # watch logs (pairing passkey shows h
 ```
 
 **HTTP API** (default `:5002`, loopback): `GET /status`, `GET /health`,
-`POST /approve`, `POST /deny`. Details in [`docs/architecture.md`](docs/architecture.md#the-approval-round-trip).
+`POST /claude-desktop/approve`, `POST /claude-desktop/deny`. Details in
+[`docs/architecture.md`](docs/architecture.md#the-approval-round-trip).
 
 ## Restart Bluetooth on the device
 

@@ -119,7 +119,7 @@ payload = json.dumps({
 }).encode()
 
 req = urllib.request.Request(
-    "http://<ip>:5002/notify",
+    "http://<ip>:5002/claude-code/notify",
     data=payload,
     headers={"Content-Type": "application/json"},
     method="POST",
@@ -134,7 +134,7 @@ Replace `<ip>` with the device's `last_known_ip` (or resolve `host`).
 
 ## 3. Usage
 
-Fetch the user's OAuth usage and POST it to `/usage`.
+Fetch the user's OAuth usage and POST it to `/claude-code/usage`.
 
 **When to use:** "push my usage to my device", "/claude-code-buddy:usage".
 
@@ -166,7 +166,7 @@ reset_7d  = time_left(usage["seven_day"]["resets_at"])   # -> "1d 11h"
 
 `scripts/buddy_client.py` already wraps token lookup + fetch — use it.
 
-### 3.2 POST to /usage
+### 3.2 POST to /claude-code/usage
 
 ```json
 {
@@ -182,7 +182,7 @@ reset_7d  = time_left(usage["seven_day"]["resets_at"])   # -> "1d 11h"
 ISO timestamp with `buddy_client.time_left()`), not raw ISO — the device shows
 them as-is.
 
-POST to `http://<ip>:5002/usage` exactly like section 2.3 (expect `200`,
+POST to `http://<ip>:5002/claude-code/usage` exactly like section 2.3 (expect `200`,
 `{"ok": true}`). The usage API rate-limits hard — do not poll faster than once
 per minute.
 
@@ -193,11 +193,12 @@ per minute.
 These run via Claude Code hooks; no skill action needed.
 
 - **Stop hook** (`scripts/on-stop-done.py`) — fires after each response. POSTs
-  `/notify` with `level: "done"`. If 5-hour or 7-day usage is `>=`
-  `usage_threshold`, it also POSTs `/usage`. Skipped when `task_done_enabled` is
-  `false`.
+  `/claude-code/notify` with `level: "done"`. If 5-hour or 7-day usage is `>=`
+  `usage_threshold`, it also POSTs `/claude-code/usage`. Skipped when
+  `task_done_enabled` is `false`.
 - **Notification hook** (`scripts/on-notify.py`) — fires when Claude needs
-  approval or input has gone idle. POSTs `/notify` with `level: "attention"`.
+  approval or input has gone idle. POSTs `/claude-code/notify` with
+  `level: "attention"`.
   Skipped when `notify_enabled` is `false`.
 
 Both honor `sounds_enabled` for the `sound` field and fail silently if no device
@@ -261,5 +262,7 @@ restart.
 - Keep `sound` a boolean; the device decides the actual cue.
 - Never print or log the OAuth token.
 - Config file permission must be `0600`.
-- Device-side `/notify` and `/usage` receivers are planned but may not be live on
-  every device yet; `/health` and `/status` exist for liveness/discovery.
+- Device-side `/claude-code/notify` and `/claude-code/usage` receivers exist and
+  log the payload, but may not yet render device feedback on every device (the HAL
+  bridge is the remaining work); `/health` and `/status` exist for
+  liveness/discovery.

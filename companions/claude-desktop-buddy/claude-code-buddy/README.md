@@ -64,7 +64,7 @@ The flags (all default `true`) plus the threshold:
 
 ## Status
 
-The plugin sends events today. The device-side receivers (`/notify`, `/usage`) are still being rolled out, so depending on your device firmware those events may not produce feedback yet. Discovery and config work regardless.
+The plugin sends events today. The device-side receivers (`/claude-code/notify`, `/claude-code/usage`) exist and log each push, but the device-side rendering (the HAL bridge to LED / display / voice) is still being rolled out, so depending on your device firmware those events may not produce feedback yet. Discovery and config work regardless.
 
 ## Update / Uninstall
 

@@ -62,7 +62,7 @@ def push_usage():
         return
 
     time.sleep(SECTION_DELAY)
-    send("/usage", {
+    send("/claude-code/usage", {
         "five_hour": pct_5h,
         "seven_day": pct_7d,
         "reset_5h": time_left(usage["five_hour"]["resets_at"]),
@@ -94,7 +94,7 @@ def main():
 
     # 1. Task Done notification (unless disabled).
     if cfg.get("task_done_enabled", True):
-        send("/notify", {
+        send("/claude-code/notify", {
             "title": "Task Done",
             "subtitle": "claude code",
             "level": "done",
