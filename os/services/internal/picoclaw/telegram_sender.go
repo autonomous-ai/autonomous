@@ -23,7 +23,7 @@ const telegramMaxMediaGroup = 10
 // protocol to the openclaw / hermes implementations; GetTelegramTargets() reads
 // from the Lumi-owned store.
 type TelegramSender struct {
-	svc *Service
+	svc *PicoclawService
 }
 
 func (t *TelegramSender) Name() string { return "telegram" }

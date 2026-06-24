@@ -32,7 +32,7 @@ const identitySoulHeading = "## Your identity card"
 // fresh identity-card block when none exists. Atomic tmp+rename so a mid-write
 // crash can't truncate the soul. Takes effect on the next Hermes session (no
 // gateway restart is forced).
-func (s *Service) UpdateIdentityName(name string) error {
+func (s *HermesService) UpdateIdentityName(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("identity name is required")
@@ -100,7 +100,7 @@ func rewriteSoulName(content, name string) string {
 // log component. Wake words come from the shared i18n.BuildChitchatWakeWords
 // (OpenClaw's private buildWakeWords is the same 5 variants); i18n.SetDeviceName
 // then refreshes the {name}/{Name} placeholders + chitchat strip list itself.
-func (s *Service) WatchIdentity(ctx context.Context) {
+func (s *HermesService) WatchIdentity(ctx context.Context) {
 	soulPath := filepath.Join(hermesHome, "SOUL.md")
 	var lastName string
 	for {

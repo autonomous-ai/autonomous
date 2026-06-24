@@ -36,7 +36,7 @@ const (
 // presync.sh is idempotent (yq fill-if-missing + sync, guarded skill restore), so
 // a steady boot writes nothing. We hash config.yaml around the run and restart
 // hermes-gateway ONLY when it actually changed, so there is no restart loop.
-func (s *Service) EnsureOnboarding() error {
+func (s *HermesService) EnsureOnboarding() error {
 	before := fileHash(hermesConfigYAML)
 
 	if err := s.runPresync(); err != nil {
@@ -61,7 +61,7 @@ func (s *Service) EnsureOnboarding() error {
 // runPresync materializes the embedded presync script to a temp file and runs it.
 // The script is self-contained (hardcodes /root/.hermes + /root/config/config.json)
 // and idempotent, so it is safe to run on every boot.
-func (s *Service) runPresync() error {
+func (s *HermesService) runPresync() error {
 	f, err := os.CreateTemp("", "hermes-presync-*.sh")
 	if err != nil {
 		return fmt.Errorf("create temp: %w", err)
@@ -106,7 +106,7 @@ func fileHash(path string) string {
 // RestartAgent restarts the hermes gateway only. Mirrors
 // internal/openclaw/service_setup.go RestartAgent (which restarts the openclaw
 // gateway) — same contract, different unit.
-func (s *Service) RestartAgent() error {
+func (s *HermesService) RestartAgent() error {
 	slog.Debug("restarting hermes gateway", "component", "hermes")
 	if err := restartHermesGateway(); err != nil {
 		return err
