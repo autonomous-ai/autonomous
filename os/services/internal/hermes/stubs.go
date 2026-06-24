@@ -79,13 +79,9 @@ func (s *Service) GetConfigJSON() (json.RawMessage, error) {
 	return json.RawMessage(`{}`), nil
 }
 
-// WatchIdentity — IDENTITY.md / wake-word rename watching is OpenClaw-specific
-// (it pushes the new word into the agent's prompt). Under Hermes, prompts are
-// owned by the Hermes server. No-op so the existing goroutine slot in
-// server.go stays valid.
-func (s *Service) WatchIdentity(ctx context.Context) {
-	<-ctx.Done()
-}
+// WatchIdentity for Hermes lives in identity.go — it polls SOUL.md (no IDENTITY.md
+// slot under Hermes) and pushes wake words to HAL + i18n device name on rename,
+// mirroring internal/openclaw/service_identity.go.
 
 // StartSkillWatcher for Hermes lives in skill_watcher.go — it keeps the
 // OpenClaw-imported skills (~/.hermes/skills/openclaw-imports) fresh from the CDN,

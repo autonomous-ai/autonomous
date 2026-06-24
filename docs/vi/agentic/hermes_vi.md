@@ -269,7 +269,10 @@ Switch openclaw→hermes chạy một migration persona Go
 
 - **SOUL.md** (rebrand) — và vì Hermes không có slot IDENTITY.md riêng, inline các
   field IDENTITY đã điền của owner thành block `## Your identity card` để tên tùy
-  chỉnh (vd "Ngân") sống sót. `UpdateIdentityName` (đổi tên thiết bị) sửa block đó.
+  chỉnh (vd "Ngân") sống sót. `UpdateIdentityName` (đổi tên thiết bị) sửa block đó;
+  `WatchIdentity` (`internal/hermes/identity.go`) poll SOUL.md và khi tên đổi thì
+  đẩy wake words mới sang HAL + `i18n.SetDeviceName` — mirror `WatchIdentity` của
+  OpenClaw, chỉ khác là watch SOUL.md thay vì IDENTITY.md.
 - **MEMORY.md + daily `memory/*.md` + KNOWLEDGE.md** → merge vào `memories/MEMORY.md`.
   Hermes chỉ load `MEMORY.md` + `USER.md` **theo tên** (không glob `memories/*.md`),
   nên KNOWLEDGE được fold vào thay vì giữ thành file riêng bị bỏ qua.

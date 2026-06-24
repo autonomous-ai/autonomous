@@ -284,7 +284,9 @@ Switching openclaw→hermes runs a Go persona migration
 - **SOUL.md** (rebranded) — and, because Hermes has no separate IDENTITY.md slot,
   inlines the owner's filled IDENTITY fields as a `## Your identity card` block so
   the custom name (e.g. "Ngân") survives. `UpdateIdentityName` (device rename) edits
-  that block.
+  that block; `WatchIdentity` (`internal/hermes/identity.go`) polls SOUL.md and, on
+  a name change, pushes the new wake words to HAL + `i18n.SetDeviceName` — mirroring
+  OpenClaw's `WatchIdentity`, just watching SOUL.md instead of IDENTITY.md.
 - **MEMORY.md + daily `memory/*.md` + KNOWLEDGE.md** → merged into
   `memories/MEMORY.md`. Hermes loads only `MEMORY.md` + `USER.md` **by name** (no
   `memories/*.md` glob), so KNOWLEDGE is folded in rather than kept as a separate,
