@@ -9,12 +9,24 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"go.autonomous.ai/os/domain"
 )
 
 const (
 	hermesConfigYAML  = "/root/.hermes/config.yaml"
 	hermesGatewayUnit = "hermes-gateway"
 )
+
+// SetupAgent materializes the Hermes device config from config.json by running the
+// same presync EnsureOnboarding runs. The device setup flow calls this AFTER it
+// persists config.json (internal/device/service.go), so presync picks up the
+// freshly-entered llm_api_key/base_url + channel tokens right away instead of
+// waiting for the next os-server boot. The SetupRequest is unused — config.json
+// (just saved) is the source of truth presync reads.
+func (s *HermesService) SetupAgent(_ domain.SetupRequest) error {
+	return s.EnsureOnboarding()
+}
 
 // EnsureOnboarding reconciles the device-side Hermes config on every os-server
 // boot by running the embedded presync hook (PresyncScript) — the SAME script
