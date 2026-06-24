@@ -66,11 +66,17 @@ jq_edit() { local f="$1"; shift; local tmp; tmp="$(mktemp)"; jq "$@" "$f" >"$tmp
 # read a field from the device config.json ("" when absent/empty).
 dev() { jq -r ".${1} // empty" "$CONFIG_JSON" 2>/dev/null || true; }
 
-# ── 0. MIGRATE (restore persona/memory/skills from openclaw if missing) ─────────
-SKILLS_DIR="$PICO_DIR/workspace/skills"
-if [ ! -d "$SKILLS_DIR" ] || [ -z "$(ls -A "$SKILLS_DIR" 2>/dev/null)" ]; then
+# ── 0. MIGRATE (restore persona/memory/skills from openclaw, once) ──────────────
+# Gate on a sentinel marker, NOT on workspace/skills emptiness: PicoClaw ships
+# built-in skills, so `workspace/skills` is ALWAYS non-empty (onboard seeds it) and
+# an emptiness check would skip migrate forever. The marker lives under the picoclaw
+# data dir, so a factory reset that wipes /root/.picoclaw clears it and migrate
+# re-runs on the next switch. The marker is written ONLY after a clean migrate, so a
+# failed migrate is retried next switch.
+MIGRATE_MARKER="$PICO_DIR/.openclaw-migrated"
+if [ ! -f "$MIGRATE_MARKER" ]; then
   if [ -x "$PICO_BIN" ] && [ -d /root/.openclaw ]; then
-    log "workspace/skills empty — migrating persona/memory/skills from openclaw"
+    log "no migration marker — migrating persona/memory/skills from openclaw"
     # stop openclaw first so migrate doesn't race its live on-disk state (retry 3x,
     # proceed regardless — migrate is non-fatal).
     for attempt in 1 2 3; do
@@ -83,7 +89,14 @@ if [ ! -d "$SKILLS_DIR" ] || [ -z "$(ls -A "$SKILLS_DIR" 2>/dev/null)" ]; then
     done
     # --force skips the interactive plan confirmation. migrate also converts
     # openclaw.json -> config.json, so STRUCTURE/DYNAMIC below re-assert on top.
-    HOME=/root "$PICO_BIN" migrate --force || log "WARN: picoclaw migrate failed (non-fatal)"
+    if HOME=/root "$PICO_BIN" migrate --force; then
+      touch "$MIGRATE_MARKER"
+      log "migration complete — marker written ($MIGRATE_MARKER)"
+    else
+      log "WARN: picoclaw migrate failed (non-fatal) — will retry next switch"
+    fi
+  else
+    log "no migration marker but openclaw absent or picoclaw binary missing — skipping migrate"
   fi
 fi
 

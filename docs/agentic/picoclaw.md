@@ -70,10 +70,13 @@ live next to the backend and are embedded + registered in `install.go`:
 
 **`presync.sh`** (every switch — single owner of model + channel config, so it
 self-heals after a factory reset, mirroring hermes' presync):
-- **§0 migrate** — when `~/.picoclaw/workspace/skills` is empty (first install or
-  post-reset), stop openclaw and run `picoclaw migrate --force` to carry
-  persona/memory/skills over from OpenClaw (also converts `openclaw.json` →
-  `config.json`). Guarded so a normal switch is a no-op.
+- **§0 migrate** — gated on a sentinel marker `~/.picoclaw/.openclaw-migrated`
+  (**not** on `workspace/skills` emptiness — PicoClaw ships built-in skills so that
+  dir is always non-empty). When the marker is absent and `/root/.openclaw` exists,
+  stop openclaw and run `picoclaw migrate --force` to carry persona/memory/skills
+  over from OpenClaw (also converts `openclaw.json` → `config.json`), then write the
+  marker. A factory reset wiping `/root/.picoclaw` clears the marker so migrate
+  re-runs; a failed migrate leaves the marker unwritten and retries next switch.
 - **§1 structure** (`jq` on `config.json`) — `agents.defaults` (provider
   `anthropic-messages`, `model_name "autonomous"`, `restrict_to_workspace:false`,
   `allow_read_outside_workspace:true`), the `autonomous` `model_list` entry, and the

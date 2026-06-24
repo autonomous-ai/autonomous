@@ -70,10 +70,13 @@ nằm cạnh backend và được embed + đăng ký trong `install.go`:
 
 **`presync.sh`** (mỗi lần switch — single owner của config model + channel, nên
 tự-heal sau factory reset, giống presync của hermes):
-- **§0 migrate** — khi `~/.picoclaw/workspace/skills` rỗng (lần đầu hoặc sau reset),
-  stop openclaw và chạy `picoclaw migrate --force` để mang persona/memory/skills từ
-  OpenClaw qua (đồng thời convert `openclaw.json` → `config.json`). Có guard nên
-  switch bình thường là no-op.
+- **§0 migrate** — chốt bằng marker `~/.picoclaw/.openclaw-migrated` (**không** check
+  `workspace/skills` rỗng — PicoClaw có sẵn built-in skills nên thư mục đó luôn
+  non-empty). Khi marker chưa có và `/root/.openclaw` tồn tại, stop openclaw rồi chạy
+  `picoclaw migrate --force` để mang persona/memory/skills từ OpenClaw qua (đồng thời
+  convert `openclaw.json` → `config.json`), sau đó ghi marker. Factory reset xoá
+  `/root/.picoclaw` sẽ xoá marker nên migrate chạy lại; migrate lỗi thì không ghi
+  marker và thử lại ở lần switch sau.
 - **§1 cấu trúc** (`jq` trên `config.json`) — `agents.defaults` (provider
   `anthropic-messages`, `model_name "autonomous"`, `restrict_to_workspace:false`,
   `allow_read_outside_workspace:true`), entry `autonomous` trong `model_list`, và
