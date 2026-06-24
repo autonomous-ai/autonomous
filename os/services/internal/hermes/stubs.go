@@ -17,9 +17,9 @@ func (s *Service) SetupAgent(_ domain.SetupRequest) error {
 	return nil
 }
 
-// AddChannel — channels run inside Lumi (Telegram receive loop) when on
+// AddChannel — channels run inside Device (Telegram receive loop) when on
 // Hermes, not as plugins inside the agent runtime. No-op here; channel
-// credentials live in the regular Lumi config (TelegramBotToken, etc.).
+// credentials live in the regular Device config (TelegramBotToken, etc.).
 func (s *Service) AddChannel(_ context.Context, _ domain.AddChannelRequest) error {
 	slog.Info("AddChannel: no-op (hermes backend)", "component", "hermes")
 	return nil
@@ -52,22 +52,18 @@ func (s *Service) ResetAgent() error {
 	return nil
 }
 
-func (s *Service) RestartAgent() error {
-	slog.Info("RestartAgent: no-op (hermes backend — manage via systemctl externally)", "component", "hermes")
-	return nil
-}
+// RestartAgent for Hermes lives in onboarding.go — it restarts hermes-gateway
+// via restartHermesGateway, mirroring openclaw's RestartAgent.
 
 // RefreshModelsConfig — Hermes config (~/.hermes/...) is owned externally; we
-// don't patch it from Lumi. No-op.
+// don't patch it from Device. No-op.
 func (s *Service) RefreshModelsConfig() error {
 	return nil
 }
 
-// EnsureOnboarding — user has confirmed Hermes is provisioned with skills and
-// soul. No-op so the os-server boot path stays generic.
-func (s *Service) EnsureOnboarding() error {
-	return nil
-}
+// EnsureOnboarding for Hermes lives in onboarding.go — it runs the embedded
+// presync hook each boot to self-heal config.yaml from config.json (llm_* +
+// provider structure), and restarts hermes-gateway only when the config changed.
 
 // FetchChatHistory — Hermes per-conversation history is server-side, but we
 // don't currently walk the previous_response_id chain (hermes.md §17 decided
@@ -81,19 +77,13 @@ func (s *Service) GetConfigJSON() (json.RawMessage, error) {
 	return json.RawMessage(`{}`), nil
 }
 
-// WatchIdentity — IDENTITY.md / wake-word rename watching is OpenClaw-specific
-// (it pushes the new word into the agent's prompt). Under Hermes, prompts are
-// owned by the Hermes server. No-op so the existing goroutine slot in
-// server.go stays valid.
-func (s *Service) WatchIdentity(ctx context.Context) {
-	<-ctx.Done()
-}
+// WatchIdentity for Hermes lives in identity.go — it polls SOUL.md (no IDENTITY.md
+// slot under Hermes) and pushes wake words to HAL + i18n device name on rename,
+// mirroring internal/openclaw/service_identity.go.
 
-// StartSkillWatcher — skills are pre-provisioned on the Hermes box (per user).
-// No download/notify loop. No-op.
-func (s *Service) StartSkillWatcher(ctx context.Context) {
-	<-ctx.Done()
-}
+// StartSkillWatcher for Hermes lives in skill_watcher.go — it keeps the
+// OpenClaw-imported skills (~/.hermes/skills/openclaw-imports) fresh from the CDN,
+// mirroring internal/openclaw/skill_watcher.go.
 
 // StartModelSync — model registry is owned by Hermes. No-op.
 func (s *Service) StartModelSync(ctx context.Context) {
@@ -109,7 +99,7 @@ func (s *Service) StartPrimaryModelWatch(ctx context.Context) {
 	<-ctx.Done()
 }
 
-// GetConfiguredChannel — Lumi config is the source of truth under Hermes.
+// GetConfiguredChannel — Device config is the source of truth under Hermes.
 // Returns "telegram" when a bot token is set, otherwise the generic label.
 func (s *Service) GetConfiguredChannel() string {
 	if s.config.TelegramBotToken != "" {

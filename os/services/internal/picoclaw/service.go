@@ -1,5 +1,5 @@
 // Package picoclaw implements domain.AgentGateway against a PicoClaw runtime
-// reached over a persistent WebSocket. See docs/picoclaw.md for the protocol
+// reached over a persistent WebSocket. See docs/agentic/picoclaw.md for the protocol
 // mapping and the runtime boundaries with OpenClaw / Hermes.
 //
 // PicoClaw is assumed to be running locally on the Pi as a systemd service at

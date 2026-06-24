@@ -1,5 +1,5 @@
 // Package hermes implements domain.AgentGateway against the Hermes HTTP+SSE
-// API server (OpenAI Responses API style). See docs/hermes.md for the full
+// API server (OpenAI Responses API style). See docs/agentic/hermes.md for the full
 // design — protocol mapping, session strategy, and the runtime boundaries with
 // OpenClaw.
 //
@@ -123,6 +123,12 @@ type Service struct {
 	// Channel senders (Telegram).
 	channels []domain.ChannelSender
 
+	// ackHookEnabled mirrors OpenClaw's emotion-acknowledge hook: when the device
+	// declares the `expression` capability, every visible turn flashes a "thinking"
+	// face before the reply lands. Resolved once at construction from the shared
+	// hook registry (skills.SupportedHooks). See emotion_ack.go.
+	ackHookEnabled bool
+
 	// Pending chat traces (mapping idempotencyKey ↔ message text for
 	// MatchPendingByMessage). Hermes-side this is less critical since we own
 	// the response.id immediately, but the SSE handler still calls these on
@@ -180,6 +186,7 @@ func ProvideService(cfg *config.Config, bus *monitor.Bus, sled *statusled.Servic
 	s.channels = []domain.ChannelSender{
 		&TelegramSender{svc: s},
 	}
+	s.ackHookEnabled = ackEmotionEnabled(cfg.DeviceTypeOrDefault())
 	return s
 }
 
