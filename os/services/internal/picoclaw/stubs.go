@@ -61,11 +61,9 @@ func (s *PicoclawService) RefreshModelsConfig() error {
 	return nil
 }
 
-// EnsureOnboarding — PicoClaw is provisioned externally with skills and soul.
-// No-op so the os-server boot path stays generic.
-func (s *PicoclawService) EnsureOnboarding() error {
-	return nil
-}
+// EnsureOnboarding lives in onboarding.go — it keeps the OS-managed block in the
+// workspace AGENTS.md current (the rest of provisioning is owned by install.sh /
+// presync.sh). Kept out of this stub file because it does real work.
 
 // FetchChatHistory — PicoClaw history is server-side and we don't walk it.
 // Returns empty so callers degrade gracefully (also keeps the read loop's

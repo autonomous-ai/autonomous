@@ -90,6 +90,29 @@ if [ ! -f "$MIGRATE_MARKER" ]; then
     # --force skips the interactive plan confirmation. migrate also converts
     # openclaw.json -> config.json, so STRUCTURE/DYNAMIC below re-assert on top.
     if HOME=/root "$PICO_BIN" migrate --force; then
+      WS="$PICO_DIR/workspace"
+      OC_WS="/root/.openclaw/workspace"
+      # 1) HEARTBEAT.md — copy openclaw's verbatim into the picoclaw workspace.
+      if [ -f "$OC_WS/HEARTBEAT.md" ]; then
+        cp -f "$OC_WS/HEARTBEAT.md" "$WS/HEARTBEAT.md"
+        log "copied HEARTBEAT.md from openclaw"
+      fi
+      # 1b) KNOWLEDGE.md — accumulated learnings. openclaw seeds it from an embedded
+      #     template (seedFileIfAbsent) then appends daily; `picoclaw migrate` skips it
+      #     (like IDENTITY.md). Copy the device's living copy so picoclaw keeps the
+      #     learnings instead of starting blank.
+      if [ -f "$OC_WS/KNOWLEDGE.md" ]; then
+        cp -f "$OC_WS/KNOWLEDGE.md" "$WS/KNOWLEDGE.md"
+        log "copied KNOWLEDGE.md from openclaw"
+      fi
+      # 2) Drop AGENT.md so picoclaw runs the legacy AGENTS.md path, which is the only
+      #    mode that reads IDENTITY.md. `picoclaw migrate` does NOT carry IDENTITY.md
+      #    over, so copy openclaw's in manually.
+      rm -f "$WS/AGENT.md"
+      if [ -f "$OC_WS/IDENTITY.md" ]; then
+        cp -f "$OC_WS/IDENTITY.md" "$WS/IDENTITY.md"
+        log "copied IDENTITY.md from openclaw"
+      fi
       touch "$MIGRATE_MARKER"
       log "migration complete — marker written ($MIGRATE_MARKER)"
     else

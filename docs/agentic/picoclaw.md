@@ -25,9 +25,10 @@ which brain is active.
 > migration from OpenClaw is done by `picoclaw migrate --force` **inside the presync
 > hook** — PicoClaw has **no** Go `migrate_persona` adapter, so it is intentionally
 > skipped by the boot-time reconciler (`internal/agent/persona_migration.go`). The Go
-> gateway itself stays **client-only**: in-process lifecycle methods (`SetupAgent`,
-> `EnsureOnboarding`, identity/skill watchers …) remain no-ops (§7) because all
-> provisioning happens out-of-process in install.sh/presync.
+> gateway itself stays **client-only**: most in-process lifecycle methods
+> (`SetupAgent`, identity/skill watchers …) remain no-ops (§7) because provisioning
+> happens out-of-process in install.sh/presync. The exception is `EnsureOnboarding`
+> (`onboarding.go`), which keeps the OS-managed block in `AGENTS.md` current (§1.1).
 
 ## 1. When and how it is selected
 
@@ -74,9 +75,32 @@ self-heals after a factory reset, mirroring hermes' presync):
   (**not** on `workspace/skills` emptiness — PicoClaw ships built-in skills so that
   dir is always non-empty). When the marker is absent and `/root/.openclaw` exists,
   stop openclaw and run `picoclaw migrate --force` to carry persona/memory/skills
-  over from OpenClaw (also converts `openclaw.json` → `config.json`), then write the
-  marker. A factory reset wiping `/root/.picoclaw` clears the marker so migrate
-  re-runs; a failed migrate leaves the marker unwritten and retries next switch.
+  over from OpenClaw (also converts `openclaw.json` → `config.json`). It then does
+  the file fixups migrate doesn't: copy `HEARTBEAT.md` + `KNOWLEDGE.md` from the
+  openclaw workspace (KNOWLEDGE.md is openclaw's living learnings doc, seeded from an
+  embedded template then appended daily — migrate skips it), delete `AGENT.md` (so
+  PicoClaw runs the legacy `AGENTS.md` path — the only mode that reads `IDENTITY.md`),
+  and copy openclaw's `IDENTITY.md` over (migrate skips it too). Finally it writes the
+  marker. A factory reset wiping `/root/.picoclaw` clears
+  the marker so migrate re-runs; a failed migrate leaves the marker unwritten and
+  retries next switch.
+- **§0.5 onboarding (`onboarding.go`)** — `EnsureOnboarding`, called on
+  boot/config-change like openclaw/hermes, mirrors openclaw's reconcile (trimmed):
+  - seeds `KNOWLEDGE.md` from an embedded template (`resources/KNOWLEDGE.md`) **only
+    if absent** — covers the fresh picoclaw-only device where presync §0 had no
+    openclaw copy; never overwrites;
+  - injects the OS-managed `<!-- OS DO NOT REMOVE -->` blocks into `SOUL.md`
+    (`ensureSoulMDBlock`, per-device-type soul from DEVICE.md `soul_ref`; owner
+    content below `---` preserved), `AGENTS.md` (`ensureAgentsMDBlock`,
+    skills/memory/priority rules), and `HEARTBEAT.md` (`ensureHeartbeatMDBlock`,
+    daily knowledge-synthesis) — mirroring openclaw but stripped of OpenClaw-only
+    content, so the blocks stay current on a plain os-server OTA;
+  - when any block changed, **restarts the gateway** (`restartPicoclawGateway` →
+    `systemctl restart picoclaw`) so it re-reads the workspace files. (When systemctl
+    is unavailable it logs + skips; TODO: fall back to POST `…:18790/reload`.)
+  - openclaw.json-specific steps (hooks/logging/controlUi registration) are N/A for
+    picoclaw's `config.json`; skills capability-gating + queue/steer pinning are
+    TODO.
 - **§1 structure** (`jq` on `config.json`) — `agents.defaults` (provider
   `anthropic-messages`, `model_name "autonomous"`, `restrict_to_workspace:false`,
   `allow_read_outside_workspace:true`), the `autonomous` `model_list` entry, and the
@@ -201,14 +225,15 @@ Everything not on the PicoClaw hot path is a no-op so the single
 `domain.AgentGateway` interface is satisfied without inventing features the
 backend does not have: `SetupAgent`, `AddChannel`, `RefreshChannelConfig`,
 WhatsApp pairing, `ResetAgent`, `RestartAgent`, `RefreshModelsConfig`,
-`EnsureOnboarding`, `FetchChatHistory`, `GetConfigJSON`, MCP entry writes,
-`WatchIdentity`, `UpdateIdentityName`, skill/model watchers, `UpdatePrimaryModel`.
+`FetchChatHistory`, `GetConfigJSON`, MCP entry writes, `WatchIdentity`,
+`UpdateIdentityName`, skill/model watchers, `UpdatePrimaryModel`.
 HAL TTS/voice, Telegram fan-out, sensing-event queue/drain, and the run-marker
 helpers (guard / broadcast / web-chat / silent / pose-bucket) are backend-agnostic
 and behave exactly like the Hermes backend.
 
 These stay no-ops **on purpose**: PicoClaw is provisioned out-of-process by
 `install.sh` + `presync.sh` (§1.1), not by in-process gateway calls. Install,
-onboarding, model/channel config, and persona migration all happen in those scripts
-during the `switch-runtime` flow, so the Go gateway never needs `SetupAgent` /
-`EnsureOnboarding` / config writers of its own.
+model/channel config, and persona migration all happen in those scripts during the
+`switch-runtime` flow. The one exception is **`EnsureOnboarding`**
+(`onboarding.go`), which is real: it injects the OS-managed block into
+`workspace/AGENTS.md` on boot/config-change (§1.1), the same contract openclaw has.

@@ -22,9 +22,10 @@
 #   4. drop /usr/local/bin/runtime-picoclaw-presync ownership to os-server and run
 #      it once: it OWNS the model wiring (config.json agents.defaults + model_list,
 #      .security.yml api_keys) AND the channel wiring (config.json channel_list +
-#      .security.yml channel tokens), and — when workspace/skills is empty (first
-#      install OR after a factory reset wiped it) — runs `picoclaw migrate --force`
-#      to carry persona/memory/skills over from OpenClaw. See presync.sh.
+#      .security.yml channel tokens), and — when the .openclaw-migrated marker is
+#      absent (first install OR after a factory reset wiped /root/.picoclaw) — runs
+#      `picoclaw migrate --force` to carry persona/memory/skills over from OpenClaw.
+#      See presync.sh.
 #
 # UNIT NAME: picoclaw.service (== runtime name). No service-name declaration file
 #    is needed (switch_runtime.sh defaults the unit to the runtime name).
@@ -102,12 +103,12 @@ else
 fi
 
 # OpenClaw persona/memory/skill import (`picoclaw migrate --force`) is owned by the
-# presync hook now — it runs the migrate whenever workspace/skills is empty (first
-# install OR after a factory reset wiped it), then asserts the model/channel config
-# on top. Owning it there (not here) is what lets a plain os-server OTA refresh the
-# logic: this installer only re-runs on a first install / failed verify. See
-# presync.sh §0. (openclaw is stopped by the presync hook right before migrate to
-# avoid racing its on-disk state.)
+# presync hook now — it runs the migrate when the .openclaw-migrated marker is absent
+# (first install OR after a factory reset wiped /root/.picoclaw), then asserts the
+# model/channel config on top. Owning it there (not here) is what lets a plain
+# os-server OTA refresh the logic: this installer only re-runs on a first install /
+# failed verify. See presync.sh §0. (openclaw is stopped by the presync hook right
+# before migrate to avoid racing its on-disk state.)
 
 # Model + channel wiring (config.json agents.defaults/model_list/channel_list and
 # .security.yml api_keys/channel tokens) is owned ENTIRELY by the presync hook, NOT
