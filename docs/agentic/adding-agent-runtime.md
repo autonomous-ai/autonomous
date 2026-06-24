@@ -17,7 +17,7 @@ wire the switch, install, migration, skills, hooks, and reset.
 
 > **Agentic-backend docs:** this file (generic contract + how to add one) ·
 > [`hermes.md`](hermes.md) (Hermes, a full backend) · [`picoclaw.md`](picoclaw.md)
-> (PicoClaw, currently client-only). Per-backend protocol/quirks live in those;
+> (PicoClaw, client-only gateway with install/presync scripts). Per-backend protocol/quirks live in those;
 > the generic mechanics + checklist live here.
 
 ---
@@ -147,7 +147,10 @@ directions — file count is **linear (2 per runtime)**, not the quadratic N×(N
 a per-pair migrator needs. Register the adapter in the `adapters` map in
 `migrator.go`; nothing else changes (no new `Direction` enum). A runtime with no
 registered adapter (external/out-of-band persona, e.g. PicoClaw) is simply
-skipped by `CanMigrate` — switches to/from it don't migrate.
+skipped by `CanMigrate` — the boot-time reconciler doesn't migrate to/from it.
+Such a runtime can still migrate persona/memory in its own way: PicoClaw does it
+in its presync hook via `picoclaw migrate --force` (see `picoclaw.md` §1.1), out of
+the Go reconciler's path.
 
 > **Copy-me template:** `internal/agent/migrate_persona/runtime_example.go` is a
 > build-ignored, fully-annotated skeleton — copy it to `runtime_<name>.go`, delete

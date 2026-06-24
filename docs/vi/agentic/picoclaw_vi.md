@@ -18,11 +18,16 @@ não nào đang chạy.
 > (hợp đồng generic + cách thêm) · [`hermes_vi.md`](hermes_vi.md) (Hermes) ·
 > file này (PicoClaw).
 >
-> **Trạng thái: chỉ-client / chưa hoàn chỉnh.** PicoClaw mới được nối như *client*
-> gateway — **chưa có install, presync, migrate persona/memory, import/watch skill,
-> onboarding**. Mọi thứ ngoài hot-path WS đều no-op (§7). Coi như chưa đạt parity;
-> checklist trong `adding-agent-runtime_vi.md` là danh sách gap nếu sau này nâng nó
-> thành backend đầy đủ.
+> **Trạng thái: đạt parity về install; gateway vẫn chỉ-client.** PicoClaw nay đã có
+> installer + hook pre-start phía thiết bị (`internal/picoclaw/install.sh` +
+> `presync.sh`, được embed và đăng ký qua `install.go` → `runtimereg`), nên một lần
+> switch `picoclaw.setup` sẽ cài, cấu hình và khởi động nó giống hermes (§1.1).
+> Migrate persona/memory/skill từ OpenClaw do `picoclaw migrate --force` **bên trong
+> hook presync** đảm nhiệm — PicoClaw **không** có adapter Go `migrate_persona`, nên
+> bộ reconcile lúc boot (`internal/agent/persona_migration.go`) cố tình bỏ qua nó.
+> Bản thân gateway Go vẫn **chỉ-client**: các method lifecycle in-process
+> (`SetupAgent`, `EnsureOnboarding`, watcher identity/skill …) vẫn no-op (§7) vì mọi
+> việc provisioning xảy ra ngoài tiến trình trong install.sh/presync.
 
 ## 1. Khi nào và chọn ra sao
 
@@ -39,15 +44,54 @@ não nào đang chạy.
 Khi khởi động, `ProvideGateway` in banner `AGENT BACKEND ACTIVE → PICOCLAW` kèm
 `ws_url`, `conversation`, và `source`.
 
-### Onboarding / install nằm ngoài phạm vi
+## 1.1 Cài đặt + provisioning (`install.sh` + `presync.sh`)
 
-Khác OpenClaw và Hermes, backend này giả định **PicoClaw đã chạy sẵn** trên thiết
-bị dưới dạng systemd service và mở sẵn WebSocket. os-server chỉ là **client** —
-không có `install.sh`, không đăng ký `runtimereg`, không seed config. Luồng
-chuyển runtime `picoclaw.setup` qua MQTT + `switch-runtime` (lật
-`config.agent_runtime`) đã tồn tại sẵn (`server/device/delivery/mqtt/`,
-`internal/device/switch_runtime.sh`); việc cung cấp chính service PicoClaw được
-xử lý ngoài luồng này.
+Một lần switch `picoclaw.setup` chạy `internal/device/switch_runtime.sh` (generic),
+script này materialize các script nhúng của PicoClaw rồi điều phối chúng. Hai script
+nằm cạnh backend và được embed + đăng ký trong `install.go`:
+
+| Script | Đường dẫn trên đĩa | Chạy khi |
+|---|---|---|
+| `install.sh` | `/usr/local/lib/os-runtimes/picoclaw/install.sh` | lần switch đầu / `verify` thất bại |
+| `presync.sh` | `/usr/local/bin/runtime-picoclaw-presync` | **trước mỗi lần** picoclaw start (và một lần cuối install) |
+
+**`install.sh`** (một lần):
+1. cài `jq` + `yq` + binary `picoclaw` đã pin (GitHub release,
+   `picoclaw-linux-arm64`) vào `/usr/local/bin`;
+2. `picoclaw onboard` (chỉ khi chưa có `config.json`) tạo `/root/.picoclaw` —
+   workspace + `config.json` và `.security.yml` baseline;
+3. ghi **`picoclaw.service`** (`ExecStart=/usr/local/bin/picoclaw gateway`,
+   `HOME=/root`, `Restart=always`) — `picoclaw gateway` chỉ chạy foreground, nên
+   khác hermes (có `gateway install --system`) ta tự bọc nó. Tên unit trùng tên
+   runtime nên **không cần** file khai báo `os-runtimes/picoclaw/service`
+   (switch-runtime mặc định lấy tên đó);
+4. chạy hook presync một lần, rồi drop hook `verify` (`command -v picoclaw`) để
+   switch-runtime phát hiện + tự-heal unit mồ côi.
+
+**`presync.sh`** (mỗi lần switch — single owner của config model + channel, nên
+tự-heal sau factory reset, giống presync của hermes):
+- **§0 migrate** — khi `~/.picoclaw/workspace/skills` rỗng (lần đầu hoặc sau reset),
+  stop openclaw và chạy `picoclaw migrate --force` để mang persona/memory/skills từ
+  OpenClaw qua (đồng thời convert `openclaw.json` → `config.json`). Có guard nên
+  switch bình thường là no-op.
+- **§1 cấu trúc** (`jq` trên `config.json`) — `agents.defaults` (provider
+  `anthropic-messages`, `model_name "autonomous"`, `restrict_to_workspace:false`,
+  `allow_read_outside_workspace:true`), entry `autonomous` trong `model_list`, và
+  khung `channel_list`. `channel_list.pico` luôn được bật.
+- **§2 động** (secrets lấy từ `/root/config/config.json` cấp **project**, thắng) —
+  `model_list[autonomous].api_base` từ `llm_base_url` (PicoClaw cần đuôi `/v1`, khác
+  hermes), `.security.yml` `model_list."autonomous:0".api_keys` từ `llm_api_key`,
+  bearer token `pico` (phải khớp `constants.go` `Token`), và mỗi kênh non-pico **chỉ
+  bật khi có credential**: telegram (`telegram_bot_token` + `telegram_user_id`),
+  discord (`discord_bot_token` + `discord_user_id`), slack (`slack_bot_token` +
+  `slack_app_token` + `slack_user_id`), whatsapp native (`whatsapp_user_id` →
+  `allow_from`, không token, quét QR lần đầu). Secrets nằm trong `.security.yml` dưới
+  `channel_list.<ch>.settings`; phần cấu trúc ở `config.json`.
+
+Log của gateway xác nhận cấu hình khi boot (`Gateway started on 127.0.0.1:18790`,
+health ở `/health` `/ready` `/reload`, `Channels enabled: [pico]`). Cảnh báo
+`SECURITY: Channel allows EVERYONE (allow_from is empty) channel=pico` là bình
+thường: `pico` là gateway native cục bộ của thiết bị và cố tình không có `allow_from`.
 
 ## 2. Hằng số kết nối
 
@@ -155,3 +199,9 @@ Mọi thứ không nằm trên hot path của PicoClaw đều là no-op để th
 skill/model, `UpdatePrimaryModel`. HAL TTS/voice, fan-out Telegram, hàng đợi/drain
 sensing-event, và các helper run-marker (guard / broadcast / web-chat / silent /
 pose-bucket) đều backend-agnostic và hành xử y hệt backend Hermes.
+
+Những phần này no-op **có chủ đích**: PicoClaw được provisioning ngoài tiến trình
+bởi `install.sh` + `presync.sh` (§1.1), không phải bằng các lời gọi gateway
+in-process. Cài đặt, onboarding, cấu hình model/channel, và migrate persona đều diễn
+ra trong các script đó trong luồng `switch-runtime`, nên gateway Go không cần
+`SetupAgent` / `EnsureOnboarding` / writer config của riêng nó.

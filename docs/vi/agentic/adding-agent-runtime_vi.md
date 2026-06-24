@@ -17,7 +17,7 @@ install, migration, skills, hooks, reset.
 
 > **Nhóm docs agentic-backend:** file này (hợp đồng generic + cách thêm) ·
 > [`hermes_vi.md`](hermes_vi.md) (Hermes, backend đầy đủ) ·
-> [`picoclaw_vi.md`](picoclaw_vi.md) (PicoClaw, hiện chỉ-client). Protocol/quirk
+> [`picoclaw_vi.md`](picoclaw_vi.md) (PicoClaw, gateway chỉ-client kèm script install/presync). Protocol/quirk
 > đặc thù từng backend nằm ở các file kia; cơ chế generic + checklist nằm ở đây.
 
 ---
@@ -143,8 +143,11 @@ write[to]` (`RunMigration(from, to, opts)`). Nên thêm runtime = **đúng 1 fil
 adapter**, tự động chạy với mọi runtime sẵn có, cả 2 chiều — số file **tuyến tính
 (2/runtime)**, không phải N×(N-1) như per-pair. Đăng ký adapter vào map `adapters`
 trong `migrator.go`; không cần `Direction` enum mới. Runtime không có adapter
-(persona external/out-of-band, vd PicoClaw) bị `CanMigrate` bỏ qua — switch
-tới/từ nó không migrate.
+(persona external/out-of-band, vd PicoClaw) bị `CanMigrate` bỏ qua — bộ reconcile
+lúc boot không migrate tới/từ nó. Runtime kiểu này vẫn có thể tự migrate
+persona/memory theo cách riêng: PicoClaw làm việc đó trong hook presync qua
+`picoclaw migrate --force` (xem `picoclaw_vi.md` §1.1), nằm ngoài đường đi của
+reconciler Go.
 
 > **Template copy-là-chạy:** `internal/agent/migrate_persona/runtime_example.go` là
 > skeleton build-ignored, comment đầy đủ — copy sang `runtime_<name>.go`, xóa dòng
