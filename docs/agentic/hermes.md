@@ -199,18 +199,29 @@ so a plain os-server OTA refreshes it on disk — unlike a copy written once by
 `install.sh`, which `switch-runtime` skips on a later switch (the *activation gap*;
 see `docs/agentic/adding-agent-runtime.md` §3).
 
-**The hook also runs on every os-server boot**, not only on a switch:
-`EnsureOnboarding` (`internal/hermes/onboarding.go`) executes the embedded
-`PresyncScript` each boot and restarts `hermes-gateway` only when `config.yaml`
-actually changed (content-hash guarded — no restart loop). This closes the gap
-where a device that **boots straight into Hermes** (`DEVICE.md gateway.default:
-hermes`, or imaged with it) without ever switching from OpenClaw, or whose
-`llm_*` changed while Hermes was already active, would keep a stale `config.yaml`
-that never picked up `config.json`'s real `llm_api_key`/`base_url`. It gives
-Hermes the same boot-time config self-heal OpenClaw has (`ensureAgentDefaults` +
+**The hook also runs on every os-server boot AND at initial setup**, not only on a
+switch — both via `EnsureOnboarding` (`internal/hermes/onboarding.go`), which
+executes the embedded `PresyncScript` and restarts `hermes-gateway` only when
+`config.yaml` actually changed (content-hash guarded — no restart loop):
+
+- **Boot:** the startup sequence calls `EnsureOnboarding`. Closes the gap where a
+  device that **boots straight into Hermes** (`DEVICE.md gateway.default: hermes`,
+  or imaged with it) without ever switching from OpenClaw, or whose `llm_*` changed
+  while Hermes was already active, would keep a stale `config.yaml` that never
+  picked up `config.json`'s real `llm_api_key`/`base_url`.
+- **Setup:** `SetupAgent` (also in `onboarding.go`) just calls `EnsureOnboarding`.
+  This works because **Hermes provisions from `config.json`, not from the
+  `SetupRequest`** (unlike OpenClaw, whose `SetupAgent` writes `openclaw.json`
+  straight from the request — hence OpenClaw needs *two* distinct functions, Hermes
+  *one*). The device setup flow saves `config.json` **before** calling `SetupAgent`
+  (`internal/device/service.go` — the call was deliberately ordered after
+  `config.Save()`), so presync materializes `config.yaml`/`.env` from the
+  freshly-entered keys immediately instead of waiting for the next boot.
+
+This gives Hermes the same config self-heal OpenClaw has (`ensureAgentDefaults` +
 `StartModelSync`), reusing the one presync script instead of duplicating the sync
-in Go. (A live `llm_*` rotation without a reboot still waits for the next boot —
-a config-change trigger is a possible follow-up.)
+in Go. (A live `llm_*` rotation via `PUT /api/device/config` without a reboot still
+waits for the next boot — a config-change trigger is a possible follow-up.)
 
 The hook runs right before the gateway starts (on switch and boot, and inline
 during install) and does three things, in order:
