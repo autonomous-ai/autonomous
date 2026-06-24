@@ -47,10 +47,9 @@ func (s *Service) PairWhatsapp(_ context.Context) <-chan domain.PairingEvent {
 	return ch
 }
 
-func (s *Service) ResetAgent() error {
-	slog.Info("ResetAgent: no-op (hermes backend)", "component", "hermes")
-	return nil
-}
+// ResetAgent for Hermes lives in reset.go — the factory-reset wipe (stop daemon
+// + hermes setup --reset + surgical rm), invoked by server/system/factoryreset.go
+// on the active gateway.
 
 // RestartAgent for Hermes lives in onboarding.go — it restarts hermes-gateway
 // via restartHermesGateway, mirroring openclaw's RestartAgent.

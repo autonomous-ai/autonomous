@@ -490,35 +490,9 @@ func (s *Service) AddChannel(ctx context.Context, data domain.AddChannelRequest)
 	return nil
 }
 
-// ResetAgent overwrites openclaw.json with a minimal default config and restarts the gateway.
-func (s *Service) ResetAgent() error {
-	slog.Debug("checking openclaw in PATH", "component", "openclaw")
-	if _, err := exec.LookPath("openclaw"); err != nil {
-		return fmt.Errorf("openclaw not found in PATH: %w", err)
-	}
-	slog.Debug("openclaw found", "component", "openclaw")
-	if err := os.RemoveAll(s.config.OpenclawConfigDir); err != nil {
-		return fmt.Errorf("remove openclaw config dir: %w", err)
-	}
-	if err := os.MkdirAll(s.config.OpenclawConfigDir, 0755); err != nil {
-		return fmt.Errorf("recreate openclaw config dir: %w", err)
-	}
-	configPath := filepath.Join(s.config.OpenclawConfigDir, "openclaw.json")
-	if err := s.onboardOpenclaw(); err != nil {
-		return fmt.Errorf("onboard openclaw: %w", err)
-	}
-	if err := chownRuntimeUserIfRoot(configPath, openclawRuntimeUser); err != nil {
-		return fmt.Errorf("set openclaw config ownership: %w", err)
-	}
-	slog.Info("wrote default config", "component", "openclaw", "path", configPath)
-
-	slog.Debug("restarting openclaw gateway", "component", "openclaw")
-	if err := restartOpenclawGateway(); err != nil {
-		return err
-	}
-	slog.Info("reset completed", "component", "openclaw")
-	return nil
-}
+// ResetAgent for OpenClaw lives in reset.go — the factory-reset wipe (CLI reset
+// + disable service + rm runtime state), invoked by server/system/factoryreset.go
+// on the active gateway.
 
 // RefreshModelsConfig patches the models reasoning fields in openclaw.json
 // based on current config and restarts the agent. Safe to call after UpdateConfig.
