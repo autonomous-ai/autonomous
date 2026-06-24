@@ -148,6 +148,12 @@ jq_edit "$PICO_CONFIG" --arg ab "$DEFAULT_API_BASE" '
             model: "Auto-AI", api_base: ($existing // $ab) } ]
 '
 
+# Gateway server block.
+log "ensure gateway server block"
+jq_edit "$PICO_CONFIG" '
+  .gateway = { host: "localhost", port: 18790, hot_reload: false, log_level: "warn" }
+'
+
 # pico is the native server gateway — always enabled. Assert its structure (fill
 # defaults only when missing so a customized config is preserved).
 log "ensure channel_list.pico structure (always enabled)"
@@ -186,12 +192,23 @@ ensure_channel_struct whatsapp whatsapp
 # Helpers. enable_channel flips config.json; sec_* write to .security.yml via yq's
 # strenv() so values are passed through the environment (no shell-quoting / yaml-
 # injection risk). allow_from is a single id from config.json wrapped in an array.
+#
+# style="flow" on the settings map keeps the picoclaw-native inline shape
+# `settings: { token: "...", allow_from: ["..."] }` instead of yq's default block
+# style — picoclaw writes/expects flow there, and flow context also force-quotes the
+# bot token (which contains a colon). Re-applied on every sec_* call (idempotent).
 enable_channel() { jq_edit "$PICO_CONFIG" --arg ch "$1" '.channel_list[$ch].enabled = true'; }
-sec_set() { CH="$1" K="$2" V="$3" yq -i '.channel_list[strenv(CH)].settings[strenv(K)] = strenv(V)' "$PICO_SECURITY"; }
+sec_set() {
+  CH="$1" K="$2" V="$3" yq -i \
+    '.channel_list[strenv(CH)].settings[strenv(K)] = strenv(V) | .channel_list[strenv(CH)].settings style="flow"' \
+    "$PICO_SECURITY"
+}
 sec_allow_from() {
   local ch="$1" id="$2"
   [ -n "$id" ] || return 0
-  CH="$ch" ID="$id" yq -i '.channel_list[strenv(CH)].settings.allow_from = [strenv(ID)]' "$PICO_SECURITY"
+  CH="$ch" ID="$id" yq -i \
+    '.channel_list[strenv(CH)].settings.allow_from = [strenv(ID)] | .channel_list[strenv(CH)].settings style="flow"' \
+    "$PICO_SECURITY"
 }
 
 # LLM endpoint: config.json llm_base_url wins; PicoClaw needs a trailing /v1.
@@ -213,7 +230,7 @@ if [ -n "$LLM_API_KEY" ]; then
 fi
 
 # pico bearer token (always) — must match constants.go Token.
-PT="$PICO_TOKEN" yq -i '.channel_list.pico.settings.token = strenv(PT)' "$PICO_SECURITY"
+PT="$PICO_TOKEN" yq -i '.channel_list.pico.settings.token = strenv(PT) | .channel_list.pico.settings style="flow"' "$PICO_SECURITY"
 log "security channel_list.pico.settings.token synced"
 
 # Telegram — enable when bot token present.
