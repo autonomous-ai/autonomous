@@ -133,13 +133,38 @@ Identical contract to OpenClaw: while a turn is active (`IsBusy`), passive sensi
 events are dropped or buffered (`QueuePendingEvent`, last-write-wins per type) and
 replayed when idle, so ambient signals never interrupt an in-flight command.
 
-## 8. Telegram fan-out
+## 8. Channels (Telegram/Slack/Discord) — inbound visibility + fan-out
 
-`telegram.go` / `telegram_sender.go` route agent replies back to the originating
-Telegram chat. `markTelegramOrigin(runID, chatID)` records where a turn came from
-and `consumeTelegramOrigin(runID)` reads it back at reply time, so a Telegram-
-initiated turn answers in the right chat while still flowing through the shared
-pipeline.
+The Hermes gateway **owns all messaging-channel I/O**: it polls Telegram (and
+Slack/Discord/WhatsApp) itself with the tokens `presync` syncs into
+`~/.hermes/.env`, runs the turn, and replies to the chat directly. os-server is
+not on that path, so — unlike OpenClaw, which pushes `session.message` WS events —
+a channel turn under Hermes would never show up in Flow Monitor. The gateway has
+no cross-platform turn broadcast to subscribe to either; the only seam is its
+**hook** system.
+
+So os-server installs a gateway hook, `os-server-observer`
+(`internal/hermes/hooks/os-server-observer/{HOOK.yaml,handler.py}`, materialized
+to `~/.hermes/hooks/` by `ensureObserverHook` on every boot — see §10). It fires
+on `agent:start` / `agent:end` for **every** platform and POSTs the turn to the
+loopback endpoint `POST /api/agent/channel-turn` (`handler_channel_turn.go`),
+which emits the same flow events a normal turn does:
+
+- `agent:start` → `chat_input` (source `channel`, with `sender` + `channel`) plus
+  `lifecycle_start`.
+- `agent:end` → `lifecycle_end` plus `tts_suppressed` carrying the reply text
+  (the reply went to the channel, not the device speaker — the same node the
+  OpenClaw channel path uses, so the web turn renders it), or `no_reply` for an
+  empty / `NO_REPLY` turn.
+
+Both events share one `run_id`, correlated by `session_id`. The handler is
+channel-agnostic (keyed on the `platform` field) and **skips** `api_server` / `cli`
+turns — those are os-server's own `/v1/responses` calls, already logged by
+`sendChat`; emitting them again would double the device-originated turns.
+
+Outbound (proactive) sends — `Broadcast` / `SendToUser` in `telegram.go` /
+`telegram_sender.go` — go straight to the Telegram Bot API for device-initiated
+alerts, using the bot token and the `telegramTargetsFile` chat list.
 
 ## 9. Voice
 

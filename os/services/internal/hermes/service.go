@@ -139,13 +139,6 @@ type HermesService struct {
 	// Recent outbound texts (echo-suppression for session.message handler).
 	recentOutboundMu    sync.Mutex
 	recentOutboundTexts []recentOutbound
-
-	// telegramRunOrigin maps a runID → telegram chatID for runs originated
-	// from a Device-side Telegram receive loop. The SSE handler consults this
-	// on response.completed to route the reply back to the chat instead of
-	// (or alongside) TTS.
-	telegramRunOriginMu sync.Mutex
-	telegramRunOrigin   map[string]string
 }
 
 type recentOutbound struct {
@@ -172,16 +165,15 @@ type poseBucketInfo struct {
 // when config.AgentRuntime == "hermes".
 func ProvideService(cfg *config.Config, bus *monitor.Bus, sled *statusled.Service) *HermesService {
 	s := &HermesService{
-		config:            cfg,
-		monitorBus:        bus,
-		statusLED:         sled,
-		httpClient:        &http.Client{Timeout: 0}, // per-request stream — no global timeout, use ctx
-		guardRuns:         make(map[string]string),
-		broadcastRuns:     make(map[string]bool),
-		webChatRuns:       make(map[string]bool),
-		silentRuns:        make(map[string]bool),
-		poseBucketRuns:    make(map[string]poseBucketInfo),
-		telegramRunOrigin: make(map[string]string),
+		config:         cfg,
+		monitorBus:     bus,
+		statusLED:      sled,
+		httpClient:     &http.Client{Timeout: 0}, // per-request stream — no global timeout, use ctx
+		guardRuns:      make(map[string]string),
+		broadcastRuns:  make(map[string]bool),
+		webChatRuns:    make(map[string]bool),
+		silentRuns:     make(map[string]bool),
+		poseBucketRuns: make(map[string]poseBucketInfo),
 	}
 	s.channels = []domain.ChannelSender{
 		&TelegramSender{svc: s},
@@ -259,27 +251,4 @@ func (s *HermesService) IsRecentOutboundChat(text string) bool {
 		}
 	}
 	return false
-}
-
-// markTelegramOrigin records that a runID originated from a Telegram inbound
-// message so response.completed can route the reply back via DM.
-func (s *HermesService) markTelegramOrigin(runID, chatID string) {
-	if runID == "" || chatID == "" {
-		return
-	}
-	s.telegramRunOriginMu.Lock()
-	s.telegramRunOrigin[runID] = chatID
-	s.telegramRunOriginMu.Unlock()
-}
-
-// consumeTelegramOrigin returns the chatID associated with runID and clears
-// the entry. One-shot.
-func (s *HermesService) consumeTelegramOrigin(runID string) (string, bool) {
-	s.telegramRunOriginMu.Lock()
-	chatID, ok := s.telegramRunOrigin[runID]
-	if ok {
-		delete(s.telegramRunOrigin, runID)
-	}
-	s.telegramRunOriginMu.Unlock()
-	return chatID, ok
 }
