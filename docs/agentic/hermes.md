@@ -139,7 +139,8 @@ replayed when idle, so ambient signals never interrupt an in-flight command.
 Telegram chat. `markTelegramOrigin(runID, chatID)` records where a turn came from
 and `consumeTelegramOrigin(runID)` reads it back at reply time, so a Telegram-
 initiated turn answers in the right chat while still flowing through the shared
-pipeline.
+pipeline. (Enabling telegram/slack/discord as native Hermes channels is covered in
+§10 "Channel capability & live add/refresh".)
 
 ## 9. Voice
 
@@ -201,8 +202,13 @@ see `docs/agentic/adding-agent-runtime.md` §3).
 
 **The hook also runs on every os-server boot**, not only on a switch:
 `EnsureOnboarding` (`internal/hermes/onboarding.go`) executes the embedded
-`PresyncScript` each boot and restarts `hermes-gateway` only when `config.yaml`
-actually changed (content-hash guarded — no restart loop). This closes the gap
+`PresyncScript` each boot and restarts `hermes-gateway` only when the config
+actually changed (content-hash guarded — no restart loop). The change-detection
+hash covers **both** `config.yaml` **and** `.env` (`hermesEnvFile` =
+`/root/.hermes/.env`); previously it hashed only `config.yaml`, so a
+channel-token-only change (which touches only `.env`) would not have restarted the
+gateway. Hashing `.env` too means adding a channel live now restarts the gateway so
+the Hermes server picks the new channel up. This closes the gap
 where a device that **boots straight into Hermes** (`DEVICE.md gateway.default:
 hermes`, or imaged with it) without ever switching from OpenClaw, or whose
 `llm_*` changed while Hermes was already active, would keep a stale `config.yaml`
@@ -249,6 +255,43 @@ every turn 401s. Hermes must listen on `127.0.0.1:8642` to match `BaseURL`.
 To target a different Hermes endpoint / key / model today, edit
 `internal/hermes/constants.go` and rebuild (making these per-unit configurable is
 future work).
+
+### Channel capability & live add/refresh
+
+Hermes is a **first-class channel runtime** in the generic capability flow
+(`internal/hermes/channels.go`). Hermes Agent delivers **telegram / slack /
+discord** natively inside its own server — a channel is enabled by the presence of
+its tokens in `~/.hermes/.env` (Slack uses Socket Mode → `SLACK_APP_TOKEN`), which
+the §10 `.env` mapping table above already populates from `config.json`. os-server
+runs **no channel receive loop** of its own; its only job is to land creds in `.env`
+and bounce the gateway.
+
+- **`SupportedChannels()`** returns `[telegram, slack, discord]`. **WhatsApp is NOT
+  supported on Hermes** (Baileys pairing is OpenClaw-only) → `AddChannel` /
+  `RefreshChannelConfig` for `whatsapp` return `domain.ErrChannelNotSupported`
+  (capability gated via `domain.ChannelSupported`).
+- **`AddChannel` and `RefreshChannelConfig` are no longer no-ops.** They used to be
+  silent `return nil` stubs; they now re-sync `~/.hermes/.env` from `config.json` by
+  reusing the presync primitive and restart `hermes-gateway` **only when config
+  changed**. Mechanism: `syncChannelsEnv()` → `EnsureOnboarding()` → `runPresync()`
+  (upserts the `.env` channel vars) → the `config.yaml`+`.env` hash-diff →
+  `restartHermesGateway()`. Both reduce to "re-sync `.env` + restart-if-changed", so
+  they share one code path.
+- **Persist-then-apply.** The device layer (`internal/device/service.go`
+  `AddChannel`) capability-gates first, then persists the channel creds to
+  `config.json` **before** calling the gateway's `AddChannel`, so the presync run
+  re-reads `config.json` and sees the new tokens. A transient apply failure leaves
+  creds persisted (the recoverable direction — boot presync / `ChannelReconcile`
+  re-applies them).
+- **Runtime switch vs live add.** On a **switch into Hermes**, the presync hook
+  already runs before the gateway starts, so slack/discord carry over
+  automatically; the new code closes the **live** add/refresh gap (adding a channel
+  while already running on Hermes). The startup `ChannelReconcile`
+  (`internal/agent/channel_reconcile.go`) also re-applies channels after a switch,
+  but for Hermes it is effectively a **no-op** — presync already synced `.env`, so
+  the hash-diff finds no change and skips the restart. It also records WhatsApp as
+  unsupported (`ChannelsUnsupported`) for the info uplink, leaving its creds for a
+  switch back to OpenClaw.
 
 ## 11. Switching backends at runtime
 

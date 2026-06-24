@@ -61,9 +61,16 @@ The OS server uses MQTT to communicate with the backend server (status reporting
 (`openclaw` | `hermes` | `picoclaw`) — resolved as `config.agent_runtime`, else
 the device's `DEVICE.md` `gateway.default`, else `openclaw`. The response also
 carries these optional fields when known: `hal_version`, `openclaw_version`,
-`hermes_version`, `local_ip`, `tts_provider`, `tts_voice`, `stt_language`.
-`openclaw_version` and `hermes_version` are both probed at startup (each from its
-own `--version`) and reported side by side; `agent_runtime` names the active one.
+`hermes_version`, `local_ip`, `tts_provider`, `tts_voice`, `stt_language`,
+`unsupported_channels`. `openclaw_version` and `hermes_version` are both probed at
+startup (each from its own `--version`) and reported side by side; `agent_runtime`
+names the active one.
+
+`unsupported_channels` (omitted when empty) lists the channels configured on the
+device that the **active** runtime cannot run. It is populated by `ChannelReconcile`
+after a runtime switch — e.g. switching `openclaw` → `picoclaw` (telegram-only) leaves
+any configured `slack`/`discord` as unsupported. The list is sourced from
+`config.channels_unsupported`, which `ChannelReconcile` rewrites on each switch.
 
 ### `add_channel` — Add messaging channel
 
@@ -97,6 +104,14 @@ own `--version`) and reported side by side; `agent_runtime` names the active one
   "error": "..."
 }
 ```
+
+**Capability gate.** `add_channel` is capability-aware: when the **active** agent
+runtime cannot run the requested channel, the device replies `status:"failure"` with
+the stable error code `error:"channel_not_supported"` (mapped from
+`domain.ErrChannelNotSupported` via `errors.Is`, mirroring how `channel.refresh_config`
+maps its sentinels). Previously every runtime silently accepted any channel. Each
+runtime declares its own `SupportedChannels` — e.g. `picoclaw` runs telegram only, so
+`slack`/`discord`/`whatsapp` return `channel_not_supported`.
 
 **Response (streamed — whatsapp):** the device publishes one fd_channel message
 per pairing event:
@@ -210,6 +225,7 @@ optional `error`, and an optional `data` payload.
 | `oauth.remove` | Delete the stored OAuth token for a provider | `provider` |
 | `connector.set.<code>` | Store/replace credentials for a connector (async; acks `starting`) | `connector`, `auth_type`, optional `access_token`/`refresh_token`/`api_key`/`expires_in`/`expires_at`/`scopes`/`credentials`/`refresh` |
 | `connector.remove.<code>` | Delete a connector's credentials (async; acks `starting`) | `connector` |
+| `channel.refresh_config` | Re-apply a channel's canonical config block (async; acks `configuring`) | `channel` |
 | `system.info` | Aggregate snapshot: versions + network + host | _(none)_ |
 | `system.version` | Component versions only (cheaper than `system.info`) | _(none)_ |
 | `system.network` | wlan0 network facts only | _(none)_ |
@@ -297,6 +313,46 @@ carrying BOTH a `refresh_token` AND `refresh:true` (the backend owns refresh
 eligibility via the `refresh` flag) once it is within 10 minutes of expiry, via the
 backend `/connector/refresh-token` endpoint.
 
+#### `channel.refresh_config`
+
+Re-applies a channel's canonical config block on an already-onboarded device — for
+older customers whose runtime config predates schema additions (e.g. the Slack
+`socketMode` block, object-form streaming, `dmPolicy`). Config-only: **no** plugin
+install, CLI bootstrap, or pairing. Credentials are read from `config.json` on the
+device — they are **NOT** carried in the payload; the device builds the per-channel
+`RefreshChannelRequest` from config.json.
+
+**Generic.** Refresh now works for `telegram`, `slack`, and `discord` — previously only
+`slack` was wired, and other channels returned `channel_not_supported`. The capability
+gate still applies: a channel the **active** runtime can't run returns
+`channel_not_supported`.
+
+**Receive:** `{"cmd": "data", "kind": "channel.refresh_config", "data": {"channel": "slack"}}`
+
+**Async flow** — the device acks `configuring` (not `starting`, because the channel was
+already set up; this is a re-apply), then runs the write + gateway restart in the
+background and publishes a terminal status:
+
+```json
+{
+  "device": "lamp",
+  "type": "data",
+  "kind": "channel.refresh_config",
+  "status": "configuring | success | failure",
+  "error": "<code>",
+  "data": { "channel": "slack", "runtime": "2026.5.27" }
+}
+```
+
+`data.runtime` carries the detected runtime version string (empty when probing failed)
+so the backend can correlate refresh outcomes with runtime upgrades. Error codes (in
+`error` when `status:"failure"`, mapped from sentinels via `errors.Is`):
+
+| Code | Meaning |
+|------|---------|
+| `slack_credentials_missing` | config.json has no credentials for the channel being refreshed (kept for wire back-compat; applies to any channel, not just slack) |
+| `channel_not_supported` | the active runtime can't run this channel |
+
 ### `ota` — Trigger OTA update
 
 Handled by bootstrap worker, not through MQTT handler directly.
@@ -320,6 +376,9 @@ Handled by bootstrap worker, not through MQTT handler directly.
 | `os/services/server/device/delivery/mqtt/mcp_connector_writer.go` | Special stdio MCP writer (`figma-api`): token file + local-wrapper `openclaw.json` MCP entry |
 | `os/services/server/device/delivery/mqtt/connector_refresh.go` | Connector token refresh loop (`/connector/refresh-token`) |
 | `os/services/server/device/delivery/mqtt/system_info_handler.go` | Handle `data` kinds `system.info`/`system.version`/`system.network` |
+| `os/services/server/device/delivery/mqtt/channel_refresh_handler.go` | Handle `data` kind `channel.refresh_config` (async re-apply of a channel's config block) |
+| `os/services/internal/device/service.go` | `RefreshChannelConfig` (generic per-channel request build + capability gate) |
+| `os/services/internal/agent/channel_reconcile.go` | `ChannelReconcile`: re-applies channels after a runtime switch, records `channels_unsupported` |
 | `os/services/server/device/delivery/mqtt/whatsapp_pair_handler.go` | Handle `whatsapp_pair` re-pair command |
 | `os/services/internal/openclaw/pairing.go` | WhatsApp Baileys QR pairing subprocess driver |
 | `os/services/domain/device.go` | MQTTMessage, command constants |
