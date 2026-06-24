@@ -103,6 +103,18 @@ func fileHash(path string) string {
 	return string(sum[:])
 }
 
+// RestartAgent restarts the hermes gateway only. Mirrors
+// internal/openclaw/service_setup.go RestartAgent (which restarts the openclaw
+// gateway) — same contract, different unit.
+func (s *Service) RestartAgent() error {
+	slog.Debug("restarting hermes gateway", "component", "hermes")
+	if err := restartHermesGateway(); err != nil {
+		return err
+	}
+	slog.Info("restart completed", "component", "hermes")
+	return nil
+}
+
 // restartHermesGateway bounces the hermes daemon so it reloads config.yaml. The
 // unit name (hermes-gateway) is declared by install.sh for switch-runtime.
 func restartHermesGateway() error {

@@ -52,10 +52,8 @@ func (s *Service) ResetAgent() error {
 	return nil
 }
 
-func (s *Service) RestartAgent() error {
-	slog.Info("RestartAgent: no-op (hermes backend — manage via systemctl externally)", "component", "hermes")
-	return nil
-}
+// RestartAgent for Hermes lives in onboarding.go — it restarts hermes-gateway
+// via restartHermesGateway, mirroring openclaw's RestartAgent.
 
 // RefreshModelsConfig — Hermes config (~/.hermes/...) is owned externally; we
 // don't patch it from Device. No-op.
