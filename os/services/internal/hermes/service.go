@@ -4,7 +4,7 @@
 // OpenClaw.
 //
 // Hermes is assumed to be running locally on the Pi at Hermes.BaseURL with
-// all skills already provisioned. Lumi only acts as a per-request client and
+// all skills already provisioned. Device only acts as a per-request client and
 // translates SSE events into the same domain.WSEvent shape that the OpenClaw
 // handler at server/agent/delivery/http/handler_events.go consumes — so the
 // downstream pipeline (HAL TTS, [HW:/...] markers, monitor SSE, sensing
@@ -140,13 +140,6 @@ type HermesService struct {
 	recentOutboundMu    sync.Mutex
 	recentOutboundTexts []recentOutbound
 
-	// telegramRunOrigin maps a runID → telegram chatID for runs originated
-	// from a Lumi-side Telegram receive loop. The SSE handler consults this
-	// on response.completed to route the reply back to the chat instead of
-	// (or alongside) TTS.
-	telegramRunOriginMu sync.Mutex
-	telegramRunOrigin   map[string]string
-
 	// slackRunOrigin maps a runID → the Slack channel/thread an inbound HTTP-mode
 	// Slack event came from, so the SSE handler can post the reply back (and suppress
 	// TTS). Populated by HandleInboundSlack; consumed once by the agent event handler.
@@ -185,18 +178,17 @@ type poseBucketInfo struct {
 // when config.AgentRuntime == "hermes".
 func ProvideService(cfg *config.Config, bus *monitor.Bus, sled *statusled.Service) *HermesService {
 	s := &HermesService{
-		config:            cfg,
-		monitorBus:        bus,
-		statusLED:         sled,
-		httpClient:        &http.Client{Timeout: 0}, // per-request stream — no global timeout, use ctx
-		guardRuns:         make(map[string]string),
-		broadcastRuns:     make(map[string]bool),
-		webChatRuns:       make(map[string]bool),
-		silentRuns:        make(map[string]bool),
-		poseBucketRuns:    make(map[string]poseBucketInfo),
-		telegramRunOrigin: make(map[string]string),
-		slackRunOrigin:    make(map[string]slackOrigin),
-		slackStreams:      make(map[string]*slackStream),
+		config:         cfg,
+		monitorBus:     bus,
+		statusLED:      sled,
+		httpClient:     &http.Client{Timeout: 0}, // per-request stream — no global timeout, use ctx
+		guardRuns:      make(map[string]string),
+		broadcastRuns:  make(map[string]bool),
+		webChatRuns:    make(map[string]bool),
+		silentRuns:     make(map[string]bool),
+		poseBucketRuns: make(map[string]poseBucketInfo),
+		slackRunOrigin: make(map[string]slackOrigin),
+		slackStreams:   make(map[string]*slackStream),
 	}
 	s.channels = []domain.ChannelSender{
 		&TelegramSender{svc: s},
@@ -237,7 +229,7 @@ func (s *HermesService) AgentUptime() int64 {
 }
 
 // markOutboundChat / IsRecentOutboundChat mirror openclaw.Service. Used by the
-// session.message handler to skip echoes of Lumi-injected user messages
+// session.message handler to skip echoes of Device-injected user messages
 // (wake greeting, sensing events) that the server rebroadcasts.
 func (s *HermesService) markOutboundChat(text string) {
 	if text == "" {
@@ -260,7 +252,7 @@ func (s *HermesService) markOutboundChat(text string) {
 	s.recentOutboundTexts = pruned
 }
 
-// IsRecentOutboundChat reports whether Lumi sent this text recently.
+// IsRecentOutboundChat reports whether Device sent this text recently.
 func (s *HermesService) IsRecentOutboundChat(text string) bool {
 	if text == "" {
 		return false
@@ -275,27 +267,4 @@ func (s *HermesService) IsRecentOutboundChat(text string) bool {
 		}
 	}
 	return false
-}
-
-// markTelegramOrigin records that a runID originated from a Telegram inbound
-// message so response.completed can route the reply back via DM.
-func (s *HermesService) markTelegramOrigin(runID, chatID string) {
-	if runID == "" || chatID == "" {
-		return
-	}
-	s.telegramRunOriginMu.Lock()
-	s.telegramRunOrigin[runID] = chatID
-	s.telegramRunOriginMu.Unlock()
-}
-
-// consumeTelegramOrigin returns the chatID associated with runID and clears
-// the entry. One-shot.
-func (s *HermesService) consumeTelegramOrigin(runID string) (string, bool) {
-	s.telegramRunOriginMu.Lock()
-	chatID, ok := s.telegramRunOrigin[runID]
-	if ok {
-		delete(s.telegramRunOrigin, runID)
-	}
-	s.telegramRunOriginMu.Unlock()
-	return chatID, ok
 }

@@ -133,14 +133,41 @@ Identical contract to OpenClaw: while a turn is active (`IsBusy`), passive sensi
 events are dropped or buffered (`QueuePendingEvent`, last-write-wins per type) and
 replayed when idle, so ambient signals never interrupt an in-flight command.
 
-## 8. Telegram fan-out
+## 8. Channels (Telegram/Slack/Discord) — inbound visibility + fan-out
 
-`telegram.go` / `telegram_sender.go` route agent replies back to the originating
-Telegram chat. `markTelegramOrigin(runID, chatID)` records where a turn came from
-and `consumeTelegramOrigin(runID)` reads it back at reply time, so a Telegram-
-initiated turn answers in the right chat while still flowing through the shared
-pipeline. (Enabling telegram/slack/discord as native Hermes channels is covered in
-§10 "Channel capability & live add/refresh".)
+The Hermes gateway **owns Telegram/Discord/WhatsApp I/O**: it polls those platforms
+itself with the tokens `presync` syncs into `~/.hermes/.env`, runs the turn, and
+replies to the chat directly. (**Slack is the exception** on this fleet — the app
+runs in HTTP/Events mode, not Socket Mode, so os-server bridges it; see the Slack
+subsection below.) os-server is not on the gateway's channel path, so — unlike
+OpenClaw, which pushes `session.message` WS events — a gateway-handled channel turn
+would never show up in Flow Monitor. The gateway has no cross-platform turn
+broadcast to subscribe to either; the only seam is its **hook** system.
+
+So os-server installs a gateway hook, `os-server-observer`
+(`internal/hermes/hooks/os-server-observer/{HOOK.yaml,handler.py}`, materialized
+to `~/.hermes/hooks/` by `ensureObserverHook` on every boot — see §10). It fires
+on `agent:start` / `agent:end` for **every** platform and POSTs the turn to the
+loopback endpoint `POST /api/agent/channel-turn` (`handler_channel_turn.go`),
+which emits the same flow events a normal turn does:
+
+- `agent:start` → `chat_input` (source `channel`, with `sender` + `channel`) plus
+  `lifecycle_start`.
+- `agent:end` → `lifecycle_end` plus `tts_suppressed` carrying the reply text
+  (the reply went to the channel, not the device speaker — the same node the
+  OpenClaw channel path uses, so the web turn renders it), or `no_reply` for an
+  empty / `NO_REPLY` turn.
+
+Both events share one `run_id`, correlated by `session_id`. The handler is
+channel-agnostic (keyed on the `platform` field) and **skips** `api_server` / `cli`
+turns — those are os-server's own `/v1/responses` calls, already logged by
+`sendChat`; emitting them again would double the device-originated turns. (Slack
+bridge turns below are driven through `/v1/responses`, so they are logged by
+`sendChat` and likewise skipped by the hook — no double-counting.)
+
+Outbound (proactive) sends — `Broadcast` / `SendToUser` in `telegram.go` /
+`telegram_sender.go` — go straight to the Telegram Bot API for device-initiated
+alerts, using the bot token and the `telegramTargetsFile` chat list.
 
 ### Slack — HTTP-mode bridge (for Socket-Mode-only runtimes)
 
@@ -297,23 +324,33 @@ so a plain os-server OTA refreshes it on disk — unlike a copy written once by
 `install.sh`, which `switch-runtime` skips on a later switch (the *activation gap*;
 see `docs/agentic/adding-agent-runtime.md` §3).
 
-**The hook also runs on every os-server boot**, not only on a switch:
-`EnsureOnboarding` (`internal/hermes/onboarding.go`) executes the embedded
-`PresyncScript` each boot and restarts `hermes-gateway` only when the config
-actually changed (content-hash guarded — no restart loop). The change-detection
-hash covers **both** `config.yaml` **and** `.env` (`hermesEnvFile` =
-`/root/.hermes/.env`); previously it hashed only `config.yaml`, so a
-channel-token-only change (which touches only `.env`) would not have restarted the
-gateway. Hashing `.env` too means adding a channel live now restarts the gateway so
-the Hermes server picks the new channel up. This closes the gap
-where a device that **boots straight into Hermes** (`DEVICE.md gateway.default:
-hermes`, or imaged with it) without ever switching from OpenClaw, or whose
-`llm_*` changed while Hermes was already active, would keep a stale `config.yaml`
-that never picked up `config.json`'s real `llm_api_key`/`base_url`. It gives
-Hermes the same boot-time config self-heal OpenClaw has (`ensureAgentDefaults` +
+**The hook also runs on every os-server boot AND at initial setup**, not only on a
+switch — both via `EnsureOnboarding` (`internal/hermes/onboarding.go`), which
+executes the embedded `PresyncScript` and restarts `hermes-gateway` only when the
+config actually changed (content-hash guarded — no restart loop). The
+change-detection hash covers **both** `config.yaml` **and** `.env` (`hermesEnvFile`
+= `/root/.hermes/.env`), so a channel-token-only change (which touches only `.env`,
+e.g. adding Slack live) also restarts the gateway — letting the Hermes server pick
+the new channel up:
+
+- **Boot:** the startup sequence calls `EnsureOnboarding`. Closes the gap where a
+  device that **boots straight into Hermes** (`DEVICE.md gateway.default: hermes`,
+  or imaged with it) without ever switching from OpenClaw, or whose `llm_*` changed
+  while Hermes was already active, would keep a stale `config.yaml` that never
+  picked up `config.json`'s real `llm_api_key`/`base_url`.
+- **Setup:** `SetupAgent` (also in `onboarding.go`) just calls `EnsureOnboarding`.
+  This works because **Hermes provisions from `config.json`, not from the
+  `SetupRequest`** (unlike OpenClaw, whose `SetupAgent` writes `openclaw.json`
+  straight from the request — hence OpenClaw needs *two* distinct functions, Hermes
+  *one*). The device setup flow saves `config.json` **before** calling `SetupAgent`
+  (`internal/device/service.go` — the call was deliberately ordered after
+  `config.Save()`), so presync materializes `config.yaml`/`.env` from the
+  freshly-entered keys immediately instead of waiting for the next boot.
+
+This gives Hermes the same config self-heal OpenClaw has (`ensureAgentDefaults` +
 `StartModelSync`), reusing the one presync script instead of duplicating the sync
-in Go. (A live `llm_*` rotation without a reboot still waits for the next boot —
-a config-change trigger is a possible follow-up.)
+in Go. (A live `llm_*` rotation via `PUT /api/device/config` without a reboot still
+waits for the next boot — a config-change trigger is a possible follow-up.)
 
 The hook runs right before the gateway starts (on switch and boot, and inline
 during install) and does three things, in order:

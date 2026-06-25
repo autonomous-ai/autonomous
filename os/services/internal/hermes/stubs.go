@@ -8,13 +8,9 @@ import (
 	"go.autonomous.ai/os/domain"
 )
 
-// SetupAgent — Hermes is assumed already running on the Pi with skills
-// provisioned externally (see hermes.md §10). This is a no-op so the setup
-// flow doesn't try to write openclaw.json / restart a gateway.
-func (s *HermesService) SetupAgent(_ domain.SetupRequest) error {
-	slog.Info("SetupAgent: no-op (hermes backend)", "component", "hermes")
-	return nil
-}
+// SetupAgent for Hermes lives in onboarding.go — at setup time it runs the
+// presync hook (via EnsureOnboarding) to materialize config.yaml from the
+// just-saved config.json (llm_* + channel tokens).
 
 // AddChannel + RefreshChannelConfig + SupportedChannels live in channels.go —
 // Hermes delivers telegram/slack/discord natively via ~/.hermes/.env, so both apply

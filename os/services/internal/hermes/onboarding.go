@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"go.autonomous.ai/os/domain"
 )
 
 const (
@@ -16,6 +18,16 @@ const (
 	hermesEnvFile     = "/root/.hermes/.env"
 	hermesGatewayUnit = "hermes-gateway"
 )
+
+// SetupAgent materializes the Hermes device config from config.json by running the
+// same presync EnsureOnboarding runs. The device setup flow calls this AFTER it
+// persists config.json (internal/device/service.go), so presync picks up the
+// freshly-entered llm_api_key/base_url + channel tokens right away instead of
+// waiting for the next os-server boot. The SetupRequest is unused — config.json
+// (just saved) is the source of truth presync reads.
+func (s *HermesService) SetupAgent(_ domain.SetupRequest) error {
+	return s.EnsureOnboarding()
+}
 
 // EnsureOnboarding reconciles the device-side Hermes config on every os-server
 // boot by running the embedded presync hook (PresyncScript) — the SAME script
@@ -46,17 +58,32 @@ func (s *HermesService) EnsureOnboarding() error {
 	if err := s.runPresync(); err != nil {
 		return fmt.Errorf("hermes presync: %w", err)
 	}
+	// config "changed" covers config.yaml AND .env: presync writes channel tokens to
+	// .env, so a channel-only change (e.g. adding Slack) leaves config.yaml untouched
+	// and must still restart the gateway for the Hermes server to pick the channel up.
+	configChanged := fileHash(hermesConfigYAML)+fileHash(hermesEnvFile) != before
 
-	if after := fileHash(hermesConfigYAML) + fileHash(hermesEnvFile); before == after {
-		slog.Info("hermes onboarding: config unchanged, no restart", "component", "hermes")
+	// Materialize the os-server-observer hook so channel turns surface in Flow
+	// Monitor. Best-effort: a hook write failure must not block the boot path
+	// (config self-heal above already succeeded).
+	hookChanged, err := s.ensureObserverHook()
+	if err != nil {
+		slog.Warn("hermes observer hook materialize failed", "component", "hermes", "error", err)
+	}
+
+	// Restart the gateway only when config.yaml/.env OR the hook actually changed —
+	// all are loaded only at gateway start, so an unchanged boot is a no-op.
+	if !configChanged && !hookChanged {
+		slog.Info("hermes onboarding: config + hooks unchanged, no restart", "component", "hermes")
 		return nil
 	}
 
-	slog.Info("hermes onboarding: config.yaml changed, restarting gateway",
-		"component", "hermes", "unit", hermesGatewayUnit)
+	slog.Info("hermes onboarding: change detected, restarting gateway",
+		"component", "hermes", "unit", hermesGatewayUnit,
+		"config_changed", configChanged, "hook_changed", hookChanged)
 	if err := restartHermesGateway(); err != nil {
-		// Non-fatal: the new config is on disk; the gateway picks it up on its next
-		// (re)start even if this one failed. Don't block the os-server boot path.
+		// Non-fatal: the new config/hook is on disk; the gateway picks it up on its
+		// next (re)start even if this one failed. Don't block the os-server boot path.
 		slog.Warn("hermes gateway restart failed", "component", "hermes", "error", err)
 	}
 	return nil

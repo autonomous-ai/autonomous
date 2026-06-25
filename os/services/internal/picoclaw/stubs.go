@@ -94,7 +94,7 @@ func (s *PicoclawService) StartPrimaryModelWatch(ctx context.Context) {
 	<-ctx.Done()
 }
 
-// GetConfiguredChannel — Lumi config is the source of truth under PicoClaw.
+// GetConfiguredChannel — Device config is the source of truth under PicoClaw.
 // Returns "telegram" when a bot token is set, otherwise the generic label.
 func (s *PicoclawService) GetConfiguredChannel() string {
 	if s.config.TelegramBotToken != "" {
@@ -118,7 +118,7 @@ func (s *PicoclawService) NewSession(sessionKey string) error {
 }
 
 // UpdateIdentityName — under PicoClaw, IDENTITY.md is owned by the external
-// PicoClaw server, not Lumi. No-op.
+// PicoClaw server, not Device. No-op.
 func (s *PicoclawService) UpdateIdentityName(_ string) error {
 	slog.Info("UpdateIdentityName: no-op (picoclaw backend)", "component", "picoclaw")
 	return nil
