@@ -136,11 +136,30 @@ Re-runs the QR-scan flow without re-bootstrapping the channel config. Used when 
 ### `slack_event` — Forward a Slack Events API delivery (HTTP mode)
 
 Sent by the public Slack-events proxy (bff-campaign-service) when Slack delivers an
-Events API POST for a workspace this device owns. The payload is a verbatim forward of
-Slack's HTTP request body + signature headers; the device POSTs them to the local
-OpenClaw gateway's `webhook_path` (default `http://127.0.0.1:18789/slack/events`), which
-re-verifies the Slack signature against the shared `signing_secret`. Only relevant when
-the device's slack channel is configured with `mode:"http"` (see `add_channel`).
+Events API POST for a workspace this device owns. The payload (a verbatim forward of
+Slack's HTTP request body + signature headers) and the MQTT wire shape are unchanged —
+but **how the device handles it now branches on the active runtime** (the handler
+type-asserts the agent gateway to `domain.SlackBridge`):
+
+- **Runtimes that serve the Slack webhook themselves** (not a `SlackBridge` — today:
+  OpenClaw) — unchanged behavior: the device POSTs the verbatim body + signature headers to
+  the local gateway's `webhook_path` (default `http://127.0.0.1:18789/slack/events`), which
+  re-verifies the Slack signature against the shared `signing_secret`. The fd_channel ack
+  carries the gateway's HTTP status. Only relevant when the device's slack channel is
+  configured with `mode:"http"` (see `add_channel`).
+- **Runtimes whose native Slack support is Socket Mode only** (implement
+  `domain.SlackBridge`) — this branch is **generic to any such runtime** (hermes is the
+  current example, not a special case): with only Socket Mode it has **no local HTTP Slack
+  webhook**, so os-server **is** the HTTP-mode Slack frontend for it. It parses the event
+  itself and drives a turn (`HandleInboundSlack`). The reply is rendered **straight to
+  Slack via the Bot API**, not relayed back over MQTT, using Slack's **native streaming
+  API**: `chat.startStream` (opens the streaming message) → `chat.appendStream`
+  (progressive `markdown_text`) → `chat.stopStream` (finalize), plus
+  `assistant.threads.setStatus` for the native "…is typing" indicator. The fd_channel ack
+  still becomes `status:"success"` (`http_status` 200) once the inbound turn is dispatched.
+  A `url_verification` challenge
+  normally terminates at the public proxy (which owns the Slack Request URL), so it is
+  handled defensively here and still acked `success`.
 
 **Receive:**
 ```json
@@ -205,6 +224,10 @@ Differences from `slack_event`: the body is the urlencoded slash-command form (i
 `command`, `text`, `response_url`, `trigger_id`, ...), the `Content-Type` is
 `application/x-www-form-urlencoded`, and the `event_id` slot carries Slack's `trigger_id`
 (slash commands have no `event_id`) — reused as the dedup key.
+
+**Runtime support:** slash commands remain **OpenClaw-only**. The hermes `SlackBridge`
+defers slash commands for now (v1) — only `slack_event` is runtime-aware — so on a hermes
+device `slack_command` still follows the OpenClaw local-webhook path described above.
 
 **Response (publish fd_channel):** same shape as `slack_event` but `type:"slack_command"`.
 
@@ -368,7 +391,7 @@ Handled by bootstrap worker, not through MQTT handler directly.
 | `os/services/server/device/delivery/mqtt/handler.go` | Command dispatcher |
 | `os/services/server/device/delivery/mqtt/info_handler.go` | Handle `info` command |
 | `os/services/server/device/delivery/mqtt/add_channel_hander.go` | Handle `add_channel` command (streams pairing events for WhatsApp) |
-| `os/services/server/device/delivery/mqtt/slack_event_handler.go` | Handle `slack_event` / `slack_command` (forwards Slack HTTP-mode events and slash commands to local gateway) |
+| `os/services/server/device/delivery/mqtt/slack_event_handler.go` | Handle `slack_event` / `slack_command` (runtime-aware: forwards Slack HTTP-mode events/slash commands to the local OpenClaw gateway, or drives a hermes turn when the runtime is a `SlackBridge`) |
 | `os/services/server/device/delivery/mqtt/data_handler.go` | Handle `data` command kinds `oauth.set`/`oauth.remove` (+ access-token store) |
 | `os/services/server/device/delivery/mqtt/connector_handler.go` | Handle `connector.set.<code>`/`connector.remove.<code>` (async, writer dispatch via `connectorWriterFor`) |
 | `os/services/server/device/delivery/mqtt/connector_writer.go` | `ConnectorWriter` interface + shared `<code>_access_tokens.json` file helpers |

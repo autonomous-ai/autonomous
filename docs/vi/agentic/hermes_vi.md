@@ -139,6 +139,100 @@ Telegram gốc. `markTelegramOrigin(runID, chatID)` ghi lượt đến từ đâ
 trả lời đúng chat mà vẫn chảy qua pipeline chung. (Việc bật telegram/slack/discord
 như các kênh Hermes native được mô tả ở §10 "Capability kênh & add/refresh live".)
 
+### Slack — bridge HTTP-mode (cho runtime chỉ-Socket-Mode)
+
+`domain.SlackBridge` (`os/services/domain/slack_bridge.go`) là một **cơ chế
+generic**, không riêng cho hermes: nó là interface cho **bất kỳ** runtime nào mà
+hỗ trợ Slack native **chỉ là Socket Mode** (hiện tại: hermes là ví dụ duy nhất) và
+do đó **không có webhook HTTP Slack local** để nhận event. Với một runtime như
+vậy, chính os-server trở thành **Slack frontend kiểu HTTP-mode** — nó parse event,
+chạy lượt, và post phản hồi qua Bot API. OpenClaw và picoclaw tự phục vụ webhook
+HTTP Slack của chúng (webhook local `127.0.0.1:18789/slack/events` của OpenClaw),
+nên chúng **không** implement `SlackBridge` và giữ nguyên path POST webhook local
+hiện có.
+
+**Yêu cầu Slack app.** Slack app phải **bật "Agents & AI Apps"** cùng các scope
+**`assistant:write`** (trạng thái typing của assistant), **`chat:write`** (stream +
+post), và **`im:history`** (đọc DM). Thiếu `assistant:write` thì trạng thái typing
+bị bỏ qua âm thầm (best-effort) nhưng văn bản vẫn stream qua `chat:write`.
+
+**Inbound** — Slack → proxy bff-campaign-service → MQTT `slack_event` → device.
+`server/device/delivery/mqtt/slack_event_handler.go` (`forwardSlackHTTP`)
+type-assert gateway đang hoạt động sang `domain.SlackBridge`. Khi khớp (hermes) nó
+gọi `HandleInboundSlack`; khi không khớp (openclaw, picoclaw) nó giữ nguyên path
+POST webhook local hiện có.
+
+`internal/hermes/slack.go` `HandleInboundSlack` / `parseSlackInbound` decode JSON
+Slack Events (challenge `url_verification` — phòng thủ, proxy public mới là nơi
+thực sự sở hữu kiểm tra Request URL của Slack; `event_callback` với `event.type`
+`message`/`app_mention`). Nó bỏ qua tin nhắn bot (`bot_id`), event `subtype`
+(sửa/join), và event `user` rỗng (chống loop); áp cổng allowed-user qua
+`config.SlackUserID` (rỗng = mở); strip mention `<@Uxxx>` ở đầu; và bắt `channel`,
+`thread_ts`, `ts` của tin nhắn user, cùng `team_id`. Với một tin nhắn user thật, nó:
+
+1. ghi origin Slack (channel + `thread_ts` + `ts` của tin nhắn user) vào map
+   `slackRunOrigin`;
+2. đặt trạng thái assistant thành **"...is typing"** qua
+   **`assistant.threads.setStatus`** (`setSlackAssistantStatus`, best-effort, async
+   — cần `assistant:write`);
+3. đăng ký một session stream **lazy** (`startSlackStreamSession`) — chưa call
+   Slack, chỉ là một goroutine theo-run sẵn sàng stream;
+4. gửi lượt qua `SendChatMessageWithRun`;
+5. thêm một reaction 👀 (`eyes`) vào tin nhắn của user (`setSlackReaction`, hằng số
+   `slackAckReaction = "eyes"`, async).
+
+**Streaming.** Phản hồi được render bằng API streaming native của Slack — chỉ báo
+"…is typing" thật cùng văn bản chảy dần vào. Trong lượt, handler SSE của agent
+(`server/agent/delivery/http/handler_event_agent.go`) feed văn bản phản hồi **đã
+được dọn (cleaned) tích lũy** (`cleanedSlackStreamText` trong `handler_state.go`,
+hàm này strip các HW marker và hoãn khi gặp marker `[HW:` còn dở / bất kỳ wrapper
+`<say>` nào / `NO_REPLY` / `HEARTBEAT_OK`) vào `StreamSlackDelta` ở mỗi delta. Một
+goroutine theo-run riêng (`slack_stream.go`) mở stream **lazy** ngay khi có nội
+dung đầu tiên qua **`chat.startStream`** — gieo (seed) chính văn bản đầu đó dưới
+dạng một chunk `markdown_text`, nên bubble **không bao giờ rỗng** — rồi append phần
+đuôi mới qua **`chat.appendStream`** (các chunk `markdown_text`), throttle ~650 ms
+(flush đầu tiên là tức thì qua một kick). Nó chỉ append phần đuôi mới (chưa-append),
+theo thứ tự, nên vòng lặp delta SSE không bao giờ block vào một call HTTP Slack.
+`chat.startStream` nhận `channel`, `thread_ts` (bắt buộc — trả lời trong thread
+đang có, nếu không thì thread dưới tin nhắn của user), và `recipient_team_id` (bắt
+buộc với channel, lấy từ `team_id` của event).
+
+**Finalize phản hồi** — `handler_event_agent.go` gọi `DeliverSlackReply(runID,
+text)` (`internal/hermes/slack.go`) cho runID đã hoàn tất. Hàm này tiêu thụ origin,
+**xóa trạng thái assistant** (`setSlackAssistantStatus` với `""`), gỡ reaction 👀,
+rồi `finishSlackStream` làm một **flush cuối + `chat.stopStream`** (việc này cũng
+xóa chỉ báo typing và đánh dấu tin nhắn hoàn tất). Khi stream chưa từng mở (không
+có nội dung tới nó, hoặc `startStream` cứ thất bại), nó fallback về một
+`chat.postMessage` đơn (`PostSlackReply`). Các call Web API đều đi qua helper
+generic `slackAPI` trong `internal/hermes/slack_sender.go`.
+
+**Chặn TTS (cả hai nửa của lượt).** Một lượt xuất phát từ Slack không bao giờ tới
+loa thiết bị; việc chặn được áp tại **hai** điểm qua peek **không tiêu thụ**
+`IsSlackOriginRun(runID)` (để cả hai chạy trước khi `DeliverSlackReply` tiêu thụ
+origin lúc reply): stream câu đầu giữa lượt (`canStreamSentenceTTS` trong
+`server/agent/delivery/http/handler_text.go`) **và** phần còn lại cuối
+(`isChannelRun`, đặt từ `isSlackRun`, trong `handler_event_agent.go`). Phản hồi đi
+tới Slack, không tới loa.
+
+**Các method Bot API dùng.** `chat.startStream` / `chat.appendStream` /
+`chat.stopStream` (phản hồi streaming), `assistant.threads.setStatus` (trạng thái
+typing), `reactions.add` / `reactions.remove` (ack 👀), `chat.postMessage`
+(fallback + proactive).
+
+**Outbound / proactive** — một `SlackSender` (`domain.ChannelSender`, trong
+`slack_sender.go`) post tin nhắn sensing/broadcast tới `config.SlackUserID` qua
+`chat.postMessage`; nó được nối vào danh sách `channels` của hermes trong
+`internal/hermes/service.go` cùng với `TelegramSender`.
+
+**`.env`** — `SLACK_BOT_TOKEN` (đồng bộ từ `config.json` bởi hook presync) là cái
+bridge dùng cho mọi call Bot API. `SLACK_APP_TOKEN` không liên quan tới bridge HTTP
+(nó chỉ dùng cho Socket Mode native) nhưng vô hại.
+
+**Giới hạn phạm vi v1.** Bridge bỏ qua re-verify chữ ký request của Slack (path
+qua MQTT broker đã được device xác thực và proxy đã verify chữ ký rồi) và hoãn
+slash command (`slack_command`). Bản thân phản hồi chỉ là văn bản và ảnh đính kèm
+bị bỏ trên path proactive.
+
 ## 9. Voice
 
 `hal.go` nối lượt Hermes vào path voice của HAL (TTS lúc speak-end, cùng entry

@@ -292,24 +292,27 @@ func (s *Service) AddChannel(ctx context.Context, data domain.AddChannelRequest)
 	// 2. Persist creds FIRST: a config-reading runtime apply (hermes presync re-reads
 	// config.json to rebuild ~/.hermes/.env) must see the new tokens. A transient
 	// apply failure then leaves creds persisted, which is the recoverable direction —
-	// the boot presync / ChannelReconcile re-applies them.
-	s.config.Channel = channel
-	switch channel {
-	case domain.ChannelSlack:
-		s.config.SlackBotToken = data.SlackBotToken
-		s.config.SlackAppToken = data.SlackAppToken
-		s.config.SlackUserID = data.SlackUserID
-	case domain.ChannelDiscord:
-		s.config.DiscordBotToken = data.DiscordBotToken
-		s.config.DiscordGuildID = data.DiscordGuildID
-		s.config.DiscordUserID = data.DiscordUserID
-	case domain.ChannelWhatsapp:
-		s.config.WhatsappUserID = data.WhatsappUserID
-	default:
-		s.config.TelegramBotToken = data.TelegramBotToken
-		s.config.TelegramUserID = data.TelegramUserID
-	}
-	if err := s.config.Save(); err != nil {
+	// the boot presync / ChannelReconcile re-applies them. Mutate INSIDE WithLockSave so
+	// the field writes + marshal are atomic against concurrent config writers
+	// (UpdateConfig, the primary-model watcher).
+	if err := s.config.WithLockSave(func(c *config.Config) {
+		c.Channel = channel
+		switch channel {
+		case domain.ChannelSlack:
+			c.SlackBotToken = data.SlackBotToken
+			c.SlackAppToken = data.SlackAppToken
+			c.SlackUserID = data.SlackUserID
+		case domain.ChannelDiscord:
+			c.DiscordBotToken = data.DiscordBotToken
+			c.DiscordGuildID = data.DiscordGuildID
+			c.DiscordUserID = data.DiscordUserID
+		case domain.ChannelWhatsapp:
+			c.WhatsappUserID = data.WhatsappUserID
+		default:
+			c.TelegramBotToken = data.TelegramBotToken
+			c.TelegramUserID = data.TelegramUserID
+		}
+	}); err != nil {
 		slog.Error("save config failed", "component", "device", "error", err)
 	}
 

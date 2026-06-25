@@ -142,6 +142,103 @@ initiated turn answers in the right chat while still flowing through the shared
 pipeline. (Enabling telegram/slack/discord as native Hermes channels is covered in
 §10 "Channel capability & live add/refresh".)
 
+### Slack — HTTP-mode bridge (for Socket-Mode-only runtimes)
+
+`domain.SlackBridge` (`os/services/domain/slack_bridge.go`) is a **generic
+mechanism**, not hermes-specific: it is the interface for **any** runtime whose
+native Slack support is **Socket Mode only** (today: hermes is the one example)
+and which therefore has **no local HTTP Slack webhook** to receive events. For
+such a runtime, os-server itself becomes the **HTTP-mode Slack frontend** — it
+parses the event, drives a turn, and posts the reply via the Bot API. OpenClaw and
+picoclaw serve the Slack HTTP webhook themselves (OpenClaw's local
+`127.0.0.1:18789/slack/events`), so they do **not** implement `SlackBridge` and
+keep the existing local-webhook POST path untouched.
+
+**Slack app requirements.** The Slack app must have **"Agents & AI Apps"
+enabled** plus the scopes **`assistant:write`** (assistant typing status),
+**`chat:write`** (streaming + posting), and **`im:history`** (read DMs). Without
+`assistant:write` the typing status is silently skipped (best-effort) but text
+still streams via `chat:write`.
+
+**Inbound** — Slack → bff-campaign-service proxy → MQTT `slack_event` → device.
+`server/device/delivery/mqtt/slack_event_handler.go` (`forwardSlackHTTP`)
+type-asserts the active gateway to `domain.SlackBridge`. When it matches (hermes)
+it calls `HandleInboundSlack`; when it does not (openclaw, picoclaw) it keeps the
+existing local-webhook POST path.
+
+`internal/hermes/slack.go` `HandleInboundSlack` / `parseSlackInbound` decode the
+Slack Events JSON (`url_verification` challenge — defensive, the public proxy
+normally owns Slack's Request URL check; `event_callback` with `event.type`
+`message`/`app_mention`). It skips bot messages (`bot_id`), `subtype` events
+(edits/joins), and empty-`user` events (loop guard); enforces an allowed-user gate
+via `config.SlackUserID` (empty = open); strips a leading `<@Uxxx>` mention; and
+captures the `channel`, `thread_ts`, the user message `ts`, and `team_id`. For a
+real user message it then:
+
+1. records the Slack origin (channel + `thread_ts` + the user message `ts`) in the
+   `slackRunOrigin` map;
+2. sets the assistant status to **"...is typing"** via
+   **`assistant.threads.setStatus`** (`setSlackAssistantStatus`, best-effort,
+   async — needs `assistant:write`);
+3. registers a **lazy** stream session (`startSlackStreamSession`) — no Slack call
+   yet, just a per-run goroutine ready to stream;
+4. sends the turn via `SendChatMessageWithRun`;
+5. adds an 👀 (`eyes`) reaction to the user's message (`setSlackReaction`, constant
+   `slackAckReaction = "eyes"`, async).
+
+**Streaming.** The reply renders with Slack's native streaming API — the real
+"…is typing" indicator plus text that streams in progressively. During the turn,
+the agent SSE handler (`server/agent/delivery/http/handler_event_agent.go`) feeds
+the **cleaned cumulative** reply text (`cleanedSlackStreamText` in
+`handler_state.go`, which strips HW markers and defers on a partial `[HW:` marker /
+any `<say>` wrapper / `NO_REPLY` / `HEARTBEAT_OK`) to `StreamSlackDelta` on every
+delta. A dedicated per-run goroutine (`slack_stream.go`) opens the stream
+**lazily** on the first content via **`chat.startStream`** — seeded with that first
+text as a `markdown_text` chunk, so the bubble is **never empty** — then appends
+the new tail via **`chat.appendStream`** (`markdown_text` chunks), throttled to
+~650 ms (the first flush is immediate via a kick). It appends only the new
+(un-appended) tail, in order, so the SSE delta loop never blocks on a Slack HTTP
+call. `chat.startStream` takes `channel`, `thread_ts` (required — reply in the
+existing thread, else thread under the user's message), and `recipient_team_id`
+(required for channels, taken from the event's `team_id`).
+
+**Reply finalize** — `handler_event_agent.go` calls `DeliverSlackReply(runID,
+text)` (`internal/hermes/slack.go`) for the completed runID. It consumes the
+origin, **clears the assistant status** (`setSlackAssistantStatus` with `""`),
+removes the 👀 reaction, then `finishSlackStream` does a **final flush +
+`chat.stopStream`** (which also clears the typing indicator and marks the message
+complete). When the stream never opened (no content reached it, or `startStream`
+kept failing), it falls back to a single `chat.postMessage` (`PostSlackReply`). The
+Web API calls all go through the generic `slackAPI` helper in
+`internal/hermes/slack_sender.go`.
+
+**TTS suppression (both halves of the turn).** A Slack-origin run never reaches the
+device speaker; suppression is enforced at **two** points via the **non-consuming**
+`IsSlackOriginRun(runID)` peek (so both fire before `DeliverSlackReply` consumes
+the origin at reply time): the mid-turn first-sentence stream
+(`canStreamSentenceTTS` in `server/agent/delivery/http/handler_text.go`) **and**
+the final remainder (`isChannelRun`, set from `isSlackRun`, in
+`handler_event_agent.go`). The reply goes to Slack, not the speaker.
+
+**Bot API methods used.** `chat.startStream` / `chat.appendStream` /
+`chat.stopStream` (streaming reply), `assistant.threads.setStatus` (typing
+status), `reactions.add` / `reactions.remove` (👀 ack), `chat.postMessage`
+(fallback + proactive).
+
+**Outbound / proactive** — a `SlackSender` (`domain.ChannelSender`, in
+`slack_sender.go`) posts sensing/broadcast messages to `config.SlackUserID` via
+`chat.postMessage`; it is wired into the hermes `channels` list in
+`internal/hermes/service.go` alongside `TelegramSender`.
+
+**`.env`** — `SLACK_BOT_TOKEN` (synced from `config.json` by the presync hook) is
+what the bridge uses for every Bot API call. `SLACK_APP_TOKEN` is irrelevant to the
+HTTP bridge (it drives native Socket Mode) but harmless.
+
+**v1 scope limits.** The bridge skips Slack request-signature re-verification (the
+MQTT broker path is device-authenticated and the proxy already verified the
+signature) and defers slash commands (`slack_command`). The reply itself is
+text-only and image attachments are dropped on the proactive path.
+
 ## 9. Voice
 
 `hal.go` wires Hermes turns into the HAL voice path (TTS on speak-end, the same

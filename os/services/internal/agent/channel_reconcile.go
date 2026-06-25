@@ -52,11 +52,20 @@ func (r *ChannelReconcile) configuredChannels() []domain.AddChannelRequest {
 		})
 	}
 	if c.SlackBotToken != "" {
+		// Re-apply Slack in HTTP mode (the fleet convention — Socket Mode is not used;
+		// see device.Service.RefreshChannelConfig which hardcodes the same). config.json
+		// carries no slack-mode field, so without this the request would default to
+		// Socket Mode (EffectiveSlackMode) and openclaw would be mis-wired for the
+		// proxy-forwarded webhook events after a switch back to openclaw. The HTTP-mode
+		// signing secret is the device's llm_api_key, matching what the backend proxy
+		// re-signs with.
 		out = append(out, domain.AddChannelRequest{
-			Channel:       domain.ChannelSlack,
-			SlackBotToken: c.SlackBotToken,
-			SlackAppToken: c.SlackAppToken,
-			SlackUserID:   c.SlackUserID,
+			Channel:            domain.ChannelSlack,
+			SlackBotToken:      c.SlackBotToken,
+			SlackAppToken:      c.SlackAppToken,
+			SlackUserID:        c.SlackUserID,
+			SlackMode:          "http",
+			SlackSigningSecret: c.LLMAPIKey,
 		})
 	}
 	if c.DiscordBotToken != "" {
@@ -128,13 +137,19 @@ func (r *ChannelReconcile) Reconcile() {
 			"component", "agent", "channel", req.Channel, "runtime", current)
 	}
 
+	// Persist the unsupported list and advance the marker ONLY on a clean pass. On a
+	// transient apply failure the loop may have `continue`d before reaching the truly
+	// unsupported channels, so `unsupported` is incomplete — writing it then would
+	// surface a wrong list on the info uplink. Leaving both fields untouched makes the
+	// next boot re-run the full reconcile and rebuild the correct list.
+	if applyErr {
+		slog.Warn("channel reconcile: apply error — leaving marker + unsupported list for next-boot retry",
+			"component", "agent", "runtime", current)
+		return
+	}
 	if err := r.cfg.WithLockSave(func(c *config.Config) {
 		c.ChannelsUnsupported = unsupported
-		// Advance the marker only on a clean pass, so a transient apply failure is
-		// retried on the next boot instead of being silently skipped.
-		if !applyErr {
-			c.ChannelsAppliedRuntime = current
-		}
+		c.ChannelsAppliedRuntime = current
 	}); err != nil {
 		slog.Warn("channel reconcile: persist marker failed", "component", "agent", "error", err)
 	}
