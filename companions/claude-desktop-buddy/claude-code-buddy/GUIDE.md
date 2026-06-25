@@ -45,6 +45,36 @@ Behind the scenes this writes `~/.config/claude-code-buddy.json` with the device
 
 ---
 
+## macOS: allow Local Network access
+
+Recent macOS (Sonoma / Sequoia) blocks apps from reaching devices on your local
+network until you grant **Local Network** permission. The plugin's scripts run
+under `python3`, so if that permission is missing, Python can't reach the device
+— even though the device is online and reachable from `curl`.
+
+**Symptoms:**
+
+- `connect my device` says it can't find the device, even though it's powered on
+  and on the same WiFi.
+- After connecting, **nothing arrives on the device** — no Task Done, no usage,
+  no ping — because the hooks' network calls are silently blocked.
+
+**Fix:** open **System Settings → Privacy & Security → Local Network**, and turn
+it **on** for the app that runs Claude Code (Terminal, iTerm, or the Claude app).
+Then restart that app and try `connect my device` again.
+
+To confirm Python can reach the device, run (replace the IP with yours):
+
+```bash
+python3 -c "import urllib.request as u; print(u.urlopen('http://192.168.1.50:5002/health', timeout=2).read())"
+```
+
+A `{"status":"ok",...}` response means Local Network access is working. An error
+like `No route to host` while `curl` to the same address succeeds is the
+tell-tale sign the permission is still off.
+
+---
+
 ## What happens next
 
 Once connected:
