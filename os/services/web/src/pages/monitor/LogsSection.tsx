@@ -10,7 +10,7 @@ const LOG_SOURCES: { id: LogSource; label: string; color: string }[] = [
   { id: "os-server",        label: "OS",         color: "var(--lm-amber)" },
   { id: "openclaw",         label: "Agent",      color: "var(--lm-blue)" },
   { id: "openclaw-service", label: "Agent Service", color: "var(--lm-purple)" },
-  { id: "buddy",            label: "Buddy",      color: "var(--lm-cyan)" },
+  { id: "buddy",            label: "Claude Desktop Buddy", color: "var(--lm-cyan)" },
 ];
 
 const LOG_LEVELS = ["ALL", "DEBUG", "INFO", "WARN", "ERROR"] as const;
