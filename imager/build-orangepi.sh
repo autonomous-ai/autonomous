@@ -1238,22 +1238,29 @@ log "Manifest: /output/manifest-opi.json"
 # manifest contained, and what OTA metadata was live at build time.
 # Check with: cat /etc/autonomous-build.json | jq .
 METADATA_FOR_SNAPSHOT="${MNT}/tmp/metadata-baked.json"
-if [ -f "${METADATA_FOR_SNAPSHOT}" ] && [ -f "/output/manifest-opi.json" ]; then
+HW_MANIFEST_FILE="/input/${DEVICE_TYPE}/manifest-opi-dev.json"
+if [ -f "${METADATA_FOR_SNAPSHOT}" ]; then
+  HW_MANIFEST_JSON="null"
+  if [ -f "${HW_MANIFEST_FILE}" ]; then
+    HW_MANIFEST_JSON=$(cat "${HW_MANIFEST_FILE}")
+  else
+    log "WARN: no hardware manifest at ${HW_MANIFEST_FILE} — hardware_manifest will be null"
+  fi
   jq -n \
     --arg build_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg git_commit "${BUILD_GIT_SHA:-unknown}" \
-    --slurpfile hw_manifest /output/manifest-opi.json \
+    --argjson hw_manifest "${HW_MANIFEST_JSON}" \
     --slurpfile ota_metadata "${METADATA_FOR_SNAPSHOT}" \
     '{
       build_date: $build_date,
       git_commit: $git_commit,
-      hardware_manifest: $hw_manifest[0],
+      hardware_manifest: $hw_manifest,
       ota_metadata: $ota_metadata[0]
     }' > "${MNT}/etc/autonomous-build.json"
   rm -f "${METADATA_FOR_SNAPSHOT}"
   log "Build snapshot: /etc/autonomous-build.json"
 else
-  log "WARN: skipping build snapshot — manifest or metadata missing"
+  log "WARN: skipping build snapshot — metadata missing"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
