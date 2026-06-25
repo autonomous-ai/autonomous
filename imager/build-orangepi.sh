@@ -1188,6 +1188,10 @@ BOOTSTRAP_VER=\${BOOTSTRAP_VER}
 HAL_VER=\${HAL_VER}
 BUDDY_VER=\${BUDDY_VER}
 MANIFEST
+
+# Save the fetched metadata.json snapshot so the host can bake it into
+# /etc/autonomous-build.json alongside the hardware manifest + git SHA.
+cp "\${META}" /tmp/metadata-baked.json 2>/dev/null || true
 OVERLAY_STAGES
 
 # Capture OTA versions for the build manifest before they get wiped by Phase 5.
@@ -1228,6 +1232,29 @@ cat > /output/manifest-opi.json <<MANIFEST_JSON
 }
 MANIFEST_JSON
 log "Manifest: /output/manifest-opi.json"
+
+# Bake a build snapshot into the image so anyone SSH-ing in can see exactly
+# what was flashed: when, from which git commit, what the hardware team's
+# manifest contained, and what OTA metadata was live at build time.
+# Check with: cat /etc/autonomous-build.json | jq .
+METADATA_FOR_SNAPSHOT="${MNT}/tmp/metadata-baked.json"
+if [ -f "${METADATA_FOR_SNAPSHOT}" ] && [ -f "/output/manifest-opi.json" ]; then
+  jq -n \
+    --arg build_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    --arg git_commit "${BUILD_GIT_SHA:-unknown}" \
+    --slurpfile hw_manifest /output/manifest-opi.json \
+    --slurpfile ota_metadata "${METADATA_FOR_SNAPSHOT}" \
+    '{
+      build_date: $build_date,
+      git_commit: $git_commit,
+      hardware_manifest: $hw_manifest[0],
+      ota_metadata: $ota_metadata[0]
+    }' > "${MNT}/etc/autonomous-build.json"
+  rm -f "${METADATA_FOR_SNAPSHOT}"
+  log "Build snapshot: /etc/autonomous-build.json"
+else
+  log "WARN: skipping build snapshot — manifest or metadata missing"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 4 — Install resize-once.service (first-boot SD-fill expand)
