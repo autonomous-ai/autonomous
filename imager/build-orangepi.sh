@@ -1045,6 +1045,9 @@ OS_SERVER_VER=\$(jq -r '."os-server".version // empty'         "\$META")
 BOOTSTRAP_VER=\$(jq -r '.bootstrap.version // empty' "\$META")
 HAL_VER=\$(jq -r '.hal.version // empty'     "\$META")
 BUDDY_VER=\$(jq -r '."claude-desktop-buddy".version // empty' "\$META")
+# Save snapshot before removing — host reads it back after chroot exits to bake
+# into /etc/autonomous-build.json. Must happen before rm -f below.
+cp "\${META}" /tmp/metadata-baked.json 2>/dev/null || true
 rm -f "\$META"
 [ -z "\$WEB_URL" ] || [ -z "\$OS_SERVER_URL" ] || [ -z "\$BOOTSTRAP_URL" ] && {
   echo "ERROR: OTA metadata missing web.url / os-server.url / bootstrap.url"; exit 1
@@ -1189,9 +1192,6 @@ HAL_VER=\${HAL_VER}
 BUDDY_VER=\${BUDDY_VER}
 MANIFEST
 
-# Save the fetched metadata.json snapshot so the host can bake it into
-# /etc/autonomous-build.json alongside the hardware manifest + git SHA.
-cp "\${META}" /tmp/metadata-baked.json 2>/dev/null || true
 OVERLAY_STAGES
 
 # Capture OTA versions for the build manifest before they get wiped by Phase 5.
