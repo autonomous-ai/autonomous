@@ -437,6 +437,15 @@ REALTIME_ZOMBIE_RECONNECT_AFTER: int = int(
 REALTIME_SESSION_IDLE_RESET_S: float = float(
     os.environ.get("HAL_REALTIME_SESSION_IDLE_RESET_S", "240")
 )
+# Cost control: recycle (rebuild) the realtime session after this many turns even
+# in an actively-ongoing conversation. Each turn's reply + audio accrues into the
+# session context the provider re-bills as input every turn, so context grows
+# unbounded in a long chat; recycling caps that growth back to the floor
+# (instructions + summary). Continuity survives via the reloaded summary.md. 0
+# disables. See RealtimeOrchestrator.stream_output.
+REALTIME_SESSION_MAX_TURNS: int = int(
+    os.environ.get("HAL_REALTIME_SESSION_MAX_TURNS", "12")
+)
 # A captured session shorter than this AND with no STT transcript is treated as a
 # VAD false-trigger (a noise blip that only grabbed the pre-roll, no sustained
 # speech) and is NOT committed to the realtime model. Committing such turns wastes
@@ -445,6 +454,26 @@ REALTIME_SESSION_IDLE_RESET_S: float = float(
 # runs longer than this, so it still commits.
 REALTIME_MIN_COMMIT_DURATION_S: float = float(
     os.environ.get("HAL_REALTIME_MIN_COMMIT_DURATION_S", "0.8")
+)
+# Noise guard for empty-STT turns: the duration floor above only catches SHORT
+# noise blips — sustained background noise (fan, hum) runs longer than the floor,
+# fools the entry VAD, yields no STT transcript, yet still commits to the realtime
+# model, which then answers the noise (spurious self-talk + wasted tokens). When
+# enabled, an empty-STT turn is re-checked with Silero VAD over the FULL captured
+# buffer; if it isn't speech, the turn is dropped regardless of duration. A genuine
+# audio-only turn (real speech STT missed) passes Silero, so it still commits.
+# Fail-open: Silero unavailable/erroring → behaves as before (commits).
+REALTIME_REQUIRE_SPEECH_ON_EMPTY_STT: bool = os.environ.get(
+    "HAL_REALTIME_REQUIRE_SPEECH_ON_EMPTY_STT", "true"
+).lower() in ("1", "true", "yes")
+# Voiced-ratio floor for the empty-STT noise guard: the fraction of 32ms Silero
+# chunks that must be voiced for the buffer to count as real speech (and commit).
+# Peak confidence alone is too lenient — one transient chunk crossing the Silero
+# threshold would pass a noisy turn — so we require sustained voicing. A real
+# speaking turn is voiced across most of its length; sustained noise spikes only
+# sparsely. Provisional 0.30; tune from the `noise-guard metrics` logs.
+REALTIME_NOISE_SPEECH_RATIO: float = float(
+    os.environ.get("HAL_REALTIME_NOISE_SPEECH_RATIO", "0.30")
 )
 # Turn detection / VAD: "server_vad" | "semantic_vad" | "off"
 # For Gemini: "off" disables automatic activity detection; any other value enables it.
