@@ -150,12 +150,16 @@ adapter **write** (bundle → layout), trong
 write[to]` (`RunMigration(from, to, opts)`). Nên thêm runtime = **đúng 1 file
 adapter**, tự động chạy với mọi runtime sẵn có, cả 2 chiều — số file **tuyến tính
 (2/runtime)**, không phải N×(N-1) như per-pair. Đăng ký adapter vào map `adapters`
-trong `migrator.go`; không cần `Direction` enum mới. Runtime không có adapter
-(persona external/out-of-band, vd PicoClaw) bị `CanMigrate` bỏ qua — bộ reconcile
-lúc boot không migrate tới/từ nó. Runtime kiểu này vẫn có thể tự migrate
-persona/memory theo cách riêng: PicoClaw làm việc đó trong hook presync qua
-`picoclaw migrate --workspace-only --force` (xem `picoclaw_vi.md` §1.1), nằm ngoài đường đi của
-reconciler Go.
+trong `migrator.go`; không cần `Direction` enum mới. openclaw, hermes, và picoclaw
+đều có adapter, nên mọi cặp migrate được cả 2 chiều. Runtime không có adapter bị
+`CanMigrate` bỏ qua — bộ reconcile lúc boot không migrate tới/từ nó.
+
+Adapter của PicoClaw (`runtime_picoclaw.go`) mirror layout openclaw nhưng đọc/ghi
+`memory/MEMORY.md` (picoclaw để MEMORY.md trong `memory/`, không ở gốc workspace).
+Lưu ý skills chiều VÀO vẫn do presync `picoclaw migrate --workspace-only`
+(`picoclaw_vi.md` §1.1) lo — reconciler Go chỉ mang persona/memory, không mang skills
+— nên khi switch VÀO picoclaw, hai bên trùng phần persona (cùng nguồn, vô hại) còn
+presync là đường duy nhất mang skills.
 
 > **Template copy-là-chạy:** `internal/agent/migrate_persona/runtime_example.go` là
 > skeleton build-ignored, comment đầy đủ — copy sang `runtime_<name>.go`, xóa dòng

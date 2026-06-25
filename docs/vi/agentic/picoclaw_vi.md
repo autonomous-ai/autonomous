@@ -22,16 +22,16 @@ não nào đang chạy.
 > installer + hook pre-start phía thiết bị (`internal/picoclaw/install.sh` +
 > `presync.sh`, được embed và đăng ký qua `install.go` → `runtimereg`), nên một lần
 > switch `picoclaw.setup` sẽ cài, cấu hình và khởi động nó giống hermes (§1.1).
-> Migrate persona/memory/skill từ OpenClaw do `picoclaw migrate --workspace-only --force` **bên trong
-> hook presync** đảm nhiệm — PicoClaw **không** có adapter Go `migrate_persona`, nên
-> bộ reconcile lúc boot (`internal/agent/persona_migration.go`) cố tình bỏ qua nó.
+> Migrate persona/memory **2 chiều** qua reconciler Go — picoclaw có adapter
+> `migrate_persona` (`runtime_picoclaw.go`), nên switch tới/từ nó mang
+> SOUL/IDENTITY/MEMORY/USER/KNOWLEDGE cả 2 chiều; **skills** chiều VÀO do `picoclaw
+> migrate --workspace-only --force` trong hook presync lo (§1.1).
 > Bản thân gateway Go vẫn **chỉ-client**: hầu hết method lifecycle in-process
 > (`SetupAgent`, watcher identity …) vẫn no-op (§8) vì provisioning xảy ra ngoài tiến
 > trình trong install.sh/presync. Ngoại lệ là `EnsureOnboarding` (`onboarding.go`, giữ
 > khối OS-managed trong SOUL/AGENTS/HEARTBEAT cập nhật) và `StartSkillWatcher`
 > (`skill_watcher.go`, auto-update skill từ CDN) — đều là thật (§1.1).
-> Các gap còn lại (hook emotion-acknowledge, reverse persona
-> migration, pin queue/steer) được theo dõi theo checklist
+> Các gap còn lại (hook emotion-acknowledge, pin queue/steer) được theo dõi theo checklist
 > [`adding-agent-runtime_vi.md`](adding-agent-runtime_vi.md) — xem đó trước khi nâng
 > PicoClaw lên parity đầy đủ.
 

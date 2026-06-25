@@ -21,17 +21,18 @@ which brain is active.
 > **Status: install parity; client-only gateway.** PicoClaw now ships a device-side
 > installer + pre-start hook (`internal/picoclaw/install.sh` + `presync.sh`, embedded
 > and registered via `install.go` → `runtimereg`), so a `picoclaw.setup` switch
-> installs, provisions, and starts it like hermes (§1.1). Persona/memory/skill
-> migration from OpenClaw is done by `picoclaw migrate --workspace-only --force` **inside the presync
-> hook** — PicoClaw has **no** Go `migrate_persona` adapter, so it is intentionally
-> skipped by the boot-time reconciler (`internal/agent/persona_migration.go`). The Go
+> installs, provisions, and starts it like hermes (§1.1). Persona/memory migration is
+> two-way through the Go reconciler — picoclaw has a `migrate_persona` adapter
+> (`runtime_picoclaw.go`), so switching to/from it carries SOUL/IDENTITY/MEMORY/USER/
+> KNOWLEDGE both directions; **skills** import on the way IN is done by `picoclaw
+> migrate --workspace-only --force` in the presync hook (§1.1). The Go
 > gateway itself stays **client-only**: most in-process lifecycle methods
 > (`SetupAgent`, identity watcher …) remain no-ops (§8) because provisioning happens
 > out-of-process in install.sh/presync. The exceptions are `EnsureOnboarding`
 > (`onboarding.go`, keeps the OS-managed blocks in SOUL/AGENTS/HEARTBEAT current) and
 > `StartSkillWatcher` (`skill_watcher.go`, CDN skill auto-update) — both real (§1.1).
-> Remaining gaps (an emotion-acknowledge hook, reverse persona migration, queue/steer
-> pinning) are tracked against the
+> Remaining gaps (an emotion-acknowledge hook, queue/steer pinning) are tracked
+> against the
 > [`adding-agent-runtime.md`](adding-agent-runtime.md) checklist — consult it before
 > raising PicoClaw to full parity.
 

@@ -153,12 +153,17 @@ bundle) and ONE **write** adapter (bundle → its layout), in
 **one adapter file** that interoperates with every existing runtime in both
 directions — file count is **linear (2 per runtime)**, not the quadratic N×(N-1)
 a per-pair migrator needs. Register the adapter in the `adapters` map in
-`migrator.go`; nothing else changes (no new `Direction` enum). A runtime with no
-registered adapter (external/out-of-band persona, e.g. PicoClaw) is simply
-skipped by `CanMigrate` — the boot-time reconciler doesn't migrate to/from it.
-Such a runtime can still migrate persona/memory in its own way: PicoClaw does it
-in its presync hook via `picoclaw migrate --workspace-only --force` (see `picoclaw.md` §1.1), out of
-the Go reconciler's path.
+`migrator.go`; nothing else changes (no new `Direction` enum). openclaw, hermes, and
+picoclaw all have adapters, so any pair migrates both ways. A runtime with no
+registered adapter is skipped by `CanMigrate` — the boot-time reconciler doesn't
+migrate to/from it.
+
+PicoClaw's adapter (`runtime_picoclaw.go`) mirrors openclaw's layout but reads/writes
+`memory/MEMORY.md` (picoclaw keeps it under `memory/`, not at the workspace root).
+Note its INBOUND skills still come from presync's `picoclaw migrate --workspace-only`
+(`picoclaw.md` §1.1) — the Go reconciler only carries persona/memory, not skills — so
+on a switch INTO picoclaw the two overlap on persona (same source, harmless) while
+presync remains the only skills path.
 
 > **Copy-me template:** `internal/agent/migrate_persona/runtime_example.go` is a
 > build-ignored, fully-annotated skeleton — copy it to `runtime_<name>.go`, delete
