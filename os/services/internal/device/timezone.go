@@ -180,6 +180,17 @@ func (s *Service) GetTimezone() (current string, zones []string) {
 	return current, listSystemTimezones()
 }
 
+// CurrentTimezone returns just the device's active IANA zone (live from the
+// system, config.Timezone as fallback) — without enumerating the selectable
+// list. Cheap enough to call on every MQTT info uplink, unlike GetTimezone which
+// shells out to `timedatectl list-timezones`.
+func (s *Service) CurrentTimezone() string {
+	if tz := currentSystemTimezone(); tz != "" {
+		return tz
+	}
+	return s.config.Timezone
+}
+
 // SetTimezone validates, applies (localtime + /etc/timezone + best-effort
 // timedatectl), and persists the chosen IANA zone to config.json. HAL's clock
 // helpers read /etc/timezone fresh per call, so the change takes effect without a
