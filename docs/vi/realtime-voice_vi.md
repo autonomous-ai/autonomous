@@ -201,6 +201,14 @@ Model ở Go tại `os/services/server/config/realtime.go`; đọc ở HAL tại
 `gemini` / `openai`, `provider` chọn cái đang active (`none` hoặc vắng → tắt
 realtime). `api_key` / `base_url` rỗng → fallback `llm_api_key` / `llm_base_url`.
 
+> **Để `base_url` trống trừ khi có endpoint riêng (không qua proxy).** Khi trống,
+> HAL tự suy ra `<llm_base_url>/ws/gemini` (hoặc `/ws/openai`) — đúng suffix WS mà
+> proxy `campaign-api` route. Nếu `base_url` bị set bằng `llm_base_url` trần (thiếu
+> `/ws/...`), giá trị đó được đưa thẳng vào SDK provider và **404 ngay ở Live
+> handshake**. Vì vậy ô "Base URL" trong web Settings chỉ hiển thị *override tường
+> minh* (`RealtimeBaseURLOverride`, không phải giá trị đã resolve), để "để trống là
+> tự suy ra" luôn trống và mỗi lần Save không vô tình ghi đè URL trần.
+
 ```json
 "realtime": {
   "enabled": true,
