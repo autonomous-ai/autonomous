@@ -85,7 +85,7 @@ async def object_detection_ws(websocket: WebSocket, detector_name: str):
                 raise
             except Exception as e:
                 logger.exception("Error processing object detection WS message")
-                await websocket.send_json({"error": str(e)})
+                await websocket.send_json({"error": "Processing failed"})
 
     except WebSocketDisconnect:
         logger.info("Object detection WebSocket disconnected (%s)", detector_name)
@@ -110,7 +110,9 @@ async def object_detect(detector_name: str, req: ObjectDetectRequest):
         return ObjectDetectResponse.from_object_detection(result)
     except HTTPException:
         raise
-    except Exception as exc:
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
         logger.exception("Error processing object detection HTTP message")
         raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -137,7 +139,9 @@ async def object_detect_compat(detector_name: str, req: ObjectDetectRequest):
         ]
     except HTTPException:
         raise
-    except Exception as exc:
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
         logger.exception("Error processing object detection HTTP message")
         raise HTTPException(status_code=500, detail="Internal server error")
 

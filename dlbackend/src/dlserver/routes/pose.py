@@ -78,7 +78,7 @@ async def pose_estimation_ws(websocket: WebSocket):
                 raise
             except Exception as e:
                 logger.exception("Error processing pose WS message")
-                await websocket.send_json({"error": str(e)})
+                await websocket.send_json({"error": "Processing failed"})
 
     except WebSocketDisconnect:
         logger.info("Pose estimation WebSocket disconnected")

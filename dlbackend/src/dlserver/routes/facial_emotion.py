@@ -82,7 +82,7 @@ async def emotion_analysis_ws(websocket: WebSocket):
                 raise
             except Exception as e:
                 logger.exception("Error processing facial emotion WS message")
-                await websocket.send_json({"error": str(e)})
+                await websocket.send_json({"error": "Processing failed"})
 
     except WebSocketDisconnect:
         logger.info("Facial emotion analysis WebSocket disconnected")
@@ -130,6 +130,8 @@ async def emotion_recognize(req: EmotionRecognizeRequest):
         )
     except HTTPException:
         raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception:
         logger.exception("Error processing facial emotion HTTP message")
         raise HTTPException(status_code=500, detail="Internal server error")

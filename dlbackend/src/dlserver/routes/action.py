@@ -78,7 +78,7 @@ async def action_analysis_ws(websocket: WebSocket):
                 raise
             except Exception as e:
                 logger.exception("Error processing action WS message")
-                await websocket.send_json({"error": str(e)})
+                await websocket.send_json({"error": "Processing failed"})
 
     except WebSocketDisconnect:
         logger.info("Action analysis WebSocket disconnected")

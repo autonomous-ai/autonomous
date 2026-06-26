@@ -35,8 +35,10 @@ async def embed_audio(req: EmbedAudioRequest):
         audios: list[Audio] = []
         for item in req.audios_b64:
             audios.append(decode_b64_wav(item))
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid audio: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid audio format")
 
     if not audios:
         raise HTTPException(status_code=400, detail="No audio extracted from inputs")

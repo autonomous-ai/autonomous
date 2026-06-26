@@ -133,7 +133,7 @@ class InputLimitSetting(BaseModel):
     max_image_dim: int = 4096  # px per side
     max_audio_bytes: int = 20 * 1024 * 1024  # 20 MB decoded
     max_audio_duration_s: float = 60.0  # seconds
-    max_audio_batch: int = 10  # max items in a single audio batch request
+    max_audio_batch: int = 16  # max items in a single audio batch request
 
 
 class LBSetting(BaseModel):

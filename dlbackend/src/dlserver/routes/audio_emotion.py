@@ -28,8 +28,10 @@ async def recognize_emotion(req: RecognizeEmotionRequest):
 
     try:
         audio = decode_b64_wav(req.audio_b64)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid audio: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid audio format")
 
     try:
         detection = await model.predict_audio(audio)

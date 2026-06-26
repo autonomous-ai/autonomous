@@ -20,7 +20,10 @@ def decode_b64_wav(b64: str) -> Audio:
     max_bytes = settings.input_limits.max_audio_bytes
     if len(raw) > max_bytes:
         raise ValueError(f"Audio exceeds {max_bytes // (1024 * 1024)} MB limit")
-    waveform, sample_rate = sf.read(io.BytesIO(raw), dtype="float32")
+    try:
+        waveform, sample_rate = sf.read(io.BytesIO(raw), dtype="float32")
+    except Exception:
+        raise ValueError("Unsupported or corrupt audio file")
     arr = np.asarray(waveform, dtype=np.float32)
     if arr.ndim == 2:
         arr = arr.mean(axis=1)
