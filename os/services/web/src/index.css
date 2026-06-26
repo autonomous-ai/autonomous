@@ -120,6 +120,7 @@
   --lm-amber-glow:  rgba(245,158,11,0.35);
   --lm-teal:        #2DD4BF;
   --lm-teal-dim:    rgba(45,212,191,0.12);
+  --lm-teal-glow:   rgba(45,212,191,0.35);
   --lm-green:       #34D399;
   --lm-green-dim:   rgba(52,211,153,0.12);
   --lm-green-glow:  rgba(52,211,153,0.35);
@@ -162,6 +163,7 @@
   --lm-amber-glow:  rgba(217,119,6,0.25);
   --lm-teal:        #0D9488;
   --lm-teal-dim:    rgba(13,148,136,0.10);
+  --lm-teal-glow:   rgba(13,148,136,0.28);
   --lm-green:       #059669;
   --lm-green-dim:   rgba(5,150,105,0.10);
   --lm-green-glow:  rgba(5,150,105,0.28);
@@ -195,6 +197,7 @@
     --lm-amber-glow:  rgba(217,119,6,0.25);
     --lm-teal:        #0D9488;
     --lm-teal-dim:    rgba(13,148,136,0.10);
+    --lm-teal-glow:   rgba(13,148,136,0.28);
     --lm-green:       #059669;
     --lm-green-dim:   rgba(5,150,105,0.10);
     --lm-green-glow:  rgba(5,150,105,0.28);
@@ -1270,9 +1273,71 @@
   50%      { box-shadow: 0 0 8px 1px color-mix(in srgb, var(--lm-red) 40%, transparent); }
 }
 
+/* ── Cooldown progress fill — live shimmer ────────────────────────────────────
+   A light sweep travels across an active cooldown bar so a counting-down timer
+   reads as "live" rather than a static colored block. The base fill color is set
+   inline (per-kind), this only layers a translucent moving highlight on top. */
+.lm-root .lm-cooldown-fill {
+  position: relative;
+  overflow: hidden;
+}
+.lm-root .lm-cooldown-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: lm-cooldown-sweep 1.6s ease-in-out infinite;
+}
+@keyframes lm-cooldown-sweep {
+  0%   { background-position: 180% 0; }
+  100% { background-position: -80% 0; }
+}
+
+/* ── Spinner — refresh-in-flight ──────────────────────────────────────────────
+   Spins an icon button's glyph while a fetch is running, so the refresh control
+   reads as "working" instead of dead. Applied to the ↻ button when loading. */
+.lm-root .lm-spin {
+  animation: lm-spin 0.8s linear infinite;
+}
+@keyframes lm-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Card entrance — staggered fade-in ────────────────────────────────────────
+   Person cards rise + fade in instead of snapping in all at once. The per-card
+   delay is set inline via --lm-stagger so each lands a beat after the previous,
+   reading as "dealt out" rather than a hard pop. */
+.lm-root .lm-card-in {
+  animation: lm-card-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--lm-stagger, 0ms);
+}
+@keyframes lm-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scroll fade — bottom edge hint ───────────────────────────────────────────
+   A soft fade at the bottom of a scroll region (the Unknown Voices/Faces/
+   Cooldowns lists) signals "more below" without a visible scrollbar. The mask
+   only bites when content overflows; a short list shows no fade. */
+.lm-root .lm-scroll-fade {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lm-root .lm-skel { animation: none; }
   .lm-root .lm-hw-down { animation: none; }
+  .lm-root .lm-cooldown-fill::after { animation: none; }
+  .lm-root .lm-spin { animation: none; }
+  .lm-root .lm-card-in { animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
