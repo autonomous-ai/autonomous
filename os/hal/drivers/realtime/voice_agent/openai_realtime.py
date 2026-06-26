@@ -389,7 +389,13 @@ class OpenAIRealtimeAgent(VoiceAgentBase):
     def _recv_loop(self) -> None:
         while not self._stop_event.is_set():
             if not self._connected.is_set():
-                self._connected.wait(timeout=1)
+                # Proactively reconnect (throttled) so the session self-heals while
+                # disconnected even with no audio flowing — without this, once
+                # voice_service stops feeding audio (available=False after a dropped
+                # session) nothing would ever trigger a reconnect. Mirrors gemini_live.
+                self._ensure_connected()
+                if not self._connected.is_set():
+                    self._connected.wait(timeout=1)
                 continue
 
             for attempt in range(self._max_retries):
