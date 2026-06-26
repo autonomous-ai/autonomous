@@ -108,7 +108,15 @@ class GeminiLiveAgent(VoiceAgentBase):
                         voice_name=self._config.voice.value,
                     )
                 ),
-                language_code=lang,
+                # Native-audio models (e.g. gemini-2.5-flash-native-audio) REJECT an
+                # explicit language_code (server closes setup with WS 1000) — they
+                # auto-detect the language. Only half-cascade / 3.x Live accept it.
+                # The system prompt already enforces the spoken language either way.
+                # Verified via on-device bisect: removing speech_config.language_code
+                # is the only change that lets 2.5 connect.
+                language_code=(
+                    None if "native-audio" in self._config.model else lang
+                ),
             ),
             system_instruction=self._config.instructions,
             input_audio_transcription=None,
@@ -279,13 +287,15 @@ class GeminiLiveAgent(VoiceAgentBase):
                 # turn_complete, and the server_content branch returns on
                 # turn_complete — so a check placed after it never runs.
                 um = message.usage_metadata
-                # gemini-3.1-flash-live-preview rates, USD per 1M tokens, by
-                # (direction, modality). Verified vs ai.google.dev/gemini-api/docs/
-                # pricing (2026-06): text-in $0.75, audio-in $3, audio-out $12. Text
-                # bills ~4-16x cheaper than audio, so per-modality is what matters.
+                # Rates USD per 1M tokens by (direction, modality), model-aware
+                # (ai.google.dev/gemini-api/docs/pricing, 2026-06). Audio is identical
+                # across models; text-in/out is where 2.5 native-audio is cheaper
+                # ($0.50/$2.00 vs 3.1 $0.75/$4.50). Without this the log would bill 2.5
+                # at 3.1 rates and over-state its cost ~50% on text.
+                _is_25 = "2.5" in self._config.model or "native-audio" in self._config.model
                 rates = {
-                    ("in", "TEXT"): 0.75, ("in", "AUDIO"): 3.0,
-                    ("out", "TEXT"): 0.75, ("out", "AUDIO"): 12.0,
+                    ("in", "TEXT"): 0.50 if _is_25 else 0.75, ("in", "AUDIO"): 3.0,
+                    ("out", "TEXT"): 2.0 if _is_25 else 4.5, ("out", "AUDIO"): 12.0,
                 }
                 parts, cost, attributed = [], 0.0, {"in": 0, "out": 0}
                 for direction, details in (
