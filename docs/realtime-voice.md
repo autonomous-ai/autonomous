@@ -209,6 +209,14 @@ Modelled in Go at `os/services/server/config/realtime.go`; read in HAL at
 (`none` or absent → realtime off). Empty `api_key` / `base_url` fall back to
 `llm_api_key` / `llm_base_url`.
 
+> **Leave `base_url` blank unless you have a non-proxy endpoint.** When empty, HAL
+> derives `<llm_base_url>/ws/gemini` (or `/ws/openai`) — the WS suffix the
+> `campaign-api` proxy routes on. A `base_url` set to the bare `llm_base_url`
+> (no `/ws/...`) is handed verbatim to the provider SDK and **404s at the Live
+> handshake**. The web Settings "Base URL" field is therefore display-bound to the
+> *explicit override only* (`RealtimeBaseURLOverride`, not the resolved value), so
+> "leave blank to derive" stays blank and a save never re-persists the bare URL.
+
 ```json
 "realtime": {
   "enabled": true,
