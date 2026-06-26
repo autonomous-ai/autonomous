@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"go.autonomous.ai/os/server/config"
 )
@@ -202,6 +203,18 @@ func (s *Service) SetTimezone(tz string) error {
 	}
 	if err := applySystemTimezone(tz); err != nil {
 		return fmt.Errorf("apply timezone: %w", err)
+	}
+	// Re-point THIS process's cached local zone. Go reads /etc/localtime once at
+	// startup and caches time.Local for the process lifetime, so os-server's own
+	// local-date logic (the daily JSONL buckets in flow/history/analytics and
+	// lib/posture|music|mood|wellbeing, all keyed by time.Now().Format("2006-01-02"))
+	// would keep using the OLD zone until restart. Updating time.Local here makes
+	// the change live in-process, so changing the timezone needs NO os-server
+	// restart — matching HAL, which reads /etc/timezone fresh per call.
+	if loc, err := time.LoadLocation(tz); err == nil {
+		time.Local = loc
+	} else {
+		slog.Warn("load location for in-process time.Local failed", "component", "device", "tz", tz, "error", err)
 	}
 	if err := s.config.WithLockSave(func(c *config.Config) {
 		c.Timezone = tz
