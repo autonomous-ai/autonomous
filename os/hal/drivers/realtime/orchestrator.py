@@ -163,6 +163,13 @@ class RealtimeOrchestrator:
         self._idle_reset_pending: bool = False
         self._turns_since_recycle: int = 0  # turn-cap recycle counter (cost)
         self._rebuild_lock: threading.Lock = threading.Lock()  # guards _force_rebuild
+        # Idle keepalive (see _keepalive_loop): monotonic time the live session was
+        # last (re)connected, and whether a turn is currently in flight. Together
+        # with _last_turn_monotonic these let the watchdog refresh a session a few
+        # seconds before the provider's server-side idle-close would race a turn.
+        self._session_fresh_at: float = 0.0  # 0 = never connected
+        self._turn_active: bool = False  # a turn is committing / streaming output
+        self._keepalive_stop: threading.Event = threading.Event()
         summarizer: RealtimeSummarizer | None = None
         if config.REALTIME_SUMMARIZER_ENABLED:
             try:
@@ -192,10 +199,19 @@ class RealtimeOrchestrator:
         # blocks ~15s in receive() before falling back. Gating on the live
         # connection makes those turns skip realtime and go straight to the main
         # agent immediately (and auto-resume once the limit clears / reconnect wins).
+        #
+        # Also report unavailable WHILE a session rebuild is in flight. _force_rebuild
+        # keeps the old agent serving until the new one connects (~1s) then swaps and
+        # disconnects the old — so a turn that dispatches during that window commits
+        # its audio to the about-to-be-discarded old session and dies mid-turn with
+        # WS 1000 (the "async rebuild raced the next turn" failure). Gating on the
+        # rebuild lock routes such turns cleanly to the main agent for that ~1s
+        # instead, eliminating that whole class of mid-turn closes.
         return (
             self._started.is_set()
             and self._agent is not None
             and self._agent.available
+            and not self._rebuild_lock.locked()
         )
 
     @property
@@ -257,6 +273,7 @@ class RealtimeOrchestrator:
                     return
                 new.connect()
                 self._agent = new
+                self._session_fresh_at = time.monotonic()  # reset keepalive timer
                 logger.info("[realtime] Zombie recovery: fresh session connected")
             except Exception:
                 logger.exception("[realtime] Zombie rebuild failed")
@@ -295,6 +312,7 @@ class RealtimeOrchestrator:
 
         try:
             self._agent.connect()
+            self._session_fresh_at = time.monotonic()  # arm keepalive timer
             logger.info(
                 "[realtime] Realtime orchestrator started (provider=%s)", provider
             )
@@ -303,6 +321,14 @@ class RealtimeOrchestrator:
                 "[realtime] Failed to connect realtime agent — will retry on next audio"
             )
         self._started.set()
+
+        # Idle keepalive: refresh the session before the provider idle-closes it
+        # under a conversational pause (see _keepalive_loop). Started after
+        # _started so the loop's guards see a live orchestrator.
+        if config.REALTIME_KEEPALIVE_REFRESH_S > 0:
+            threading.Thread(
+                target=self._keepalive_loop, daemon=True, name="rt-keepalive"
+            ).start()
 
         # Catch up on any unsummarized memory from a previous (possibly crashed)
         # session in the background. This is an LLM call and is NOT needed to serve
@@ -326,6 +352,7 @@ class RealtimeOrchestrator:
 
     def stop(self) -> None:
         """Disconnect the agent and summarize unsummarized memory."""
+        self._keepalive_stop.set()  # stop the idle keepalive watchdog
         # Summarize remaining memory before shutdown
         try:
             self._context.summarize_device_memory()
@@ -350,8 +377,64 @@ class RealtimeOrchestrator:
     def commit_audio(self) -> None:
         """Queue commit signal (non-blocking)."""
         self._mark_turn_start()
+        # Mark the turn in flight so the idle keepalive watchdog never refreshes the
+        # session mid-turn (cleared in stream_output's finally).
+        self._turn_active = True
         if self._agent is not None:
             self._agent.commit_audio()
+
+    def _keepalive_loop(self) -> None:
+        """Refresh the session BEFORE the provider idle-closes it under a pause.
+
+        Gemini Live (via the proxy) silently idle-closes a session after ~60-70s of
+        no real speech. A session the server has decided to close still reports
+        connected locally, so the next turn dispatches to it (available=True),
+        commits its audio, and the server then sends WS 1000 mid-turn → the turn
+        fails over to the main agent. We can't keep the SAME socket alive past idle
+        (ping/silence don't reset the server timer — device-verified), so instead we
+        stay AHEAD of the close: while a conversation is warm, swap in a fresh
+        session every REFRESH_S (< the idle-close window) so a follow-up turn always
+        lands on a young session.
+
+        Cost-bounded two ways: (1) a pure-idle refresh sends NO audio and runs NO
+        model turn, so it bills nothing (just a WS reconnect); a fresh session also
+        carries only the floor (instructions + summary), never accumulated history,
+        so if anything it LOWERS the next turn's cost. (2) It only runs while a real
+        turn happened within MAX_IDLE_S — once the conversation is clearly over the
+        session is left to idle-close and the next turn reconnects fresh (one-time),
+        so a device nobody is talking to never churns the proxy.
+        """
+        refresh_s: float = config.REALTIME_KEEPALIVE_REFRESH_S
+        max_idle_s: float = config.REALTIME_KEEPALIVE_MAX_IDLE_S
+        poll: float = min(5.0, refresh_s)
+        while not self._keepalive_stop.wait(poll):
+            if not self._started.is_set() or self._agent is None:
+                continue
+            # Never refresh under an active turn or while another rebuild is already
+            # swapping the agent (the lock is the real serialization point).
+            if self._turn_active or self._rebuild_lock.locked():
+                continue
+            now: float = time.monotonic()
+            # Both a real turn AND a refresh/connect reset the server idle timer, so
+            # measure staleness from whichever happened last.
+            last_activity: float = max(self._last_turn_monotonic, self._session_fresh_at)
+            if last_activity <= 0.0:
+                continue  # never connected and no turn yet — nothing to keep warm
+            # Conversation over → stop keeping warm; let it idle-close naturally. Keyed
+            # on the last REAL turn, not the last refresh, so refreshes can't extend
+            # the warm window indefinitely.
+            if self._last_turn_monotonic <= 0.0 or now - self._last_turn_monotonic >= max_idle_s:
+                continue
+            if now - last_activity >= refresh_s:
+                logger.info(
+                    "[realtime] keepalive: refreshing session (%.0fs since activity) "
+                    "to stay ahead of the ~idle-close window",
+                    now - last_activity,
+                )
+                # Stamp first so a slow rebuild can't trigger a second refresh; the
+                # rebuild restamps _session_fresh_at on success.
+                self._session_fresh_at = now
+                self._force_rebuild()
 
     def _mark_turn_start(self) -> None:
         """Detect a long idle gap before this turn and arm a post-turn session
@@ -398,57 +481,64 @@ class RealtimeOrchestrator:
             return
 
         produced = False  # did this turn yield any real output (vs stay silent)?
-        for output in self._agent.receive(stop_on_done=True):
-            if (
-                isinstance(output, FunctionCallOutput)
-                and output.name == EMOTION_TOOL_NAME
-            ):
-                self._handle_emotion_call(output)
-                continue
-            if (
-                isinstance(output, FunctionCallOutput)
-                and output.name == DELEGATE_TOOL_NAME
-            ):
-                delegate_msg: str = ""
-                try:
-                    args: dict[str, Any] = (
-                        json.loads(output.arguments) if output.arguments else {}
-                    )
-                    delegate_msg = args.get("message", "").strip()
-                except (ValueError, TypeError):
-                    pass
+        try:
+            for output in self._agent.receive(stop_on_done=True):
+                if (
+                    isinstance(output, FunctionCallOutput)
+                    and output.name == EMOTION_TOOL_NAME
+                ):
+                    self._handle_emotion_call(output)
+                    continue
+                if (
+                    isinstance(output, FunctionCallOutput)
+                    and output.name == DELEGATE_TOOL_NAME
+                ):
+                    delegate_msg: str = ""
+                    try:
+                        args: dict[str, Any] = (
+                            json.loads(output.arguments) if output.arguments else {}
+                        )
+                        delegate_msg = args.get("message", "").strip()
+                    except (ValueError, TypeError):
+                        pass
 
-                if not delegate_msg:
-                    logger.warning(
-                        "[realtime] Model called delegate_to_main with empty message — ignoring"
+                    if not delegate_msg:
+                        logger.warning(
+                            "[realtime] Model called delegate_to_main with empty message — ignoring"
+                        )
+                        self._agent.send(
+                            [
+                                FunctionCallResultInput(
+                                    call_id=output.call_id,
+                                    output='{"error": "message must not be empty"}',
+                                )
+                            ]
+                        )
+                        continue
+
+                    logger.info(
+                        "[realtime] Model delegated to main flow (message=%r)",
+                        delegate_msg[:100],
                     )
                     self._agent.send(
                         [
                             FunctionCallResultInput(
                                 call_id=output.call_id,
-                                output='{"error": "message must not be empty"}',
+                                output='{"result": "delegated"}',
                             )
                         ]
                     )
+                    produced = True
+                    yield DelegateSignal(message=delegate_msg)
                     continue
-
-                logger.info(
-                    "[realtime] Model delegated to main flow (message=%r)",
-                    delegate_msg[:100],
-                )
-                self._agent.send(
-                    [
-                        FunctionCallResultInput(
-                            call_id=output.call_id,
-                            output='{"result": "delegated"}',
-                        )
-                    ]
-                )
                 produced = True
-                yield DelegateSignal(message=delegate_msg)
-                continue
-            produced = True
-            yield output
+                yield output
+        finally:
+            # The turn is over (normal completion, delegate, or an exception
+            # propagating to the caller) — let the idle keepalive watchdog refresh
+            # the session again. Stamp end-of-turn so the next idle measurement runs
+            # from now even if the body raised before reaching the recycle block.
+            self._turn_active = False
 
         # Track consecutive silent turns for the zombie guard: a turn that
         # committed audio but yielded nothing. A long-lived Gemini session can
@@ -476,7 +566,9 @@ class RealtimeOrchestrator:
         # turn churned the session and the async rebuild raced the next turn (common
         # when the user asks consecutive search questions) → frequent mid-turn WS 1000
         # closes. The snippet-eviction saving (~200t) wasn't worth it; turn-cap/idle
-        # recycle already bounds accumulation.
+        # recycle already bounds accumulation. The race itself (rebuild swapping the
+        # agent under a dispatching turn) is now also blocked by the available-gate
+        # checking _rebuild_lock — see the `available` property.
         zombie: bool = (
             not produced
             and self._consecutive_silent >= config.REALTIME_ZOMBIE_RECONNECT_AFTER
