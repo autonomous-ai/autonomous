@@ -68,7 +68,6 @@ class GeminiLiveAgent(VoiceAgentBase):
         self._recv_timeout_s: float = config.recv_timeout_s
         self._queue_poll_s: float = config.queue_poll_s
         self._join_timeout_s: float = config.join_timeout_s
-        self._keepalive_s: float = config.keepalive_interval_s
         # Signals that the model is idle (no active turn). Set by default,
         # cleared when activityEnd is sent, set again on turn_complete.
         self._turn_done: threading.Event = threading.Event()
@@ -259,34 +258,6 @@ class GeminiLiveAgent(VoiceAgentBase):
             self._activity_started = False
             self._turn_done.clear()
             logger.debug("[realtime] Sent activityEnd (manual VAD)")
-
-    async def _async_keepalive(self) -> None:
-        """Keep an idle session warm so the proxy/Gemini doesn't idle-close it.
-
-        A WS-level ping does NOT work: the proxy idle-closes on application
-        inactivity (no realtime input), not on a dead link — device-verified that
-        pings keep flowing yet the session still closes "idle". So we send a short
-        SILENCE frame instead — a real `realtime_input` audio chunk that resets the
-        idle timer. Silence carries no speech, and in manual-VAD mode it is sent
-        without an activity_start, so it never opens a turn (no response, ~no
-        tokens). Sent only while idle (between turns), so it can't collide with a
-        real turn's audio on the send thread. Best-effort; guarded.
-        """
-        sess = self._session
-        if sess is None or self._activity_started:
-            return
-        try:
-            n = int(self._config.sample_rate * 0.02)  # 20ms of PCM16 silence
-            silence = b"\x00\x00" * n
-            await sess.send_realtime_input(
-                audio=types.Blob(
-                    data=silence,
-                    mime_type=f"audio/pcm;rate={self._config.sample_rate}",
-                )
-            )
-            logger.debug("[realtime] keepalive silence sent")
-        except Exception as e:
-            logger.debug("[realtime] keepalive failed: %s", e)
 
     async def _async_receive_turn(self) -> None:
         """Read one full turn from the session, put outputs on _recv_queue."""
@@ -511,7 +482,6 @@ class GeminiLiveAgent(VoiceAgentBase):
 
     @override
     def _send_loop(self) -> None:
-        last_activity: float = time.monotonic()
         while not self._stop_event.is_set():
             if self._loop is None:
                 break
@@ -520,21 +490,7 @@ class GeminiLiveAgent(VoiceAgentBase):
                     timeout=self._queue_poll_s
                 )
             except queue.Empty:
-                # Idle: keepalive-ping the WS so the proxy doesn't idle-close the
-                # session (a cold reconnect on the next turn drops the committed
-                # audio → silent turn → user's question lost).
-                if (
-                    self._keepalive_s > 0
-                    and self._connected.is_set()
-                    and time.monotonic() - last_activity >= self._keepalive_s
-                ):
-                    try:
-                        self._submit_and_wait(self._async_keepalive(), timeout=5.0)
-                    except Exception as e:
-                        logger.debug("[realtime] keepalive submit failed: %s", e)
-                    last_activity = time.monotonic()
                 continue
-            last_activity = time.monotonic()
 
             for attempt in range(self._max_retries):
                 self._ensure_connected()
