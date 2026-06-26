@@ -59,6 +59,10 @@ class GeminiLiveAgent(VoiceAgentBase):
         self._resumption_handle: str | None = None
         self._speech_ended_at: float | None = None
         self._first_audio_received: bool = False
+        # Set when a Google Search grounding injects chunks this turn; consumed by
+        # the orchestrator (take_grounding_fired) to recycle the session afterward
+        # so the bulky snippets don't keep re-billing on later turns.
+        self._grounding_fired: bool = False
         self._vad_disabled: bool = not config.vad_enabled
         self._activity_started: bool = False
         self._reconnect_delay_s: float = config.reconnect_delay_s
@@ -118,12 +122,13 @@ class GeminiLiveAgent(VoiceAgentBase):
                 # second line of defense.
                 include_thoughts=False,
             ),
-            # NOTE: context-window compression intentionally NOT set. It only helps
-            # genuinely long sessions, but ours recycle (idle / turn-cap) long before
-            # the trigger is reached, so it never meaningfully fired — and a target
-            # below the per-turn floor (system instruction + memory) made the server
-            # close the session (WS 1000) mid-turn. Cost is controlled by shrinking
-            # that floor (memory caps) + session recycle instead.
+            # NO context_window_compression. DO NOT re-add it while running behind the
+            # campaign-api proxy: when compression fires the Gemini server performs it
+            # via a session-resumption handoff (sessionResumptionUpdate + CLOSE 1000),
+            # and the proxy does not support resumption, so the in-flight turn dies
+            # mid-answer. Cost is controlled by shrinking the per-turn floor (memory
+            # caps + skills-catalog trim) + session recycle instead. Only reconsider
+            # against a resumption-capable endpoint (direct Google base_url).
         )
 
         live_tools: list[types.Tool] = []
@@ -323,6 +328,10 @@ class GeminiLiveAgent(VoiceAgentBase):
                         "[realtime][grounding] Google Search fired: queries=%s chunks=%d",
                         queries[:3], len(chunks),
                     )
+                    # Snippets were injected into the session context — flag for a
+                    # post-turn recycle so they don't re-bill on every later turn.
+                    if chunks:
+                        self._grounding_fired = True
 
                 if content.model_turn and content.model_turn.parts:
                     for part in content.model_turn.parts:
@@ -468,6 +477,14 @@ class GeminiLiveAgent(VoiceAgentBase):
             "(skipping receive timeout wait)",
             reason,
         )
+
+    @override
+    def take_grounding_fired(self) -> bool:
+        """Return + reset the grounding flag (see base). True when this turn's
+        Google Search injected chunks → orchestrator recycles to drop them."""
+        fired: bool = self._grounding_fired
+        self._grounding_fired = False
+        return fired
 
     # --- VoiceAgentBase implementation ---
 
