@@ -67,6 +67,12 @@ class GeminiLiveAgent(VoiceAgentBase):
         self._activity_started: bool = False
         self._reconnect_delay_s: float = config.reconnect_delay_s
         self._last_reconnect_at: float = 0.0
+        # Exponential backoff: the recv loop self-reconnects when disconnected, so a
+        # persistent failure (e.g. Gemini usage-limit 4029) would otherwise hammer
+        # the endpoint every reconnect_delay_s. Grow the throttle on each failed
+        # reconnect (capped), reset to the base on success.
+        self._reconnect_backoff: float = config.reconnect_delay_s
+        self._reconnect_backoff_max: float = 60.0
         self._max_retries: int = config.max_retries
         self._send_timeout_s: float = config.send_timeout_s
         self._recv_timeout_s: float = config.recv_timeout_s
@@ -410,11 +416,12 @@ class GeminiLiveAgent(VoiceAgentBase):
     # --- Reconnect ---
 
     def _ensure_connected(self) -> None:
-        """Reconnect if not connected. Throttled to at most once per reconnect_delay_s."""
+        """Reconnect if not connected. Throttled by an exponential backoff that grows
+        on consecutive failures (reset to base on success)."""
         if self._connected.is_set():
             return
         now: float = time.monotonic()
-        if now - self._last_reconnect_at < self._reconnect_delay_s:
+        if now - self._last_reconnect_at < self._reconnect_backoff:
             return
         self._last_reconnect_at = now
         self._reconnect()
@@ -431,6 +438,7 @@ class GeminiLiveAgent(VoiceAgentBase):
         self._activity_started = False
         self._turn_done.set()  # unblock any waiting commit
         self._last_reconnect_at = 0.0  # bypass _ensure_connected throttle
+        self._reconnect_backoff = self._reconnect_delay_s  # zombie recovery → retry now
         if self._loop is not None:
             try:
                 self._submit_and_wait(self._async_disconnect(), timeout=10.0)
@@ -451,8 +459,17 @@ class GeminiLiveAgent(VoiceAgentBase):
             self._submit_and_wait(self._async_disconnect())
             self._submit_and_wait(self._async_connect())
             self._connected.set()
+            self._reconnect_backoff = self._reconnect_delay_s  # success → reset backoff
         except Exception as e:
-            logger.warning("[realtime] Reconnect failed: %s — will retry on next audio", e)
+            # Grow backoff so a persistent failure (e.g. usage-limit 4029) doesn't
+            # hammer the endpoint every base delay.
+            self._reconnect_backoff = min(
+                self._reconnect_backoff * 2, self._reconnect_backoff_max
+            )
+            logger.warning(
+                "[realtime] Reconnect failed: %s — next retry in ~%.0fs",
+                e, self._reconnect_backoff,
+            )
 
     def _fail_fast_turn(self, reason: str) -> None:
         """End the current turn immediately on a non-idle recv error.
