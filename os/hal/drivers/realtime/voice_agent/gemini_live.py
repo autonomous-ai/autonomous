@@ -565,7 +565,15 @@ class GeminiLiveAgent(VoiceAgentBase):
             if self._loop is None:
                 break
             if not self._connected.is_set():
-                _ = self._connected.wait(timeout=self._queue_poll_s)
+                # Proactively reconnect (throttled by reconnect_delay_s) so the
+                # session SELF-HEALS while disconnected even with NO audio flowing.
+                # Critical after a usage-limit (4029) close: voice_service stops
+                # feeding audio (orchestrator.available=False once disconnected), so
+                # the send loop never triggers a reconnect — without this the session
+                # would stay dead forever even after the limit is lifted.
+                self._ensure_connected()
+                if not self._connected.is_set():
+                    _ = self._connected.wait(timeout=self._queue_poll_s)
                 continue
 
             for attempt in range(self._max_retries):

@@ -185,7 +185,18 @@ class RealtimeOrchestrator:
 
     @property
     def available(self) -> bool:
-        return self._started.is_set() and self._agent is not None
+        # Require the agent to be actually CONNECTED, not just constructed. On a
+        # Gemini usage-limit close (code 4029) or any failed reconnect the agent
+        # object survives but its session is dead; without the _agent.available
+        # check, voice_service still routes the turn to realtime, commits, and
+        # blocks ~15s in receive() before falling back. Gating on the live
+        # connection makes those turns skip realtime and go straight to the main
+        # agent immediately (and auto-resume once the limit clears / reconnect wins).
+        return (
+            self._started.is_set()
+            and self._agent is not None
+            and self._agent.available
+        )
 
     @property
     def sample_rate(self) -> int:
