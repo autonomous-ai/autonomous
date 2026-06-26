@@ -860,6 +860,20 @@ type AgentRuntimeStatus struct {
 	Options []string `json:"options"`
 }
 
+// TimezoneStatus is returned by GET /api/device/timezone: the device's active
+// IANA zone plus the selectable list (from the system tzdata), so the web picker
+// never hardcodes the zone list.
+type TimezoneStatus struct {
+	Current string   `json:"current"`
+	Zones   []string `json:"zones"`
+}
+
+// TimezoneSetData is the POST /api/device/timezone body — the IANA zone name to
+// apply (e.g. "Asia/Ho_Chi_Minh"). Invalid/unknown zones are rejected.
+type TimezoneSetData struct {
+	Timezone string `json:"timezone" validate:"required"`
+}
+
 // AgentRuntimeSetAck is published to fd_channel after applying (or failing) a
 // hermes.setup / picoclaw.setup downlink — Kind echoes the triggering kind so
 // the worker can match it. status: "starting" | "success" | "failure". On

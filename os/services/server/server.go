@@ -244,6 +244,8 @@ func (s *Server) Serve(closeFn func()) error {
 	device.GET("realtime-options", s.deviceHandler.GetRealtimeOptions)
 	device.GET("agent-runtime", adminAuthMiddleware(s.config), s.deviceHandler.GetAgentRuntime)
 	device.POST("agent-runtime", adminAuthMiddleware(s.config), s.deviceHandler.SetAgentRuntime)
+	device.GET("timezone", adminAuthMiddleware(s.config), s.deviceHandler.GetTimezone)
+	device.POST("timezone", adminAuthMiddleware(s.config), s.deviceHandler.SetTimezone)
 
 	network := api.Group("network")
 	network.GET("", s.networkHandler.GetNetworks)
