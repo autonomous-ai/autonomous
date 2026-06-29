@@ -106,15 +106,25 @@ def run_realtime_turn(
     # Noise/false-trigger guard: a session with no STT transcript is not worth a
     # model turn — committing it makes the model answer silence/noise (spurious
     # self-talk + wasted tokens), which then desyncs onto a later real turn.
-    # Two signals catch it: (1) a sliver of audio (just the VAD pre-roll, below
-    # the duration floor), or (2) Silero VAD judged the FULL buffer non-speech
-    # (catches sustained noise that runs LONGER than the floor — `audio_is_speech`
-    # is computed by the caller, default True so a missing check never drops a
-    # turn). A genuine audio-only turn (real speech STT missed) clears both.
-    noise_turn = not combined and (
-        buf_duration < hal_config.REALTIME_MIN_COMMIT_DURATION_S
-        or not audio_is_speech
-    )
+    #
+    # REQUIRE_TRANSCRIPT (default): drop ANY empty-STT turn. The Silero signals
+    # below only reject non-speech; real human speech that nova-3 missed (short
+    # utterances below its floor) is voiced and would otherwise commit as raw
+    # audio, which Gemini fills with an invented greeting. "No transcript" → don't
+    # speak. A turn with a transcript always commits.
+    #
+    # When REQUIRE_TRANSCRIPT is off, fall back to the Silero-gated audio-only
+    # path: an empty-STT turn still commits unless (1) it's a sliver of audio (just
+    # the VAD pre-roll, below the duration floor), or (2) Silero VAD judged the
+    # FULL buffer non-speech (`audio_is_speech` computed by the caller, default
+    # True so a missing check never drops a turn).
+    if hal_config.REALTIME_REQUIRE_TRANSCRIPT:
+        noise_turn = not combined
+    else:
+        noise_turn = not combined and (
+            buf_duration < hal_config.REALTIME_MIN_COMMIT_DURATION_S
+            or not audio_is_speech
+        )
     if (
         hal_config.REALTIME_ENABLED
         and realtime.available

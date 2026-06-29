@@ -492,6 +492,20 @@ REALTIME_REQUIRE_SPEECH_ON_EMPTY_STT: bool = os.environ.get(
 REALTIME_NOISE_SPEECH_RATIO: float = float(
     os.environ.get("HAL_REALTIME_NOISE_SPEECH_RATIO", "0.55")
 )
+# Hard gate: never commit an empty-STT turn to the realtime model. The Silero
+# guards above (REQUIRE_SPEECH_ON_EMPTY_STT + NOISE_SPEECH_RATIO) only reject
+# NON-speech; real human speech that sits close to the mic is voiced (ratio
+# >=0.64) and passes them even when nova-3 produced no transcript (short <~2s
+# utterances are below nova-3's floor). Committing that raw audio makes Gemini
+# fill the silence — it invents a generic greeting, often with a wrong name
+# ("Dạ em nghe, anh ... cần gì không?") that nobody said. Since a spoken reply
+# can't be retracted, treat "no transcript" as "don't speak". When true, ANY
+# empty-STT turn is dropped regardless of duration/voicing. Trade-off: a short
+# utterance nova-3 misses yields silence (preferred over a wrong reply). Set
+# false to fall back to the Silero-gated audio-only path.
+REALTIME_REQUIRE_TRANSCRIPT: bool = os.environ.get(
+    "HAL_REALTIME_REQUIRE_TRANSCRIPT", "true"
+).lower() in ("1", "true", "yes")
 # Turn detection / VAD: "server_vad" | "semantic_vad" | "off"
 # For Gemini: "off" disables automatic activity detection; any other value enables it.
 # For OpenAI: maps to turn_detection type in session config.
