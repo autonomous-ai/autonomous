@@ -42,6 +42,10 @@ def setup_logging() -> logging.Logger:
     _root = logging.getLogger()
     _log_level = os.environ.get("HAL_LOG_LEVEL", "INFO").upper()
     _root.setLevel(getattr(logging, _log_level, logging.INFO))
+    # Keep HAL's own INFO breadcrumbs while preventing SDK/websocket internals
+    # from dumping raw frames into server.log when their loggers are verbose.
+    for noisy_name in ("google.genai", "websockets", "httpx", "httpcore"):
+        logging.getLogger(noisy_name).setLevel(logging.WARNING)
 
     # Console handler (colored)
     _console = logging.StreamHandler()

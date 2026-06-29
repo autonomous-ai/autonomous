@@ -88,8 +88,16 @@ Two interchangeable backends, selected by `HAL_REALTIME_PROVIDER`
 
 | Provider | Class | Threading model | Default model | Sample rate |
 |----------|-------|-----------------|---------------|-------------|
-| Gemini Live | `voice_agent/gemini_live.py` `GeminiLiveAgent` | private asyncio loop on a `gemini-io` thread; send/recv threads submit coroutines via `run_coroutine_threadsafe` | `gemini-3.1-flash-live-preview` | 16000 Hz |
+| Gemini Live | `voice_agent/gemini_live.py` `GeminiLiveAgent` | private asyncio loop on a `gemini-io` thread; send/recv threads submit coroutines via `run_coroutine_threadsafe` | `gemini-2.5-flash-native-audio-preview-12-2025` | 16000 Hz |
 | OpenAI Realtime | `voice_agent/openai_realtime.py` `OpenAIRealtimeAgent` | fully synchronous; one `RealtimeConnection` shared by send/recv threads, serialized by a reentrant lock | `gpt-realtime-2` | 24000 Hz |
+
+Gemini Live uses `google-genai`, but the SDK websocket keepalive is disabled
+(`ping_interval=None`, `ping_timeout=None`) so the Python client behaves like the
+browser raw-WS probe through the `campaign-api` proxy. The default Python
+`websockets` 20 s ping loop can close idle sessions and make the next turn fail
+with WS 1011. HAL also recycles Gemini synchronously before streaming audio when
+the previous turn ended more than `HAL_GEMINI_PRE_TURN_RECYCLE_S` seconds ago, so
+post-idle speech does not land on a proxy-dropped session.
 
 Both subclass `voice_agent/base.py` `VoiceAgentBase`, which defines the
 queue-based contract:
@@ -135,7 +143,7 @@ only surface `voice_service` talks to:
 | `append_audio(frame)` | Queue one mic frame (non-blocking) |
 | `commit_audio()` | Signal end-of-utterance (non-blocking) |
 | `stream_output()` | Yield `AudioOutput` / `TextOutput` / `FunctionCallOutput`, or a `DelegateSignal` (then stop) |
-| `send_text(text)` | Inject context (turn context, TTS history) as a non-response user message |
+| `send_text(text)` | Inject context (turn context, TTS history) as a non-response user message. Gemini Live skips this to avoid SDK `clientContent`/audio turn collisions; OpenAI still accepts it. |
 | `send_function_result(call_id, output)` | Return a tool result to the model |
 | `save_turn(user, agent)` | Persist a turn to realtime memory |
 | `available` / `sample_rate` | Readiness + provider audio rate |
@@ -181,13 +189,18 @@ turn ("hello") right after a restart would leak to the main agent.
    Hardcoded TTS (dead-air fillers, ambient mumble, backchannel, reconnect /
    health notices, local chitchat) goes through plain `hal.Speak` and is **never**
    fed back — otherwise the model would echo lines it never generated.
-2. **Stream.** While the STT session is open, each mic frame is also resampled to
+2. **Prime context.** After STT connects but before any buffered mic frame is sent
+   to realtime, `[TURN CONTEXT]` (time, reply-language reminder, current user) is
+   offered as non-response text. Gemini Live intentionally drops this injection
+   because repeated SDK `clientContent(turn_complete=False)` messages can collide
+   with later audio turns and close with WS 1011; the browser probe sends no such
+   context messages.
+3. **Stream.** While the STT session is open, each mic frame is also resampled to
    the provider rate and sent via `append_audio()` (parallel, non-blocking), and
    buffered in `rt_audio_buffer`.
-3. **Commit.** At session end, if enabled + `available` + audio buffered, the
-   per-turn `[TURN CONTEXT]` (time, current user) is injected and `commit_audio()`
-   fires.
-4. **Consume.** `for output in stream_output()`:
+4. **Commit.** At session end, if enabled + `available` + audio buffered,
+   `commit_audio()` fires.
+5. **Consume.** `for output in stream_output()`:
    - `TextOutput` → sentences are flushed to TTS (`speak` / `speak_queue`).
    - `DelegateSignal` → stop; forward `[voice-instruction] …` + transcript to the
      OS server with the original `event_type`.
@@ -267,12 +280,14 @@ Each knob's `HAL_*` env var overrides the block (and is the dev-box path):
 | `HAL_REALTIME_PROVIDER` | `gemini` | `none` \| `gemini` \| `openai` |
 | `HAL_REALTIME_TURN_DETECTION` | `off` | `server_vad` \| `semantic_vad` \| `off` (Gemini: off = manual activity detection) |
 | `HAL_REALTIME_RECV_QUEUE_TIMEOUT_S` | `8.0` | Max seconds `receive()` waits for the next output event before ending a silent turn (fallback to main agent) |
-| `HAL_REALTIME_MIN_COMMIT_DURATION_S` | `0.8` | Sessions shorter than this with no STT transcript are treated as VAD noise and not committed to the model |
+| `HAL_REALTIME_REQUIRE_TRANSCRIPT` | `true` | Never commit an empty-STT turn to the model. Real speech that nova-3 missed (short utterances) is voiced and passes the VAD/Silero guards, so committing its raw audio makes the model invent a reply to silence (a generic greeting, often with a name nobody said). When `true`, any empty-STT turn is dropped regardless of duration/voicing — silence beats a wrong reply. Set `false` to fall back to the Silero-gated audio-only path below. |
+| `HAL_REALTIME_MIN_COMMIT_DURATION_S` | `0.8` | Sessions shorter than this with no STT transcript are treated as VAD noise and not committed to the model. Only consulted when `HAL_REALTIME_REQUIRE_TRANSCRIPT=false`. |
 | `HAL_REALTIME_SESSION_IDLE_RESET_S` | `240` | Cost control: when a turn arrives after this many seconds of silence, recycle (rebuild) the session **after** that turn so the next turn drops the per-turn context the provider re-bills on a long-lived session. A post-pause turn is effectively a new conversation; long-term continuity survives via the reloaded `summary.md`. `0` disables. Reuses the zombie-recovery rebuild path. |
 | `HAL_GEMINI_SESSION_RESUMPTION` | `false` | Resume the same Gemini session across reconnects. OFF by default — the `campaign-api` proxy doesn't forward the resumption handshake, so resuming through it yields a zombie session (cold reconnects work). Enable only against an endpoint that supports it. |
+| `HAL_GEMINI_PRE_TURN_RECYCLE_S` | `15` | Gemini transport guard: when a new spoken turn starts after this much idle time, rebuild the Gemini session **before** streaming pre-roll/audio so the turn does not hit a proxy/SDK idle-dead socket. `0` disables. |
 | `HAL_AGENT_GATEWAY` | `openclaw` | Selects the context manager (also from `agent_runtime` in config.json) |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | — | Gemini key; falls back to `llm_api_key` |
-| `HAL_GEMINI_LIVE_MODEL` | `gemini-3.1-flash-live-preview` | |
+| `HAL_GEMINI_LIVE_MODEL` | `gemini-2.5-flash-native-audio-preview-12-2025` | |
 | `HAL_GEMINI_LIVE_VOICE` | `Kore` | |
 | `HAL_GEMINI_LIVE_BASE_URL` | `<llm_base_url>/ws/gemini` | |
 | `HAL_GEMINI_THINKING_LEVEL` | `MINIMAL` | `MINIMAL` \| `LOW` \| `MEDIUM` \| `HIGH` — cost-lean default (was `HIGH`) |

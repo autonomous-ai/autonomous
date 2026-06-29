@@ -32,7 +32,7 @@ from hal.drivers.realtime.utils import pcm16_bytes_to_float32, resample_float32
 from hal.drivers.voice._internal import config as voice_cfg
 from hal.drivers.voice._internal.audio_dsp import resample_to_stt, rms
 from hal.drivers.voice._internal.audio_recorder import ArecordStream
-from hal.drivers.voice._internal.realtime_turn import run_realtime_turn
+from hal.drivers.voice._internal.realtime_turn import build_turn_context, run_realtime_turn
 from hal.drivers.voice._internal.sensing_sender import SensingSender
 from hal.drivers.voice._internal.session_finalize import finalize_session
 from hal.drivers.voice._internal.speaker_decorate import SpeakerDecorator
@@ -895,6 +895,25 @@ class VoiceService:
 
             if not connect_ok[0]:
                 return
+
+            # Long-idle recovery: keepalive holds the WS open across SHORT idle, but
+            # past ~the proxy/Cloudflare WS-idle + auth-TTL window (~100s) the held
+            # connection's session expires — committing a turn onto it returns WS
+            # 1008 (auth) / 1011. So for a turn that follows a LONG idle gap
+            # (>= REALTIME_GEMINI_PRE_TURN_RECYCLE_S) rebuild a FRESH session (fresh
+            # auth) BEFORE streaming audio. Viable now that keepalive keeps the fresh
+            # session alive through the speak window (it died here before keepalive).
+            if hal_config.REALTIME_ENABLED:
+                self._realtime.prepare_turn()
+
+            # Send per-turn context before any audio is streamed to Gemini. Do not
+            # inject clientContent after audio has opened an activity window: Gemini
+            # 2.5 native-audio can close the websocket with 1011 on that ordering.
+            if hal_config.REALTIME_ENABLED and self._realtime.available:
+                try:
+                    self._realtime.send_text(build_turn_context())
+                except Exception as e:
+                    logger.warning("[realtime] send turn context failed: %s", e)
 
             # Flush holdoff audio (frames captured before STT connect, both paths)
             all_pre = (speech_pre_buffer or []) + pre_buffer

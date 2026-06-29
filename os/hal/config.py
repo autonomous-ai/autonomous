@@ -437,6 +437,17 @@ REALTIME_ZOMBIE_RECONNECT_AFTER: int = int(
 REALTIME_SESSION_IDLE_RESET_S: float = float(
     os.environ.get("HAL_REALTIME_SESSION_IDLE_RESET_S", "240")
 )
+REALTIME_GEMINI_PRE_TURN_RECYCLE_S: float = float(
+    os.environ.get("HAL_GEMINI_PRE_TURN_RECYCLE_S", "60")
+)
+# Gemini 1011 recovery: how many times to reconnect a FRESH session and replay
+# the just-captured turn audio when a turn produced no output (the campaign-api
+# proxy drops idle 2.5-native-audio sessions → a post-pause turn lands on a dead
+# session → WS 1011). Replaying immediately turns it into an active turn, which
+# the proxy serves reliably. 0 disables.
+REALTIME_GEMINI_TURN_RETRIES: int = int(
+    os.environ.get("HAL_GEMINI_TURN_RETRIES", "2")
+)
 # Cost control: recycle (rebuild) the realtime session after this many turns even
 # in an actively-ongoing conversation. Each turn's reply + audio accrues into the
 # session context the provider re-bills as input every turn, so context grows
@@ -481,6 +492,20 @@ REALTIME_REQUIRE_SPEECH_ON_EMPTY_STT: bool = os.environ.get(
 REALTIME_NOISE_SPEECH_RATIO: float = float(
     os.environ.get("HAL_REALTIME_NOISE_SPEECH_RATIO", "0.55")
 )
+# Hard gate: never commit an empty-STT turn to the realtime model. The Silero
+# guards above (REQUIRE_SPEECH_ON_EMPTY_STT + NOISE_SPEECH_RATIO) only reject
+# NON-speech; real human speech that sits close to the mic is voiced (ratio
+# >=0.64) and passes them even when nova-3 produced no transcript (short <~2s
+# utterances are below nova-3's floor). Committing that raw audio makes Gemini
+# fill the silence — it invents a generic greeting, often with a wrong name
+# ("Dạ em nghe, anh ... cần gì không?") that nobody said. Since a spoken reply
+# can't be retracted, treat "no transcript" as "don't speak". When true, ANY
+# empty-STT turn is dropped regardless of duration/voicing. Trade-off: a short
+# utterance nova-3 misses yields silence (preferred over a wrong reply). Set
+# false to fall back to the Silero-gated audio-only path.
+REALTIME_REQUIRE_TRANSCRIPT: bool = os.environ.get(
+    "HAL_REALTIME_REQUIRE_TRANSCRIPT", "true"
+).lower() in ("1", "true", "yes")
 # Turn detection / VAD: "server_vad" | "semantic_vad" | "off"
 # For Gemini: "off" disables automatic activity detection; any other value enables it.
 # For OpenAI: maps to turn_detection type in session config.
@@ -512,7 +537,7 @@ REALTIME_GEMINI_BASE_URL: str = (
 # device) but ~33% cheaper text tokens ($0.50 vs $0.75 /M in). Requires the
 # language_code-omit fix in gemini_live.py (native-audio rejects an explicit
 # language_code). Override via realtime.gemini.model or HAL_GEMINI_LIVE_MODEL.
-REALTIME_GEMINI_MODEL: str = _rt_str("HAL_GEMINI_LIVE_MODEL", _RT_GEMINI.get("model"), "gemini-2.5-flash-native-audio-preview-12-2025")
+REALTIME_GEMINI_MODEL: str = _rt_str("HAL_GEMINI_LIVE_MODEL", _RT_GEMINI.get("model"), "gemini-3.1-flash-live-preview")
 REALTIME_GEMINI_VOICE: str = _rt_str("HAL_GEMINI_LIVE_VOICE", _RT_GEMINI.get("voice"), "Kore")
 REALTIME_GEMINI_SAMPLE_RATE: int = 16000
 REALTIME_GEMINI_THINKING_LEVEL: str = _rt_str("HAL_GEMINI_THINKING_LEVEL", _RT_GEMINI.get("thinking_level"), "MINIMAL")
