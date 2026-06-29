@@ -901,6 +901,11 @@ func (s *Service) RePushVoiceConfig() {
 			slog.Warn("hal restart failed", "component", "device", "error", err, "output", string(out))
 		} else {
 			slog.Info("hal restarted for TTS config", "component", "device", "voice", s.config.TTSVoice, "provider", s.config.TTSProvider)
+			// Refresh the boot-time baseline so the next os-server restart sees
+			// the running HAL as up-to-date and skips a redundant restart.
+			if err := config.SnapshotHALConfig(); err != nil {
+				slog.Warn("hal config snapshot failed", "component", "device", "error", err)
+			}
 		}
 	}()
 }
@@ -1007,6 +1012,11 @@ func (s *Service) RePushRealtimeConfig() {
 			slog.Warn("hal restart failed", "component", "device", "error", err, "output", string(out))
 		} else {
 			slog.Info("hal restarted for realtime config", "component", "device", "provider", s.config.RealtimeProvider())
+			// Refresh the boot-time baseline so the next os-server restart sees
+			// the running HAL as up-to-date and skips a redundant restart.
+			if err := config.SnapshotHALConfig(); err != nil {
+				slog.Warn("hal config snapshot failed", "component", "device", "error", err)
+			}
 		}
 	}()
 }
