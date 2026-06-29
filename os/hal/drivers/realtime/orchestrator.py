@@ -25,7 +25,12 @@ import numpy.typing as npt
 
 import hal.config as config
 import hal.presets as presets
-from hal.drivers.realtime.config import GeminiConfig, OpenAIConfig, _load_language
+from hal.drivers.realtime.config import (
+    GeminiConfig,
+    OpenAIConfig,
+    _load_language,
+    gemini_needs_idle_workaround,
+)
 from hal.drivers.realtime.context_manager import (
     ContextManagerBase,
     HermesContextManager,
@@ -287,7 +292,7 @@ class RealtimeOrchestrator:
     def prepare_turn(self) -> None:
         """Prepare the realtime session before the caller streams turn audio."""
         provider: str = config.REALTIME_PROVIDER.strip().lower()
-        if provider != "gemini":
+        if provider != "gemini" or not gemini_needs_idle_workaround():
             return
         threshold = config.REALTIME_GEMINI_PRE_TURN_RECYCLE_S
         if threshold <= 0 or self._last_turn_monotonic <= 0.0:
@@ -664,14 +669,18 @@ class RealtimeOrchestrator:
         Used to feed back results from the main system after delegation,
         so the agent knows what happened.
         """
-        if config.REALTIME_PROVIDER.strip().lower() == "gemini":
-            # Gemini Live via google-genai is sensitive to non-response
+        if (
+            config.REALTIME_PROVIDER.strip().lower() == "gemini"
+            and gemini_needs_idle_workaround()
+        ):
+            # 2.5 native-audio via google-genai is sensitive to non-response
             # clientContent turns (`turn_complete=False`) mixed with audio turns:
             # even when sent before audio, repeated context/TTS-history injections
             # can leave the session in a state that later closes with WS 1011.
-            # Keep Gemini's live session on the same wire shape as the browser
-            # probe: audio realtimeInput + tool responses only.
-            logger.debug("[realtime] Gemini: skipping non-response text context")
+            # Keep its live session on the same wire shape as the browser probe:
+            # audio realtimeInput + tool responses only. 3.1 is NOT sensitive →
+            # allow text context (so per-turn [TURN CONTEXT] reaches the model).
+            logger.debug("[realtime] Gemini native-audio: skipping non-response text context")
             return
         if self._agent is not None:
             self._agent.send([TextInput(text=text)])

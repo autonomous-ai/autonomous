@@ -12,6 +12,7 @@ from typing import Callable, NamedTuple
 from hal import app_state as hal_app_state
 from hal import config as hal_config
 from hal.clock import device_now
+from hal.drivers.realtime.config import gemini_needs_idle_workaround
 from hal.drivers.realtime.models import AudioOutput as RTAudioOutput
 from hal.drivers.realtime.models import TextOutput as RTTextOutput
 from hal.drivers.realtime.models.signal import DelegateSignal
@@ -106,15 +107,25 @@ def run_realtime_turn(
     # Noise/false-trigger guard: a session with no STT transcript is not worth a
     # model turn — committing it makes the model answer silence/noise (spurious
     # self-talk + wasted tokens), which then desyncs onto a later real turn.
-    # Two signals catch it: (1) a sliver of audio (just the VAD pre-roll, below
-    # the duration floor), or (2) Silero VAD judged the FULL buffer non-speech
-    # (catches sustained noise that runs LONGER than the floor — `audio_is_speech`
-    # is computed by the caller, default True so a missing check never drops a
-    # turn). A genuine audio-only turn (real speech STT missed) clears both.
-    noise_turn = not combined and (
-        buf_duration < hal_config.REALTIME_MIN_COMMIT_DURATION_S
-        or not audio_is_speech
-    )
+    #
+    # REQUIRE_TRANSCRIPT (default): drop ANY empty-STT turn. The Silero signals
+    # below only reject non-speech; real human speech that nova-3 missed (short
+    # utterances below its floor) is voiced and would otherwise commit as raw
+    # audio, which Gemini fills with an invented greeting. "No transcript" → don't
+    # speak. A turn with a transcript always commits.
+    #
+    # When REQUIRE_TRANSCRIPT is off, fall back to the Silero-gated audio-only
+    # path: an empty-STT turn still commits unless (1) it's a sliver of audio (just
+    # the VAD pre-roll, below the duration floor), or (2) Silero VAD judged the
+    # FULL buffer non-speech (`audio_is_speech` computed by the caller, default
+    # True so a missing check never drops a turn).
+    if hal_config.REALTIME_REQUIRE_TRANSCRIPT:
+        noise_turn = not combined
+    else:
+        noise_turn = not combined and (
+            buf_duration < hal_config.REALTIME_MIN_COMMIT_DURATION_S
+            or not audio_is_speech
+        )
     if (
         hal_config.REALTIME_ENABLED
         and realtime.available
@@ -134,9 +145,14 @@ def run_realtime_turn(
             # already-captured audio IMMEDIATELY (no idle wait) — turning a
             # post-pause turn into an active one. Audio lives in rt_audio_buffer.
             # Gemini only; other providers retry 0 times.
+            # Replay only for 2.5 native-audio (the model with the idle-resume WS
+            # 1011). 3.1 handles idle→resume fine, so retries=0 there — no churn,
+            # no 6-9s dead-air on a no-output turn. See gemini_needs_idle_workaround.
             is_gemini: bool = hal_config.REALTIME_PROVIDER.strip().lower() == "gemini"
             max_retries: int = (
-                hal_config.REALTIME_GEMINI_TURN_RETRIES if is_gemini else 0
+                hal_config.REALTIME_GEMINI_TURN_RETRIES
+                if (is_gemini and gemini_needs_idle_workaround())
+                else 0
             )
             text_parts: list[str] = []
             sentence_buf: str = ""
@@ -300,8 +316,9 @@ def run_realtime_turn(
             delegated = True  # fall through to OS server on error
     elif hal_config.REALTIME_ENABLED and noise_turn:
         logger.info(
-            "[realtime] Skipping commit — noise/false-trigger turn "
-            "(empty STT, dur=%.2fs, min=%.2fs, silero_speech=%s)",
+            "[realtime] Skipping commit — empty STT, not committing to model "
+            "(require_transcript=%s, dur=%.2fs, min=%.2fs, silero_speech=%s)",
+            hal_config.REALTIME_REQUIRE_TRANSCRIPT,
             buf_duration,
             hal_config.REALTIME_MIN_COMMIT_DURATION_S,
             audio_is_speech,
