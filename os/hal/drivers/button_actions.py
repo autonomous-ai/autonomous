@@ -1,7 +1,7 @@
 """Shared button/touch actions.
 
 Reused by any input device that maps to the same three gestures:
-- single_click_action(): stop speaker / unmute mic + announce listening
+- single_click_action(): stop speaker / unmute mic + speaker + announce listening
 - triple_click_action(): reboot OS
 - long_press_action():  shutdown OS
 
@@ -136,11 +136,21 @@ def _wake_if_sleepy(source: str):
 
 
 def single_click_action(source: str = "button"):
-    """Stop in-flight speech / unmute mic, then announce listening cue."""
-    from hal.routes.music import audio_stop
+    """Stop in-flight speech / unmute mic + speaker, then announce listening cue."""
+    from hal.routes.music import audio_stop, unmute_speaker
     from hal.routes.voice import stop_tts, unmute_mic
 
     _wake_if_sleepy(source)
+
+    # A single click is a "give me the floor" gesture, so relax a user/scene
+    # speaker mute too — otherwise the listening cue stays silent and the reply
+    # the user just asked for would be inaudible. Skip while a voice enrollment
+    # is recording: that mute is a transient guard against TTS bleeding into the
+    # captured WAV (see routes/speaker.py record-enroll), not a user preference.
+    # Must run before the _tts_available() check below so the cue can play.
+    if state._speaker_muted and not state._enrolling:
+        logger.info("%s single click -- unmuting speaker", source)
+        unmute_speaker()
 
     if state._mic_muted:
         logger.info("%s single click -- unmuting mic", source)

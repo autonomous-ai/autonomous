@@ -120,6 +120,7 @@
   --lm-amber-glow:  rgba(245,158,11,0.35);
   --lm-teal:        #2DD4BF;
   --lm-teal-dim:    rgba(45,212,191,0.12);
+  --lm-teal-glow:   rgba(45,212,191,0.35);
   --lm-green:       #34D399;
   --lm-green-dim:   rgba(52,211,153,0.12);
   --lm-green-glow:  rgba(52,211,153,0.35);
@@ -162,6 +163,7 @@
   --lm-amber-glow:  rgba(217,119,6,0.25);
   --lm-teal:        #0D9488;
   --lm-teal-dim:    rgba(13,148,136,0.10);
+  --lm-teal-glow:   rgba(13,148,136,0.28);
   --lm-green:       #059669;
   --lm-green-dim:   rgba(5,150,105,0.10);
   --lm-green-glow:  rgba(5,150,105,0.28);
@@ -195,6 +197,7 @@
     --lm-amber-glow:  rgba(217,119,6,0.25);
     --lm-teal:        #0D9488;
     --lm-teal-dim:    rgba(13,148,136,0.10);
+    --lm-teal-glow:   rgba(13,148,136,0.28);
     --lm-green:       #059669;
     --lm-green-dim:   rgba(5,150,105,0.10);
     --lm-green-glow:  rgba(5,150,105,0.28);
@@ -678,6 +681,136 @@
   .lm-snav-sub > svg,
   .lm-snav-group > span > svg { transition: background 0.15s ease, color 0.15s ease; transform: none !important; }
   .lm-snav-children { animation: none; }
+}
+
+/* ── Sidebar feature search ───────────────────────────────────────────────────
+   A search box pinned to the top of the rail to tame a long nav. The input has a
+   leading magnifier and a trailing clear (×) button that only appears with a
+   query. When searching, the grouped nav is swapped for a flat result list
+   (rendered just below the box) where each row reuses .lm-snav-item so the amber
+   active treatment and hover nudge carry over. Colors come from --lm-* vars so
+   dark/light flips automatically. */
+.lm-snav-search { padding: 12px 12px 4px; }
+/* While a query is active the box owns the rail's vertical space so the result
+   list can scroll independently of the (hidden) grouped nav. */
+.lm-snav-search--active {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-bottom: 8px;
+}
+.lm-snav-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.lm-snav-search-icon {
+  position: absolute;
+  left: 11px;
+  color: var(--lm-text-muted);
+  pointer-events: none;
+  transition: color 0.15s ease;
+}
+.lm-snav-search-input {
+  width: 100%;
+  padding: 9px 32px 9px 34px;
+  border-radius: 10px;
+  border: 1px solid var(--lm-border);
+  background: var(--lm-surface);
+  color: var(--lm-text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.lm-snav-search-input::placeholder { color: var(--lm-text-muted); }
+.lm-snav-search-input:focus {
+  border-color: color-mix(in srgb, var(--lm-amber) 55%, transparent);
+  box-shadow: 0 0 0 3px var(--lm-amber-dim);
+  background: var(--lm-bg);
+}
+.lm-snav-search-box:focus-within .lm-snav-search-icon { color: var(--lm-amber); }
+.lm-snav-search-clear {
+  position: absolute;
+  right: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--lm-text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.lm-snav-search-clear:hover {
+  background: var(--lm-amber-dim);
+  color: var(--lm-amber);
+}
+
+/* Flat result list — scrolls independently, fills the rail below the box. */
+.lm-snav-search-results {
+  margin-top: 6px;
+  overflow-y: auto;
+  flex: 1;
+  animation: lm-snav-reveal 0.16s ease-out both;
+}
+/* Result rows must never wrap: the rail is narrow (~216px), so the label gets
+   the slack (ellipsis when long) while the group chip stays compact and the icon
+   never shrinks. `gap` is tightened from the base nav item to buy label width. */
+.lm-snav-result {
+  flex-wrap: nowrap;
+  gap: 8px;
+  padding-right: 10px;
+  overflow: hidden;
+}
+.lm-snav-result > svg { flex-shrink: 0; }
+/* Label takes remaining space and truncates rather than pushing the chip onto a
+   second line. min-width:0 is what lets a flex child shrink below its content. */
+.lm-snav-result-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Parent-group chip — small, muted, right-aligned so a result reads
+   "⚙ General  Settings". Caps its own width and truncates so it can't crowd out
+   the label on a tight rail. */
+.lm-snav-result-group {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--lm-text-muted);
+  background: var(--lm-surface);
+  border: 1px solid var(--lm-border);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+.lm-snav-item--active .lm-snav-result-group { color: var(--lm-amber); }
+/* Enter hint on the first (default) result — hidden on very narrow rails so the
+   label keeps its room. */
+.lm-snav-result-enter { flex-shrink: 0; color: var(--lm-text-muted); margin-left: 2px; }
+@media (max-width: 240px) {
+  .lm-snav-result-enter { display: none; }
+}
+.lm-snav-search-empty {
+  padding: 14px 16px;
+  font-size: 12.5px;
+  color: var(--lm-text-muted);
+  text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lm-snav-search-results { animation: none; }
 }
 
 /* ── Setup wizard ─────────────────────────────────────────────────────────── */
@@ -1270,9 +1403,71 @@
   50%      { box-shadow: 0 0 8px 1px color-mix(in srgb, var(--lm-red) 40%, transparent); }
 }
 
+/* ── Cooldown progress fill — live shimmer ────────────────────────────────────
+   A light sweep travels across an active cooldown bar so a counting-down timer
+   reads as "live" rather than a static colored block. The base fill color is set
+   inline (per-kind), this only layers a translucent moving highlight on top. */
+.lm-root .lm-cooldown-fill {
+  position: relative;
+  overflow: hidden;
+}
+.lm-root .lm-cooldown-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.45) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: lm-cooldown-sweep 1.6s ease-in-out infinite;
+}
+@keyframes lm-cooldown-sweep {
+  0%   { background-position: 180% 0; }
+  100% { background-position: -80% 0; }
+}
+
+/* ── Spinner — refresh-in-flight ──────────────────────────────────────────────
+   Spins an icon button's glyph while a fetch is running, so the refresh control
+   reads as "working" instead of dead. Applied to the ↻ button when loading. */
+.lm-root .lm-spin {
+  animation: lm-spin 0.8s linear infinite;
+}
+@keyframes lm-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Card entrance — staggered fade-in ────────────────────────────────────────
+   Person cards rise + fade in instead of snapping in all at once. The per-card
+   delay is set inline via --lm-stagger so each lands a beat after the previous,
+   reading as "dealt out" rather than a hard pop. */
+.lm-root .lm-card-in {
+  animation: lm-card-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--lm-stagger, 0ms);
+}
+@keyframes lm-card-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Scroll fade — bottom edge hint ───────────────────────────────────────────
+   A soft fade at the bottom of a scroll region (the Unknown Voices/Faces/
+   Cooldowns lists) signals "more below" without a visible scrollbar. The mask
+   only bites when content overflows; a short list shows no fade. */
+.lm-root .lm-scroll-fade {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lm-root .lm-skel { animation: none; }
   .lm-root .lm-hw-down { animation: none; }
+  .lm-root .lm-cooldown-fill::after { animation: none; }
+  .lm-root .lm-spin { animation: none; }
+  .lm-root .lm-card-in { animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

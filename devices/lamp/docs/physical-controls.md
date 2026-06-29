@@ -26,7 +26,7 @@ Board detection in both handlers reads `/proc/device-tree/model`:
 
 | Gesture | GPIO button | TTP223 touchpad |
 |---|---|---|
-| **1 tap** | Stop speaker / unmute mic + announce "I'm listening" | Same — fires ~1.2 s after release (decision-window cost, see below) |
+| **1 tap** | Stop speaker / unmute mic + speaker + announce "I'm listening" | Same — fires ~1.2 s after release (decision-window cost, see below) |
 | **2 taps** (≤ 0.4 s apart, button) / (≤ 1.2 s apart, TTP223) | Ignored (panic-click guard) | Pet response — TTS picks a random phrase from the language pool |
 | **3 taps** (≤ 0.4 s apart, button) | Reboot OS (TTS announce → `sudo reboot`) | n/a — TTP223 stops at 2 (any further taps absorbed by cooldown) |
 | **Hold 5–10 s, then release** | Shutdown OS (TTS announce → release servos → `sudo shutdown -h now`). LED blinks red while armed. | n/a — TTP223 hardware cannot reliably hold (see "FastMode" below) |
@@ -36,7 +36,7 @@ Destructive gestures (reboot, shutdown, factory-reset) are intentionally only on
 
 ## Interrupting Lamp while it speaks (barge-in)
 
-The 1-tap gesture is Lamp's primary **barge-in mechanism**: tap top of Lamp (touchpad) or press the GPIO button once during an in-flight TTS to cancel the current utterance mid-word, stop any music, and unmute the mic so Lamp listens for the next thing the user says. A localized "I'm listening" cue plays after the cancel.
+The 1-tap gesture is Lamp's primary **barge-in mechanism**: tap top of Lamp (touchpad) or press the GPIO button once during an in-flight TTS to cancel the current utterance mid-word, stop any music, and unmute the mic so Lamp listens for the next thing the user says. A user/scene speaker mute is also relaxed (unless a voice enrollment is recording) so the cue and the reply are audible again. A localized "I'm listening" cue plays after the cancel.
 
 End-to-end chain:
 1. `gpio_button.py` / `ttp223.py` detect single click → call `single_click_action(source)` in `button_actions.py`
@@ -117,7 +117,7 @@ The actions live in one place so the GPIO button, TTP223, and any future input (
 
 | Function | What it does | Interrupts in-flight TTS? |
 |---|---|---|
-| `single_click_action(source)` | If mic is muted: unmute. Else stop TTS + stop music. Then speak the localized "I'm listening" cue with retry-on-busy. | Yes — calls `stop_tts()` and the cue itself preempts. |
+| `single_click_action(source)` | Relax a user/scene speaker mute (skipped while `_enrolling`). If mic is muted: unmute. Else stop TTS + stop music. Then speak the localized "I'm listening" cue with retry-on-busy. | Yes — calls `stop_tts()` and the cue itself preempts. |
 | `triple_click_action(source)` | Speak "Rebooting now" → wait 5 s for the cached clip → `sudo reboot`. | Yes |
 | `long_press_action(source)` | Speak "Shutting down now" → wait 5 s → `release_servos()` (so the lamp doesn't slam down mid-pose) → `sudo shutdown -h now`. | Yes |
 | `factory_reset_action(source)` | Speak "Factory reset starting. Rebooting now" → `release_servos()` → POST `/api/system/factory-reset` on the OS server (the server owns the wipe + reboot, see below). | Yes |

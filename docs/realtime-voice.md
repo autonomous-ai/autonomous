@@ -209,7 +209,23 @@ os-server **seeds** the block into `config.json` on first start — and on upgra
 when it's absent — so the file always carries an editable realtime config. HAL
 reads it directly (same as `llm_api_key` / `stt_language`), no push down. Because
 HAL reads `config.json` at import, a config change needs a **HAL restart** to take
-effect.
+effect. A live edit triggers that restart immediately (`RePushRealtimeConfig` /
+`RePushVoiceConfig` in `internal/device/service.go`).
+
+**Restart only when the config changed.** os-server does *not* restart HAL on
+every os-server restart — that would needlessly drop the voice pipeline. Instead
+it hashes `config.json` and stores the hash in `config/.hal_config_hash` whenever
+it (re)starts HAL. On boot (`handleSetUpCompleteChange` in `server/config_watch.go`)
+it restarts HAL only when the current hash differs from that snapshot — i.e. the
+config actually changed while os-server was down (fresh setup, OTA config swap, an
+edit during downtime), or no snapshot exists yet (first boot). A plain os-server
+restart with unchanged config leaves the already-running HAL untouched. If HAL is
+genuinely down, `hal.service` (`Restart=always`, `RestartSec=5`) brings it back
+independently, so skipping the restart is safe. The `RePush*` paths refresh the
+snapshot after they restart HAL, so a live change followed by an os-server restart
+doesn't double-restart. Hashing the whole file (rather than the HAL-read subset)
+keeps the signal self-maintaining as HAL's read set evolves; the only cost is one
+spurious HAL restart on the next boot after an os-server-only field changes.
 
 ### `config.json` `realtime` block
 

@@ -11,6 +11,7 @@ import (
 	"go.autonomous.ai/os/internal/statusled"
 	"go.autonomous.ai/os/lib/hal"
 	"go.autonomous.ai/os/lib/safego"
+	"go.autonomous.ai/os/server/config"
 	_sensingHttpDeliver "go.autonomous.ai/os/server/sensing/delivery/http"
 )
 
@@ -197,8 +198,22 @@ func (s *Server) handleSetUpCompleteChange(setupCompleted bool) {
 			} else {
 				slog.Warn("agent gateway ready timeout", "component", "server")
 			}
-			// Restart hal so it picks up the fresh config written during setup.
-			exec.Command("systemctl", "restart", "hal").Run()
+			// Restart hal only when the config it reads changed since HAL last
+			// started — e.g. fresh setup, an OTA config swap, or an edit while
+			// os-server was down. A plain os-server restart with unchanged config
+			// leaves the already-running HAL untouched, so we don't needlessly drop
+			// the voice pipeline. If HAL is actually down, hal.service Restart=always
+			// brings it back independently.
+			if config.HALConfigChanged() {
+				slog.Info("config changed since HAL last started, restarting hal", "component", "server")
+				if out, err := exec.Command("systemctl", "restart", "hal").CombinedOutput(); err != nil {
+					slog.Warn("hal restart failed", "component", "server", "error", err, "output", string(out))
+				} else if err := config.SnapshotHALConfig(); err != nil {
+					slog.Warn("hal config snapshot failed", "component", "server", "error", err)
+				}
+			} else {
+				slog.Info("config unchanged since HAL last started, skipping hal restart", "component", "server")
+			}
 			// Start voice pipeline on HAL (if Deepgram key configured)
 			// Retry because hal may not be running yet at setup time.
 			if s.config.DeepgramAPIKey != "" {

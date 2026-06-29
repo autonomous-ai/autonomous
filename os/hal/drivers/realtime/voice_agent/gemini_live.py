@@ -38,6 +38,43 @@ from hal.drivers.realtime.utils import float32_to_pcm16_bytes, pcm16_bytes_to_fl
 from hal.drivers.realtime.voice_agent.base import VoiceAgentBase
 
 logger = logging.getLogger(__name__)
+# Per-turn token/cost lines go to their own file (gemini_usage.log) via a
+# dedicated logger configured in server_support/log_setup.py (propagate=False),
+# so they don't mix into server.log.
+usage_logger = logging.getLogger("hal.realtime.usage")
+
+# Gemini Live pricing, USD per 1M tokens, keyed (direction, modality), PER MODEL.
+# Source: ai.google.dev/gemini-api/docs/pricing (verified 2026-06-29). Audio rates
+# happen to match across these models ($3 in / $12 out) — only text differs — but
+# the table is explicit per model so adding a new model is one entry and a wrong
+# audio rate can't hide behind a shared default. Keys match as a SUBSTRING of
+# self._config.model so a dated preview suffix (…-preview-12-2025) still resolves.
+_GEMINI_RATES: dict[str, dict[tuple[str, str], float]] = {
+    "gemini-2.5-flash-native-audio": {
+        ("in", "TEXT"): 0.50, ("in", "AUDIO"): 3.0,
+        ("out", "TEXT"): 2.0, ("out", "AUDIO"): 12.0,
+    },
+    "gemini-3.1-flash-live": {
+        ("in", "TEXT"): 0.75, ("in", "AUDIO"): 3.0,
+        ("out", "TEXT"): 4.5, ("out", "AUDIO"): 12.0,
+    },
+}
+# Unknown model → fall back to the entry with the highest text-out rate (the
+# dominant text cost), so a future/untabled model logs a cost CEILING rather than
+# an under-report. Avoids the old `"native-audio" in model` heuristic mis-pricing
+# a hypothetical 3.x native-audio model at 2.5 rates.
+_GEMINI_RATES_FALLBACK: dict[tuple[str, str], float] = max(
+    _GEMINI_RATES.values(), key=lambda r: r[("out", "TEXT")]
+)
+
+
+def _gemini_rates_for(model: str) -> dict[tuple[str, str], float]:
+    """Resolve the per-1M-token rate table for a model name (substring match);
+    unknown models fall back to the most expensive table (cost = ceiling)."""
+    for key, table in _GEMINI_RATES.items():
+        if key in model:
+            return table
+    return _GEMINI_RATES_FALLBACK
 
 
 class GeminiLiveAgent(VoiceAgentBase):
@@ -59,10 +96,6 @@ class GeminiLiveAgent(VoiceAgentBase):
         self._resumption_handle: str | None = None
         self._speech_ended_at: float | None = None
         self._first_audio_received: bool = False
-        # Set when a Google Search grounding injects chunks this turn; consumed by
-        # the orchestrator (take_grounding_fired) to recycle the session afterward
-        # so the bulky snippets don't keep re-billing on later turns.
-        self._grounding_fired: bool = False
         self._vad_disabled: bool = not config.vad_enabled
         self._activity_started: bool = False
         self._reconnect_delay_s: float = config.reconnect_delay_s
@@ -108,7 +141,15 @@ class GeminiLiveAgent(VoiceAgentBase):
                         voice_name=self._config.voice.value,
                     )
                 ),
-                language_code=lang,
+                # Native-audio models (e.g. gemini-2.5-flash-native-audio) REJECT an
+                # explicit language_code (server closes setup with WS 1000) — they
+                # auto-detect the language. Only half-cascade / 3.x Live accept it.
+                # The system prompt already enforces the spoken language either way.
+                # Verified via on-device bisect: removing speech_config.language_code
+                # is the only change that lets 2.5 connect.
+                language_code=(
+                    None if "native-audio" in self._config.model else lang
+                ),
             ),
             system_instruction=self._config.instructions,
             input_audio_transcription=None,
@@ -279,14 +320,10 @@ class GeminiLiveAgent(VoiceAgentBase):
                 # turn_complete, and the server_content branch returns on
                 # turn_complete — so a check placed after it never runs.
                 um = message.usage_metadata
-                # gemini-3.1-flash-live-preview rates, USD per 1M tokens, by
-                # (direction, modality). Verified vs ai.google.dev/gemini-api/docs/
-                # pricing (2026-06): text-in $0.75, audio-in $3, audio-out $12. Text
-                # bills ~4-16x cheaper than audio, so per-modality is what matters.
-                rates = {
-                    ("in", "TEXT"): 0.75, ("in", "AUDIO"): 3.0,
-                    ("out", "TEXT"): 0.75, ("out", "AUDIO"): 12.0,
-                }
+                # Per-model rate table (see _GEMINI_RATES above). Resolved by model
+                # name so 2.5 native-audio (cheaper text) and 3.1 Live are billed at
+                # their own rates; unknown models fall back to a cost ceiling.
+                rates = _gemini_rates_for(self._config.model)
                 parts, cost, attributed = [], 0.0, {"in": 0, "out": 0}
                 for direction, details in (
                     ("in", um.prompt_tokens_details),
@@ -311,9 +348,10 @@ class GeminiLiveAgent(VoiceAgentBase):
                 # cache is not hitting (e.g. session churn) — that's the cost red flag.
                 cached = getattr(um, "cached_content_token_count", 0) or 0
                 cost_cached = max(0.0, cost - cached * rates[("in", "TEXT")] * 0.90 / 1_000_000)
-                logger.debug(
-                    "[realtime] Gemini usage: %s +unattr(%din/%dout) | cached=%dtok "
-                    "total=%dtok est_full>=$%.5f est_cached>=$%.5f",
+                usage_logger.info(
+                    "[realtime] Gemini usage: model=%s %s +unattr(%din/%dout) | "
+                    "cached=%dtok total=%dtok est_full>=$%.5f est_cached>=$%.5f",
+                    self._config.model,
                     " ".join(parts) or "-", unattr_in, unattr_out, cached,
                     um.total_token_count or 0, cost, cost_cached,
                 )
@@ -334,10 +372,6 @@ class GeminiLiveAgent(VoiceAgentBase):
                         "[realtime][grounding] Google Search fired: queries=%s chunks=%d",
                         queries[:3], len(chunks),
                     )
-                    # Snippets were injected into the session context — flag for a
-                    # post-turn recycle so they don't re-bill on every later turn.
-                    if chunks:
-                        self._grounding_fired = True
 
                 if content.model_turn and content.model_turn.parts:
                     for part in content.model_turn.parts:
@@ -366,9 +400,17 @@ class GeminiLiveAgent(VoiceAgentBase):
                                 )
                             )
                         elif part.text:
-                            self._recv_queue.put(
-                                OutputEvent(output=TextOutput(text=part.text))
-                            )
+                            # In AUDIO modality with output_audio_transcription
+                            # enabled (always, see _build_config), the spoken reply
+                            # arrives via output_transcription below. Gemini also
+                            # occasionally puts the SAME reply into a model_turn text
+                            # part (same quirk as thought parts leaking, filtered
+                            # above) — emitting it here too double-speaks the whole
+                            # turn (verified on-device 2026-06-29: text part arrived
+                            # BEFORE first audio, then output_transcription repeated
+                            # it). Skip it; output_transcription is the source of
+                            # truth for the spoken text + [HANDLED] transcript.
+                            continue
 
                 if content.output_transcription and content.output_transcription.text:
                     self._recv_queue.put(
@@ -494,14 +536,6 @@ class GeminiLiveAgent(VoiceAgentBase):
             "(skipping receive timeout wait)",
             reason,
         )
-
-    @override
-    def take_grounding_fired(self) -> bool:
-        """Return + reset the grounding flag (see base). True when this turn's
-        Google Search injected chunks → orchestrator recycles to drop them."""
-        fired: bool = self._grounding_fired
-        self._grounding_fired = False
-        return fired
 
     # --- VoiceAgentBase implementation ---
 

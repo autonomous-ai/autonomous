@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -366,6 +368,58 @@ func (c *Config) WithLockSave(fn func(*Config)) error {
 // Prefer WithLockSave for any path that also mutates fields.
 func (c *Config) Save() error {
 	return c.WithLockSave(func(*Config) {})
+}
+
+// halConfigHashPath stores a hash of config.json captured when HAL was last
+// (re)started. HAL reads config.json directly, so a change to that file is the
+// conservative signal that HAL must be restarted to re-read it. Comparing the
+// current hash against this snapshot lets a plain os-server restart with
+// unchanged config skip the HAL restart (which would needlessly drop the voice
+// pipeline). Lives next to config.json so it survives os-server restarts.
+const halConfigHashPath = "config/.hal_config_hash"
+
+// hashConfigFile returns a hex SHA-256 of config.json's bytes, or "" if the
+// file can't be read.
+func hashConfigFile() string {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+// HALConfigChanged reports whether config.json differs from the snapshot taken
+// at the last HAL (re)start. Returns true when no snapshot exists yet (first
+// boot) or the config can't be hashed, so HAL is restarted in the uncertain
+// case rather than left on possibly-stale config.
+func HALConfigChanged() bool {
+	current := hashConfigFile()
+	if current == "" {
+		return true
+	}
+	prev, err := os.ReadFile(halConfigHashPath)
+	if err != nil {
+		return true
+	}
+	return strings.TrimSpace(string(prev)) != current
+}
+
+// SnapshotHALConfig records config.json's current hash as the baseline for the
+// running HAL process. Call right after a successful HAL (re)start so a later
+// os-server restart with unchanged config skips the redundant HAL restart.
+func SnapshotHALConfig() error {
+	current := hashConfigFile()
+	if current == "" {
+		return fmt.Errorf("hash config: %s unreadable", configPath)
+	}
+	if err := os.MkdirAll(filepath.Dir(halConfigHashPath), 0755); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+	if err := os.WriteFile(halConfigHashPath, []byte(current), 0600); err != nil {
+		return fmt.Errorf("write %s: %w", halConfigHashPath, err)
+	}
+	return nil
 }
 
 // SetLLMModel atomically sets LLMModel and saves the config in a single lock

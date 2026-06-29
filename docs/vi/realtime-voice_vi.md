@@ -201,7 +201,22 @@ biến HAL_*  >  block "realtime" trong config.json  >  default built-in
 os-server **seed** block này vào `config.json` lúc start lần đầu — và khi upgrade
 nếu thiếu — nên file luôn có realtime config sửa được. HAL **tự đọc** trực tiếp
 (giống `llm_api_key` / `stt_language`), không push xuống. Vì HAL đọc `config.json`
-lúc import, đổi config phải **restart HAL** mới ăn.
+lúc import, đổi config phải **restart HAL** mới ăn. Sửa lúc đang chạy thì restart
+liền (`RePushRealtimeConfig` / `RePushVoiceConfig` trong `internal/device/service.go`).
+
+**Chỉ restart khi config thực sự đổi.** os-server *không* restart HAL mỗi lần
+os-server restart — làm vậy sẽ rớt voice pipeline vô ích. Thay vào đó nó hash
+`config.json` và lưu hash vào `config/.hal_config_hash` mỗi khi (re)start HAL. Lúc
+boot (`handleSetUpCompleteChange` trong `server/config_watch.go`) nó chỉ restart HAL
+khi hash hiện tại khác snapshot — tức config thật sự đổi trong lúc os-server tắt
+(setup mới, OTA đổi config, sửa lúc downtime), hoặc chưa có snapshot (boot đầu). Một
+lần os-server restart bình thường với config không đổi sẽ để nguyên HAL đang chạy.
+Nếu HAL thật sự chết, `hal.service` (`Restart=always`, `RestartSec=5`) tự hồi độc
+lập, nên skip restart là an toàn. Các nhánh `RePush*` cập nhật lại snapshot sau khi
+restart HAL, nên đổi lúc-chạy rồi os-server restart không restart hai lần. Hash cả
+file (thay vì chỉ tập field HAL đọc) giữ tín hiệu tự-bảo-trì khi tập field HAL đọc
+thay đổi; cái giá duy nhất là một lần restart HAL thừa ở boot kế tiếp khi sửa field
+chỉ-thuộc-os-server.
 
 ### Block `realtime` trong `config.json`
 
