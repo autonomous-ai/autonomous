@@ -368,9 +368,17 @@ class GeminiLiveAgent(VoiceAgentBase):
                                 )
                             )
                         elif part.text:
-                            self._recv_queue.put(
-                                OutputEvent(output=TextOutput(text=part.text))
-                            )
+                            # In AUDIO modality with output_audio_transcription
+                            # enabled (always, see _build_config), the spoken reply
+                            # arrives via output_transcription below. Gemini also
+                            # occasionally puts the SAME reply into a model_turn text
+                            # part (same quirk as thought parts leaking, filtered
+                            # above) — emitting it here too double-speaks the whole
+                            # turn (verified on-device 2026-06-29: text part arrived
+                            # BEFORE first audio, then output_transcription repeated
+                            # it). Skip it; output_transcription is the source of
+                            # truth for the spoken text + [HANDLED] transcript.
+                            continue
 
                 if content.output_transcription and content.output_transcription.text:
                     self._recv_queue.put(
