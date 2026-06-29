@@ -343,6 +343,7 @@ def speaker_record_enroll(req: RecordEnrollRequest) -> EnrollResponse:
     # TTS, music, and backchannel paths via the existing speaker-gate
     # checks; we restore in finally below.
     state._speaker_muted = True
+    state._enrolling = True
     if state.tts_service and getattr(state.tts_service, "speaking", False):
         try:
             state.tts_service.stop()
@@ -414,6 +415,7 @@ def speaker_record_enroll(req: RecordEnrollRequest) -> EnrollResponse:
             pass
         # Restore speaker mute state — only relax the gate if we set it.
         # Don't overwrite a pre-existing mute the user/scene may have asked for.
+        state._enrolling = False
         if not prev_speaker_muted:
             state._speaker_muted = False
         # Always restart the listener so passive recognition / wake word

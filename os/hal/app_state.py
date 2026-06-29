@@ -102,6 +102,12 @@ _mic_muted = False
 _mic_manual_override = False
 _speaker_muted = False
 
+# True only while a live voice enrollment is recording. record-enroll sets
+# _speaker_muted as a transient guard (keep TTS out of the captured WAV), which
+# is NOT a user preference — this flag lets the single-click "unmute speaker"
+# gesture skip it so a stray click can't relax the mute mid-recording.
+_enrolling = False
+
 # Set True by destructive button actions (long_press, factory_reset) right
 # before they kick `shutdown`/`reboot`/OS-server reset. The lifespan shutdown
 # handler in server.py checks this flag so it doesn't speak a second
