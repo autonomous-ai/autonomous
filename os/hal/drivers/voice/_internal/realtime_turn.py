@@ -310,8 +310,9 @@ def run_realtime_turn(
             delegated = True  # fall through to OS server on error
     elif hal_config.REALTIME_ENABLED and noise_turn:
         logger.info(
-            "[realtime] Skipping commit — noise/false-trigger turn "
-            "(empty STT, dur=%.2fs, min=%.2fs, silero_speech=%s)",
+            "[realtime] Skipping commit — empty STT, not committing to model "
+            "(require_transcript=%s, dur=%.2fs, min=%.2fs, silero_speech=%s)",
+            hal_config.REALTIME_REQUIRE_TRANSCRIPT,
             buf_duration,
             hal_config.REALTIME_MIN_COMMIT_DURATION_S,
             audio_is_speech,
