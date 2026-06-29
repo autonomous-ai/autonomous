@@ -85,8 +85,16 @@ Hai backend thay thế cho nhau, chọn bằng `HAL_REALTIME_PROVIDER`
 
 | Provider | Class | Mô hình threading | Model mặc định | Sample rate |
 |----------|-------|-------------------|----------------|-------------|
-| Gemini Live | `voice_agent/gemini_live.py` `GeminiLiveAgent` | event loop asyncio riêng trên thread `gemini-io`; thread send/recv submit coroutine qua `run_coroutine_threadsafe` | `gemini-3.1-flash-live-preview` | 16000 Hz |
+| Gemini Live | `voice_agent/gemini_live.py` `GeminiLiveAgent` | event loop asyncio riêng trên thread `gemini-io`; thread send/recv submit coroutine qua `run_coroutine_threadsafe` | `gemini-2.5-flash-native-audio-preview-12-2025` | 16000 Hz |
 | OpenAI Realtime | `voice_agent/openai_realtime.py` `OpenAIRealtimeAgent` | thuần đồng bộ; 1 `RealtimeConnection` dùng chung bởi thread send/recv, serialize bằng reentrant lock | `gpt-realtime-2` | 24000 Hz |
+
+Gemini Live dùng `google-genai`, nhưng tắt keepalive websocket của SDK
+(`ping_interval=None`, `ping_timeout=None`) để Python client giống browser raw-WS
+probe hơn khi đi qua proxy `campaign-api`. Vòng ping mặc định 20 giây của Python
+`websockets` có thể đóng session idle và làm lượt kế tiếp fail WS 1011. HAL cũng
+recycle Gemini đồng bộ trước khi stream audio nếu lượt trước đã kết thúc quá
+`HAL_GEMINI_PRE_TURN_RECYCLE_S` giây, để câu nói sau khoảng nghỉ không rơi vào
+socket đã chết vì idle ở proxy.
 
 Cả hai kế thừa `voice_agent/base.py` `VoiceAgentBase`, định nghĩa contract dựa
 trên queue:
@@ -131,7 +139,7 @@ nhất mà `voice_service` giao tiếp:
 | `append_audio(frame)` | Đẩy 1 frame mic (non-blocking) |
 | `commit_audio()` | Báo hết câu nói (non-blocking) |
 | `stream_output()` | Yield `AudioOutput` / `TextOutput` / `FunctionCallOutput`, hoặc `DelegateSignal` (rồi dừng) |
-| `send_text(text)` | Bơm context (turn context, TTS history) dạng user message không tạo response |
+| `send_text(text)` | Bơm context (turn context, TTS history) dạng user message không tạo response. Gemini Live bỏ qua bước này để tránh va chạm giữa SDK `clientContent` và lượt audio; OpenAI vẫn nhận. |
 | `send_function_result(call_id, output)` | Trả kết quả tool về model |
 | `save_turn(user, agent)` | Lưu một lượt vào realtime memory |
 | `available` / `sample_rate` | Trạng thái sẵn sàng + sample rate của provider |
@@ -176,12 +184,18 @@ sớm ("hello") ngay sau khi restart sẽ rớt xuống main agent.
    filler, ambient mumble, backchannel, thông báo reconnect/health, chitchat
    local) đi qua `hal.Speak` thường và **không bao giờ** được feed lại — nếu không
    model sẽ lặp lại (echo) những câu nó chưa từng sinh ra.
-2. **Stream.** Khi session STT đang mở, mỗi frame mic được resample về rate của
+2. **Bơm context trước.** Sau khi STT connect nhưng trước khi gửi bất kỳ frame mic
+   đã buffer nào sang realtime, HAL thử bơm `[TURN CONTEXT]` (thời gian, nhắc ngôn
+   ngữ trả lời, user hiện tại) dạng text không tạo response. Gemini Live chủ động
+   bỏ qua injection này vì các message SDK `clientContent(turn_complete=False)` lặp
+   lại có thể va với lượt audio sau đó và đóng WS 1011; browser probe không gửi
+   loại context message này.
+3. **Stream.** Khi session STT đang mở, mỗi frame mic được resample về rate của
    provider và gửi qua `append_audio()` (song song, non-blocking), đồng thời buffer
    vào `rt_audio_buffer`.
-3. **Commit.** Cuối session, nếu enabled + `available` + có audio buffer, bơm
-   `[TURN CONTEXT]` của lượt (thời gian, user hiện tại) rồi gọi `commit_audio()`.
-4. **Tiêu thụ.** `for output in stream_output()`:
+4. **Commit.** Cuối session, nếu enabled + `available` + có audio buffer, gọi
+   `commit_audio()`.
+5. **Tiêu thụ.** `for output in stream_output()`:
    - `TextOutput` → các câu được flush sang TTS (`speak` / `speak_queue`).
    - `DelegateSignal` → dừng; chuyển `[voice-instruction] …` + transcript tới OS
      server với `event_type` gốc.
@@ -260,9 +274,10 @@ Mỗi knob có thể bị `HAL_*` env override (thắng block, và là đường
 | `HAL_REALTIME_MIN_COMMIT_DURATION_S` | `0.8` | Session ngắn hơn ngưỡng này mà không có STT transcript bị coi là nhiễu VAD, không commit lên model |
 | `HAL_REALTIME_SESSION_IDLE_RESET_S` | `240` | Kiểm soát chi phí: khi một turn đến sau ngần này giây im lặng, recycle (rebuild) session **sau** turn đó để turn kế tiếp bỏ phần context mỗi-turn mà provider re-bill trên session sống lâu. Turn sau khoảng nghỉ dài coi như cuộc hội thoại mới; trí nhớ dài hạn vẫn còn nhờ nạp lại `summary.md`. `0` = tắt. Dùng lại đường rebuild của zombie-recovery. |
 | `HAL_GEMINI_SESSION_RESUMPTION` | `false` | Resume cùng session Gemini qua reconnect. Mặc định OFF — proxy `campaign-api` không forward đúng resumption handshake nên resume qua nó tạo session zombie (cold reconnect thì chạy được). Chỉ bật khi endpoint hỗ trợ. |
+| `HAL_GEMINI_PRE_TURN_RECYCLE_S` | `15` | Guard transport cho Gemini: khi lượt nói mới bắt đầu sau ngần này giây idle, rebuild session Gemini **trước khi** stream pre-roll/audio để turn không đụng socket chết vì idle ở proxy/SDK. `0` = tắt. |
 | `HAL_AGENT_GATEWAY` | `openclaw` | Chọn context manager (cũng đọc từ `agent_runtime` trong config.json) |
 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | — | Key Gemini; fallback về `llm_api_key` |
-| `HAL_GEMINI_LIVE_MODEL` | `gemini-3.1-flash-live-preview` | |
+| `HAL_GEMINI_LIVE_MODEL` | `gemini-2.5-flash-native-audio-preview-12-2025` | |
 | `HAL_GEMINI_LIVE_VOICE` | `Kore` | |
 | `HAL_GEMINI_LIVE_BASE_URL` | `<llm_base_url>/ws/gemini` | |
 | `HAL_GEMINI_THINKING_LEVEL` | `MINIMAL` | `MINIMAL` \| `LOW` \| `MEDIUM` \| `HIGH` — default rẻ (trước là `HIGH`) |

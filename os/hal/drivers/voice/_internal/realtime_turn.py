@@ -38,6 +38,39 @@ def _reply_language_name() -> str:
     return ContextManagerBase.LANGUAGE_NAMES.get(code, code)
 
 
+def build_turn_context() -> str:
+    """Build per-turn context for the realtime model.
+
+    The caller must send this before streaming audio for the turn. Gemini 2.5
+    native-audio can close the websocket with 1011 when clientContent is
+    interleaved inside an open audio activity window.
+    """
+    turn_ctx: list[str] = [
+        f"Time: {device_now().strftime('%Y-%m-%d %H:%M:%S %A')}",
+    ]
+    # Per-turn language reminder. The system prompt already locks the language, but
+    # Google Search grounding pulls English source text into context and can drag
+    # the spoken reply into English. A reminder right next to the turn (closest to
+    # generation) is the strongest lever.
+    lang_name: str = _reply_language_name()
+    if lang_name:
+        turn_ctx.append(
+            f"Reply language: {lang_name} (answer ONLY in {lang_name}, "
+            "even if a search result or any context is in another language)"
+        )
+    try:
+        if hal_app_state.sensing_service:
+            cu: str = (
+                hal_app_state.sensing_service._perception_orchestrator.current_user
+                or ""
+            )
+            if cu:
+                turn_ctx.append(f"Current user: {cu}")
+    except Exception:
+        pass
+    return "[TURN CONTEXT] " + " | ".join(turn_ctx)
+
+
 class RealtimeTurnResult(NamedTuple):
     """Outcome of a realtime turn, consumed by the OS-server dispatch step."""
 
@@ -93,89 +126,102 @@ def run_realtime_turn(
             combined[:100] if combined else "(empty)",
         )
         try:
-            # Inject per-turn context before committing
-            turn_ctx: list[str] = [
-                f"Time: {device_now().strftime('%Y-%m-%d %H:%M:%S %A')}",
-            ]
-            # Per-turn language reminder. The system prompt already locks the
-            # language, but Google Search grounding pulls English source text into
-            # context and can drag the spoken reply into English. A reminder right
-            # next to the turn (closest to generation) is the strongest lever.
-            lang_name: str = _reply_language_name()
-            if lang_name:
-                turn_ctx.append(
-                    f"Reply language: {lang_name} (answer ONLY in {lang_name}, "
-                    "even if a search result or any context is in another language)"
-                )
-            try:
-                if hal_app_state.sensing_service:
-                    cu: str = (
-                        hal_app_state.sensing_service._perception_orchestrator.current_user
-                        or ""
-                    )
-                    if cu:
-                        turn_ctx.append(f"Current user: {cu}")
-            except Exception:
-                pass
-            realtime.send_text("[TURN CONTEXT] " + " | ".join(turn_ctx))
-
-            # Drop any output still queued from a previous turn so this turn only
-            # reads its OWN response. Provider replies arrive async and can lag the
-            # local-VAD cadence; without this, a noise blip reads a stale prior
-            # reply in milliseconds and speaks it ("Moon talks on its own" + double
-            # TTS).
-            realtime.flush_output()
-            realtime.commit_audio()
-            logger.info("[realtime] Audio committed — streaming output")
+            # 1011 recovery (idle-death): the campaign-api proxy drops idle
+            # 2.5-native-audio sessions, so a turn that follows a pause lands on a
+            # dead session and Gemini returns WS 1011 with NO output. The proxy
+            # serves ACTIVE sessions fine (continuous talking works), so on a
+            # no-output turn reconnect a FRESH session and REPLAY this turn's
+            # already-captured audio IMMEDIATELY (no idle wait) — turning a
+            # post-pause turn into an active one. Audio lives in rt_audio_buffer.
+            # Gemini only; other providers retry 0 times.
+            is_gemini: bool = hal_config.REALTIME_PROVIDER.strip().lower() == "gemini"
+            max_retries: int = (
+                hal_config.REALTIME_GEMINI_TURN_RETRIES if is_gemini else 0
+            )
             text_parts: list[str] = []
             sentence_buf: str = ""
             first_sentence_sent: bool = False
+            attempt: int = 0
+            while True:
+                if attempt > 0:
+                    logger.info(
+                        "[realtime] No output (likely WS 1011) — fresh session + "
+                        "replay audio (retry %d/%d)",
+                        attempt,
+                        max_retries,
+                    )
+                    if not realtime.recover_session("gemini-1011-replay"):
+                        break
+                    for _frame in rt_audio_buffer:
+                        realtime.append_audio(_frame)
+                    text_parts = []
+                    sentence_buf = ""
+                    first_sentence_sent = False
 
-            for output in realtime.stream_output():
-                if isinstance(output, DelegateSignal):
-                    delegated = True
-                    delegate_msg = output.message
-                    continue
-                if delegated:
-                    continue
-                # Native voice: play the model's OWN audio straight to the speaker.
-                if native and isinstance(output, RTAudioOutput):
-                    if not native_started:
-                        native_started = tts.native_play_begin(
-                            realtime.output_sample_rate
-                        )
-                        if native_started:
-                            logger.info("[realtime] Native audio → playing model voice")
-                    if native_started:
-                        tts.native_play_frame(output.audio)
-                    if output.transcript:
-                        text_parts.append(output.transcript)
-                    continue
-                if isinstance(output, RTTextOutput):
-                    text_parts.append(output.text)
-                    if native:
-                        # Audio already carries the reply — keep text only for
-                        # memory + the [HANDLED] hint; don't synthesize it.
+                # Drop any output still queued from a previous turn so this turn
+                # only reads its OWN response (stale async replies desync onto a
+                # later turn → "talks on its own" + double TTS).
+                realtime.flush_output()
+                realtime.commit_audio()
+                logger.info("[realtime] Audio committed — streaming output")
+
+                for output in realtime.stream_output():
+                    if isinstance(output, DelegateSignal):
+                        delegated = True
+                        delegate_msg = output.message
                         continue
-                    sentence_buf += output.text
-                    # Flush complete sentences to TTS as they arrive
-                    if tts is not None and sentence_buf.rstrip().endswith(SENTENCE_ENDS):
-                        sentence: str = strip_markers(sentence_buf)
-                        if sentence:
-                            if not first_sentence_sent:
-                                logger.info(
-                                    "[realtime] First sentence → speak: %r",
-                                    sentence[:80],
-                                )
-                                tts.speak(sentence)
-                                first_sentence_sent = True
-                            else:
-                                logger.info(
-                                    "[realtime] Next sentence → speak_queue: %r",
-                                    sentence[:80],
-                                )
-                                tts.speak_queue(sentence)
-                        sentence_buf = ""
+                    if delegated:
+                        continue
+                    # Native voice: play the model's OWN audio straight to the speaker.
+                    if native and isinstance(output, RTAudioOutput):
+                        if not native_started:
+                            native_started = tts.native_play_begin(
+                                realtime.output_sample_rate
+                            )
+                            if native_started:
+                                logger.info("[realtime] Native audio → playing model voice")
+                        if native_started:
+                            tts.native_play_frame(output.audio)
+                        if output.transcript:
+                            text_parts.append(output.transcript)
+                        continue
+                    if isinstance(output, RTTextOutput):
+                        text_parts.append(output.text)
+                        if native:
+                            # Audio already carries the reply — keep text only for
+                            # memory + the [HANDLED] hint; don't synthesize it.
+                            continue
+                        sentence_buf += output.text
+                        # Flush complete sentences to TTS as they arrive
+                        if tts is not None and sentence_buf.rstrip().endswith(SENTENCE_ENDS):
+                            sentence: str = strip_markers(sentence_buf)
+                            if sentence:
+                                if not first_sentence_sent:
+                                    logger.info(
+                                        "[realtime] First sentence → speak: %r",
+                                        sentence[:80],
+                                    )
+                                    tts.speak(sentence)
+                                    first_sentence_sent = True
+                                else:
+                                    logger.info(
+                                        "[realtime] Next sentence → speak_queue: %r",
+                                        sentence[:80],
+                                    )
+                                    tts.speak_queue(sentence)
+                            sentence_buf = ""
+
+                # A WS-1011 failure yields NOTHING (no audio spoken yet), so a
+                # retry is safe. Stop as soon as the turn produced real output.
+                produced: bool = (
+                    delegated
+                    or first_sentence_sent
+                    or native_started
+                    or bool("".join(text_parts).strip())
+                )
+                if produced or attempt >= max_retries:
+                    break
+                attempt += 1
 
             transcript = strip_markers("".join(text_parts))
 

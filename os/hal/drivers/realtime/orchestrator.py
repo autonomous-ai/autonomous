@@ -240,6 +240,68 @@ class RealtimeOrchestrator:
             )
         return None
 
+    def _rebuild_now(self, reason: str) -> bool:
+        """Synchronously swap in a fresh session before audio is streamed.
+
+        Used for Gemini idle-gap recovery: if the proxy/SDK may have dropped an
+        idle socket, reconnecting after commit is too late because this turn's
+        audio has already been sent to the dead session.
+        """
+        if not self._rebuild_lock.acquire(blocking=False):
+            return False
+        provider: str = config.REALTIME_PROVIDER.strip().lower()
+        old = self._agent
+        try:
+            instructions = self._context.build_instructions()
+            new = self._make_agent(provider, instructions)
+            if new is None:
+                return False
+            new.connect()
+            self._agent = new
+            self._consecutive_silent = 0
+            self._idle_reset_pending = False
+            self._turns_since_recycle = 0
+            logger.info("[realtime] Fresh session connected before turn (%s)", reason)
+            return True
+        except Exception:
+            logger.exception("[realtime] Pre-turn session rebuild failed")
+            return False
+        finally:
+            self._rebuild_lock.release()
+            if old is not None and old is not self._agent:
+                try:
+                    old.disconnect()
+                except Exception:
+                    logger.exception("[realtime] old agent disconnect failed")
+
+    def recover_session(self, reason: str) -> bool:
+        """Reconnect a FRESH session synchronously for a mid-turn 1011 replay.
+
+        Used by run_realtime_turn when a turn produced no output (likely WS 1011
+        from a proxy-dropped idle session): swap in a fresh agent so the caller
+        can immediately replay the captured turn audio onto an active session.
+        Returns True if a fresh session is ready.
+        """
+        return self._rebuild_now(reason)
+
+    def prepare_turn(self) -> None:
+        """Prepare the realtime session before the caller streams turn audio."""
+        provider: str = config.REALTIME_PROVIDER.strip().lower()
+        if provider != "gemini":
+            return
+        threshold = config.REALTIME_GEMINI_PRE_TURN_RECYCLE_S
+        if threshold <= 0 or self._last_turn_monotonic <= 0.0:
+            return
+        idle = time.monotonic() - self._last_turn_monotonic
+        if idle < threshold:
+            return
+        logger.info(
+            "[realtime] %.0fs idle (>= %.0fs) — recycling Gemini before streaming audio",
+            idle,
+            threshold,
+        )
+        self._rebuild_now("gemini-idle-pre-turn")
+
     def _force_rebuild(self) -> None:
         """Recover a zombie session by building a BRAND-NEW agent and swapping it
         in, then discarding the old one.
@@ -602,6 +664,15 @@ class RealtimeOrchestrator:
         Used to feed back results from the main system after delegation,
         so the agent knows what happened.
         """
+        if config.REALTIME_PROVIDER.strip().lower() == "gemini":
+            # Gemini Live via google-genai is sensitive to non-response
+            # clientContent turns (`turn_complete=False`) mixed with audio turns:
+            # even when sent before audio, repeated context/TTS-history injections
+            # can leave the session in a state that later closes with WS 1011.
+            # Keep Gemini's live session on the same wire shape as the browser
+            # probe: audio realtimeInput + tool responses only.
+            logger.debug("[realtime] Gemini: skipping non-response text context")
+            return
         if self._agent is not None:
             self._agent.send([TextInput(text=text)])
 

@@ -437,6 +437,17 @@ REALTIME_ZOMBIE_RECONNECT_AFTER: int = int(
 REALTIME_SESSION_IDLE_RESET_S: float = float(
     os.environ.get("HAL_REALTIME_SESSION_IDLE_RESET_S", "240")
 )
+REALTIME_GEMINI_PRE_TURN_RECYCLE_S: float = float(
+    os.environ.get("HAL_GEMINI_PRE_TURN_RECYCLE_S", "60")
+)
+# Gemini 1011 recovery: how many times to reconnect a FRESH session and replay
+# the just-captured turn audio when a turn produced no output (the campaign-api
+# proxy drops idle 2.5-native-audio sessions → a post-pause turn lands on a dead
+# session → WS 1011). Replaying immediately turns it into an active turn, which
+# the proxy serves reliably. 0 disables.
+REALTIME_GEMINI_TURN_RETRIES: int = int(
+    os.environ.get("HAL_GEMINI_TURN_RETRIES", "2")
+)
 # Cost control: recycle (rebuild) the realtime session after this many turns even
 # in an actively-ongoing conversation. Each turn's reply + audio accrues into the
 # session context the provider re-bills as input every turn, so context grows
