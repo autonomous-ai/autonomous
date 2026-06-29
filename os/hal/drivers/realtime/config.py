@@ -24,6 +24,25 @@ def _load_language() -> str | None:
     return lang if lang else None
 
 
+def gemini_needs_idle_workaround(model: str | None = None) -> bool:
+    """Whether a Gemini Live model needs the idle-resume WS-1011 workarounds.
+
+    True ONLY for the 2.5 native-audio family: through the campaign-api proxy it
+    returns WS 1011 on a turn that follows an idle pause — a backend limitation
+    (the browser raw-WS client fails the same way), not fixable client-side. The
+    workarounds (keepalive ping, pre-turn rebuild, replay, suppressed
+    mid-activity [TURN CONTEXT]) only mitigate it and add churn/latency, so they
+    must stay OFF for models that DON'T have the bug.
+
+    `gemini-3.1-flash-live` handles idle→resume fine → returns False → all
+    workarounds disabled (clean, fast, per-turn context restored). Switch the
+    model back to native-audio in config.json and they re-enable automatically.
+    Defaults to the configured model when `model` is omitted.
+    """
+    m = (model if model is not None else app_config.REALTIME_GEMINI_MODEL) or ""
+    return "native-audio" in m.lower()
+
+
 def _parse_turn_detection(value: str) -> OpenAITurnDetectionType | None:
     """Parse HAL_REALTIME_TURN_DETECTION into an OpenAITurnDetectionType or None (off)."""
     v = value.strip().lower()

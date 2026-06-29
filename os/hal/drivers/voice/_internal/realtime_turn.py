@@ -12,6 +12,7 @@ from typing import Callable, NamedTuple
 from hal import app_state as hal_app_state
 from hal import config as hal_config
 from hal.clock import device_now
+from hal.drivers.realtime.config import gemini_needs_idle_workaround
 from hal.drivers.realtime.models import AudioOutput as RTAudioOutput
 from hal.drivers.realtime.models import TextOutput as RTTextOutput
 from hal.drivers.realtime.models.signal import DelegateSignal
@@ -144,9 +145,14 @@ def run_realtime_turn(
             # already-captured audio IMMEDIATELY (no idle wait) — turning a
             # post-pause turn into an active one. Audio lives in rt_audio_buffer.
             # Gemini only; other providers retry 0 times.
+            # Replay only for 2.5 native-audio (the model with the idle-resume WS
+            # 1011). 3.1 handles idle→resume fine, so retries=0 there — no churn,
+            # no 6-9s dead-air on a no-output turn. See gemini_needs_idle_workaround.
             is_gemini: bool = hal_config.REALTIME_PROVIDER.strip().lower() == "gemini"
             max_retries: int = (
-                hal_config.REALTIME_GEMINI_TURN_RETRIES if is_gemini else 0
+                hal_config.REALTIME_GEMINI_TURN_RETRIES
+                if (is_gemini and gemini_needs_idle_workaround())
+                else 0
             )
             text_parts: list[str] = []
             sentence_buf: str = ""

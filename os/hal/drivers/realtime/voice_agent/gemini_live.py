@@ -18,7 +18,7 @@ from google.genai import types
 from google.genai.live import AsyncSession
 from websockets.exceptions import ConnectionClosed
 
-from hal.drivers.realtime.config import GeminiConfig
+from hal.drivers.realtime.config import GeminiConfig, gemini_needs_idle_workaround
 from hal.drivers.realtime.enums import GeminiThinkingLevel
 from hal.drivers.realtime.models import (
     AgentInputEvent,
@@ -90,21 +90,22 @@ class GeminiLiveAgent(VoiceAgentBase):
         if config.base_url:
             client_kwargs["http_options"] = types.HttpOptions(base_url=config.base_url)
         self._client: genai.Client = genai.Client(**client_kwargs)
-        # Keep the Live WS alive across IDLE gaps. Device-proven: the browser
-        # raw-WS client survives long silence on this same proxy, so the proxy/CF
-        # does NOT close idle sessions — the idle death is client-side. DISABLING
-        # pings entirely (ping_interval=None) was WRONG: with no outbound traffic
-        # the NAT/proxy path drops the idle TCP (WS 1006) and the next spoken turn
-        # lands on a dead session → WS 1011. Instead, KEEP sending pings every 20s
-        # (outbound traffic holds the path open, like the browser's TCP keepalive)
-        # but set ping_timeout=None so a missing pong (the proxy doesn't pong)
-        # never makes the client self-close. google-genai spreads this dict into
-        # websockets.connect(...).
-        try:
-            self._client._api_client._websocket_ssl_ctx["ping_interval"] = 20
-            self._client._api_client._websocket_ssl_ctx["ping_timeout"] = None
-        except Exception as e:  # pragma: no cover - private SDK field, best effort
-            logger.warning("[realtime] could not set Gemini WS keepalive: %s", e)
+        # Keep the Live WS alive across IDLE gaps — ONLY for native-audio (the
+        # model with the idle-resume bug; see gemini_needs_idle_workaround). The
+        # browser raw-WS client survives long silence on this same proxy, so the
+        # idle death is client-side. DISABLING pings entirely (ping_interval=None)
+        # was WRONG: with no outbound traffic the NAT/proxy path drops the idle TCP
+        # (WS 1006) and the next spoken turn lands on a dead session → WS 1011.
+        # Instead KEEP pinging every 20s (outbound traffic holds the path open like
+        # the browser's TCP keepalive) but ping_timeout=None so a missing pong (the
+        # proxy doesn't pong) never self-closes. 3.1 doesn't need this → leave the
+        # SDK defaults. google-genai spreads this dict into websockets.connect(...).
+        if gemini_needs_idle_workaround(config.model):
+            try:
+                self._client._api_client._websocket_ssl_ctx["ping_interval"] = 20
+                self._client._api_client._websocket_ssl_ctx["ping_timeout"] = None
+            except Exception as e:  # pragma: no cover - private SDK field, best effort
+                logger.warning("[realtime] could not set Gemini WS keepalive: %s", e)
         self._session: AsyncSession | None = None
         self._exit_stack: AsyncExitStack | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
