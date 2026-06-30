@@ -522,7 +522,13 @@ class RealtimeOrchestrator:
                 )
                 produced = True
                 yield DelegateSignal(message=delegate_msg)
-                continue
+                # Stop the turn here — once the model has delegated, it has nothing
+                # more to say, and waiting for turn_complete just blocks on the
+                # receive() timeout (the model stays silent for the full
+                # RECV_QUEUE_TIMEOUT, ~15s) before we forward to the main flow. We
+                # already sent the function result above; the dangling open turn is
+                # dropped by the next turn's flush_output(). Forward immediately.
+                break
             produced = True
             yield output
 
