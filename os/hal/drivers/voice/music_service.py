@@ -257,6 +257,20 @@ class MusicService:
         return True
 
     @property
+    def streaming(self) -> bool:
+        """True only when audio is actually flowing (ffmpeg/aplay live), False
+        during the yt-dlp resolve phase. Voice routes gate TTS on this (not
+        `playing`): a play command's accompanying reply must be spoken first,
+        and _play_sync waits for TTS to finish before grabbing ALSA. Rejecting
+        TTS during resolve (as `playing` does, to block a second play) would
+        swallow that reply. `playing` stays the gate for double-play
+        prevention."""
+        if not self._playing:
+            return False
+        procs = [self._aplay_proc, self._ffmpeg_proc]
+        return any(p is not None and p.poll() is None for p in procs)
+
+    @property
     def current_title(self) -> Optional[str]:
         return self._current_title
 
