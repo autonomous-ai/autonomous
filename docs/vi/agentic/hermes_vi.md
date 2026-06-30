@@ -131,6 +131,21 @@ Hợp đồng giống hệt OpenClaw: khi một lượt đang active (`IsBusy`),
 event thụ động bị drop hoặc buffer (`QueuePendingEvent`, last-write-wins theo
 loại) và replay khi rảnh, để tín hiệu ambient không cắt ngang lệnh đang chạy.
 
+**Merge-drain (chỉ Hermes).** Backend OpenClaw có steer mode
+(`messages.queue.mode=steer`) gộp các message đồng thời vào lượt đang chạy tại
+model boundary kế tiếp. Backend Hermes (service NousResearch bên ngoài,
+`POST /v1/responses` stateless) không có mode này, nên os-server gộp ở phía
+client: khi `drainPendingEvents` chạy, các event sống sót được phân nhóm bởi
+`standaloneDrain`. Event standalone giữ lượt riêng — lệnh voice thật
+(`voice` / `voice_command`, trả lời trực tiếp), `voice_agent_handled` (reply câm),
+và event có ảnh. Phần sensing ambient thuần còn lại (presence / motion / emotion /
+speech_emotion) được gộp thành **một lượt** qua `sendMergedPending` (một `runID`,
+các dòng nối dưới `mergedSensingHeader`), nên prompt floor mỗi lượt chỉ trả một
+lần thay vì mỗi event một lần. Cách này lấy lại phần lớn lợi ích cost của steer
+nhưng không lấy được tính tức thì: batch chỉ bắn sau khi lượt hiện tại kết thúc,
+không bao giờ giữa lượt. Bật/tắt bằng const `mergeDrainEnabled` (đặt `false` để
+quay về replay mỗi event một lượt). Xem `internal/hermes/events.go`.
+
 ## 8. Channel (Telegram/Slack/Discord) — hiển thị inbound + fan-out
 
 hermes gateway **sở hữu I/O của Telegram/Discord/WhatsApp**: nó tự poll các nền
