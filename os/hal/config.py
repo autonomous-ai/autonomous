@@ -112,6 +112,14 @@ FACE_AREA_RATIO_THRESHOLD = float(os.environ.get("HAL_FACE_AREA_RATIO_THRESHOLD"
 # --- DL backend connection ---
 OS_CONFIG_PATH = os.environ.get("OS_CONFIG_PATH", "/root/config/config.json")
 
+# Persisted speaker volume (0-100). set_volume writes it on every change so
+# os-server restores the user's last choice at next boot instead of resetting
+# to the DEVICE.md startup_volume. Sits next to config.json (the dir shared
+# with the Go server via OS_CONFIG_PATH).
+VOLUME_STATE_PATH = os.environ.get(
+    "HAL_VOLUME_STATE_PATH", os.path.join(os.path.dirname(OS_CONFIG_PATH), ".volume")
+)
+
 def _os_cfg_get(key: str, default: str = "") -> str:
     """Read a value from the os-server config.json (shared with the Go server)."""
     try:
