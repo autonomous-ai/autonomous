@@ -339,6 +339,18 @@ def release_servos():
         raise HTTPException(503, "Servo not available")
     if not state.animation_service.robot:
         raise HTTPException(503, "Servo robot not connected")
+    # Stop the vision tracker FIRST. It drives the servo bus from its own
+    # worker thread (send_action under bus_lock), so if it's live when we cut
+    # torque it keeps writing goals right after and the arm re-engages instead
+    # of going limp — exactly the "servo won't release on shutdown while
+    # tracking" race. Clearing animation._running below only stops the emotion
+    # event loop, not this thread, so it must be halted explicitly here.
+    if state.tracker_service and state.tracker_service.is_tracking:
+        try:
+            state.logger.info("release: stopping vision tracker before torque-off")
+            state.tracker_service.stop()
+        except Exception as e:
+            state.logger.warning(f"tracker stop before release failed: {e}")
     state.animation_service._running.clear()
     if state.animation_service._event_thread and state.animation_service._event_thread.is_alive():
         state.animation_service._event_thread.join(timeout=3.0)
@@ -377,6 +389,8 @@ def release_servos():
                 errors[motor_name] = str(e)
     if errors:
         state.logger.warning(f"Servo release errors (offline?): {errors}")
+    else:
+        state.logger.info("release: torque disabled on all servos (arm limp)")
     return {"status": "ok"}
 
 
