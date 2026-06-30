@@ -614,7 +614,11 @@ class MusicService:
                 sys.executable, "-m", "yt_dlp",
                 "--js-runtimes", "node:/usr/bin/node",
                 "--remote-components", "ejs:github",
-                "-f", "bestaudio",
+                # Fall back to "best" when no audio-only progressive format
+                # exists — e.g. YouTube live broadcasts (yt_live_broadcast) only
+                # expose an HLS manifest, where bare "bestaudio" raises
+                # "Requested format is not available" and ffmpeg gets empty input.
+                "-f", "bestaudio/best",
                 "-o", "-",
                 audio_url,
             ],
