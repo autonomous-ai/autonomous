@@ -125,6 +125,11 @@ type AgentHandler struct {
 	// in flight. Cooldown is shorter than compacting because new-session
 	// completes server-side instantly.
 	newSessioning atomic.Bool
+
+	// turnsSinceRotation counts agent turns since the last auto-new-session.
+	// Feeds the sessionRotator decision for backends (e.g. Hermes) whose
+	// reported token count understates real session size. Reset on rotation.
+	turnsSinceRotation atomic.Int64
 }
 
 // runStreamStats is the per-run streaming bookkeeping that backs the

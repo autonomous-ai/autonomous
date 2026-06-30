@@ -91,6 +91,17 @@ type HermesService struct {
 	lastResponseID atomic.Value // string — last response.id observed
 	reqCounter     atomic.Int64
 
+	// Conversation rotation (rotation.go). The gateway chains the whole history
+	// into one response blob per turn keyed on conversation name, so a permanent
+	// name accumulates a multi-MB / multi-million-token chain it must reconstruct
+	// + recompress every turn. conversation holds the active name (boot-fresh +
+	// per-rotation suffix); convOnce seeds bootStamp once; rotateSeq increments
+	// per rotation.
+	conversation atomic.Value // string
+	convOnce     sync.Once
+	bootStamp    int64
+	rotateSeq    atomic.Int64
+
 	// Handler registered via StartWS — kept here so the per-request SSE
 	// consumer can dispatch translated domain.WSEvent frames into the same
 	// pipeline as openclaw.

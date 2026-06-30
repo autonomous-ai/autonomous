@@ -99,16 +99,7 @@ func (s *HermesService) CompactSession(sessionKey string) error {
 	return nil
 }
 
-// NewSession — under Hermes, "new session" means routing future turns to a
-// fresh named conversation. Setting an empty key restores the default. We do
-// not delete prior history (Hermes server still has it under the old name).
-func (s *HermesService) NewSession(sessionKey string) error {
-	slog.Info("NewSession: rotating conversation (hermes backend)", "component", "hermes", "key", sessionKey)
-	// sessionKey here is treated as the next conversation name. Empty means
-	// reset to default. The session UUID gets refreshed by the next response
-	// header so we don't pre-clear it.
-	return nil
-}
+// NewSession lives in rotation.go (it rotates the conversation name).
 
 // UpdateIdentityName for Hermes lives in identity.go — it rewrites the name in
 // <hermes>/SOUL.md (Hermes's identity file; it has no separate IDENTITY.md slot).

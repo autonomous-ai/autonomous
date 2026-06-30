@@ -104,7 +104,7 @@ func (s *HermesService) sendChat(message string, imageBase64 string, fixedReqID 
 
 	body := streamRequest{
 		Model:        Model,
-		Conversation: Conversation,
+		Conversation: s.conversationName(),
 		Stream:       true,
 	}
 	hasImage := imageBase64 != ""

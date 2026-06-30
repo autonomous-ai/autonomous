@@ -326,6 +326,16 @@ type AgentGateway interface {
 	// is unaffected because it lives outside the agent session JSONL.
 	NewSession(sessionKey string) error
 
+	// ShouldRotateSession decides whether the agent session should be rotated
+	// (NewSession) now, given the turn's reported totalTokens and the number of
+	// turns since the last rotation. Each backend declares its own policy because
+	// the right signal differs: OpenClaw/PicoClaw report real token counts and
+	// rotate on a token threshold; Hermes compresses history server-side so its
+	// reported tokens never reflect the real (multi-million-token) chain size, so
+	// it rotates on turn count instead. Called once per turn by the os-server
+	// lifecycle handler.
+	ShouldRotateSession(totalTokens, turnsSinceRotation int) bool
+
 	// IsRecentOutboundChat returns true if the os-server just called chat.send with
 	// this exact text within the recent window. Used by the session.message
 	// handler to skip echoes of os-server-injected user messages (wake greeting,

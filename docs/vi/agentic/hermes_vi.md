@@ -81,6 +81,27 @@ Trạng thái chỉ in-memory (`sessionUUID`, `lastResponseID`, `reqCounter` + c
 tracker guard / broadcast / web_chat / pose-bucket); không gì tồn tại qua lần
 restart os-server.
 
+### Xoay conversation (`rotation.go`)
+
+Gateway nhét **toàn bộ** lịch sử hội thoại vào một response blob **mỗi turn**, key
+theo tên conversation. Vì vậy một tên cố định tích luỹ chuỗi vô hạn (đo được: blob
+`device-main` **28 MB / ~6M token**, `response_store.db` **1.9 GB**), và gateway
+phải dựng lại + nén lại nó mỗi turn — biến một turn đáng lẽ ~7 s thành **~50 s**.
+Để chặn, os-server xoay tên conversation:
+
+- `conversationName()` **boot-fresh**: seed một lần mỗi process thành
+  `device-main-<bootUnix>`, nên restart os-server không bao giờ dính lại chuỗi cũ
+  đã phình.
+- `rotateConversation()` đổi sang `device-main-<bootUnix>-<seq>`, clear
+  `lastResponseID`, để gateway bắt đầu chuỗi mới (nhỏ). Chuỗi cũ bị bỏ lại dưới tên
+  cũ (prune riêng đòi lại đĩa).
+- **Trigger:** handler lifecycle generic gọi `ShouldRotateSession(totalTokens,
+  turnsSinceRotation)` mỗi turn (method của `domain.AgentGateway`). OpenClaw /
+  PicoClaw xoay theo ngưỡng token thật (150k); **Hermes xoay theo số turn**
+  (`rotateMaxTurns = 40`, hoặc spike `rotateTokenThreshold = 50_000`) vì token nó
+  báo là sau-nén (~20–60 k), không phản ánh kích thước chuỗi thật — ngưỡng token sẽ
+  không bao giờ nổ. `NewSession()` thực hiện việc xoay.
+
 ## 4. Giao thức request — `POST /v1/responses`
 
 `client.go` POST một `streamRequest` với `stream: true` rồi đọc luồng SSE:

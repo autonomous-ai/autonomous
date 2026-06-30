@@ -72,14 +72,36 @@ Hermes has no socket, so the "session" is server-side:
 
 - Every response carries the `X-Hermes-Session-Id` response header — one UUID per
   conversation, stable across reconnects. `Service.sessionUUID` shadows it.
-- `Conversation` (`device-main`) is the named channel every turn flows into; all
-  chat/sensing/Telegram turns share it so the agent keeps one context.
+- `Conversation` (base name `device-main`) is the named channel every turn flows
+  into; all chat/sensing/Telegram turns share it so the agent keeps one context.
 - `Service.lastResponseID` caches the latest `response.id`, used to chain turns
   (Responses-API style continuation).
 
 State is in-memory only (`sessionUUID`, `lastResponseID`, `reqCounter` + the
 guard / broadcast / web_chat / pose-bucket run trackers); nothing persists across
 an os-server restart.
+
+### Conversation rotation (`rotation.go`)
+
+The gateway chains the **entire** conversation history into one response blob per
+turn, keyed on conversation name. A permanent name therefore accumulates an
+unbounded chain (measured: a `device-main` blob of **28 MB / ~6M tokens**,
+`response_store.db` at **1.9 GB**), and the gateway must reconstruct + recompress
+it on every turn — turning a turn that should take ~7 s into **~50 s**. To bound
+this, os-server rotates the conversation name:
+
+- `conversationName()` is **boot-fresh**: seeded once per process as
+  `device-main-<bootUnix>`, so an os-server restart never re-attaches to a
+  previously bloated chain.
+- `rotateConversation()` switches to `device-main-<bootUnix>-<seq>`, clears
+  `lastResponseID`, and lets the gateway start a new (small) chain. Old chains are
+  abandoned under their old name (a separate prune reclaims the disk).
+- **Trigger:** the generic lifecycle handler calls `ShouldRotateSession(totalTokens,
+  turnsSinceRotation)` once per turn (a `domain.AgentGateway` method). OpenClaw /
+  PicoClaw rotate on a real-token threshold (150k); **Hermes rotates on turn count**
+  (`rotateMaxTurns = 40`, or a `rotateTokenThreshold = 50_000` spike) because its
+  reported tokens are post-compression (~20–60 k) and never reflect the real chain
+  size — the token threshold would never fire. `NewSession()` performs the rotation.
 
 ## 4. Request protocol — `POST /v1/responses`
 

@@ -9,17 +9,6 @@ import (
 	"go.autonomous.ai/os/lib/i18n"
 )
 
-// autoSessionThreshold is the conversation token count above which we
-// trigger an auto-new-session. The reported chat.history TotalTokens
-// undercounts by ~35K (excludes system prompt, tools, workspace
-// bootstrap), so 150K here ≈ 185K actual context — well below the
-// gpt-5.5 272K window and below the ~200K mark where OpenClaw's
-// native overflow auto-compaction kicks in (3-min freeze observed
-// 2026-05-11). The OS server's /new resets in ~3s, so it races and wins under
-// normal usage. Previously 80K (≈115K actual) — bumped because resets
-// felt too aggressive for short conversational sessions.
-const autoSessionThreshold = 150_000
-
 // autoCompactCooldown is the minimum time between two compact triggers.
 // Compact itself can run for 30-60s+ on the agent runtime; this guard
 // prevents back-to-back fires while one is still in flight.
@@ -31,8 +20,8 @@ const autoCompactCooldown = 2 * time.Minute
 // session more than once.
 const autoNewSessionCooldown = 30 * time.Second
 
-// maybeAutoCompact triggers a sessions.compact RPC when the agent
-// session crosses autoSessionThreshold tokens.
+// maybeAutoCompact triggers a sessions.compact RPC when the backend's rotation
+// policy fires (ShouldRotateSession).
 //
 // Currently disabled in favour of maybeAutoNewSession — kept here as
 // reference / fallback. Re-enable by uncommenting the call site in
@@ -43,14 +32,19 @@ const autoNewSessionCooldown = 30 * time.Second
 //   - blocks the agent for 30-60s+ while the summarize LLM call runs
 //   - summary can override SKILL.md (see docs/agent-compaction.md)
 func (h *AgentHandler) maybeAutoCompact(sessionKey string, totalTokens int, flowRunID string) {
-	if totalTokens <= autoSessionThreshold {
+	// Same per-backend rotation decision as maybeAutoNewSession (the two are
+	// mutually exclusive — only one is wired at the call site, so the shared
+	// turnsSinceRotation counter is incremented by exactly one of them).
+	turns := int(h.turnsSinceRotation.Add(1))
+	if !h.agentGateway.ShouldRotateSession(totalTokens, turns) {
 		return
 	}
 	if !h.compacting.CompareAndSwap(false, true) {
 		return
 	}
+	h.turnsSinceRotation.Store(0)
 	slog.Info("auto-compact triggered", "component", "agent",
-		"total_tokens", totalTokens, "threshold", autoSessionThreshold)
+		"total_tokens", totalTokens, "turns", turns)
 	flow.Log("compact_triggered", map[string]any{
 		"session": sessionKey,
 		"tokens":  totalTokens,
@@ -72,11 +66,10 @@ func (h *AgentHandler) maybeAutoCompact(sessionKey string, totalTokens int, flow
 	}()
 }
 
-// maybeAutoNewSession triggers a sessions.new RPC when the agent
-// session crosses autoSessionThreshold tokens. Replaces compact for
-// the latency-sensitive case: sessions.new completes instantly on the
-// agent runtime so the user does not see the 30-60s freeze that
-// compact causes.
+// maybeAutoNewSession triggers a sessions.new RPC when the backend's rotation
+// policy fires (ShouldRotateSession). Replaces compact for the latency-sensitive
+// case: sessions.new completes instantly on the agent runtime so the user does
+// not see the 30-60s freeze that compact causes.
 //
 // Trade-off vs compact:
 //   - loses verbatim in-session conversation flow ("what we said an
@@ -86,17 +79,24 @@ func (h *AgentHandler) maybeAutoCompact(sessionKey string, totalTokens int, flow
 //     outside the agent session JSONL and survive a session swap
 //   - no TTS notice — the swap is meant to be invisible
 func (h *AgentHandler) maybeAutoNewSession(sessionKey string, totalTokens int, flowRunID string) {
-	if totalTokens <= autoSessionThreshold {
+	turns := int(h.turnsSinceRotation.Add(1))
+	// Rotation policy is per-backend (ShouldRotateSession): OpenClaw/PicoClaw use
+	// a real-token threshold, Hermes uses turn count (its reported tokens are
+	// post-compression and never reflect the real chain size). See
+	// domain.AgentGateway.
+	if !h.agentGateway.ShouldRotateSession(totalTokens, turns) {
 		return
 	}
 	if !h.newSessioning.CompareAndSwap(false, true) {
 		return
 	}
+	h.turnsSinceRotation.Store(0)
 	slog.Info("auto-new-session triggered", "component", "agent",
-		"total_tokens", totalTokens, "threshold", autoSessionThreshold)
+		"total_tokens", totalTokens, "turns", turns)
 	flow.Log("new_session_triggered", map[string]any{
 		"session": sessionKey,
 		"tokens":  totalTokens,
+		"turns":   turns,
 	}, flowRunID)
 	go func() {
 		defer time.AfterFunc(autoNewSessionCooldown, func() {

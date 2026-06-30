@@ -100,7 +100,7 @@ func (s *HermesService) transitionReady(now bool) {
 		slog.Info("Hermes ready",
 			"component", "hermes",
 			"base_url", BaseURL,
-			"conversation", Conversation,
+			"conversation", s.conversationName(),
 			"model", Model)
 		if s.statusLED != nil && s.config.SetUpCompleted {
 			s.statusLED.Clear(statusled.StateAgentDown)
