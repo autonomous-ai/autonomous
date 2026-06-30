@@ -211,8 +211,11 @@ func (s *Service) breathingLoop(ctx context.Context) {
 			}
 			if !running {
 				// Read the current LED color from HAL and start breathing with it.
-				// Fall back to soft blue-white if HAL returns black (just started, no color set).
-				color := [3]int{180, 220, 255} // fallback
+				// Fall back to a soft warm white if HAL returns black (just started,
+				// no color set) — a lamp at rest should read as a cozy lamp turned on,
+				// not a cold "device booting" blue, and warm white stays clear of every
+				// status color (orange = no-internet, blue = booting, etc.).
+				color := [3]int{255, 200, 140} // fallback: warm white (~2700K)
 				if c, err := hal.GetColor(); err == nil && (c[0]+c[1]+c[2]) > 0 {
 					color = c
 				}

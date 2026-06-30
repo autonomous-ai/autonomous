@@ -134,7 +134,7 @@ Khi lamp start và `config.SetUpCompleted == false` (device đang ở AP/provisi
 ## Ambient Idle Behaviors
 
 Khi Lamp idle (không có interaction):
-- **Breathing LED** — sine-wave brightness, palette warm
+- **Breathing LED** — sine-wave brightness. Thở theo màu LED hiện tại; khi chưa có màu nào (vd vừa boot xong), fallback về **trắng ấm dịu `(255, 200, 140)`** (~2700K) speed 0.3, để đèn lúc nghỉ trông như một cái đèn ấm cúng đang bật, không phải màu xanh "thiết bị" lạnh. Nếu user/agent đã đặt màu thì tôn trọng màu đó (breathing dùng màu đó; ambient không đè lên màu đã khóa).
 
 Tự pause khi có interaction, resume sau 60s im lặng.
 
