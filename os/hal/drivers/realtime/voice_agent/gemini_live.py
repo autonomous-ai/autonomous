@@ -509,6 +509,14 @@ class GeminiLiveAgent(VoiceAgentBase):
         self._reconnect()
 
     @override
+    def end_turn(self) -> None:
+        """Release the next turn's commit gate when a turn ends without a
+        `turn_complete` (e.g. the model ended on a delegate tool call). The recv
+        loop is unaffected — it keeps reading this turn in the background until the
+        real turn_complete / timeout; any late output is flushed next turn."""
+        self._turn_done.set()
+
+    @override
     def force_reconnect(self) -> None:
         """Recover a zombie session: close the live session so the recv loop —
         which may be blocked in `async for session.receive()` on a dead socket —

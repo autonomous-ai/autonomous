@@ -521,6 +521,10 @@ class RealtimeOrchestrator:
                     ]
                 )
                 produced = True
+                # Mark the turn done so the NEXT turn's commit isn't gated on a
+                # turn_complete that never comes after a tool call (Gemini manual
+                # VAD waits up to 10s on _turn_done otherwise).
+                self._agent.end_turn()
                 yield DelegateSignal(message=delegate_msg)
                 # Stop the turn here — once the model has delegated, it has nothing
                 # more to say, and waiting for turn_complete just blocks on the
