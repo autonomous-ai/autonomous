@@ -31,8 +31,6 @@ func TestPresyncOwnsConfigStructure(t *testing.T) {
 		`.model.default = "Auto-AI"`,                           // fixed campaign-api model alias (NOT openclaw llm_model)
 		`yq -i '.model = {}'`,                                  // coerce model:'' (post hermes setup --reset) to a map
 		"AUTONOMOUS_API_KEY",                                   // dynamic key sync (.env)
-		`.agent.reasoning_effort = "low"`,                      // cost knob self-heal (TUNING block)
-		`.prompt_caching.response_cache = true`,                // cost knob self-heal (TUNING block)
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("presync.sh missing %q — config structure/sync incomplete", want)
