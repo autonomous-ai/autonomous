@@ -228,6 +228,16 @@ func (s *OpenclawService) EnsureOnboarding() error {
 		needRestart = true
 	}
 
+	// Ensure models.providers.autonomous has the current apiKey + baseUrl from
+	// config.json. SetupAgent writes this during the wizard; EnsureOnboarding does
+	// not — so switching TO openclaw from hermes leaves the provider entry without
+	// an API key and every agent turn fails with "No API key found for provider".
+	if providerSynced, err := s.ensureProviderConfig(); err != nil {
+		slog.Error("ensure provider config failed", "component", "onboarding", "error", err)
+	} else if providerSynced {
+		needRestart = true
+	}
+
 	// Ensure agent defaults (compaction, bootstrap limits, caching)
 	if defaultsPatched, err := s.ensureAgentDefaults(); err != nil {
 		slog.Error("ensure agent defaults failed", "component", "onboarding", "error", err)
@@ -911,6 +921,81 @@ func (s *OpenclawService) ensureGatewayToken() (bool, error) {
 		return false, fmt.Errorf("write openclaw.json: %w", err)
 	}
 	slog.Info("seeded gateway auth token in openclaw.json", "component", "onboarding")
+	return true, nil
+}
+
+// ensureProviderConfig syncs models.providers.autonomous.{apiKey,baseUrl} in
+// openclaw.json with the current config.json values. SetupAgent writes this
+// during the wizard; EnsureOnboarding does not — so switching TO openclaw from
+// another runtime (e.g. hermes) leaves the provider without an API key, causing
+// every agent turn to fail with "No API key found for provider".
+// Best-effort model fetch: if the API is reachable we refresh the full model
+// catalog alongside the key; if not, we update only the auth fields so the
+// gateway can at least authenticate on the next turn.
+// Returns true if the file was modified (caller triggers a gateway restart).
+func (s *OpenclawService) ensureProviderConfig() (bool, error) {
+	if s.config.LLMAPIKey == "" {
+		return false, nil // device not fully configured yet
+	}
+
+	configPath := filepath.Join(s.config.OpenclawConfigDir, "openclaw.json")
+	configBytes, err := os.ReadFile(configPath)
+	if err != nil {
+		return false, fmt.Errorf("read openclaw.json: %w", err)
+	}
+	var configData map[string]interface{}
+	if err := json.Unmarshal(configBytes, &configData); err != nil {
+		return false, fmt.Errorf("parse openclaw.json: %w", err)
+	}
+
+	modelsMap := ensureMap(configData, "models")
+	providersMap := ensureMap(modelsMap, "providers")
+	autonomousMap, _ := providersMap[customProviderName].(map[string]interface{})
+
+	currentKey, _ := autonomousMap["apiKey"].(string)
+	currentBaseURL, _ := autonomousMap["baseUrl"].(string)
+	if currentKey == s.config.LLMAPIKey && currentBaseURL == s.config.LLMBaseURL {
+		return false, nil
+	}
+
+	// Try full catalog refresh; fall back to patching auth fields only.
+	modelsResp, err := FetchModelsFromAPI()
+	if err != nil {
+		slog.Warn("ensureProviderConfig: model API fetch failed, patching auth fields only",
+			"component", "onboarding", "error", err)
+		if autonomousMap == nil {
+			autonomousMap = map[string]interface{}{}
+		}
+		autonomousMap["apiKey"] = s.config.LLMAPIKey
+		autonomousMap["baseUrl"] = s.config.LLMBaseURL
+	} else {
+		entries := make([]any, 0, len(modelsResp.Models))
+		for _, m := range modelsResp.Models {
+			if s.config.LLMThinkingDisabled() {
+				m.Reasoning = false
+			}
+			entries = append(entries, openclawModelToProviderEntry(m))
+		}
+		autonomousMap = map[string]interface{}{
+			"baseUrl": s.config.LLMBaseURL,
+			"api":     resolveAutonomousAPI(modelsResp.API),
+			"apiKey":  s.config.LLMAPIKey,
+			"models":  entries,
+		}
+	}
+
+	modelsMap["mode"] = "merge"
+	providersMap[customProviderName] = autonomousMap
+	configData["models"] = modelsMap
+
+	outBytes, err := json.MarshalIndent(configData, "", "  ")
+	if err != nil {
+		return false, fmt.Errorf("marshal openclaw.json: %w", err)
+	}
+	if err := os.WriteFile(configPath, outBytes, 0600); err != nil {
+		return false, fmt.Errorf("write openclaw.json: %w", err)
+	}
+	slog.Info("synced autonomous provider config in openclaw.json", "component", "onboarding")
 	return true, nil
 }
 
