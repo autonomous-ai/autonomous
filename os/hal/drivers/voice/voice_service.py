@@ -84,7 +84,6 @@ class VoiceService:
         alsa_device: Optional[str] = None,
         enable_people_perception: bool = True,
         enable_expression: bool = False,
-        enable_vision: bool = False,
     ):
         self._stt = stt_provider
         self._input_device = input_device
@@ -153,7 +152,6 @@ class VoiceService:
         self._realtime = RealtimeOrchestrator(
             gateway=AgentGateway(hal_config.AGENT_GATEWAY),
             enable_expression=enable_expression,
-            enable_vision=enable_vision,
         )
 
         # Hook into TTS on_speak_end to feed spoken text back to the realtime agent.

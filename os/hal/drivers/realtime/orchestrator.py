@@ -150,6 +150,19 @@ LOOK_TOOL: dict[str, Any] = {
 }
 
 
+def _camera_present() -> bool:
+    """True when a camera is wired up — the device's `vision` capability at
+    runtime. app_state.camera_capture is only set by server.py when DEVICE.md
+    declares `vision`, so this is the single source of truth for "can look".
+    Lazy import keeps app_state out of this module's import graph."""
+    try:
+        import hal.app_state as state
+
+        return state.camera_capture is not None
+    except Exception:
+        return False
+
+
 class RealtimeOrchestrator:
     """Manages a single realtime voice agent session.
 
@@ -173,7 +186,6 @@ class RealtimeOrchestrator:
         gateway: AgentGateway = AgentGateway.OPENCLAW,
         extra_tools: list[dict[str, Any]] | None = None,
         enable_expression: bool = False,
-        enable_vision: bool = False,
     ) -> None:
         # express_emotion is registered ONLY when the device declares the
         # `expression` capability (DEVICE.md → expression: { routes: [emotion] }).
@@ -183,13 +195,19 @@ class RealtimeOrchestrator:
         tools: list[dict[str, Any]] = [DELEGATE_TOOL]
         if enable_expression:
             tools.append(EMOTION_TOOL)
-        # `look` (in-session vision) is registered only when ALL hold: the device
-        # declares the `vision` capability (camera present), the config flag is on
-        # (REALTIME_GEMINI_VISION), and the provider is Gemini (the image-injection
-        # → continue-turn flow is implemented + tested for Gemini Live; OpenAI keeps
-        # delegating). Otherwise visual questions fall back to delegate_to_main.
+        # `look` (in-session vision) is registered only when ALL hold: a camera is
+        # present, the config flag is on (REALTIME_GEMINI_VISION), and the provider
+        # is Gemini (the image-injection → continue-turn flow is implemented +
+        # tested for Gemini Live; OpenAI keeps delegating). Otherwise visual
+        # questions fall back to delegate_to_main.
+        #
+        # Camera presence IS the device's `vision` capability at runtime: server.py
+        # only creates app_state.camera_capture when DEVICE.md declares `vision`
+        # (the `camera` route mounts). Reusing that one signal — the same one
+        # /health and _capture_frame read — means no extra capability plumbing and
+        # it's correct for EVERY construction path (auto-start and /voice/start).
         self._vision_enabled: bool = (
-            enable_vision
+            _camera_present()
             and config.REALTIME_GEMINI_VISION
             and config.REALTIME_PROVIDER.strip().lower() == "gemini"
         )
