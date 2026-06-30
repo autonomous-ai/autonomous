@@ -794,6 +794,10 @@ class RealtimeOrchestrator:
             self._agent.send([ImageInput(image=frame)])
             self._looked_this_turn = True
             self._last_look_sent_monotonic = now
+            # Persist the SAME frame so that if this turn later delegates / falls
+            # back to the main agent (e.g. Gemini times out mid-turn), the agent
+            # reuses it instead of taking a fresh snapshot. See turn_dispatch.
+            self._persist_look_frame(frame)
             result: str = '{"result": "captured"}'
             logger.info(
                 "[realtime] look: captured frame %s in %.0fms",
@@ -857,6 +861,38 @@ class RealtimeOrchestrator:
         except Exception:
             logger.exception("[realtime] look: frame capture failed")
             return None
+
+    @staticmethod
+    def _persist_look_frame(frame: Any) -> None:
+        """Save the look frame to disk and record it in app_state so a delegate /
+        fallback turn can hand it to the main agent by path (see turn_dispatch).
+        Best-effort: a write failure just means the agent snapshots fresh."""
+        try:
+            import os
+            import time as _time
+
+            import cv2
+
+            import hal.app_state as state
+
+            os.makedirs(state._SNAPSHOT_DIR, exist_ok=True)
+            path: str = os.path.join(
+                state._SNAPSHOT_DIR, f"look_{int(_time.time() * 1000)}.jpg"
+            )
+            if not cv2.imwrite(path, frame):
+                return
+            # Drop the previous look frame so they don't pile up (the snapshot ring
+            # only tracks /camera/snapshot saves, not these).
+            prev = getattr(state, "realtime_look_frame_path", None)
+            if prev and prev != path and os.path.basename(prev).startswith("look_"):
+                try:
+                    os.remove(prev)
+                except OSError:
+                    pass
+            state.realtime_look_frame_path = path
+            state.realtime_look_frame_ts = time.monotonic()
+        except Exception:
+            logger.exception("[realtime] look: persist frame failed")
 
     def send_text(self, text: str) -> None:
         """Send a text message to the agent as context (non-blocking).

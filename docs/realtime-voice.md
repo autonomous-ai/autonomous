@@ -129,6 +129,22 @@ image tokens. To stop an over-eager model from re-billing images, `_handle_look_
 sends **at most one image per turn** and **none within `HAL_GEMINI_VISION_MIN_INTERVAL_S`
 (default 10s) of the last send** — repeat looks reuse the frame already in context.
 
+**Frame handoff on delegate / timeout.** When a `look` turn ends up delegating or
+falling back to the main agent (most importantly when Gemini times out *mid*-look),
+the frame `look` already captured is handed to the main agent **by file path** so
+it answers from that exact image instead of taking a fresh snapshot (faster, and
+it answers about the moment the user pointed at). `_handle_look_call` persists the
+frame to `_SNAPSHOT_DIR` and records it in `app_state.realtime_look_frame_path`;
+`turn_dispatch._take_vision_handoff()` consumes it **once per turn** (strictly: a
+handled turn that already used it clears it so a later delegate can't pick up a
+stale image) and, when fresh (`HAL_GEMINI_VISION_HANDOFF_MAX_AGE_S`, default 20s),
+prepends a `[vision-image] <path>` line to the message sent to the agent. The
+`camera` skill reads that path verbatim and skips `/camera/snapshot`. The handoff
+carries the **path**, not the image bytes — HAL and the agent share the
+filesystem, so a path avoids bloating the turn channel. If the timeout happens
+*before* the frame is captured, there's nothing to hand off and the agent
+snapshots normally.
+
 ## Providers
 
 Two interchangeable backends, selected by `HAL_REALTIME_PROVIDER`
@@ -343,6 +359,7 @@ Each knob's `HAL_*` env var overrides the block (and is the dev-box path):
 | `HAL_GEMINI_VISION` | `true` | In-session `look` tool (Gemini only). Lets the realtime model capture one camera frame and answer visual questions ("what is this?") in-session instead of delegating. Default on; only registered when the device also has the `vision` capability. Also settable via `realtime.gemini.vision` in config.json. |
 | `HAL_GEMINI_VISION_MAX_WIDTH` | `768` | Max width (px) the captured frame is downscaled to before sending — bounds image tokens. |
 | `HAL_GEMINI_VISION_MIN_INTERVAL_S` | `10` | Cost guard: minimum seconds between two image **sends**. Repeat `look` calls within this window (or a second call in the same turn) reuse the frame already in context instead of sending a new one. `0` = always send fresh. |
+| `HAL_GEMINI_VISION_HANDOFF_MAX_AGE_S` | `20` | Max age of a `look` frame still handed off (by path) to the main agent on a delegate/timeout fallback so it reuses the image instead of re-snapshotting. `0` disables the age guard (frame is still cleared per-turn). |
 | `OPENAI_API_KEY` | — | OpenAI key; falls back to `llm_api_key` |
 | `HAL_OPENAI_REALTIME_MODEL` | `gpt-realtime-2` | |
 | `HAL_OPENAI_REALTIME_VOICE` | `alloy` | |

@@ -601,6 +601,14 @@ REALTIME_GEMINI_VISION_MAX_WIDTH: int = int(
 REALTIME_GEMINI_VISION_MIN_INTERVAL_S: float = float(
     os.environ.get("HAL_GEMINI_VISION_MIN_INTERVAL_S", "10.0")
 )
+# Vision handoff: when a `look` turn delegates / falls back to the main agent
+# (e.g. Gemini timed out mid-turn), the frame `look` already captured is handed
+# to the main agent BY PATH so it reuses it instead of snapshotting again. The
+# handoff path is only attached if the frame is younger than this (freshness
+# guard; the frame is also cleared per-turn). 0 disables the age guard.
+REALTIME_GEMINI_VISION_HANDOFF_MAX_AGE_S: float = float(
+    os.environ.get("HAL_GEMINI_VISION_HANDOFF_MAX_AGE_S", "20.0")
+)
 
 # --- Realtime: OpenAI Realtime ---
 REALTIME_OPENAI_API_KEY: str = (
@@ -621,6 +629,21 @@ REALTIME_OPENAI_REASONING_EFFORT: str = _rt_str("HAL_OPENAI_REASONING_EFFORT", _
 # --- Realtime: Context manager ---
 OPENCLAW_WORKSPACE_DIR: str = os.environ.get("HAL_OPENCLAW_WORKSPACE_DIR", "/root/.openclaw/workspace")
 HERMES_WORKSPACE_DIR: str = os.environ.get("HAL_HERMES_WORKSPACE_DIR", "/root/.hermes")
+
+# Camera snapshot dir. MUST sit under the ACTIVE agent runtime's media root — the
+# agent's image tool only reads files under its allow-list, else it returns "not
+# under an allowed directory". So this follows AGENT_GATEWAY instead of a hardcoded
+# brand (the multi-agent bug). NOT /tmp: outside the allow-list AND wiped on
+# restart. Override with HAL_SNAPSHOT_DIR. The path is handed to the agent
+# absolute, so any runtime reads it as root.
+_AGENT_CONFIG_DIRS: dict[str, str] = {
+    "openclaw": "/root/.openclaw",
+    "hermes": "/root/.hermes",
+}
+SNAPSHOT_DIR: str = os.environ.get("HAL_SNAPSHOT_DIR") or (
+    _AGENT_CONFIG_DIRS.get(AGENT_GATEWAY, _AGENT_CONFIG_DIRS["openclaw"])
+    + "/media/hal-snapshots"
+)
 _rt_workspace: str = OPENCLAW_WORKSPACE_DIR.rstrip("/")
 REALTIME_MEMORY_PATH: str = os.environ.get("HAL_REALTIME_MEMORY_PATH", f"{_rt_workspace}/realtime/memory.jsonl")
 REALTIME_MAX_MEMORY_ENTRIES: int = int(os.environ.get("HAL_REALTIME_MAX_MEMORY_ENTRIES", "1000"))

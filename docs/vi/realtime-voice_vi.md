@@ -126,6 +126,20 @@ thêm vào là không đáng kể so với audio của turn. Frame 768px ≈ và
 `HAL_GEMINI_VISION_MIN_INTERVAL_S` (mặc định 10s)** kể từ lần gửi trước — các lần
 `look` lặp lại sẽ xài lại ảnh đã có trong context.
 
+**Bàn giao frame khi delegate / timeout.** Khi một turn `look` rốt cuộc delegate
+hoặc rớt xuống main agent (quan trọng nhất là khi Gemini timeout *giữa* lúc look),
+frame mà `look` đã chụp được bàn giao cho main agent **bằng đường dẫn file** để nó
+trả lời từ đúng ảnh đó thay vì chụp lại (nhanh hơn, và trả lời đúng khoảnh khắc
+user chỉ vào). `_handle_look_call` lưu frame vào `_SNAPSHOT_DIR` và ghi vào
+`app_state.realtime_look_frame_path`; `turn_dispatch._take_vision_handoff()` tiêu thụ
+nó **một lần mỗi turn** (turn đã handled dùng rồi thì clear luôn để delegate sau
+không nhặt phải ảnh cũ) và, khi còn tươi (`HAL_GEMINI_VISION_HANDOFF_MAX_AGE_S`,
+mặc định 20s), chèn dòng `[vision-image] <path>` vào message gửi cho agent. Skill
+`camera` đọc đúng path đó và bỏ qua `/camera/snapshot`. Handoff mang theo **path**,
+không phải bytes ảnh — HAL và agent chung filesystem nên dùng path để khỏi phình
+kênh turn. Nếu timeout xảy ra *trước khi* kịp chụp thì không có gì để bàn giao,
+agent chụp như bình thường.
+
 ## Các provider
 
 Hai backend thay thế cho nhau, chọn bằng `HAL_REALTIME_PROVIDER`
@@ -334,6 +348,7 @@ Mỗi knob có thể bị `HAL_*` env override (thắng block, và là đường
 | `HAL_GEMINI_VISION` | `true` | Tool `look` trong phiên (chỉ Gemini). Cho model realtime chụp một frame camera và trả lời câu hỏi thị giác ("cái này là gì?") ngay trong phiên thay vì delegate. Mặc định bật; chỉ đăng ký khi thiết bị còn có capability `vision`. Cũng đặt được qua `realtime.gemini.vision` trong config.json. |
 | `HAL_GEMINI_VISION_MAX_WIDTH` | `768` | Bề rộng tối đa (px) frame được downscale trước khi gửi — giới hạn token ảnh. |
 | `HAL_GEMINI_VISION_MIN_INTERVAL_S` | `10` | Chặn chi phí: số giây tối thiểu giữa hai lần **gửi ảnh**. Gọi `look` lặp trong khoảng này (hoặc gọi lần hai trong cùng turn) sẽ xài lại ảnh đã có trong context thay vì gửi ảnh mới. `0` = luôn gửi ảnh mới. |
+| `HAL_GEMINI_VISION_HANDOFF_MAX_AGE_S` | `20` | Tuổi tối đa của frame `look` còn được bàn giao (bằng path) cho main agent khi delegate/timeout fallback để nó xài lại ảnh thay vì chụp lại. `0` tắt guard tuổi (frame vẫn bị clear mỗi turn). |
 | `OPENAI_API_KEY` | — | Key OpenAI; fallback về `llm_api_key` |
 | `HAL_OPENAI_REALTIME_MODEL` | `gpt-realtime-2` | |
 | `HAL_OPENAI_REALTIME_VOICE` | `alloy` | |
