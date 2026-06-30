@@ -25,6 +25,15 @@ STT pipeline. At end-of-turn the model either:
 The `delegate_to_main` tool is registered automatically by the orchestrator
 (`orchestrator.py`, `DELEGATE_TOOL`).
 
+On a delegate call, `stream_output()` **breaks the turn immediately** after
+yielding the `DelegateSignal` — it does *not* wait for the model's
+`turn_complete`. The model has nothing more to say once it delegates, so
+draining the rest of the turn would just block on the `receive()` timeout
+(`HAL_REALTIME_RECV_QUEUE_TIMEOUT_S`) — the model stays silent for the full
+window, adding that many seconds of latency before the main agent even sees the
+request. The function result is already sent back to the model before the break;
+the dangling open turn is cleared by the next turn's `flush_output()`.
+
 ## Emotion expression (fire-and-forget)
 
 If the device declares the `expression` capability

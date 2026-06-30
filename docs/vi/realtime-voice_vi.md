@@ -25,6 +25,14 @@ lượt, model sẽ:
 Tool `delegate_to_main` được orchestrator đăng ký tự động (`orchestrator.py`,
 `DELEGATE_TOOL`).
 
+Khi model gọi delegate, `stream_output()` **break turn ngay lập tức** sau khi
+yield `DelegateSignal` — *không* chờ `turn_complete` của model. Model đã delegate
+thì không còn gì để nói nữa, nên drain nốt turn chỉ khiến nó chặn ở timeout
+`receive()` (`HAL_REALTIME_RECV_QUEUE_TIMEOUT_S`) — model im suốt cả cửa sổ đó,
+cộng thêm ngần ấy giây trễ trước khi agent chính nhìn thấy yêu cầu. Function
+result đã được gửi lại model trước khi break; turn còn mở dang dở sẽ được
+`flush_output()` của turn kế dọn.
+
 ## Biểu cảm cảm xúc (fire-and-forget)
 
 Nếu thiết bị khai báo capability `expression`

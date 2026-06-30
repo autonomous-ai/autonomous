@@ -133,6 +133,22 @@ Identical contract to OpenClaw: while a turn is active (`IsBusy`), passive sensi
 events are dropped or buffered (`QueuePendingEvent`, last-write-wins per type) and
 replayed when idle, so ambient signals never interrupt an in-flight command.
 
+**Merge-drain (Hermes-only).** OpenClaw's backend has a steer mode
+(`messages.queue.mode=steer`) that merges concurrent messages into the in-flight
+turn at the next model boundary. The Hermes backend (external NousResearch
+service, stateless `POST /v1/responses`) has no such mode, so os-server batches
+client-side instead: when `drainPendingEvents` runs, surviving events are
+partitioned by `standaloneDrain`. Standalone events keep their own turn — real
+voice commands (`voice` / `voice_command`, answered directly), `voice_agent_handled`
+(silent reply), and image-bearing events. The remaining pure-ambient sensing
+(presence / motion / emotion / speech_emotion) is collapsed into a **single turn**
+via `sendMergedPending` (one `runID`, lines joined under `mergedSensingHeader`),
+so the per-turn prompt floor is paid once instead of once per event. This recovers
+most of steer's cost saving but not its immediacy: the batch fires only after the
+current turn ends, never mid-turn. Gated by the `mergeDrainEnabled` const
+(set `false` to fall back to one-turn-per-event replay). See
+`internal/hermes/events.go`.
+
 ## 8. Channels (Telegram/Slack/Discord) — inbound visibility + fan-out
 
 The Hermes gateway **owns Telegram/Discord/WhatsApp I/O**: it polls those platforms

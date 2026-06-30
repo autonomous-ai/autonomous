@@ -137,7 +137,7 @@ When lamp starts and `config.SetUpCompleted == false` (device in AP/provisioning
 ## Ambient Idle Behaviors
 
 When Lamp is idle (no interaction):
-- **Breathing LED** — sine-wave brightness, warm palette
+- **Breathing LED** — sine-wave brightness. Breathes the current LED color; when none is set (e.g. just after boot), it falls back to a soft warm white `(255, 200, 140)` (~2700K) at speed 0.3, so a lamp at rest reads as a cozy lamp turned on rather than a cold "device" blue. A user/agent-set color is respected (breathing uses it; ambient never overrides a locked color).
 
 Auto-pauses on interaction, resumes after 60s of silence.
 

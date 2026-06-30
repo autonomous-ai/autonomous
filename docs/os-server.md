@@ -277,6 +277,7 @@ HAL (Python): FastAPI standard JSON responses.
    - Connect OpenClaw WebSocket
    - Connect MQTT
    - Start ambient behaviors
+   - Set speaker volume to the device's `startup_volume` (DEVICE.md front matter, default 100)
 4. If not yet set up: wait for `POST /api/device/setup`
 
 ## Local Intent Matching

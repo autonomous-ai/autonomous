@@ -128,6 +128,17 @@ class VoiceAgentBase(ABC):
             for inp in inputs:
                 self._send_queue.put(InputEvent(input=inp))
 
+    def end_turn(self) -> None:
+        """Mark the current turn finished from the consumer's side.
+
+        Default no-op. Gemini's manual-VAD path gates the NEXT turn's commit on a
+        `_turn_done` event that only the model's `turn_complete` sets. When a turn
+        ends with a tool call (e.g. delegate_to_main) the model sends no
+        turn_complete, so without this the next commit blocks on `_turn_done.wait`
+        for the full 10s timeout. The orchestrator calls this after a delegate so
+        the following turn commits immediately.
+        """
+
     def receive(self, *, stop_on_done: bool = True) -> Generator[OutputBase, None, None]:
         """Sync generator — yields OutputBase items from _recv_queue.
 

@@ -165,6 +165,9 @@ Always use `context.Context` for cancellation. Background goroutines must respec
 ### Validation
 Use `go-playground/validator` for struct validation. Validate at HTTP handler level before passing to services.
 
+### Commit messages
+Keep them short — one line, imperative subject (`area: what changed`). No long bodies, no bullet lists, no verbose explanation.
+
 ### Naming (paths under `os/services/`)
 - Handlers: `server/<domain>/delivery/http/handler.go`
 - Services: `internal/<domain>/service.go`

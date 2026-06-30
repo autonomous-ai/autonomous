@@ -277,6 +277,7 @@ HAL (Python): FastAPI standard JSON responses.
    - Kết nối OpenClaw WebSocket
    - Kết nối MQTT
    - Start ambient behaviors
+   - Đặt volume loa theo `startup_volume` của thiết bị (front matter DEVICE.md, mặc định 100)
 4. Nếu chưa setup: chờ `POST /api/device/setup`
 
 ## Local Intent Matching
