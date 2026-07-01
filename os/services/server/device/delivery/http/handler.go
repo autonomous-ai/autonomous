@@ -47,8 +47,56 @@ func ProvideDeviceHandler(ds *device.Service, ns *network.Service, cfg *config.C
 func (h *DeviceHandler) Setup(c *gin.Context) {
 	var req domain.SetupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		slog.Warn("setup bind json failed", "component", "device", "error", err)
 		c.JSON(http.StatusBadRequest, serializers.ResponseError(err.Error()))
 		return
+	}
+	slog.Info("setup request received", "component", "device",
+		"ssid_len", len(req.SSID),
+		"wifi_password_len", len(req.Password),
+		"admin_password_len", len(req.AdminPassword),
+		"llm_api_key_len", len(req.LLMAPIKey),
+		"llm_base_url_len", len(req.LLMBaseURL),
+		"device_id_len", len(req.DeviceID),
+		"channel", req.Channel,
+		"set_up_completed", h.config.SetUpCompleted,
+		"admin_hash_on_file", h.config.AdminPasswordHash != "",
+	)
+	// First-time setup with no admin password supplied: default it to the
+	// device's hardware suffix (last 4 chars after '-' in GetDeviceMac(), e.g.
+	// "intern-993f" → "993f"). This suffix matches the AP hotspot SSID (set by
+	// scripts/provision/setup-ap.sh with identical logic) and is printed on
+	// the sticker at the bottom of the device, so operators can sign in without
+	// picking a password during setup. Only fires when the device has no
+	// admin_password_hash yet — re-setup on a provisioned device keeps its
+	// existing hash. Fails 400 rather than silently falling back to a
+	// hardcoded default when the mac is unreadable (no DEVICE_TYPE env, no
+	// serial, no eth MAC) — silent fallback would give every unidentified
+	// device the same well-known password.
+	if req.AdminPassword == "" && !h.config.SetUpCompleted && h.config.AdminPasswordHash == "" {
+		mac := device.GetDeviceMac()
+		dash := strings.LastIndex(mac, "-")
+		slog.Info("admin_password default: input snapshot", "component", "device",
+			"mac", mac,
+			"mac_len", len(mac),
+			"last_dash_idx", dash,
+		)
+		if mac == "" || dash < 0 || dash == len(mac)-1 {
+			slog.Warn("admin_password default failed — device id unreadable", "component", "device",
+				"mac", mac, "reason", "empty mac or malformed dash position")
+			c.JSON(http.StatusBadRequest, serializers.ResponseError(
+				"device hardware ID unreadable — cannot default admin_password (set it manually)"))
+			return
+		}
+		req.AdminPassword = mac[dash+1:]
+		slog.Info("admin_password defaulted to device suffix", "component", "device",
+			"suffix", req.AdminPassword, "suffix_len", len(req.AdminPassword))
+	} else {
+		slog.Info("admin_password default skipped", "component", "device",
+			"has_admin_password_in_req", req.AdminPassword != "",
+			"set_up_completed", h.config.SetUpCompleted,
+			"admin_hash_on_file", h.config.AdminPasswordHash != "",
+		)
 	}
 	// Re-setup via `#force`: operator may omit secrets they already have on
 	// file (the web form hides them when `has_*` reports configured). Merge
@@ -58,10 +106,15 @@ func (h *DeviceHandler) Setup(c *gin.Context) {
 		mergeMissingFromConfig(&req, h.config)
 	}
 	if err := validator.New().Struct(req); err != nil {
+		slog.Warn("setup validator failed", "component", "device", "error", err.Error(),
+			"ssid_set", req.SSID != "", "password_set", req.Password != "",
+			"llm_api_key_set", req.LLMAPIKey != "", "llm_base_url_set", req.LLMBaseURL != "",
+			"device_id_set", req.DeviceID != "")
 		c.JSON(http.StatusBadRequest, serializers.ResponseError(err.Error()))
 		return
 	}
 	if err := req.ValidateChannel(); err != nil {
+		slog.Warn("setup channel validation failed", "component", "device", "error", err.Error(), "channel", req.Channel)
 		c.JSON(http.StatusBadRequest, serializers.ResponseError(err.Error()))
 		return
 	}

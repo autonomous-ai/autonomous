@@ -67,45 +67,47 @@ export function WifiSection({
     <SectionCard
       id="wifi"
       active={active}
-      title={showAdminPassword ? "Set up your device" : "Wi-Fi"}
+      title={showAdminPassword ? "Setting up" : "Wi-Fi"}
       icon={showAdminPassword ? <Settings size={17} /> : <Wifi size={17} />}
-      description={showAdminPassword
-        ? "Create a password and connect your device to Wi-Fi."
-        : "Pick the home network your device should join, then enter its password."}
+      description="Choose your Wi-Fi and enter its password."
     >
-      {/* Device admin password — shown first, in clear text. Set once here; the
-          operator signs in with it later, so no hide toggle / no confirm.
-          Only rendered when the caller passes setAdminPassword (V2 first-time
-          setup); in V1 the password lives in the Device step instead. */}
+      {/* Device admin password — kept mounted but hidden so its state (empty)
+          still submits. Operators no longer see or type this: the backend
+          defaults an empty AdminPassword to the 4 characters after the dash in
+          the device's hardware ID (see handler.Setup). The Login page tells the
+          operator where to read that suffix (sticker on the bottom of device).
+          V1 (isV1) still shows the password in its dedicated Device step; only
+          the V2 merged flow hides it. */}
       {showAdminPassword && (
         <>
-          <GroupLabel first>Device password</GroupLabel>
-          <div style={{ marginBottom: FIELD_GAP }}>
-            <div style={{ position: "relative" }}>
-            <input
-              id="admin_password" type={adminVisible ? "text" : "password"} value={adminPassword ?? ""}
-              onChange={(e) => setAdminPassword!(e.target.value)}
-              placeholder={`At least ${ADMIN_PASSWORD_MIN} characters`} autoComplete="off"
-              style={{ ...INPUT_STYLE, padding: INPUT_PAD_ONE_ICON }}
-            />
-            <button
-              type="button" onClick={() => setAdminVisible((v) => !v)} tabIndex={-1}
-              className="lm-eye-btn"
-              aria-label={adminVisible ? "Hide password" : "Show password"}
-              style={{
-                position: "absolute", right: 5, top: "50%", transform: "translateY(-50%)",
-                height: 32, width: 32, padding: 0, background: "none", border: "none",
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
-              {adminVisible ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
-          </div>
-            <div style={{ marginTop: 6, fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>
-              Keeps your device private and lets you sign in later. Don't lose it.
+          <div style={{ display: "none" }}>
+            <GroupLabel first>Device password</GroupLabel>
+            <div style={{ marginBottom: FIELD_GAP }}>
+              <div style={{ position: "relative" }}>
+              <input
+                id="admin_password" type={adminVisible ? "text" : "password"} value={adminPassword ?? ""}
+                onChange={(e) => setAdminPassword!(e.target.value)}
+                placeholder={`At least ${ADMIN_PASSWORD_MIN} characters`} autoComplete="off"
+                style={{ ...INPUT_STYLE, padding: INPUT_PAD_ONE_ICON }}
+              />
+              <button
+                type="button" onClick={() => setAdminVisible((v) => !v)} tabIndex={-1}
+                className="lm-eye-btn"
+                aria-label={adminVisible ? "Hide password" : "Show password"}
+                style={{
+                  position: "absolute", right: 5, top: "50%", transform: "translateY(-50%)",
+                  height: 32, width: 32, padding: 0, background: "none", border: "none",
+                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                {adminVisible ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+              <div style={{ marginTop: 6, fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>
+                Keeps your device private and lets you sign in later. Don't lose it.
+              </div>
             </div>
           </div>
-          <GroupLabel>Wi-Fi</GroupLabel>
         </>
       )}
       <div style={{ marginBottom: FIELD_GAP }}>
@@ -127,7 +129,7 @@ export function WifiSection({
               cursor: "pointer",
             }}
           >
-            <option value="">Select network</option>
+            <option value="">Choose your Wi-Fi</option>
             {uniqueNetworks.map((n) => (
               <option key={n.bssid} value={n.ssid}>{n.ssid}</option>
             ))}

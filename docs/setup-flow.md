@@ -55,6 +55,8 @@ When the OS server is not yet configured (`SetUpCompleted = false`), the device 
 
 **Response:** Returns immediately `{"status": 1}`. Setup runs async in a goroutine after 2s delay.
 
+**Admin password default:** `admin_password` is optional. When empty on a first-time setup (`SetUpCompleted=false` and no `AdminPasswordHash` on file), the handler defaults it to the 4-char hardware suffix from `device.GetDeviceMac()` — the same suffix `scripts/provision/setup-ap.sh` uses for the AP SSID (`<DEVICE_TYPE>-<xxxx>`). The suffix is printed on the sticker at the bottom of the device, so operators can sign into the admin UI without picking a password. The V2 Setup Web UI hides the DEVICE PASSWORD field entirely and relies on this default; V1's dedicated Device step still asks the operator to pick one. Fails 400 (`device hardware ID unreadable`) when `GetDeviceMac()` returns empty (no `DEVICE_TYPE` env, no serial, no eth MAC) — silent fallback would give every unidentified device the same well-known password.
+
 ### POST /api/device/channel
 
 Change messaging channel after setup is complete. Accepts `telegram`, `slack`, `discord`.

@@ -788,6 +788,19 @@ server {
   # 'unsafe-inline' stays only on style-src for its inline style props.
   add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self' ws: wss: http:; frame-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self'" always;
 
+  # No-cache the SPA shell so companion-app webviews (aggressive caching)
+  # pick up new UI builds without needing manual cache-clear. Assets under
+  # /assets/ are hash-named per build so they can (and should) stay cached.
+  location = /index.html {
+    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    expires 0;
+  }
+  location = / {
+    add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+    expires 0;
+    try_files /index.html =404;
+  }
+
   location / {
     try_files \$uri /index.html;
   }

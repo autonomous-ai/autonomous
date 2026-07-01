@@ -102,13 +102,36 @@ export function safeSearch(search?: string): string {
   return out ? `?${out}` : "";
 }
 
+// Session-storage key that outlives the scrub. Setup's useSetupUrlParams
+// module reads from this key when window.location.search is empty (post-scrub
+// reload), so the Setup form can still ship the operator-provided secrets. Key
+// MUST match the one in hooks/setup/useSetupUrlParams.ts.
+const SETUP_URL_SEARCH_STORE_KEY = "autonomous.setup_url_search.v1";
+
 /** Scrub secret query params from window.location without a navigation.
  *  Called once on every page mount so a `?llm_api_key=…` link doesn't survive
- *  in browser history / address bar / clipboard after the page reads it. */
+ *  in browser history / address bar / clipboard after the page reads it.
+ *
+ *  F5-reload survival: persist the raw pre-scrub search to sessionStorage
+ *  BEFORE wiping the URL. That way a reload (which reloads the scrubbed URL,
+ *  losing everything the module-load snapshot in useSetupUrlParams would have
+ *  captured) can still rehydrate the operator's secrets. sessionStorage is
+ *  per-tab and cleared on tab close, so this stays a safer resting place than
+ *  the URL — not shown in the address bar, not screenshot-captured, not
+ *  walked by "back" history. Doing this here (rather than only in
+ *  useSetupUrlParams) covers the cache-transitional case: a cached OLD JS
+ *  bundle that runs scrub before the NEW JS bundle has ever loaded still
+ *  seeds sessionStorage, so a subsequent F5 into NEW JS can rehydrate. */
 export function scrubLocationSecrets(): void {
   if (typeof window === "undefined") return;
-  const cleaned = safeSearch();
-  if (cleaned === window.location.search) return;
+  const raw = window.location.search;
+  const cleaned = safeSearch(raw);
+  if (cleaned === raw) return;
+  try {
+    if (raw) sessionStorage.setItem(SETUP_URL_SEARCH_STORE_KEY, raw);
+  } catch {
+    /* private-mode / storage disabled — URL scrub still proceeds */
+  }
   const next = `${window.location.pathname}${cleaned}${window.location.hash}`;
   window.history.replaceState(null, "", next);
 }

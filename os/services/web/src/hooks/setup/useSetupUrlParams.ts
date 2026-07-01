@@ -35,8 +35,35 @@ export interface SetupUrlParams {
 // window.location.search — reading via useSearchParams() at that point
 // returns empty strings. The module-level snapshot captures the operator-
 // provided values up front so the form state still ships them on submit.
-const INITIAL_SEARCH: string =
-  typeof window !== "undefined" ? window.location.search : "";
+//
+// F5-reload survival: the scrub uses history.replaceState, which changes the
+// URL the browser reloads. On reload, window.location.search is already
+// empty — the module snapshot would be lost. Persist the raw search string
+// to sessionStorage (per-tab, cleared on tab close) so a reload during the
+// same setup session re-hydrates the params from there. sessionStorage is
+// SAFER than URL as a resting place: not shown in the address bar, not
+// captured by screenshots of the URL, not walked by "back" history.
+// Key MUST match SETUP_URL_SEARCH_STORE_KEY in lib/api.ts (scrubLocationSecrets
+// writes here before wiping the URL; this module reads from here on reload).
+const SESSION_STORE_KEY = "autonomous.setup_url_search.v1";
+const INITIAL_SEARCH: string = (() => {
+  if (typeof window === "undefined") return "";
+  const fromURL = window.location.search;
+  // A non-empty URL wins — a fresh open from the companion app is authoritative
+  // and should overwrite whatever a prior session persisted.
+  if (fromURL) {
+    try { sessionStorage.setItem(SESSION_STORE_KEY, fromURL); } catch {
+      /* private-mode / disabled storage — fall back to URL-only behavior */
+    }
+    return fromURL;
+  }
+  // Empty URL (post-scrub reload): try sessionStorage rehydration.
+  try {
+    return sessionStorage.getItem(SESSION_STORE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+})();
 const INITIAL_PARAMS: URLSearchParams = new URLSearchParams(INITIAL_SEARCH);
 
 // The raw original query string ("?…") — used to build cross-origin redirect

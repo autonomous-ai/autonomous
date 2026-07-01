@@ -69,6 +69,10 @@ export default function Login() {
         </div>
         <div style={{ fontSize: 12, color: C.textDim, marginBottom: 18, lineHeight: 1.5 }}>
           Enter the admin password you set during device setup.
+          <div style={{ marginTop: 6 }}>
+            If you haven't set one, the default is the 4 characters after the
+            dash on the sticker at the bottom of your device.
+          </div>
         </div>
 
         {error && (
