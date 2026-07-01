@@ -39,6 +39,7 @@ func InitializeServer() (*Server, error) {
 		ambient.ProviderSet,
 		healthwatch.ProviderSet,
 		statusled.ProviderSet,
+		provideStatusLEDHasLight,
 		_healthHttpDeliver.ProviderSet,
 		_networkHttpDeliver.ProviderSet,
 		_deviceHttpDeliver.ProviderSet,

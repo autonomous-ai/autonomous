@@ -9,22 +9,21 @@ import (
 	"sync"
 	"time"
 
-	"go.autonomous.ai/os/internal/device"
 	"go.autonomous.ai/os/lib/hal"
-	"go.autonomous.ai/os/server/config"
 )
 
 // State represents a named LED status.
 type State string
 
 const (
-	StateOTA          State = "ota"          // Firmware updating
-	StateError        State = "error"        // System error
-	StateBooting      State = "booting"      // Starting up
-	StateConnectivity State = "connectivity" // No internet connection
-	StateHALDown      State = "hal_down"     // HAL hardware server unreachable
-	StateAgentDown    State = "agent_down"   // OpenClaw agent disconnected
-	StateHardware     State = "hardware"     // Hardware component failure (servo/led/audio/voice)
+	StateOTA             State = "ota"              // Firmware updating
+	StateError           State = "error"            // System error
+	StateBooting         State = "booting"          // Starting up
+	StateConnectivity    State = "connectivity"     // No internet connection
+	StateWifiConnecting  State = "wifi_connecting"  // Associating with Wi-Fi during POST /api/device/setup
+	StateHALDown         State = "hal_down"         // HAL hardware server unreachable
+	StateAgentDown       State = "agent_down"       // OpenClaw agent disconnected
+	StateHardware        State = "hardware"         // Hardware component failure (servo/led/audio/voice)
 )
 
 // The color/effect/speed for each state lives in HAL (STATUS_LED_PRESETS,
@@ -33,14 +32,19 @@ const (
 // state name; the State constant string values match the HAL preset keys.
 
 // priority determines which state wins when multiple are active.
+// WifiConnecting sits just above Booting: while the setup handler is
+// associating with home Wi-Fi, its blue-blink cue outranks the boot state
+// still bleeding through from server start, but any real fault (Error,
+// Connectivity loss surfacing later, OTA) still wins.
 var priority = map[State]int{
-	StateHardware:     1,
-	StateAgentDown:    2,
-	StateHALDown:      3,
-	StateBooting:      4,
-	StateOTA:          5,
-	StateError:        6,
-	StateConnectivity: 7,
+	StateHardware:       1,
+	StateAgentDown:      2,
+	StateHALDown:        3,
+	StateBooting:        4,
+	StateWifiConnecting: 5,
+	StateOTA:            6,
+	StateError:          7,
+	StateConnectivity:   8,
 }
 
 // Service manages status LED states.
@@ -52,11 +56,14 @@ type Service struct {
 
 // ProvideService creates a StatusLED service. A device with no LED (no `light`
 // capability) gets a no-op service: status states are never painted, since there
-// is no strip to paint and the /led route isn't mounted.
-func ProvideService(cfg *config.Config) *Service {
+// is no strip to paint and the /led route isn't mounted. The caller (Wire binding)
+// resolves the capability at construction — statusled itself must not depend on
+// the device package, since device now depends on statusled for the setup-time
+// wifi_connecting cue (import cycle).
+func ProvideService(hasLight bool) *Service {
 	return &Service{
 		active:   make(map[State]bool),
-		hasLight: device.Has(cfg.DeviceTypeOrDefault(), device.CapLight),
+		hasLight: hasLight,
 	}
 }
 

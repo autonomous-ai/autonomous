@@ -190,6 +190,7 @@ STATUS_LED_PRESETS = {
     "error":        {"effect": FX_BREATHING,          "color": [255, 0, 0],     "speed": 3.0},  # red — system error
     "booting":      {"effect": FX_BREATHING,          "color": [0, 80, 255],    "speed": 3.0},  # blue — starting up
     "connectivity": {"effect": FX_BREATHING,          "color": [255, 80, 0],    "speed": 3.0},  # orange — no internet
+    "wifi_connecting": {"effect": FX_BLINK,           "color": [0, 135, 255],   "speed": 0.5},  # blue blink — associating with Wi-Fi during POST /api/device/setup
     "hal_down":     {"effect": FX_BREATHING,          "color": [180, 0, 255],   "speed": 3.0},  # purple — HAL unreachable
     "agent_down":   {"effect": FX_BREATHING,          "color": [0, 200, 200],   "speed": 3.0},  # cyan — agent disconnected
     "hardware":     {"effect": FX_BREATHING,          "color": [255, 255, 0],   "speed": 3.0},  # yellow — hardware fault
