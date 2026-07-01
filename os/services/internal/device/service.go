@@ -16,6 +16,7 @@ import (
 	"go.autonomous.ai/os/domain"
 	"go.autonomous.ai/os/internal/beclient"
 	"go.autonomous.ai/os/internal/network"
+	"go.autonomous.ai/os/internal/statusled"
 	"go.autonomous.ai/os/lib/i18n"
 	"go.autonomous.ai/os/server/config"
 )
@@ -84,16 +85,18 @@ type Service struct {
 	networkService *network.Service
 	agentGateway   domain.AgentGateway
 	beClient       *beclient.Client
+	statusLED      *statusled.Service
 	setupState     setupState
 }
 
-func ProvideService(config *config.Config, ns *network.Service, gw domain.AgentGateway, be *beclient.Client) *Service {
+func ProvideService(config *config.Config, ns *network.Service, gw domain.AgentGateway, be *beclient.Client, sled *statusled.Service) *Service {
 	SeedAgentRuntimeFromGateway(config)
 	return &Service{
 		config:         config,
 		networkService: ns,
 		agentGateway:   gw,
 		beClient:       be,
+		statusLED:      sled,
 		setupState:     setupState{phase: SetupPhaseIdle},
 	}
 }
@@ -142,6 +145,14 @@ func (s *Service) Setup(data domain.SetupRequest) error {
 	data.STTBaseURL = normalizeBaseURL(data.STTBaseURL)
 	data.TTSBaseURL = normalizeBaseURL(data.TTSBaseURL)
 	s.setupState.set(SetupPhaseConnecting, "", "")
+
+	// Blue-blink cue while wlan0 associates with the target Wi-Fi. Mirrors the
+	// intern-v1 behavior (openclaw-lobster's led.ConnectionMode on setup entry).
+	// Cleared on every return path below so a re-run after a failed setup starts
+	// from the neutral status instead of a stuck blinking strip. No-op on devices
+	// without the `light` capability (statusled short-circuits).
+	s.statusLED.Set(statusled.StateWifiConnecting)
+	defer s.statusLED.Clear(statusled.StateWifiConnecting)
 
 	// Early LAN-IP capture: SetupNetwork() blocks up to 60s waiting for
 	// internet, but the AP (192.168.100.1) tears down within ~2s of the
