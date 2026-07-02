@@ -645,14 +645,14 @@ export default function Setup({ mode = "initial" }: SetupProps = {}) {
   }, [setupWorking, setupPhase]);
 
   // Join-progress heartbeat → parent window. Fire setupBridge.joinProgress once
-  // when the join has been running ~10s without flipping to connected/failed, so
+  // when the join has been running ~4s without flipping to connected/failed, so
   // the opener (autonomous.ai) learns the join is taking a moment but is still
   // alive. joinPingedRef guards single-fire; it resets whenever we (re)enter the
   // connecting phase so a retry pings again.
   const joinPingedRef = useRef(false);
   useEffect(() => {
     if (setupPhase === "connecting" && setupWorking) {
-      if (elapsed >= 10 && !joinPingedRef.current) {
+      if (elapsed >= 4 && !joinPingedRef.current) {
         joinPingedRef.current = true;
         setupBridge.joinProgress(elapsed);
       }
