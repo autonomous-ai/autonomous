@@ -283,6 +283,7 @@ if ! command -v node &>/dev/null || ! node -v 2>/dev/null | grep -qE '^v(2[2-9]|
 fi
 retry "npm install -g openclaw@\${OPENCLAW_VERSION} --omit=optional" 5
 openclaw --version || true
+BAKED_OPENCLAW_VERSION=\$(openclaw --version 2>/dev/null | tr -d '[:space:]' || echo "unknown")
 
 # OpenClaw state dir. MUST be /root/.openclaw (with dot) — see openclaw memory
 # note: any /root/openclaw mismatch causes WS close 1008 / token_mismatch.
@@ -328,6 +329,7 @@ done
 rm -f "\$HERMES_INSTALLER"
 echo "git" >/usr/local/lib/hermes-agent/.install_method 2>/dev/null || true
 hermes --version || true
+BAKED_HERMES_VERSION=\$(hermes --version 2>/dev/null | tr -d '[:space:]' || echo "unknown")
 
 # ── Hermes gateway unit pre-bake (A — created, left DISABLED) ────────────────
 # Pre-baking the binary above is not enough: IsReady()/device setup wait on the
@@ -349,7 +351,7 @@ if command -v hermes >/dev/null 2>&1; then
   # and os-server's Bearer auth fails (401 on every turn).
   HERMES_DIR="/root/.hermes"
   ENV_FILE="\$HERMES_DIR/.env"
-  HERMES_API_SERVER_KEY="hermes-api-key"
+  HERMES_API_SERVER_KEY="hermes-local-api-key"
   mkdir -p "\$HERMES_DIR"
   touch "\$ENV_FILE"
   for k in API_SERVER_ENABLED API_SERVER_KEY API_SERVER_CORS_ORIGINS; do
@@ -1300,12 +1302,15 @@ if [ -f "${METADATA_FOR_SNAPSHOT}" ]; then
   jq -n \
     --arg build_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     --arg git_commit "${BUILD_GIT_SHA:-unknown}" \
+    --arg hermes_version "${BAKED_HERMES_VERSION:-unknown}" \
+    --arg openclaw_version "${BAKED_OPENCLAW_VERSION:-unknown}" \
     --argjson hw_manifest "${HW_MANIFEST_JSON}" \
     --slurpfile ota_metadata "${METADATA_FOR_SNAPSHOT}" \
     '{
       build_date: $build_date,
       git_commit: $git_commit,
       hardware_manifest: $hw_manifest,
+      baked_runtimes: { hermes: $hermes_version, openclaw: $openclaw_version },
       ota_metadata: $ota_metadata[0]
     }' > "${MNT}/etc/autonomous-build.json"
   rm -f "${METADATA_FOR_SNAPSHOT}"
