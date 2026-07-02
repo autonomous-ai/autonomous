@@ -341,6 +341,29 @@ class BluetoothManager:
             logger.warning("set-default-source %s failed: %s", source_name, e)
             return False
 
+    def set_pa_sink_volume(self, sink_name: str, pct: int) -> bool:
+        """Set the sink volume (0-100%). On A2DP sinks PulseAudio forwards it
+        to the headset via AVRCP absolute volume, so this is the volume knob
+        while a BT headset is the active output."""
+        pct = max(0, min(100, pct))
+        try:
+            r = _pactl(["set-sink-volume", sink_name, f"{pct}%"], timeout=5)
+            return r.returncode == 0
+        except Exception as e:
+            logger.warning("set-sink-volume %s %s%% failed: %s", sink_name, pct, e)
+            return False
+
+    def pa_sink_volume(self, sink_name: str) -> Optional[int]:
+        """Current sink volume in percent, or None if unreadable."""
+        try:
+            r = _pactl(["get-sink-volume", sink_name], timeout=5)
+            if r.returncode != 0:
+                return None
+            m = re.search(r"(\d+)%", r.stdout)
+            return int(m.group(1)) if m else None
+        except Exception:
+            return None
+
     def pa_sink_for_mac(self, mac: str) -> Optional[str]:
         """Return the PulseAudio sink name exposing this BT device, or None."""
         try:
