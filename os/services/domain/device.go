@@ -1059,6 +1059,17 @@ const (
 // TTSProviders is the list of supported TTS providers.
 var TTSProviders = []string{TTSProviderOpenAI, TTSProviderElevenLabs}
 
+// IsValidTTSProvider reports whether p is a supported TTS provider. Used to
+// reject a bad DEVICE.md `voice.tts_provider` before seeding it into config.
+func IsValidTTSProvider(p string) bool {
+	for _, v := range TTSProviders {
+		if v == p {
+			return true
+		}
+	}
+	return false
+}
+
 // TTSVoicesByProvider maps provider name to its available voices.
 var TTSVoicesByProvider = map[string][]string{
 	TTSProviderOpenAI:     {"alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"},
