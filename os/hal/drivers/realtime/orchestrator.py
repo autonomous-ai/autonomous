@@ -132,9 +132,11 @@ LOOK_TOOL_DESCRIPTION: str = (
     "am I holding?', 'what's in front of you?', 'read this label', 'what color is "
     "this?'). Unlike delegate_to_main, this does NOT hand off — call it, the image "
     "is added to your context, then you immediately SPEAK your answer in this same "
-    "turn. Use it whenever the user asks about the visible world or refers to "
-    "something physical ('this', 'that', 'here') that you need to see. Do NOT use "
-    "it for non-visual requests."
+    "turn. The scene CHANGES constantly: the user may have swapped objects since "
+    "the last image, so for ANY present-tense visual question you MUST call this "
+    "again — never answer from a previous image, from memory, or from the "
+    "conversation, even if you are sure you already know; that is exactly how you "
+    "get it embarrassingly wrong. Do NOT use it for non-visual requests."
 )
 
 # No parameters: the model just signals intent to look; the device grabs the
@@ -399,6 +401,9 @@ class RealtimeOrchestrator:
                     return
                 new.connect()
                 self._agent = new
+                # Fresh session context has no images — see _rebuild_now.
+                self._looked_this_turn = False
+                self._last_look_sent_monotonic = 0.0
                 logger.info("[realtime] Zombie recovery: fresh session connected")
             except Exception:
                 logger.exception("[realtime] Zombie rebuild failed")
@@ -546,6 +551,7 @@ class RealtimeOrchestrator:
 
         self._looked_this_turn = False  # reset the per-turn `look` image-send guard
         produced = False  # did this turn yield any real output (vs stay silent)?
+        replay_pending = False  # look-replay signalled — the turn continues
         for output in self._agent.receive(stop_on_done=True):
             if (
                 isinstance(output, FunctionCallOutput)
@@ -558,6 +564,7 @@ class RealtimeOrchestrator:
                 # comes, signal the turn driver, stop this turn.
                 if self._handle_look_call(output):
                     produced = True
+                    replay_pending = True
                     # Unblock the replay's commit (no turn_complete follows a
                     # tool-call-only turn) and arm receive() to swallow the
                     # cancelled turn's LATE turn_complete, which otherwise ends
@@ -629,6 +636,16 @@ class RealtimeOrchestrator:
                 break
             produced = True
             yield output
+
+        # Look-replay pending: the logical turn CONTINUES (the caller is about
+        # to re-commit this turn's audio on the SAME session). Don't stamp,
+        # count, or recycle here — an idle/turn-cap recycle at this point swaps
+        # in a fresh session and orphans the image that was just sent to the
+        # old one (device-observed 2026-07-02: replay ran on a blank session,
+        # the model had no frame and stayed silent → main-agent fallback). Any
+        # armed recycle stays pending and fires after the replayed turn.
+        if replay_pending:
+            return
 
         # Track consecutive silent turns for the zombie guard: a turn that
         # committed audio but yielded nothing. A long-lived Gemini session can
