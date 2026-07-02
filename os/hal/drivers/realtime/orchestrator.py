@@ -817,13 +817,18 @@ class RealtimeOrchestrator:
     def _capture_frame() -> Any:
         """Return the latest camera frame (BGR ndarray) downscaled for cost, or
         None if no camera. Reads HAL camera state in-process (no HTTP loopback);
-        mirrors the wait/disable handling of routes.camera.camera_snapshot but
-        skips the servo-freeze (realtime wants the answer fast, not a perfect
-        still)."""
+        mirrors the wait/disable handling of routes.camera.camera_snapshot.
+
+        Uses capture_still, so servos (animation loop + tracker worker) are
+        frozen and the frame is guaranteed captured after the arm went quiet —
+        motion blur made Gemini misread scenes. Costs up to ~settle+timeout
+        only while the servos are actually moving; when they are still (or the
+        device has none — animation_service is None) it returns immediately."""
         try:
             import cv2
 
             import hal.app_state as state
+            from hal.devices.video_capture_device import capture_still
         except Exception:
             return None
         cap = getattr(state, "camera_capture", None)
@@ -833,17 +838,14 @@ class RealtimeOrchestrator:
         try:
             if was_disabled:
                 cap.start()
-            cap.acquire_consumer()
             try:
-                deadline: float = time.monotonic() + 2.0
-                frame: Any = None
-                while time.monotonic() < deadline:
-                    frame = cap.last_frame
-                    if frame is not None:
-                        break
-                    time.sleep(0.05)
+                frame: Any = capture_still(
+                    cap,
+                    getattr(state, "animation_service", None),
+                    settle_s=0.3,
+                    timeout_s=1.5,
+                )
             finally:
-                cap.release_consumer()
                 if was_disabled:
                     cap.stop()
             if frame is None:

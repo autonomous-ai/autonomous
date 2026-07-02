@@ -48,6 +48,10 @@ class LocalVideoCaptureDevice(VideoCaptureDeviceBase):
         super().__init__(device_info, name)
 
         self._last_response: VideoCaptureDeviceResponse | None = None
+        # Monotonic timestamp of when _last_response was captured. Lets
+        # consumers (snapshot, realtime look) prove a frame was grabbed AFTER
+        # the servos went quiet instead of blindly sleeping (see capture_still).
+        self._last_frame_monotonic: float = 0.0
 
         self._thread: threading.Thread | None = None
         self._lock: threading.Lock = threading.Lock()
@@ -81,6 +85,12 @@ class LocalVideoCaptureDevice(VideoCaptureDeviceBase):
                 return None
 
     @property
+    def last_frame_ts(self) -> float:
+        """Monotonic capture time of last_frame (0.0 until the first frame)."""
+        with self._lock:
+            return self._last_frame_monotonic
+
+    @property
     def last_frame_description(self) -> str | None:
         with self._lock:
             if self._last_response:
@@ -101,8 +111,10 @@ class LocalVideoCaptureDevice(VideoCaptureDeviceBase):
         with self._lock:
             if new_frame_info:
                 self._last_response = new_frame_info.model_copy(deep=True)
+                self._last_frame_monotonic = time.monotonic()
             else:
                 self._last_response = None
+                self._last_frame_monotonic = 0.0
 
     @override
     def capture(
@@ -353,3 +365,61 @@ class LocalVideoCaptureDevice(VideoCaptureDeviceBase):
         if self._thread is not None:
             self._thread.join(timeout=5)
             self._thread = None
+
+
+def capture_still(
+    cap,
+    animation_service=None,
+    settle_s: float = 0.3,
+    timeout_s: float = 2.0,
+) -> npt.NDArray[np.uint8] | None:
+    """Grab a frame guaranteed to be captured while the servos were quiet.
+
+    Freezes animation_service (pauses the animation loop AND the tracker's
+    servo worker — both honor the frozen flag), then waits for a frame whose
+    capture timestamp is at least `settle_s` after the last servo bus write,
+    so residual mechanical oscillation has died down before the exposure.
+
+    Fast path: when the servos have been quiet for `settle_s` already, the
+    current frame qualifies immediately — zero added latency (the common
+    idle case). Servo writes that ignore the frozen flag (e.g. an in-flight
+    /servo/move interpolation) keep re-stamping last_servo_write, so the wait
+    simply extends until they finish or the deadline hits.
+
+    Best effort: on timeout returns the latest frame anyway (a possibly
+    blurred answer beats none); returns None only when the camera never
+    delivered a frame at all.
+
+    animation_service is duck-typed (freeze/unfreeze/last_servo_write) and
+    optional — devices without servos just get the latest frame.
+    """
+    if cap is None:
+        return None
+    frozen = False
+    if animation_service is not None:
+        try:
+            animation_service.freeze()
+            frozen = True
+        except Exception:
+            pass
+    cap.acquire_consumer()
+    try:
+        deadline = time.monotonic() + max(timeout_s, 0.05)
+        while True:
+            quiet_from = 0.0
+            if animation_service is not None:
+                last_write = getattr(animation_service, "last_servo_write", 0.0)
+                if last_write:
+                    quiet_from = last_write + settle_s
+            frame_ts = getattr(cap, "last_frame_ts", 0.0)
+            if frame_ts and frame_ts >= quiet_from:
+                frame = cap.last_frame
+                if frame is not None:
+                    return frame
+            if time.monotonic() >= deadline:
+                return cap.last_frame
+            time.sleep(0.03)
+    finally:
+        cap.release_consumer()
+        if frozen:
+            animation_service.unfreeze()

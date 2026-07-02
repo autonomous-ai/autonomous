@@ -844,14 +844,33 @@ class TrackerService:
         """Body of start() — runs while _start_lock is held."""
 
         # Freeze servos so YOLO + tracker init see a sharp, stable frame.
+        # NOT capture_still (it unfreezes on return; the freeze must hold
+        # through YOLO + tracker init so the scene can't shift under them).
+        # Acquire a consumer: with none, the capture loop idles at ~0.5fps and
+        # last_frame can be up to 2s old — captured BEFORE the freeze, blurred.
         settle_s = 0.30
         t_req = time.perf_counter()
         animation_service.freeze()
         try:
-            time.sleep(settle_s)
+            camera_capture.acquire_consumer()
+            try:
+                last_write = animation_service.last_servo_write
+                quiet_from = (last_write + settle_s) if last_write else 0.0
+                deadline = time.monotonic() + 1.5
+                frame = None
+                while time.monotonic() < deadline:
+                    ts = camera_capture.last_frame_ts
+                    if ts and ts >= quiet_from:
+                        frame = camera_capture.last_frame
+                        if frame is not None:
+                            break
+                    time.sleep(0.03)
+                if frame is None:
+                    frame = camera_capture.last_frame  # best effort
+            finally:
+                camera_capture.release_consumer()
             t_after_settle = time.perf_counter()
 
-            frame = camera_capture.last_frame
             if frame is None:
                 self.last_error = "no frame available from camera"
                 logger.error("tracker start: %s", self.last_error)
@@ -1005,6 +1024,10 @@ class TrackerService:
 
         t0 = time.perf_counter()
         for i in range(1, n_steps + 1):
+            # Camera freeze: hold mid-ramp until the snapshot consumer is done
+            # (same contract as _servo_worker; this legacy path is kept in sync).
+            while animation_service.is_frozen:
+                time.sleep(0.02)
             alpha = i / n_steps
             step = {k: start[k] + deltas[k] * alpha for k in start}
             with animation_service.bus_lock:
@@ -1168,6 +1191,17 @@ class TrackerService:
         joints = ("base_yaw.pos", "base_pitch.pos", "elbow_pitch.pos", "wrist_pitch.pos")
         vel = {k: 0.0 for k in joints}   # per-joint SmoothDamp velocity (deg/s)
         while state.running.is_set():
+            # Camera freeze: a snapshot/look consumer wants a sharp frame.
+            # The animation loop honors _frozen; without this check the worker
+            # kept writing right through the freeze (the "snapshot blurry
+            # during tracking" bug). Goal is kept — following resumes as soon
+            # as the flag clears. Bleed velocity so the ease-out doesn't
+            # overshoot from stale momentum on resume.
+            if animation_service.is_frozen:
+                for k in joints:
+                    vel[k] = 0.0
+                time.sleep(idle_sleep)
+                continue
             with self._servo_lock:
                 goal = dict(self._servo_goal) if self._servo_goal is not None else None
                 cur = {
