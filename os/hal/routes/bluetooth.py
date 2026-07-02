@@ -6,6 +6,7 @@ through the existing OS server reverse proxy).
 """
 
 import logging
+import os
 import time
 from typing import Optional
 
@@ -135,14 +136,23 @@ def bt_active_set(req: ActiveRequest):
     if not mgr.info(target)["connected"] and not mgr.connect(target):
         raise HTTPException(503, f"Could not connect to {target}")
 
-    # Auto-switch to HFP whenever available — single-device mic+speaker is
-    # the whole point of "use headset" mode. Falls back to whatever profile
-    # is active if HFP isn't offered (e.g. BT speakers).
+    # Profile choice: A2DP by default. HFP would also give the headset mic,
+    # but SCO audio needs a working HCI audio path in the BT radio — on chips
+    # without one (e.g. the lamp's uwe5622) the HFP link is silent and the
+    # headset drops the connection after a few seconds. Boards with working
+    # SCO can opt in via HAL_BT_PREFER_HFP=1; under A2DP the STT mic falls
+    # back to the device's built-in mic.
+    prefer_hfp = os.environ.get("HAL_BT_PREFER_HFP", "0") == "1"
     card = mgr.pa_card_for_mac(target)
     if card:
         profiles = mgr.pa_card_profiles(card)
-        if profiles.get("handsfree_head_unit", False):
-            mgr.set_pa_card_profile(card, "handsfree_head_unit")
+        profile = None
+        if prefer_hfp and profiles.get("handsfree_head_unit", False):
+            profile = "handsfree_head_unit"
+        elif profiles.get("a2dp_sink", False):
+            profile = "a2dp_sink"
+        if profile:
+            mgr.set_pa_card_profile(card, profile)
 
     # Poll for the sink to appear instead of a fixed sleep — PA exposes the
     # bluez sink asynchronously after a profile switch / reconnect, and on

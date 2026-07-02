@@ -249,14 +249,15 @@ class BluetoothManager:
         except Exception:
             pass
         try:
-            _run(["bluetoothctl", "connect", mac], timeout=15)
+            _run(["bluetoothctl", "connect", mac], timeout=30)
         except Exception as e:
             logger.warning("connect after pair %s failed: %s", mac, e)
         return _device_info(mac)["paired"]
 
     def connect(self, mac: str) -> bool:
+        # 30s: sleepy headsets (AirPods) can take >16s to answer paging.
         try:
-            _run(["bluetoothctl", "connect", mac.upper()], timeout=15)
+            _run(["bluetoothctl", "connect", mac.upper()], timeout=30)
         except Exception as e:
             logger.warning("connect %s failed: %s", mac, e)
         # PulseAudio takes a beat to expose the new sink after BlueZ reports connected.
