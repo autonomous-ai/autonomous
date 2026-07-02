@@ -141,3 +141,14 @@ sync_env discord_bot_token  DISCORD_BOT_TOKEN
 sync_env discord_guild_id   DISCORD_GUILD_ID
 sync_env discord_user_id    DISCORD_ALLOWED_USERS
 sync_env whatsapp_user_id   WHATSAPP_ALLOWED_USERS
+
+# ── 3. API SERVER KEY (must match constants.go APIKey) ────────────────────────
+# Enforce on every presync so a key bump in os-server self-heals on the next
+# switch — install.sh only runs on first-install and cannot fix devices that
+# already have hermes installed with an older key.
+# API_SERVER_KEY MUST equal internal/hermes/constants.go APIKey.
+EXPECTED_API_KEY="hermes-local-api-key"
+sed -i "/^API_SERVER_KEY=/d" "$ENV_FILE"
+[ -s "$ENV_FILE" ] && [ -n "$(tail -c1 "$ENV_FILE")" ] && printf '\n' >>"$ENV_FILE"
+echo "API_SERVER_KEY=${EXPECTED_API_KEY}" >>"$ENV_FILE"
+log "API_SERVER_KEY enforced (${EXPECTED_API_KEY})"

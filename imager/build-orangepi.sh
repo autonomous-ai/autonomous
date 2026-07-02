@@ -283,7 +283,7 @@ if ! command -v node &>/dev/null || ! node -v 2>/dev/null | grep -qE '^v(2[2-9]|
 fi
 retry "npm install -g openclaw@\${OPENCLAW_VERSION} --omit=optional" 5
 openclaw --version || true
-BAKED_OPENCLAW_VERSION=\$(openclaw --version 2>/dev/null | tr -d '[:space:]' || echo "unknown")
+openclaw --version 2>/dev/null | tr -d '[:space:]' > /tmp/baked-openclaw-version || echo "unknown" > /tmp/baked-openclaw-version
 
 # OpenClaw state dir. MUST be /root/.openclaw (with dot) — see openclaw memory
 # note: any /root/openclaw mismatch causes WS close 1008 / token_mismatch.
@@ -329,7 +329,7 @@ done
 rm -f "\$HERMES_INSTALLER"
 echo "git" >/usr/local/lib/hermes-agent/.install_method 2>/dev/null || true
 hermes --version || true
-BAKED_HERMES_VERSION=\$(hermes --version 2>/dev/null | tr -d '[:space:]' || echo "unknown")
+hermes --version 2>/dev/null | tr -d '[:space:]' > /tmp/baked-hermes-version || echo "unknown" > /tmp/baked-hermes-version
 
 # ── Hermes gateway unit pre-bake (A — created, left DISABLED) ────────────────
 # Pre-baking the binary above is not enough: IsReady()/device setup wait on the
@@ -1046,6 +1046,10 @@ fi
 
 echo "[stage] chroot Phase 2 complete"
 CHROOT_STAGES
+
+# Read runtime versions captured inside chroot (shell vars don't propagate out).
+BAKED_OPENCLAW_VERSION=$(cat "${MNT}/tmp/baked-openclaw-version" 2>/dev/null | tr -d '[:space:]' || echo "unknown")
+BAKED_HERMES_VERSION=$(cat "${MNT}/tmp/baked-hermes-version" 2>/dev/null | tr -d '[:space:]' || echo "unknown")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Phase 3 — OTA bake: backend binaries + hal + web UI + buddy
