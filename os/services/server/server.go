@@ -181,8 +181,9 @@ func (s *Server) Serve(closeFn func()) error {
 	// consumer — HAL auto-start, StartHALVoice, and the Setup UI prefill — sees
 	// the same device default; the user can still override it in Setup/Settings
 	// (their saved value is non-empty, so this never clobbers it). No declaration
-	// → stays empty → HAL falls back to the legacy default (openai). Runs once at
-	// startup, before the config-change listener, so it triggers no reload churn.
+	// → stays empty → HAL falls back to the legacy default (openai). Only seeds
+	// on the first boot that has an empty provider; the WithLockSave notify then
+	// costs at most one idempotent config reload, and never fires again.
 	if s.config.TTSProvider == "" {
 		if p := device.TTSProvider(deviceType); domain.IsValidTTSProvider(p) {
 			if err := s.config.WithLockSave(func(c *config.Config) { c.TTSProvider = p }); err != nil {
