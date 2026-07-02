@@ -310,6 +310,14 @@ const (
 	KindOAuthRemove  = "oauth.remove"  // delete OAuth token for a provider
 	KindRealtimeSet  = "realtime.set"  // persist realtime voice-agent config (provider/voice/reasoning…)
 	KindTimezoneSet  = "timezone.set"  // apply device IANA timezone (/etc/localtime + /etc/timezone)
+	// KindDeviceSoftReset wipes the device's config.json and restarts os-server so
+	// the device drops back into AP setup mode WITHOUT rebooting or rolling back
+	// the firmware. Faster and safer than the hard factory-reset button on the
+	// device: keeps the current firmware and skips the reboot delay. Payload is
+	// empty; the handler acks then triggers the wipe/restart asynchronously so
+	// the ack has time to fly before os-server tears down. Used by the
+	// "Soft reset" action on autonomous.ai/internpro/me (and Lamp equivalent).
+	KindDeviceSoftReset = "device.soft_reset"
 
 	// KindHermesSetup / KindPicoclawSetup / KindOpenclawSetup switch the active
 	// agentic backend. The kind itself names the target runtime — the worker

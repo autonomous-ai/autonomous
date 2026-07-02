@@ -226,6 +226,8 @@ func (h *DeviceMQTTHandler) dispatchData(env domain.MQTTDataCommand) error {
 		return h.handleTTSPreview(env)
 	case domain.KindDeviceRename:
 		return h.handleDeviceRename(env)
+	case domain.KindDeviceSoftReset:
+		return h.handleDeviceSoftReset(env)
 	case domain.KindOAuthSet:
 		return h.handleOAuthSet(env)
 	case domain.KindOAuthRemove:
