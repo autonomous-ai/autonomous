@@ -1059,6 +1059,35 @@ const (
 // TTSProviders is the list of supported TTS providers.
 var TTSProviders = []string{TTSProviderOpenAI, TTSProviderElevenLabs}
 
+// IsValidTTSProvider reports whether p is a supported TTS provider. Used to
+// reject a bad DEVICE.md `voice.tts_provider` before seeding it into config.
+func IsValidTTSProvider(p string) bool {
+	for _, v := range TTSProviders {
+		if v == p {
+			return true
+		}
+	}
+	return false
+}
+
+// DefaultElevenLabsVoiceForLang returns the ElevenLabs voice os-server seeds when
+// a device defaults to the elevenlabs provider (via DEVICE.md voice.tts_provider)
+// but declares no explicit voice. Language-aware so a VN/CN owner boots with a
+// voice trained on their language instead of an American one. The names must
+// stay in sync with the top picks (*) in HAL's elevenlabs.py VOICE_IDS_BY_LANG:
+// vi→Ngan, zh(-CN/-TW)→Amy, everything else→Rachel. Prefix match mirrors that
+// module's voices_for_language bucket logic.
+func DefaultElevenLabsVoiceForLang(lang string) string {
+	switch {
+	case strings.HasPrefix(lang, "vi"):
+		return "Ngan"
+	case strings.HasPrefix(lang, "zh"):
+		return "Amy"
+	default:
+		return "Rachel"
+	}
+}
+
 // TTSVoicesByProvider maps provider name to its available voices.
 var TTSVoicesByProvider = map[string][]string{
 	TTSProviderOpenAI:     {"alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"},

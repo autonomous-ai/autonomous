@@ -93,10 +93,13 @@ gì?", "đọc cái nhãn này", "màu gì đây?"), model realtime trả lời 
 thay vì delegate. Orchestrator đăng ký tool `look` (`orchestrator.py`,
 `LOOK_TOOL`) và xử lý trong `_handle_look_call`:
 
-1. Lấy frame camera mới nhất **in-process** (`_capture_frame` đọc
-   `app_state.camera_capture.last_frame` — không qua HTTP loopback, không freeze
-   servo), downscale về `HAL_GEMINI_VISION_MAX_WIDTH` (mặc định 768px) để giới hạn
-   token ảnh.
+1. Lấy frame camera **nét** **in-process** (`_capture_frame` gọi
+   `capture_still` — không qua HTTP loopback; servo bị freeze (cả animation
+   loop lẫn servo worker của tracker đều tôn trọng cờ này) và frame chỉ được
+   chấp nhận khi timestamp chụp ≥ 0.3s sau lần ghi bus servo cuối, nên motion
+   blur không lọt tới model; không thêm độ trễ khi servo vốn đang đứng yên
+   hoặc thiết bị không có servo), downscale về `HAL_GEMINI_VISION_MAX_WIDTH`
+   (mặc định 768px) để giới hạn token ảnh.
 2. Đẩy vào làm **video input** realtime (`ImageInput` → `send_realtime_input(video=…)`).
 3. Gửi tool result với `trigger_response=True` để Gemini **tiếp tục cùng turn** và
    nói câu trả lời với ảnh đã có trong context.

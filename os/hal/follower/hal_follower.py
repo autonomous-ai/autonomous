@@ -60,6 +60,12 @@ class LeLampFollower(Robot):
 
         self.cameras = make_cameras_from_configs(self.config.cameras)
 
+        # Monotonic timestamp of the last motion command sent to the bus.
+        # Camera consumers use it to wait for a frame captured after the
+        # servos went quiet (motion-blur avoidance). Stamped by send_action;
+        # AnimationService.move_to_raw stamps it too (bypasses send_action).
+        self.last_write_monotonic: float = 0.0
+
     @property
     def _motors_ft(self) -> dict[str, type]:
         return {f"{motor}.pos": float for motor in self.bus.motors}
@@ -218,6 +224,7 @@ class LeLampFollower(Robot):
 
         # Send goal position to the arm
         self.bus.sync_write("Goal_Position", goal_pos)
+        self.last_write_monotonic = time.monotonic()
         return {f"{motor}.pos": val for motor, val in goal_pos.items()}
 
     def disconnect(self):

@@ -106,32 +106,30 @@ def camera_snapshot(
     if not state.camera_capture or cv2 is None:
         raise HTTPException(503, "Camera not available")
 
+    # Lazy import: video_capture_device imports cv2 at module level, and this
+    # route module must stay importable on cv2-less devices (server.py imports
+    # it unconditionally). Guarded by the cv2 check above.
+    from hal.devices.video_capture_device import capture_still
+
     was_disabled = state._camera_disabled
     if was_disabled:
         state.camera_capture.start()
 
-    state.camera_capture.acquire_consumer()
     try:
-        deadline = time.time() + 2.0
-        frame = None
-        while time.time() < deadline:
-            frame = state.camera_capture.last_frame
-            if frame is not None:
-                break
-            time.sleep(0.05)
-
+        # Freezes servos (animation loop + tracker worker, when the device has
+        # them) and waits for a frame captured after the arm went quiet, using
+        # frame/bus-write timestamps instead of a blind sleep. Zero added
+        # latency when the servos are already still. animation_service is None
+        # on servo-less devices — capture_still then just grabs the frame.
+        frame = capture_still(
+            state.camera_capture,
+            state.animation_service,
+            settle_s=0.3,
+            timeout_s=2.5,
+        )
         if frame is None:
             raise HTTPException(500, "Failed to capture frame")
-
-        if state.animation_service:
-            state.animation_service.freeze()
-            time.sleep(0.3)
-            fresh = state.camera_capture.last_frame
-            if fresh is not None:
-                frame = fresh
-            state.animation_service.unfreeze()
     finally:
-        state.camera_capture.release_consumer()
         if was_disabled:
             state.camera_capture.stop()
 

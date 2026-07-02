@@ -54,6 +54,16 @@ _LOCAL_MODEL_PATH = os.path.join(os.path.dirname(__file__), "models", "yolov8n.p
 # handled by the remote open-vocab detector than by a slower local imgsz.)
 _LOCAL_IMGSZ = 320
 
+# Vision-pipeline max width (px). The ViT tracker AND the detectors (YuNet /
+# local YOLO / remote YOLOWorld) run on a frame downscaled to at most this
+# width; every bbox they return is mapped back to ORIGINAL camera coordinates
+# before any servo/PID math, so no pixel-tuned constant (PID gains, area/center
+# gates, dead zones, feedforward thresholds) needs re-tuning. Camera runs
+# 1280x720, so 640 = 0.5x → ¼ the pixels for the ViT crop/resize and detector
+# input → faster fast-loop → smoother tracking. Set to 0/None to disable, or a
+# width ≥ the camera width for a no-op.
+VISION_MAX_WIDTH = 640
+
 # YuNet face detector (OpenCV built-in). Lighter than InsightFace, ~30ms/frame on
 # Pi, no extra dependency. Used for target='face' so we don't fall back to the
 # remote YOLOWorld (~1.3s) for what's a very common tracking target.
@@ -249,7 +259,32 @@ DEAD_ZONE_PITCH_PCT = 0.05
 
 # EMA smoothing on pixel offset before servo command (0-1).
 # Lower = smoother (less jitter) but slower response.
+# NOTE: superseded by the alpha-beta filter below (kept for the legacy path).
 EMA_ALPHA = 0.5
+
+# --- Alpha-beta (constant-velocity) filter on the target centroid ---
+# Steady-state Kalman for a constant-velocity model. Replaces the plain EMA so
+# the servo follows a *predicted, gated* centroid instead of the raw ViT bbox
+# center: it smooths jitter, coasts through dropped/garbage frames, and leads a
+# moving target to cut lag. ALPHA = position correction (higher = snappier,
+# noisier), BETA = velocity correction (higher = faster to track accel, more
+# overshoot). GATE_PX rejects a measurement whose residual-from-prediction
+# exceeds it — a ViT-bloat teleport or false detection — by coasting on the
+# prediction. Because the gate is on residual (not raw jump), sustained fast
+# motion is NOT gated (velocity tracks it); only sudden unexplained jumps are.
+# LEAD_S projects the centroid forward by this many seconds (velocity
+# feedforward) to anticipate motion; 0 = no lead.
+AB_ALPHA = 0.6
+AB_BETA = 0.2
+AB_GATE_PX = 200.0
+AB_LEAD_S = 0.12
+# Velocity decay applied when a measurement is gated, so a persistent bad lock
+# coasts to a stop instead of running away on stale velocity.
+AB_GATE_DECAY = 0.7
+# Consecutive gated frames after which the filter force-accepts the measurement
+# (re-seeds). Stops a genuine fast move from being rejected forever; transient
+# ViT-bloat teleports last only 1–2 frames so they're still filtered out.
+AB_MAX_GATED_STREAK = 3
 
 # Settle delay (seconds) after each servo command.
 # Doubled 0.025→0.05: more settle time = camera stabilises before ViT grabs
@@ -281,12 +316,72 @@ SERVO_COOLDOWN_S = 0.10
 SERVO_SUBSTEP_DEG   = 1.5   # bigger per-substep: fewer total writes → fewer audible clicks
 # Spaced wider so the motor has time between commands to glide smoothly to
 # each intermediate point, instead of getting retargeted before it settles
-# (which produced the click train).
+# (which produced the click train). This is ALSO the servo-worker tick period
+# (dt) used by the SmoothDamp follower below — one bus write per tick, so the
+# click cadence is unchanged from the old fixed-substep path.
 SERVO_SUBSTEP_SLEEP = 0.030
 # Minimum substeps per fire. Lowered from 4→2: ramping over 4 writes turned
 # the motor into a high-frequency clicker. 2 writes per fire is enough to
 # avoid the worst burst-then-idle gap without the audible buzz.
 SERVO_MIN_SUBSTEPS  = 2
+
+# --- SmoothDamp follower (cinematic ease-in/ease-out) ---
+# The servo worker used to step a FIXED SERVO_SUBSTEP_DEG toward the goal each
+# tick, then snap the last step. That makes the commanded velocity a square wave
+# (0 → ~50°/s instantly → 0 instantly) every time the goal changes at ~10 Hz —
+# the "jerky, not smooth like a film camera" feel. SmoothDamp (Game Programming
+# Gems 4 / Unity's Mathf.SmoothDamp) is a critically-damped follower: it carries
+# an internal per-joint velocity so every move accelerates smoothly and eases out
+# into the target, and when a fresh goal arrives mid-move the velocity carries
+# over (no restart jerk). Same one-write-per-tick cadence → no extra click/buzz.
+# SMOOTH_TIME = approximate seconds to reach the target: higher = smoother but
+# laggier; tune on-device. MAX_SPEED_DPS caps peak pan speed (deg/s) so a big
+# offset can't whip the camera and lose ViT lock (the hardware Goal_Velocity is
+# the real ceiling; this keeps the software setpoint tame too).
+SERVO_SMOOTH_TIME   = 0.18
+SERVO_MAX_SPEED_DPS = 60.0
+
+
+def _smooth_damp(current: float, target: float, velocity: float,
+                 smooth_time: float, dt: float, max_speed: float) -> Tuple[float, float]:
+    """Critically-damped follower. Returns (new_position, new_velocity).
+
+    Eases in and out toward `target`, carrying `velocity` across calls so
+    retargeting mid-move stays smooth. Overshoot-clamped so it settles cleanly.
+    """
+    smooth_time = max(1e-4, smooth_time)
+    omega = 2.0 / smooth_time
+    x = omega * dt
+    exp = 1.0 / (1.0 + x + 0.48 * x * x + 0.235 * x * x * x)
+    change = current - target
+    # Clamp the max distance closed per unit smooth_time → caps peak speed.
+    max_change = max_speed * smooth_time
+    change = max(-max_change, min(max_change, change))
+    new_target = current - change
+    temp = (velocity + omega * change) * dt
+    velocity = (velocity - omega * temp) * exp
+    new = new_target + (change + temp) * exp
+    # Prevent overshoot past the (clamped) target.
+    if (target - current > 0.0) == (new > target):
+        new = target
+        velocity = (new - target) / dt if dt > 0 else 0.0
+    return new, velocity
+
+
+def _soft_deadband(error: float, dz: float) -> float:
+    """Continuous dead zone: 0 inside ±dz, then ramps from 0 at the edge.
+
+    The old hard dead zone fed the controller the RAW error the instant the
+    target crossed the boundary — output jumped from 0 to a full dz-worth of
+    error, the "kick out of center" jerk. This shifts the error so it starts at
+    0 at the edge and grows from there (no value step), giving a smooth handoff
+    between holding and chasing. Sign-preserving.
+    """
+    if error > dz:
+        return error - dz
+    if error < -dz:
+        return error + dz
+    return 0.0
 
 # Pitch distribution across 3 joints.
 # Empirical: only wrist_pitch is pure rotation. base+elbow primarily translate
@@ -330,6 +425,26 @@ DETECT_MIN_CONFIDENCE = 0.15  # lowered to catch phone at angles/back-facing
 # legitimately large object (e.g. a person standing close fills 80–90% and must
 # still track). On garbage we HOLD the servo and let YOLO/retry relock.
 BBOX_FREEZE_RATIO = 1.0   # bbox area ≥ this fraction of frame ⇒ ViT dissolved
+# Relative bloat: the frame-overflow check above misses the common failure where
+# ViT balloons to 20–45% of the frame (still < 1 frame) while the real target is
+# a small face (~3%). Its centroid then wanders ±200px/frame and the servo
+# whipsaws (the "jerky, never centers" symptom). Hold the servo whenever the live
+# bbox is more than this multiple of the last YOLO-trusted lock area. A genuinely
+# large/approaching object is confirmed by YOLO, which updates the trusted
+# baseline, so this never freezes a legitimately large target.
+BLOAT_HOLD_MULT = 3.0
+
+# Detection gating + reinit debounce (SORT/ByteTrack-style outlier rejection).
+# Reject a YOLO/YuNet box whose area is more than this multiple off the recent
+# median (or its reciprocal) — almost always a false detection (background,
+# second face, scale glitch). Don't reinit the tracker to it.
+YOLO_AREA_GATE_MULT = 4.0
+# Min seconds between tracker reinits, so a noisy detector can't reinit every
+# frame. Bypassed when the tracker is clearly lost (see LOST_CENTER_FRAC).
+REINIT_COOLDOWN_S = 0.5
+# Detection-tracker center distance beyond this fraction of the frame diagonal
+# means the lock is genuinely lost → reinit immediately, ignoring the cooldown.
+LOST_CENTER_FRAC = 0.5
 
 # Ghost-lock detection via tracker confidence (ViT only).
 CONFIDENCE_THRESHOLD = 0.15
@@ -347,6 +462,88 @@ PID_YAW_KP, PID_YAW_KI, PID_YAW_KD = 0.025, 0.002, 0.002
 PID_PITCH_KP, PID_PITCH_KI, PID_PITCH_KD = 0.03, 0.002, 0.0025
 PID_OUTPUT_MAX_DEG = 5.0
 PID_INTEGRAL_MAX = 30.0
+
+# --- Velocity feedforward (constant-velocity cinematic pan) ---
+# The position PID only reacts to accumulated error, so a target moving at a
+# steady speed is always chased in catch-up bursts (the "follows in jerks, not a
+# smooth pan" feel). The alpha-beta filter already estimates the target's pixel
+# velocity (vx_f, vy_f); feed a fraction of it straight to the servo as a rate
+# command so the camera pans AT the target's speed even at zero position error.
+# The PID then only has to correct the residual. 0 = off (pure position PID).
+VFF_GAIN = 0.6
+# Cap on the per-fire dt used to turn the feedforward rate (deg/s) into a
+# per-fire step (deg) — a long gap between fires can't inject a huge lurch.
+VFF_MAX_DT_S = 0.20
+# Target pixel-speed above which a position-centered target is still "moving" →
+# keep panning on feedforward instead of freezing in the dead zone.
+VFF_MOVING_MIN_PXS = 40.0
+
+
+class AlphaBetaFilter2D:
+    """Constant-velocity alpha-beta filter on a 2D point (the target centroid).
+
+    Steady-state Kalman for a constant-velocity model (SORT/ByteTrack use a full
+    Kalman; alpha-beta is the lightweight fixed-gain equivalent — no matrices,
+    cheap on the A523). Smooths detector/tracker jitter, coasts through dropped
+    or garbage frames via prediction, and exposes velocity so the servo can lead
+    a moving target. `update()` gates a measurement whose residual from the
+    prediction exceeds gate_px (ViT-bloat teleport / false detection): it then
+    coasts on the prediction instead of snapping to the bad point.
+    """
+
+    def __init__(self, alpha: float, beta: float, gate_px: float,
+                 gate_decay: float = AB_GATE_DECAY,
+                 max_gated_streak: int = AB_MAX_GATED_STREAK):
+        self.alpha, self.beta = alpha, beta
+        self.gate_px, self.gate_decay = gate_px, gate_decay
+        self.max_gated_streak = max_gated_streak
+        self.x: Optional[float] = None
+        self.y: Optional[float] = None
+        self.vx: float = 0.0
+        self.vy: float = 0.0
+        self._gated_streak: int = 0
+
+    def reset(self) -> None:
+        self.x = self.y = None
+        self.vx = self.vy = 0.0
+        self._gated_streak = 0
+
+    def update(self, mx: float, my: float, dt: float):
+        """Feed a raw centroid measurement; return (fx, fy, vx, vy, gated)."""
+        if self.x is None or self.y is None or dt <= 0:
+            self.x, self.y = mx, my
+            self.vx = self.vy = 0.0
+            self._gated_streak = 0
+            return self.x, self.y, self.vx, self.vy, False
+        # Predict (constant velocity).
+        px = self.x + self.vx * dt
+        py = self.y + self.vy * dt
+        rx, ry = mx - px, my - py
+        gated = (rx * rx + ry * ry) ** 0.5 > self.gate_px
+        # Hysteresis: a real fast move produces a large residual too, and would be
+        # gated forever (velocity never updates → filter never catches up). After
+        # a short streak of rejects, force-accept and re-seed to the measurement —
+        # transient teleports (ViT bloat) last 1–2 frames, sustained motion does
+        # not.
+        if gated and self._gated_streak >= self.max_gated_streak:
+            self.x, self.y = mx, my
+            self.vx = self.vy = 0.0
+            self._gated_streak = 0
+            return self.x, self.y, self.vx, self.vy, False
+        if gated:
+            # Reject the measurement — coast on the prediction, bleed velocity so
+            # a stuck/garbage lock decelerates instead of running off-frame.
+            self._gated_streak += 1
+            self.x, self.y = px, py
+            self.vx *= self.gate_decay
+            self.vy *= self.gate_decay
+        else:
+            self._gated_streak = 0
+            self.x = px + self.alpha * rx
+            self.y = py + self.alpha * ry
+            self.vx += (self.beta / dt) * rx
+            self.vy += (self.beta / dt) * ry
+        return self.x, self.y, self.vx, self.vy, gated
 
 
 class PID:
@@ -449,9 +646,14 @@ class TrackerService:
         """Detect an object by name. Tries local YOLOv8n first (fast, COCO classes),
         falls back to remote YOLOWorld API for open-vocab targets.
 
-        Returns (x, y, w, h) top-left bbox or None if not found.
+        Returns (x, y, w, h) top-left bbox in ORIGINAL camera coords, or None.
         """
         target_key = (target or "").lower().strip()
+
+        # Run every detector on the downscaled frame for speed; map any bbox back
+        # to original coords before returning so callers/servo math are unaware.
+        frame, _scale = self._downscale(frame)
+        _up = 1.0 / _scale if _scale else 1.0
 
         # --- Path 0: YuNet face detector (target = face) ---
         # COCO has no face class; this avoids the ~1.3s remote round-trip for what
@@ -459,7 +661,7 @@ class TrackerService:
         if _FACE_DETECTOR_ENABLED and target_key in _FACE_TARGET_ALIASES:
             face_bbox = _detect_face_yunet(frame)
             if face_bbox is not None:
-                return face_bbox
+                return self._scale_bbox(face_bbox, _up)
             # YuNet missed — fall through to remote YOLOWorld below.
 
         # --- Path 1: local YOLOv8n (if target maps to COCO class) ---
@@ -492,7 +694,7 @@ class TrackerService:
                         bbox, conf, area_ratio = best
                         logger.info("[tracking_yolo_local] target='%s' bbox=%s conf=%.3f area=%.1f%% latency=%.0fms",
                                     target, bbox, conf, area_ratio * 100, t_ms)
-                        return bbox
+                        return self._scale_bbox(bbox, _up)
                     logger.info("[tracking_yolo_local] target='%s' not found latency=%.0fms", target, t_ms)
                     # Local missed. Fall back to remote open-vocab YOLOWorld for
                     # small/far objects local can't see — but throttle it so a
@@ -593,7 +795,7 @@ class TrackerService:
             logger.info("YOLOWorld: '%s' found at bbox=%s conf=%.3f", target, bbox, best["confidence"])
             logger.info("[tracking_yolo_response] target='%s' found=True bbox=%s conf=%.3f latency=%.0fms",
                         target, bbox, best["confidence"], latency_ms)
-            return bbox
+            return self._scale_bbox(bbox, _up)
         except Exception as e:
             logger.error("YOLOWorld detect failed: %s", e)
             return None
@@ -642,14 +844,33 @@ class TrackerService:
         """Body of start() — runs while _start_lock is held."""
 
         # Freeze servos so YOLO + tracker init see a sharp, stable frame.
+        # NOT capture_still (it unfreezes on return; the freeze must hold
+        # through YOLO + tracker init so the scene can't shift under them).
+        # Acquire a consumer: with none, the capture loop idles at ~0.5fps and
+        # last_frame can be up to 2s old — captured BEFORE the freeze, blurred.
         settle_s = 0.30
         t_req = time.perf_counter()
         animation_service.freeze()
         try:
-            time.sleep(settle_s)
+            camera_capture.acquire_consumer()
+            try:
+                last_write = animation_service.last_servo_write
+                quiet_from = (last_write + settle_s) if last_write else 0.0
+                deadline = time.monotonic() + 1.5
+                frame = None
+                while time.monotonic() < deadline:
+                    ts = camera_capture.last_frame_ts
+                    if ts and ts >= quiet_from:
+                        frame = camera_capture.last_frame
+                        if frame is not None:
+                            break
+                    time.sleep(0.03)
+                if frame is None:
+                    frame = camera_capture.last_frame  # best effort
+            finally:
+                camera_capture.release_consumer()
             t_after_settle = time.perf_counter()
 
-            frame = camera_capture.last_frame
             if frame is None:
                 self.last_error = "no frame available from camera"
                 logger.error("tracker start: %s", self.last_error)
@@ -685,7 +906,7 @@ class TrackerService:
 
         t_init0 = time.perf_counter()
         try:
-            ok = tracker.init(frame, bbox)
+            ok = self._vit_init(tracker, frame, bbox)
         except Exception as e:
             logger.error("tracker init exception for bbox %s: %s", bbox, e)
             animation_service.unfreeze()
@@ -803,6 +1024,10 @@ class TrackerService:
 
         t0 = time.perf_counter()
         for i in range(1, n_steps + 1):
+            # Camera freeze: hold mid-ramp until the snapshot consumer is done
+            # (same contract as _servo_worker; this legacy path is kept in sync).
+            while animation_service.is_frozen:
+                time.sleep(0.02)
             alpha = i / n_steps
             step = {k: start[k] + deltas[k] * alpha for k in start}
             with animation_service.bus_lock:
@@ -861,6 +1086,51 @@ class TrackerService:
         except (AttributeError, Exception):
             return 1.0
 
+    @staticmethod
+    def _downscale(frame: npt.NDArray[np.uint8]) -> Tuple[npt.NDArray[np.uint8], float]:
+        """Return (small_frame, scale) with scale = small_w / orig_w (≤ 1.0).
+
+        No-op (returns the frame and scale 1.0) when downscale is disabled or the
+        frame is already within VISION_MAX_WIDTH. INTER_AREA is the correct
+        interpolation for shrinking (avoids aliasing that would jitter the bbox).
+        """
+        if not VISION_MAX_WIDTH:
+            return frame, 1.0
+        h, w = frame.shape[:2]
+        if w <= VISION_MAX_WIDTH:
+            return frame, 1.0
+        scale = VISION_MAX_WIDTH / float(w)
+        small = cv2.resize(frame, (VISION_MAX_WIDTH, max(1, int(round(h * scale)))),
+                           interpolation=cv2.INTER_AREA)
+        return small, scale
+
+    @staticmethod
+    def _scale_bbox(bbox: Tuple[int, int, int, int], factor: float) -> Tuple[int, int, int, int]:
+        """Scale a bbox by `factor` (use scale to go orig→small, 1/scale for small→orig)."""
+        if factor == 1.0:
+            return tuple(int(v) for v in bbox)
+        return (int(round(bbox[0] * factor)), int(round(bbox[1] * factor)),
+                max(1, int(round(bbox[2] * factor))), max(1, int(round(bbox[3] * factor))))
+
+    def _vit_init(self, tracker, frame: npt.NDArray[np.uint8],
+                  bbox_orig: Tuple[int, int, int, int]) -> bool:
+        """Init `tracker` on the downscaled frame with the bbox scaled to match.
+
+        bbox_orig is in original camera coords; the tracker lives in downscaled
+        space (paired with _vit_update). Returns tracker.init()'s result.
+        """
+        small, scale = self._downscale(frame)
+        return tracker.init(small, self._scale_bbox(bbox_orig, scale))
+
+    def _vit_update(self, tracker, frame: npt.NDArray[np.uint8]):
+        """Update `tracker` on the downscaled frame; return (ok, bbox_orig) with
+        the bbox mapped back to original camera coords."""
+        small, scale = self._downscale(frame)
+        ok, bbox_s = tracker.update(small)
+        if ok:
+            return ok, self._scale_bbox(bbox_s, 1.0 / scale if scale else 1.0)
+        return ok, bbox_s
+
     def _fire_pid(self, yaw_step: float, pitch_correction: float, animation_service) -> float:
         """Apply PID outputs. yaw → base_yaw. pitch → distributed across base/elbow/wrist.
 
@@ -909,16 +1179,29 @@ class TrackerService:
         """Continuously glide servos toward the latest goal, decoupled from the
         vision loop.
 
-        One synchronized substep per iteration (the fastest joint moves
-        SERVO_SUBSTEP_DEG, the others scale proportionally so all arrive
-        together) with SERVO_SUBSTEP_SLEEP spacing — the same anti-click ramp as
-        the old blocking path, but it no longer stalls CSRT. When a fresh goal
-        arrives mid-ramp the worker simply retargets, producing continuous glide
-        instead of discrete fire-then-settle chunks. The worker owns the
-        self._track_* current-position state.
+        Each iteration advances every joint toward the latest goal with the
+        SmoothDamp critically-damped follower (ease-in/ease-out), one bus write
+        per SERVO_SUBSTEP_SLEEP tick — the same click cadence as the old
+        fixed-substep ramp, but with a smooth velocity profile instead of a
+        square wave. Each joint carries its own velocity, so when a fresh goal
+        arrives mid-move the follower retargets without a restart jerk. The
+        worker owns the self._track_* current-position state.
         """
         idle_sleep = 0.01
+        joints = ("base_yaw.pos", "base_pitch.pos", "elbow_pitch.pos", "wrist_pitch.pos")
+        vel = {k: 0.0 for k in joints}   # per-joint SmoothDamp velocity (deg/s)
         while state.running.is_set():
+            # Camera freeze: a snapshot/look consumer wants a sharp frame.
+            # The animation loop honors _frozen; without this check the worker
+            # kept writing right through the freeze (the "snapshot blurry
+            # during tracking" bug). Goal is kept — following resumes as soon
+            # as the flag clears. Bleed velocity so the ease-out doesn't
+            # overshoot from stale momentum on resume.
+            if animation_service.is_frozen:
+                for k in joints:
+                    vel[k] = 0.0
+                time.sleep(idle_sleep)
+                continue
             with self._servo_lock:
                 goal = dict(self._servo_goal) if self._servo_goal is not None else None
                 cur = {
@@ -930,16 +1213,21 @@ class TrackerService:
             if goal is None:
                 time.sleep(idle_sleep)
                 continue
-            deltas = {k: goal[k] - cur[k] for k in cur}
-            max_delta = max(abs(v) for v in deltas.values())
-            if max_delta < 0.05:
+            max_delta = max(abs(goal[k] - cur[k]) for k in joints)
+            max_vel = max(abs(v) for v in vel.values())
+            # Settled AND stopped → idle. Keep ticking while residual velocity
+            # bleeds off so the ease-out completes instead of snapping.
+            if max_delta < 0.05 and max_vel < 0.5:
+                for k in joints:
+                    vel[k] = 0.0
                 time.sleep(idle_sleep)
                 continue
-            if max_delta <= SERVO_SUBSTEP_DEG:
-                step = dict(goal)
-            else:
-                frac = SERVO_SUBSTEP_DEG / max_delta
-                step = {k: cur[k] + deltas[k] * frac for k in cur}
+            step = {}
+            for k in joints:
+                step[k], vel[k] = _smooth_damp(
+                    cur[k], goal[k], vel[k],
+                    SERVO_SMOOTH_TIME, SERVO_SUBSTEP_SLEEP, SERVO_MAX_SPEED_DPS,
+                )
             try:
                 with animation_service.bus_lock:
                     animation_service.robot.send_action(step)
@@ -1015,8 +1303,19 @@ class TrackerService:
         # Baseline bbox area for bloat detection — the initial lock is trusted.
         self._track_init_area = float(state.bbox[2] * state.bbox[3]) if state.bbox else 0.0
 
+        # Detection gating + reinit debounce (SORT/ByteTrack-style track mgmt):
+        # the detector (YuNet/YOLO) is noisy — area swings 15k↔300k+ and centers
+        # jump >700px between frames. Reiniting the ViT tracker to every such box
+        # is the main cause of jerky servo. Keep a short area history to reject
+        # outlier detections, and rate-limit reinits.
+        recent_yolo_areas: list[float] = []
+        last_reinit_t: float = 0.0
+
         ema_dx: Optional[float] = None
         ema_dy: Optional[float] = None
+        # Alpha-beta centroid filter (replaces the raw-EMA offset smoothing).
+        ab_filter = AlphaBetaFilter2D(AB_ALPHA, AB_BETA, AB_GATE_PX)
+        last_ab_t: Optional[float] = None   # perf_counter of previous filter update (dt source)
         prev_dx: Optional[float] = None   # EMA offset from previous frame (motion detection)
         prev_dy: Optional[float] = None
         motion_state = "INIT"             # INIT → STILL or MOVING
@@ -1061,7 +1360,7 @@ class TrackerService:
                     _t = self._create_tracker()
                     if _t is not None:
                         try:
-                            if _t.init(_f, _bbox) is not False:
+                            if self._vit_init(_t, _f, _bbox) is not False:
                                 state.tracker = _t
                                 state.bbox = _bbox
                                 self._track_init_area = float(_bbox[2] * _bbox[3])
@@ -1072,6 +1371,7 @@ class TrackerService:
             miss_count = 0
             yolo_miss_count = 0
             ema_dx = ema_dy = None
+            ab_filter.reset()   # tracker relocated → drop stale velocity/gate
             prev_dx = prev_dy = None
             motion_state = "INIT"
             stable_count = 0
@@ -1107,7 +1407,7 @@ class TrackerService:
 
                 h_fr, w_fr = frame.shape[:2]
                 t_csrt0 = time.perf_counter()
-                ok, new_bbox = state.tracker.update(frame)
+                ok, new_bbox = self._vit_update(state.tracker, frame)
                 t_csrt_ms = (time.perf_counter() - t_csrt0) * 1000
                 t_csrt_acc += t_csrt_ms
 
@@ -1186,15 +1486,24 @@ class TrackerService:
                 cx_obj = bx + bw / 2.0
                 cy_obj = by + bh / 2.0
 
-                # EMA smoothing on pixel offset (not on absolute position).
-                raw_dx = cx_obj - w_fr / 2.0
-                raw_dy = cy_obj - h_fr / 2.0
-                if ema_dx is None or ema_dy is None:
-                    ema_dx, ema_dy = raw_dx, raw_dy
-                else:
-                    ema_dx = EMA_ALPHA * raw_dx + (1.0 - EMA_ALPHA) * ema_dx
-                    ema_dy = EMA_ALPHA * raw_dy + (1.0 - EMA_ALPHA) * ema_dy
-                dx, dy = float(ema_dx), float(ema_dy)
+                # Alpha-beta filter on the centroid: predict → gate → correct.
+                # Replaces the raw-EMA smoothing. dt is wall-clock between frames
+                # (variable on the Pi, so feed it explicitly). The PID then drives
+                # off a smoothed, velocity-led, outlier-gated offset rather than
+                # the jittery raw ViT bbox center.
+                now_ab = time.perf_counter()
+                ab_dt = 0.0 if last_ab_t is None else (now_ab - last_ab_t)
+                last_ab_t = now_ab
+                fx, fy, vx_f, vy_f, ab_gated = ab_filter.update(cx_obj, cy_obj, ab_dt)
+                # Velocity feedforward: aim where the target will be in AB_LEAD_S,
+                # not where it is now — cuts the lag on fast motion.
+                lead_x = fx + vx_f * AB_LEAD_S
+                lead_y = fy + vy_f * AB_LEAD_S
+                dx = float(lead_x - w_fr / 2.0)
+                dy = float(lead_y - h_fr / 2.0)
+                if ab_gated:
+                    logger.debug("[ab-gate] meas=(%.0f,%.0f) coast→(%.0f,%.0f) v=(%.0f,%.0f)px/s",
+                                 cx_obj, cy_obj, fx, fy, vx_f, vy_f)
 
                 # --- tracking_object log: position, motion, direction ---
                 offset_mag = (dx ** 2 + dy ** 2) ** 0.5
@@ -1218,9 +1527,17 @@ class TrackerService:
                             dx, dy, offset_mag, moving_str, direction, bbox_ratio * 100,
                             confidence, time.perf_counter() - last_yolo_confirm_t)
 
-                # --- PID continuous-fire with detector-gated trust ---
+                # --- PID + velocity-feedforward continuous-fire with detector-gated trust ---
                 now_t = time.perf_counter()
-                in_zone = abs(dx) <= w_fr * DEAD_ZONE_YAW_PCT and abs(dy) <= h_fr * DEAD_ZONE_PITCH_PCT
+                # Soft dead zone: continuous error (0 at the edge, ramps up) so
+                # there is no output step when the target leaves center.
+                err_dx = _soft_deadband(dx, w_fr * DEAD_ZONE_YAW_PCT)
+                err_dy = _soft_deadband(dy, h_fr * DEAD_ZONE_PITCH_PCT)
+                # Target pixel speed (alpha-beta velocity) — drives the feedforward
+                # and keeps a centered-but-moving target being panned.
+                speed_pxs = (vx_f ** 2 + vy_f ** 2) ** 0.5
+                moving_ff = speed_pxs > VFF_MOVING_MIN_PXS
+                centered = err_dx == 0.0 and err_dy == 0.0
                 yolo_age = now_t - last_yolo_confirm_t
                 # Bbox-trust guard: ViT bloated past its last trusted lock (or the
                 # absolute ceiling) → centroid is garbage. Hold the servo instead
@@ -1228,7 +1545,12 @@ class TrackerService:
                 # Untrusted only when the bbox overflows the frame (ViT dissolved).
                 # A real object — even a person standing close — is ≤ frame, so
                 # this never freezes a legitimately large target.
-                bbox_untrusted = bbox_ratio >= BBOX_FREEZE_RATIO
+                cur_area_px = bw * bh
+                bloated_vs_trust = (
+                    self._track_init_area > 0
+                    and cur_area_px > self._track_init_area * BLOAT_HOLD_MULT
+                )
+                bbox_untrusted = bbox_ratio >= BBOX_FREEZE_RATIO or bloated_vs_trust
                 # Ghost-lock recovery: ViT/CSRT sometimes reports ok=True with a
                 # bbox larger than the frame (lock dissolved into background).
                 # If that persists with no detector confirm, _do_retry instead of
@@ -1253,9 +1575,13 @@ class TrackerService:
                     motion_state = "BLOAT-HOLD"
                     if not yolo_running.is_set() and state.target_label:
                         last_yolo_t = 0  # force YOLO redetect ASAP to relock
-                    logger.info("[bbox] untrusted (overflow): area=%.0f%% — HOLD servo, await YOLO relock",
-                                bbox_ratio * 100)
-                elif in_zone:
+                    logger.info("[bbox] untrusted (%s): area=%.0f%% cur_px=%.0f trust_px=%.0f — HOLD servo, await YOLO relock",
+                                "overflow" if bbox_ratio >= BBOX_FREEZE_RATIO else "bloat>%.1fx" % BLOAT_HOLD_MULT,
+                                bbox_ratio * 100, cur_area_px, self._track_init_area)
+                elif centered and not moving_ff:
+                    # Truly centered AND still — hold and let the integral clear.
+                    # (A centered but MOVING target falls through to keep panning
+                    # on feedforward so it never drifts out before the PID reacts.)
                     self._yaw_pid.reset()
                     self._pitch_pid.reset()
                     motion_state = "CENTERED"
@@ -1267,15 +1593,28 @@ class TrackerService:
                     motion_state = "WAIT-YOLO"
                 elif (now_t - last_servo_t) >= SERVO_COOLDOWN_S:
                     motion_state = "CHASING"
-                    # Yaw sign: dx>0 (object on right) → base_yaw must INCREASE
-                    # to chase right (verified empirically vs legacy _fire_gimbal,
-                    # log shows camera moving the wrong way when this was negated).
-                    yaw_step = self._yaw_pid.update(dx) if abs(dx) > w_fr * DEAD_ZONE_YAW_PCT else 0.0
-                    pitch_correction = self._pitch_pid.update(dy) if abs(dy) > h_fr * DEAD_ZONE_PITCH_PCT else 0.0
-                    logger.info("[pid-fire] offset=(%.0f,%.0f) → %.0f%%x/%.0f%%y yaw=%.2f pitch=%.2f target='%s'",
-                                dx, dy,
-                                abs(dx) / w_fr * 100, abs(dy) / h_fr * 100,
-                                yaw_step, pitch_correction, state.target_label)
+                    # Position PID on the soft-deadbanded error. Yaw sign: dx>0
+                    # (object on right) → base_yaw must INCREASE to chase right
+                    # (verified empirically vs legacy _fire_gimbal).
+                    yaw_pid = self._yaw_pid.update(err_dx)
+                    pitch_pid = self._pitch_pid.update(err_dy)
+                    # Velocity feedforward: convert target pixel velocity → a
+                    # per-fire angular step so the camera pans at the target's
+                    # speed with zero position error. deg_per_px is the same on
+                    # both axes for square pixels (vert FOV = horiz FOV·h/w).
+                    dt_fire = (min(VFF_MAX_DT_S, now_t - last_servo_t)
+                               if last_servo_t > 0 else 1.0 / FAST_LOOP_FPS)
+                    deg_per_px = CAMERA_FOV_DEG / w_fr
+                    yaw_ff = VFF_GAIN * vx_f * deg_per_px * dt_fire
+                    pitch_ff = VFF_GAIN * vy_f * deg_per_px * dt_fire
+                    # Combine and clamp to the PID output limit so ff + pid can't
+                    # exceed the per-fire travel cap.
+                    _lim = PID_OUTPUT_MAX_DEG
+                    yaw_step = max(-_lim, min(_lim, yaw_pid + yaw_ff))
+                    pitch_correction = max(-_lim, min(_lim, pitch_pid + pitch_ff))
+                    logger.info("[pid-fire] offset=(%.0f,%.0f) v=(%.0f,%.0f)px/s → yaw=%.2f(ff%.2f) pitch=%.2f(ff%.2f) target='%s'",
+                                dx, dy, vx_f, vy_f,
+                                yaw_step, yaw_ff, pitch_correction, pitch_ff, state.target_label)
                     t_servo_ms = self._fire_pid(yaw_step, pitch_correction, animation_service)
                     t_servo_acc += t_servo_ms
                     servo_count += 1
@@ -1294,6 +1633,20 @@ class TrackerService:
                         cur_bbox = state.bbox
                         cur_area = (cur_bbox[2] * cur_bbox[3]) if cur_bbox else 0
                         yolo_area = yolo_bbox[2] * yolo_bbox[3]
+                        # Detection gate (outlier rejection): reject a box whose
+                        # area is wildly off the recent median — a false detection
+                        # the tracker must NOT reinit to. Median over a short window
+                        # tolerates real scale changes (person approaching) while
+                        # dropping single-frame glitches (15k↔300k swings observed).
+                        recent_yolo_areas.append(float(yolo_area))
+                        if len(recent_yolo_areas) > 5:
+                            recent_yolo_areas.pop(0)
+                        area_outlier = False
+                        if len(recent_yolo_areas) >= 3:
+                            med = sorted(recent_yolo_areas)[len(recent_yolo_areas) // 2]
+                            if med > 0 and (yolo_area > med * YOLO_AREA_GATE_MULT
+                                            or yolo_area < med / YOLO_AREA_GATE_MULT):
+                                area_outlier = True
                         # Center distance between tracker bbox and YOLO bbox
                         cdx = cdy = 0.0
                         if cur_bbox is not None:
@@ -1309,28 +1662,44 @@ class TrackerService:
                         diverge_threshold = max(120.0, cur_min_dim * 0.4)
                         bloated = cur_area > 0 and cur_area > yolo_area * 2.0
                         diverged = center_dist > diverge_threshold
-                        if bloated or diverged:
-                            logger.info("[drift-correct] reinit reason: bloated=%s diverged=%s "
+                        # Reinit debounce: rate-limit reinits so a noisy detector
+                        # can't reinit every frame (the churn that whipsaws the
+                        # servo). Bypass the cooldown only when the lock is clearly
+                        # lost (center past half the frame diagonal) so a real loss
+                        # still recovers fast.
+                        now_reinit = time.perf_counter()
+                        frame_diag = (w_fr ** 2 + h_fr ** 2) ** 0.5
+                        clearly_lost = center_dist > frame_diag * LOST_CENTER_FRAC
+                        cooldown_ok = (now_reinit - last_reinit_t) >= REINIT_COOLDOWN_S
+                        if area_outlier:
+                            logger.info("[detect-gate] reject YOLO area=%d (median=%d, gate=%.0fx) "
+                                        "— keep current lock", yolo_area, int(med), YOLO_AREA_GATE_MULT)
+                        elif (bloated or diverged) and (cooldown_ok or clearly_lost):
+                            logger.info("[drift-correct] reinit reason: bloated=%s diverged=%s lost=%s "
                                         "cur_area=%d yolo_area=%d center_dist=%.0fpx",
-                                        bloated, diverged, cur_area, yolo_area, center_dist)
+                                        bloated, diverged, clearly_lost, cur_area, yolo_area, center_dist)
                             ema_dx = ema_dy = None
+                            ab_filter.reset()   # centroid legitimately jumps to YOLO bbox → re-seed filter
                             new_tracker = self._create_tracker()
                             if new_tracker is not None:
                                 reinit_frame = camera_capture.last_frame
                                 if reinit_frame is not None:
                                     try:
-                                        ok_r = new_tracker.init(reinit_frame, yolo_bbox)
+                                        ok_r = self._vit_init(new_tracker, reinit_frame, yolo_bbox)
                                         if ok_r is not False:
                                             state.tracker = new_tracker
                                             state.bbox = yolo_bbox
                                             self._track_init_area = float(yolo_bbox[2] * yolo_bbox[3])
+                                            last_reinit_t = now_reinit
                                             motion_state = "INIT"
                                             stable_count = 0
                                     except Exception as e:
                                         logger.warning("YOLO re-init failed: %s", e)
                         else:
-                            logger.debug("[drift-correct] tracker OK, skipping reinit "
-                                         "(cur_area=%d yolo_area=%d center_dist=%.0fpx)",
+                            logger.debug("[drift-correct] tracker OK / debounced "
+                                         "(bloated=%s diverged=%s cooldown_ok=%s "
+                                         "cur_area=%d yolo_area=%d center_dist=%.0fpx)",
+                                         bloated, diverged, cooldown_ok,
                                          cur_area, yolo_area, center_dist)
                     else:
                         yolo_miss_count += 1

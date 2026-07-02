@@ -4,7 +4,11 @@ import logging
 import re
 from typing import Iterator, Optional
 
-from hal.drivers.voice.tts.backend import TTSBackend, STREAM_CHUNK_SIZE
+from hal.drivers.voice.tts.backend import (
+    TTSBackend,
+    STREAM_CHUNK_SIZE,
+    TTSRateLimitError,
+)
 
 logger = logging.getLogger("hal.voice.tts")
 
@@ -63,6 +67,17 @@ class OpenAITTSBackend(TTSBackend):
         )
         if instructions:
             kwargs["instructions"] = instructions
-        with self._client.audio.speech.with_streaming_response.create(**kwargs) as response:
-            for chunk in response.iter_bytes(STREAM_CHUNK_SIZE):
-                yield chunk
+        try:
+            with self._client.audio.speech.with_streaming_response.create(**kwargs) as response:
+                for chunk in response.iter_bytes(STREAM_CHUNK_SIZE):
+                    yield chunk
+        except Exception as e:
+            # OpenAI SDK raises openai.RateLimitError (an APIStatusError with
+            # status_code 429) for rate limit AND insufficient_quota. Match on
+            # status_code so we don't need a hard import of the SDK's exception
+            # types here. Re-raise as TTSRateLimitError so the service announces
+            # the prerendered notice instead of failing silently. Any other error
+            # propagates unchanged.
+            if getattr(e, "status_code", None) == 429:
+                raise TTSRateLimitError(f"OpenAI TTS rate limit / quota: {e}", status_code=429) from e
+            raise

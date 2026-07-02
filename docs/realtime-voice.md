@@ -97,10 +97,13 @@ holding?", "read this label", "what colour is this?"), the realtime model answer
 in-session instead of delegating. The orchestrator registers a `look` tool
 (`orchestrator.py`, `LOOK_TOOL`) and handles the call in `_handle_look_call`:
 
-1. Grab the latest camera frame **in-process** (`_capture_frame` reads
-   `app_state.camera_capture.last_frame` — no HTTP loopback, no servo-freeze),
-   downscaled to `HAL_GEMINI_VISION_MAX_WIDTH` (default 768px) to bound image
-   tokens.
+1. Grab a **sharp** camera frame **in-process** (`_capture_frame` calls
+   `capture_still` — no HTTP loopback; servos are frozen (animation loop +
+   tracker worker both honor the flag) and the frame is only accepted once its
+   capture timestamp is ≥ 0.3s after the last servo bus write, so motion blur
+   can't reach the model; zero added latency when the servos are already still
+   or the device has none), downscaled to `HAL_GEMINI_VISION_MAX_WIDTH`
+   (default 768px) to bound image tokens.
 2. Enqueue it as realtime **video input** (`ImageInput` → `send_realtime_input(video=…)`).
 3. Send the tool result with `trigger_response=True` so Gemini **continues the
    same turn** and speaks the answer with the image now in context.
